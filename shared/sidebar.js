@@ -52,6 +52,10 @@ window.EqSidebar = (function () {
           perfis:['coordenador_aba','supervisor_clinico','admin_direcao'],
           icon:'<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>' },
 
+        { id:'auditoria', label:'Auditoria',  href:'auditoria/index.html',
+          perfis:['coordenador_aba','supervisor_clinico','admin_direcao'],
+          icon:'<path d="M12 3l8 4v6c0 4-3.5 7-8 8-4.5-1-8-4-8-8V7z"/><path d="M9 12l2 2 4-4"/>' },
+
         { id:'equipe',    label:'Equipe',     href:'equipe/index.html',
           perfis:['coordenador_aba','admin_direcao'],
           icon:'<circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.2"/><path d="M3 20c0-3 3-5 6-5s6 2 6 5"/>' },
@@ -72,7 +76,7 @@ window.EqSidebar = (function () {
         </g></svg>`;
 
     const PASTAS = ['pacientes','sessao','portal','agenda','programas','avaliacoes',
-                    'graficos','comportamento','tarefas','relatorios','equipe','configuracoes'];
+                    'graficos','comportamento','tarefas','relatorios','equipe','configuracoes','auditoria'];
 
     function caminho(href) {
         const partes = window.location.pathname.split('/').filter(Boolean);
@@ -108,7 +112,7 @@ window.EqSidebar = (function () {
         const perfil  = s.perfil || (window.EqTema ? EqTema.perfilAtual() : 'coordenador_aba');
         const rotulo  = window.EqTema ? EqTema.rotulo(perfil) : perfil;
         const nome    = s.nome || '—';
-        const foto    = s.profissional && s.profissional.foto_url;
+        const foto    = s.fotoAssinada || null;
         const recolhida = estaRecolhida();
         aplicarLargura(recolhida);
 
@@ -200,6 +204,7 @@ window.EqSidebar = (function () {
             });
             if (!ok) return;
         }
+        try { if (window.EqAudit) await EqAudit.registrar('acesso', 'auth', null, { evento: 'saida' }); } catch (e) {}
         try { if (window.eqClient) await eqClient.auth.signOut(); } catch (e) {}
         try { sessionStorage.removeItem('eqaba_ultima_atividade'); } catch (e) {}
         window.location.href = caminho('index.html');

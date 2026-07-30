@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-tema="coordenacao">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EQ ABA — Auditoria</title>
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="../favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="../apple-touch-icon.png">
+<link rel="manifest" href="../site.webmanifest">
+<meta name="theme-color" content="#0F766E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../styles/base.css?v=2">
+<link rel="stylesheet" href="../styles/components.css?v=3">
+<style>
+.filtros { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:14px; }
+.filtros input, .filtros select {
+    padding:9px 11px; font:inherit; font-size:12.5px; color:var(--ink);
+    border:1px solid var(--line-strong); border-radius:9px; background:var(--surface);
+}
+.reg { padding:11px 0; border-top:1px solid var(--line); display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap; }
+.reg:first-child { border-top:none; }
+.reg-hora { width:118px; flex:0 0 auto; font-size:11.5px; color:var(--ink-muted); }
+.reg-hora b { display:block; color:var(--ink); font-size:12.5px; }
+.reg-corpo { flex:1; min-width:210px; }
+.reg-corpo b { font-size:13px; }
+.reg-corpo span { display:block; font-size:11.5px; color:var(--ink-muted); }
+.detalhe {
+    margin-top:6px; background:var(--surface-alt); border:1px solid var(--line);
+    border-radius:8px; padding:8px 10px; font-size:11.5px; color:var(--ink-muted);
+    font-family:ui-monospace,'SF Mono',Menlo,monospace; white-space:pre-wrap; word-break:break-word;
+    display:none;
+}
+.detalhe.on { display:block; }
+.bt-det { border:none; background:transparent; color:var(--acao); font:inherit; font-size:11.5px;
+          font-weight:700; cursor:pointer; padding:0; }
+.vazio-msg { padding:26px; text-align:center; color:var(--ink-muted); font-size:13px; }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../config.js?v=4"></script>
+<script src="../shared/supabase_client.js?v=2"></script>
+<script src="../shared/tema.js?v=2"></script>
+<script src="../shared/confirm_modal.js?v=3"></script>
+<script src="../shared/fotos.js?v=7"></script>
+<script src="../shared/audit.js?v=5"></script>
+<script src="../shared/auth_guard.js?v=7"></script>
+</head>
+<body>
+
+<div class="app-shell">
+    <div id="sidebar"></div>
+    <div class="faixa-perfil"></div>
+
+    <main class="app-main">
+        <div class="app-topo">
+            <div>
+                <h1>Auditoria</h1>
+                <div class="sub" id="resumo">carregando…</div>
+            </div>
+            <button class="btn btn-secundario" onclick="exportar()">Exportar CSV</button>
+        </div>
+
+        <div class="filtros">
+            <input type="date" id="fIni" onchange="carregar()" title="De">
+            <input type="date" id="fFim" onchange="carregar()" title="Até">
+            <select id="fQuem" onchange="carregar()"><option value="">Todas as pessoas</option></select>
+            <select id="fAcao" onchange="carregar()">
+                <option value="">Todas as ações</option>
+                <option value="criacao">Criação</option>
+                <option value="edicao">Edição</option>
+                <option value="status">Mudança de status</option>
+                <option value="acesso">Acesso</option>
+                <option value="exclusao">Exclusão</option>
+                <option value="exportacao">Exportação</option>
+            </select>
+            <select id="fTabela" onchange="carregar()">
+                <option value="">Todos os registros</option>
+                <option value="pacientes">Pacientes</option>
+                <option value="sessoes">Sessões</option>
+                <option value="cronograma_terapeutico">Grade</option>
+                <option value="profissionais">Profissionais</option>
+                <option value="equipes_aba">Equipes</option>
+                <option value="vinculos_paciente_aplicador">Vínculos</option>
+                <option value="auth">Entradas e saídas</option>
+            </select>
+            <button class="btn btn-secundario" onclick="limpar()">Limpar</button>
+        </div>
+
+        <div class="card"><div id="area"><div class="muted small">carregando…</div></div></div>
+
+        <div style="text-align:center; margin-top:12px">
+            <button class="btn btn-secundario" id="btMais" style="display:none" onclick="carregarMais()">Carregar mais</button>
+        </div>
+    </main>
+</div>
+
+<script src="../shared/sidebar.js?v=7"></script>
+<script>
+'use strict';
+
+const ACOES = {
+    criacao:   { r:'criou',     c:'var(--st-ok)' },
+    edicao:    { r:'editou',    c:'var(--acao)' },
+    status:    { r:'mudou o status de', c:'var(--st-warn)' },
+    exclusao:  { r:'excluiu',   c:'var(--st-bad)' },
+    acesso:    { r:'acessou',   c:'var(--st-neutro)' },
+    exportacao:{ r:'exportou',  c:'var(--st-neutro)' }
+};
+const TABELAS = {
+    pacientes:'paciente', sessoes:'sessão', cronograma_terapeutico:'horário da grade',
+    profissionais:'profissional', equipes_aba:'equipe',
+    vinculos_paciente_aplicador:'vínculo', auth:'sistema'
+};
+
+const PAGINA = 60;
+let offset = 0, TOTAL = 0, REGISTROS = [];
+
+document.addEventListener('eq:pronto', async function (ev) {
+    EqSidebar.render('auditoria');
+
+    if (!['admin_direcao','supervisor_clinico','coordenador_aba'].includes(ev.detail.perfil)) {
+        document.getElementById('area').innerHTML =
+            '<div class="vazio-msg">Esta tela é restrita à coordenação, supervisão e direção.</div>';
+        document.getElementById('resumo').textContent = 'sem acesso';
+        return;
+    }
+
+    // últimos 7 dias por padrão
+    const hoje = new Date(), ini = new Date(); ini.setDate(hoje.getDate() - 7);
+    const p2 = n => String(n).padStart(2,'0');
+    const iso = d => d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate());
+    document.getElementById('fIni').value = iso(ini);
+    document.getElementById('fFim').value = iso(hoje);
+
+    try {
+        const { data } = await eqClient.from('profissionais')
+            .select('id, nome_completo').order('nome_completo');
+        document.getElementById('fQuem').innerHTML = '<option value="">Todas as pessoas</option>' +
+            (data || []).map(p => `<option value="${p.id}">${p.nome_completo}</option>`).join('');
+    } catch (e) { console.warn(e); }
+
+    carregar();
+});
+
+function limpar() {
+    ['fQuem','fAcao','fTabela'].forEach(id => document.getElementById(id).value = '');
+    carregar();
+}
+
+function montarConsulta() {
+    let q = eqClient.from('auditoria')
+        .select('id, criado_em, acao, tabela, registro_id, detalhes, pagina, profissional:profissionais(nome_completo)',
+                { count: 'exact' })
+        .order('criado_em', { ascending: false });
+
+    const ini = document.getElementById('fIni').value;
+    const fim = document.getElementById('fFim').value;
+    if (ini) q = q.gte('criado_em', ini + 'T00:00:00');
+    if (fim) q = q.lte('criado_em', fim + 'T23:59:59');
+
+    const quem = document.getElementById('fQuem').value;
+    const acao = document.getElementById('fAcao').value;
+    const tab  = document.getElementById('fTabela').value;
+    if (quem) q = q.eq('profissional_id', quem);
+    if (acao) q = q.eq('acao', acao);
+    if (tab)  q = q.eq('tabela', tab);
+
+    return q;
+}
+
+async function carregar() {
+    offset = 0; REGISTROS = [];
+    document.getElementById('area').innerHTML = '<div class="muted small">carregando…</div>';
+    await buscar();
+}
+
+async function carregarMais() { offset += PAGINA; await buscar(true); }
+
+async function buscar(concatenar) {
+    try {
+        const { data, error, count } = await montarConsulta().range(offset, offset + PAGINA - 1);
+        if (error) throw error;
+        TOTAL = count || 0;
+        REGISTROS = concatenar ? REGISTROS.concat(data || []) : (data || []);
+        desenhar();
+    } catch (e) {
+        console.error(e);
+        document.getElementById('area').innerHTML =
+            '<div class="vazio-msg" style="color:var(--st-bad)">Erro ao consultar. Veja o console.</div>';
+    }
+}
+
+function quando(iso) {
+    const d = new Date(iso);
+    const p2 = n => String(n).padStart(2,'0');
+    return { data: p2(d.getDate())+'/'+p2(d.getMonth()+1)+'/'+d.getFullYear(),
+             hora: p2(d.getHours())+':'+p2(d.getMinutes()) };
+}
+
+function frase(r) {
+    const a = ACOES[r.acao] || { r: r.acao };
+    const alvo = TABELAS[r.tabela] || r.tabela;
+    const d = r.detalhes || {};
+    let complemento = '';
+    if (d.nome)          complemento = ' — ' + d.nome;
+    else if (d.paciente) complemento = ' — ' + d.paciente;
+    else if (d.email)    complemento = ' — ' + d.email;
+    else if (d.encerrado)complemento = ' — ' + d.encerrado;
+    if (d.novo_status)   complemento += ' para "' + String(d.novo_status).replace(/_/g,' ') + '"';
+    if (d.quantidade != null) complemento += ' (' + d.quantidade + ')';
+    return a.r + ' ' + alvo + complemento;
+}
+
+function desenhar() {
+    document.getElementById('resumo').textContent =
+        TOTAL + ' registro' + (TOTAL === 1 ? '' : 's') + ' no período';
+
+    const area = document.getElementById('area');
+    if (!REGISTROS.length) {
+        area.innerHTML = '<div class="vazio-msg">Nenhum registro com esses filtros.</div>';
+        document.getElementById('btMais').style.display = 'none';
+        return;
+    }
+
+    area.innerHTML = REGISTROS.map((r, i) => {
+        const t = quando(r.criado_em);
+        const cor = (ACOES[r.acao] || {}).c || 'var(--st-neutro)';
+        const temDetalhe = r.detalhes && Object.keys(r.detalhes).length;
+        return `<div class="reg">
+            <div class="reg-hora"><b>${t.hora}</b>${t.data}</div>
+            <span class="chip" style="background:transparent;border:1px solid ${cor};color:${cor}">${r.acao}</span>
+            <div class="reg-corpo">
+                <b>${r.profissional ? r.profissional.nome_completo : 'sistema'}</b>
+                <span>${frase(r)}${r.pagina ? ' · ' + r.pagina : ''}</span>
+                ${temDetalhe ? `<button class="bt-det" onclick="verDetalhe(${i})">ver detalhes</button>
+                    <div class="detalhe" id="det-${i}">${JSON.stringify(r.detalhes, null, 2)
+                        .replace(/</g,'&lt;')}</div>` : ''}
+            </div>
+        </div>`;
+    }).join('');
+
+    document.getElementById('btMais').style.display = REGISTROS.length < TOTAL ? '' : 'none';
+}
+
+function verDetalhe(i) { document.getElementById('det-' + i).classList.toggle('on'); }
+
+async function exportar() {
+    const ok = await EqConfirm.mostrar({
+        titulo: 'Exportar a auditoria?',
+        texto: 'Gera um CSV com os registros filtrados. A própria exportação fica registrada na auditoria.',
+        confirmar: 'Exportar', tipo: 'padrao'
+    });
+    if (!ok) return;
+    try {
+        const { data, error } = await montarConsulta().range(0, 4999);
+        if (error) throw error;
+        const linhas = [['data_hora','quem','acao','registro','detalhes','pagina']].concat(
+            (data || []).map(r => [
+                r.criado_em,
+                r.profissional ? r.profissional.nome_completo : 'sistema',
+                r.acao, TABELAS[r.tabela] || r.tabela,
+                JSON.stringify(r.detalhes || {}), r.pagina || ''
+            ]));
+        const csv = '\uFEFF' + linhas.map(l =>
+            l.map(c => '"' + String(c).replace(/"/g,'""') + '"').join(';')).join('\n');
+        const url = URL.createObjectURL(new Blob([csv], { type:'text/csv;charset=utf-8' }));
+        const a = document.createElement('a');
+        a.href = url; a.download = 'auditoria_eqaba.csv'; a.click();
+        URL.revokeObjectURL(url);
+        await EqAudit.registrar('exportacao', 'auditoria', null, { linhas: (data || []).length });
+    } catch (e) {
+        console.error(e);
+        await EqConfirm.mostrar({ titulo:'Não foi possível exportar', texto: e.message || 'Erro.',
+            confirmar:'Entendi', cancelar:'Fechar', tipo:'alerta' });
+    }
+}
+</script>
+</body>
+</html>

@@ -50,7 +50,7 @@
 .pc:focus-visible { outline:2px solid var(--acao); outline-offset:2px; }
 .pc-topo { display:flex; gap:10px; align-items:flex-start; margin-bottom:10px; }
 .ini {
-    width:40px; height:40px; border-radius:12px; flex:0 0 auto; color:#fff;
+    width:40px; height:40px; border-radius:12px; flex:0 0 auto; color:#fff; overflow:hidden;
     display:flex; align-items:center; justify-content:center; font-weight:800; font-size:15px;
 }
 .pc-nome { font-size:14.5px; font-weight:800; line-height:1.2; }
@@ -68,8 +68,9 @@
 <script src="../shared/supabase_client.js?v=2"></script>
 <script src="../shared/tema.js?v=2"></script>
 <script src="../shared/confirm_modal.js?v=3"></script>
+<script src="../shared/fotos.js?v=7"></script>
 <script src="../shared/audit.js?v=5"></script>
-<script src="../shared/auth_guard.js?v=4"></script>
+<script src="../shared/auth_guard.js?v=7"></script>
 </head>
 <body>
 
@@ -147,7 +148,7 @@
 .campo-2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
 </style>
 
-<script src="../shared/sidebar.js?v=6"></script>
+<script src="../shared/sidebar.js?v=7"></script>
 <script>
 'use strict';
 
@@ -205,7 +206,7 @@ async function carregar() {
 
         const [pac, vinc, sess] = await Promise.all([
             eqClient.from('pacientes')
-                .select('id, nome_completo, data_nascimento, status, convenio, responsavel_nome, sessoes_semana_prescritas, cartao_seguranca')
+                .select('id, nome_completo, data_nascimento, status, convenio, responsavel_nome, sessoes_semana_prescritas, cartao_seguranca, foto_url')
                 .order('nome_completo'),
             eqClient.from('vinculos_paciente_aplicador')
                 .select('paciente_id, profissional_id, tipo, ativo, profissional:profissionais(nome_completo)')
@@ -240,6 +241,12 @@ async function carregar() {
                 ultimaSessao: feitas[0] ? diasDesde(feitas[0].data) : null
             };
         });
+
+        // links assinados das fotos, todos de uma vez
+        try {
+            const mapa = await EqFotos.links(PACIENTES.map(p => p.foto_url));
+            PACIENTES.forEach(p => { p.foto = p.foto_url ? mapa[p.foto_url] : null; });
+        } catch (e) { console.warn('fotos não carregadas', e); }
 
         pintar();
 
@@ -320,7 +327,7 @@ function cardDe(p) {
     return `
     <button class="pc" onclick="abrirPasta('${p.id}')">
         <div class="pc-topo">
-            <div class="ini" style="background:${p.cor}">${p.inicial}</div>
+            <div class="ini" style="${p.foto ? 'background-image:url(' + p.foto + ');background-size:cover;background-position:center' : 'background:' + p.cor}">${p.foto ? '' : p.inicial}</div>
             <div style="flex:1; min-width:0">
                 <div class="pc-nome">${p.nome_completo}</div>
                 <div class="pc-sub">${textoIdade(p.idade)}${p.aplicador ? ' · ' + p.aplicador : ''}</div>

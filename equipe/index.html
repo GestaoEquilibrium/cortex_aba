@@ -16,6 +16,11 @@
 <link rel="stylesheet" href="../styles/base.css?v=2">
 <link rel="stylesheet" href="../styles/components.css?v=3">
 <style>
+.foto-prof { width:34px; height:34px; border-radius:50%; flex:0 0 auto; color:#fff; overflow:hidden;
+             display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:800;
+             background:var(--acao); background-size:cover; background-position:center; }
+.foto-prof.editavel { cursor:pointer; }
+.celula-nome { display:flex; align-items:center; gap:10px; }
 .modal-fundo { position:fixed; inset:0; background:rgba(12,27,42,.5); backdrop-filter:blur(3px);
                display:none; align-items:center; justify-content:center; padding:20px; z-index:80; }
 .modal-fundo.aberto { display:flex; }
@@ -34,8 +39,9 @@
 <script src="../shared/supabase_client.js?v=2"></script>
 <script src="../shared/tema.js?v=2"></script>
 <script src="../shared/confirm_modal.js?v=3"></script>
+<script src="../shared/fotos.js?v=7"></script>
 <script src="../shared/audit.js?v=5"></script>
-<script src="../shared/auth_guard.js?v=4"></script>
+<script src="../shared/auth_guard.js?v=7"></script>
 </head>
 <body>
 
@@ -146,7 +152,9 @@
     </div>
 </div>
 
-<script src="../shared/sidebar.js?v=6"></script>
+<input type="file" id="inputFotoProf" accept="image/jpeg,image/png,image/webp"
+       style="display:none" onchange="enviarFotoProf(this)">
+<script src="../shared/sidebar.js?v=7"></script>
 <script>
 'use strict';
 
@@ -176,7 +184,7 @@ async function carregarProfissionais() {
     try {
         const { data, error } = await eqClient
             .from('profissionais')
-            .select('id, nome_completo, email, perfil, turno, equipe_id, ativo, auth_user_id')
+            .select('id, nome_completo, email, perfil, turno, equipe_id, ativo, auth_user_id, foto_url')
             .order('nome_completo');
         if (error) throw error;
 
@@ -184,12 +192,22 @@ async function carregarProfissionais() {
         const nomeEquipe = id => (eqs || []).find(e => e.id === id)?.nome || '—';
 
         const ps = data || [];
+        try {
+            const mapa = await EqFotos.links(ps.map(p => p.foto_url));
+            ps.forEach(p => { p.foto = p.foto_url ? mapa[p.foto_url] : null; });
+        } catch (e) { console.warn('fotos não carregadas', e); }
         document.getElementById('contagem').textContent =
             ps.filter(p => p.ativo).length + ' ativos · ' + (eqs || []).length + ' equipes';
 
         tb.innerHTML = ps.length ? ps.map(p => `
             <tr style="${p.ativo ? '' : 'opacity:.55'}">
-                <td><b>${p.nome_completo}</b><br><span class="tiny soft">${p.email}</span></td>
+                <td><div class="celula-nome">
+                    <div class="foto-prof ${SOU_ADMIN ? 'editavel' : ''}"
+                         style="${p.foto ? 'background-image:url(' + p.foto + ')' : ''}"
+                         ${SOU_ADMIN ? `onclick="escolherFoto('${p.id}')" title="Trocar foto"` : ''}>
+                        ${p.foto ? '' : EqFotos.iniciais(p.nome_completo)}</div>
+                    <div><b>${p.nome_completo}</b><br><span class="tiny soft">${p.email}</span></div>
+                </div></td>
                 <td>${ROTULO_PERFIL[p.perfil] || p.perfil}</td>
                 <td class="muted">${p.turno || '—'}</td>
                 <td class="muted">${nomeEquipe(p.equipe_id)}</td>
@@ -243,6 +261,27 @@ async function carregarEquipes() {
         console.error(e);
         tb.innerHTML = '<tr><td colspan="5" style="color:var(--st-bad)">Erro ao carregar.</td></tr>';
     }
+}
+
+let PROF_FOTO = null;
+function escolherFoto(id) { PROF_FOTO = id; document.getElementById('inputFotoProf').click(); }
+
+async function enviarFotoProf(input) {
+    const arquivo = input.files && input.files[0];
+    input.value = '';
+    if (!arquivo || !PROF_FOTO) return;
+    try {
+        const caminho = await EqFotos.enviar(arquivo, 'profissionais', PROF_FOTO);
+        const { error } = await eqClient.from('profissionais').update({ foto_url: caminho }).eq('id', PROF_FOTO);
+        if (error) throw error;
+        await EqAudit.registrar('edicao', 'profissionais', PROF_FOTO, { campos: { foto: 'atualizada' } });
+        await carregarProfissionais();
+    } catch (e) {
+        console.error(e);
+        await EqConfirm.mostrar({ titulo:'Não foi possível enviar a foto',
+            texto: e.message || 'Tente uma imagem JPG ou PNG.',
+            confirmar:'Entendi', cancelar:'Fechar', tipo:'alerta' });
+    } finally { PROF_FOTO = null; }
 }
 
 async function alternarAtivo(id, ativo, nome) {

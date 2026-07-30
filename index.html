@@ -41,6 +41,7 @@ body { min-height:100vh; display:flex; align-items:center; justify-content:cente
 <script src="config.js?v=2"></script>
 <script src="shared/supabase_client.js?v=2"></script>
 <script src="shared/tema.js?v=2"></script>
+<script src="shared/audit.js?v=5"></script>
 </head>
 <body>
 
@@ -128,6 +129,14 @@ body { min-height:100vh; display:flex; align-items:center; justify-content:cente
                 mostrar('Cadastro inativo. Fale com a coordenação.');
                 return;
             }
+
+            // registra a entrada antes de sair da página
+            try {
+                await eqClient.from('auditoria').insert({
+                    profissional_id: prof.id, acao: 'acesso', tabela: 'auth',
+                    detalhes: { evento: 'entrada' }, pagina: 'index.html'
+                });
+            } catch (e) { console.warn('entrada não registrada', e); }
 
             location.href = prof.perfil === 'responsavel' ? 'portal/index.html' : 'dashboard.html';
 

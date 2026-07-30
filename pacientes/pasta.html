@@ -21,8 +21,13 @@
 .voltar:hover { color:var(--acao); }
 
 .cabecalho { display:flex; gap:16px; align-items:flex-start; flex-wrap:wrap; }
-.avatar-pac { width:60px; height:60px; border-radius:18px; flex:0 0 auto; color:#fff;
-              display:flex; align-items:center; justify-content:center; font-size:23px; font-weight:800; }
+.avatar-pac { width:60px; height:60px; border-radius:18px; flex:0 0 auto; color:#fff; position:relative;
+              display:flex; align-items:center; justify-content:center; font-size:23px; font-weight:800;
+              overflow:hidden; background-size:cover; background-position:center; }
+.avatar-pac.editavel { cursor:pointer; }
+.avatar-pac .troca { position:absolute; inset:0; background:rgba(12,27,42,.55); color:#fff;
+                     display:none; align-items:center; justify-content:center; font-size:10px; font-weight:700; }
+.avatar-pac.editavel:hover .troca { display:flex; }
 .cab-dados { flex:1; min-width:200px; }
 .cab-dados h1 { font-size:22px; }
 .cab-dados .linha { font-size:12.5px; color:var(--ink-muted); margin-top:3px; }
@@ -70,8 +75,9 @@
 <script src="../shared/supabase_client.js?v=2"></script>
 <script src="../shared/tema.js?v=2"></script>
 <script src="../shared/confirm_modal.js?v=3"></script>
+<script src="../shared/fotos.js?v=7"></script>
 <script src="../shared/audit.js?v=5"></script>
-<script src="../shared/auth_guard.js?v=4"></script>
+<script src="../shared/auth_guard.js?v=7"></script>
 </head>
 <body>
 
@@ -85,6 +91,8 @@
                 <path d="M15 6l-6 6 6 6"/></svg> Pacientes
         </a>
 
+        <input type="file" id="inputFoto" accept="image/jpeg,image/png,image/webp"
+               style="display:none" onchange="enviarFoto(this)">
         <div id="conteudo"><div class="muted small">carregando…</div></div>
     </main>
 </div>
@@ -166,7 +174,7 @@
     </div>
 </div>
 
-<script src="../shared/sidebar.js?v=6"></script>
+<script src="../shared/sidebar.js?v=7"></script>
 <script>
 'use strict';
 
@@ -182,6 +190,7 @@ const STATUS_SESSAO = {
 
 const ID = new URLSearchParams(location.search).get('id');
 let PAC = null, GRADE = [], SESSOES = [], VINCULOS = [], PROFS = [], PODE_EDITAR = false;
+let FOTO = null;
 
 document.addEventListener('eq:pronto', async function (ev) {
     EqSidebar.render('pacientes');
@@ -241,6 +250,7 @@ async function carregar() {
         VINCULOS = rv.data || []; PROFS = (rpr.data || []).filter(p =>
             ['aplicador','aplicador_itinerante','estagiario_aba','coordenador_aba'].includes(p.perfil));
 
+        FOTO = PAC.foto_url ? await EqFotos.link(PAC.foto_url) : null;
         desenhar();
         await EqAudit.registrar('acesso', 'pacientes', ID, { nome: PAC.nome_completo });
 
@@ -269,7 +279,12 @@ function desenhar() {
     document.getElementById('conteudo').innerHTML = `
     <div class="card">
         <div class="cabecalho">
-            <div class="avatar-pac" style="background:${cor}">${inicial}</div>
+            <div class="avatar-pac ${PODE_EDITAR ? 'editavel' : ''}"
+                 style="background:${FOTO ? 'transparent' : cor}${FOTO ? ';background-image:url(' + FOTO + ')' : ''}"
+                 ${PODE_EDITAR ? 'onclick="document.getElementById(\'inputFoto\').click()" title="Trocar foto"' : ''}>
+                ${FOTO ? '' : inicial}
+                ${PODE_EDITAR ? '<span class="troca">trocar</span>' : ''}
+            </div>
             <div class="cab-dados">
                 <h1>${PAC.nome_completo}</h1>
                 <div class="linha">${idadeTexto(PAC.data_nascimento)} · nascido em ${brl(PAC.data_nascimento)}</div>
@@ -535,9 +550,11 @@ document.getElementById('formGrade').addEventListener('submit', async function (
         const jaVinculado = VINCULOS.some(v => v.profissional && v.profissional.id === profId);
         if (!jaVinculado) {
             const tipo = VINCULOS.length ? 'secundario' : 'titular';
-            const { error: e2 } = await eqClient.from('vinculos_paciente_aplicador')
-                .insert({ paciente_id: ID, profissional_id: profId, tipo: tipo });
+            const { data: v, error: e2 } = await eqClient.from('vinculos_paciente_aplicador')
+                .insert({ paciente_id: ID, profissional_id: profId, tipo: tipo }).select('id').single();
             if (e2) console.warn('vínculo não criado', e2);
+            else await EqAudit.registrar('criacao', 'vinculos_paciente_aplicador', v.id,
+                     { paciente: PAC.nome_completo, tipo: tipo });
         }
 
         fechar('modalGrade'); this.reset();
@@ -551,6 +568,26 @@ document.getElementById('formGrade').addEventListener('submit', async function (
         erro.style.display = 'block';
     } finally { bt.disabled = false; bt.textContent = 'Adicionar'; }
 });
+
+async function enviarFoto(input) {
+    const arquivo = input.files && input.files[0];
+    input.value = '';
+    if (!arquivo) return;
+    try {
+        const caminho = await EqFotos.enviar(arquivo, 'pacientes', ID);
+        const { error } = await eqClient.from('pacientes').update({ foto_url: caminho }).eq('id', ID);
+        if (error) throw error;
+        await EqAudit.registrar('edicao', 'pacientes', ID, { campos: { foto: 'atualizada' } });
+        await carregar();
+    } catch (e) {
+        console.error(e);
+        await EqConfirm.mostrar({
+            titulo: 'Não foi possível enviar a foto',
+            texto: e.message || 'Tente uma imagem JPG ou PNG.',
+            confirmar: 'Entendi', cancelar: 'Fechar', tipo: 'alerta'
+        });
+    }
+}
 
 async function encerrarHorario(id, descricao) {
     const ok = await EqConfirm.mostrar({

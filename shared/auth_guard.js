@@ -82,7 +82,7 @@ window.EqSessao = null;
         // duas consultas simples em vez de uma frágil.
         const { data: prof, error } = await window.eqClient
             .from('profissionais')
-            .select('id, nome_completo, email, perfil, turno, equipe_id, ativo')
+            .select('id, nome_completo, email, perfil, turno, equipe_id, ativo, foto_url')
             .eq('auth_user_id', session.user.id)
             .maybeSingle();
 
@@ -112,6 +112,12 @@ window.EqSessao = null;
             equipe: prof.equipe ? prof.equipe.nome : null,
             equipeId: prof.equipe_id
         };
+
+        // link assinado da foto do próprio usuário (bucket privado)
+        if (prof.foto_url && window.EqFotos) {
+            try { window.EqSessao.fotoAssinada = await EqFotos.link(prof.foto_url); }
+            catch (e) { console.warn('foto do usuário não carregada', e); }
+        }
 
         if (window.EqTema) EqTema.aplicar(prof.perfil);
 

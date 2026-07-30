@@ -99,8 +99,12 @@ document.addEventListener('eq:pronto', async function (ev) {
         const [ativos, fila, sessoesHoje, faltas] = await Promise.all([
             eqClient.from('pacientes').select('id', { count: 'exact', head: true }).eq('status', 'ativo'),
             eqClient.from('pacientes').select('id', { count: 'exact', head: true }).eq('status', 'fila_espera'),
+            // `sessoes` referencia `profissionais` duas vezes (profissional_id e
+            // registrado_por). Sem apontar a FK, o PostgREST devolve PGRST201.
             eqClient.from('sessoes')
-                .select('hora_inicio, status, paciente:pacientes(nome_completo), profissional:profissionais(nome_completo)')
+                .select(`hora_inicio, status,
+                         paciente:pacientes!sessoes_paciente_id_fkey(nome_completo),
+                         profissional:profissionais!sessoes_profissional_id_fkey(nome_completo)`)
                 .eq('data', hojeISO).order('hora_inicio'),
             eqClient.from('sessoes').select('id', { count: 'exact', head: true })
                 .gte('data', segISO).in('status', ['falta_injustificada','falta_justificada'])

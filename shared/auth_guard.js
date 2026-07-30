@@ -70,15 +70,34 @@ window.EqSessao = null;
         const { data: { session } } = await window.eqClient.auth.getSession();
         if (!session) { paraLogin('sem sessão'); return; }
 
+        // Sem embed aqui de propósito. Existem duas FKs entre `profissionais` e
+        // `equipes_aba` (profissionais.equipe_id e equipes_aba.coordenador_id), e o
+        // PostgREST devolve PGRST201 se o embed não disser qual usar. Como esta é a
+        // consulta que decide se a pessoa entra ou não, ela vai sem embed nenhum —
+        // duas consultas simples em vez de uma frágil.
         const { data: prof, error } = await window.eqClient
             .from('profissionais')
-            .select('id, nome_completo, email, perfil, turno, equipe_id, ativo, equipe:equipes_aba(id, nome, turno)')
+            .select('id, nome_completo, email, perfil, turno, equipe_id, ativo')
             .eq('auth_user_id', session.user.id)
             .maybeSingle();
 
         if (error) { console.error('EQ ABA: erro ao ler profissionais', error); }
         if (!prof)       { paraLogin('conta sem vínculo em profissionais'); return; }
         if (!prof.ativo) { paraLogin('profissional inativo'); return; }
+
+        // Nome da equipe (opcional — falha aqui não impede o acesso)
+        let equipe = null;
+        if (prof.equipe_id) {
+            try {
+                const { data: eq } = await window.eqClient
+                    .from('equipes_aba')
+                    .select('id, nome, turno')
+                    .eq('id', prof.equipe_id)
+                    .maybeSingle();
+                equipe = eq || null;
+            } catch (e) { console.warn('EQ ABA: não foi possível ler a equipe', e); }
+        }
+        prof.equipe = equipe;
 
         window.EqSessao = {
             usuario: session.user,

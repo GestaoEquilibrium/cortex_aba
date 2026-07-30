@@ -19,103 +19,244 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
 <link rel="stylesheet" href="../styles/base.css?v=3">
 <link rel="stylesheet" href="../styles/components.css?v=5">
 <style>
-.aba-manuscrito { font-family:'Caveat', cursive; font-size:1.25em; font-weight:700;
-                  color:var(--acao); transform:rotate(-6deg); display:inline-block; }
+.aba-manuscrito { font-family:'Caveat', cursive; font-size:1.3em; font-weight:700;
+                  display:inline-block; transform:rotate(-6deg); }
+.portal { max-width:470px; margin:0 auto; padding:0 16px 40px; position:relative; z-index:1; }
+.portal-topo { background:var(--side-bg); color:#fff; border-radius:0 0 26px 26px;
+               padding:20px 20px 24px; margin:0 -16px 18px; }
+.topo-linha { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.marca { display:flex; align-items:center; gap:8px; font-weight:800; font-size:14px; opacity:.92; }
+.bt-topo { width:30px; height:30px; border-radius:9px; background:rgba(255,255,255,.16); border:none;
+           color:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; }
+.crianca { display:flex; align-items:center; gap:12px; margin-top:16px; }
+.foto-crianca { width:52px; height:52px; border-radius:16px; flex:0 0 auto; background:rgba(255,255,255,.2);
+                display:flex; align-items:center; justify-content:center; font-size:19px; font-weight:800;
+                background-size:cover; background-position:center; }
+.crianca h1 { font-size:19px; }
+.crianca p { font-size:12.5px; color:rgba(255,255,255,.85); }
+.seletor { margin-top:12px; }
+.seletor select { width:100%; padding:9px 11px; border-radius:9px; border:1px solid rgba(255,255,255,.3);
+                  background:rgba(255,255,255,.14); color:#fff; font:inherit; font-size:13px; }
+.seletor option { color:#1B1340; }
 
-/* Portal é externo: sem sidebar, layout de celular, um cartão por assunto. */
-body { background: var(--bg); }
-.portal { max-width: 460px; margin: 0 auto; padding: 0 16px 34px; }
-.portal-topo {
-    background: var(--side-bg); color: #fff;
-    border-radius: 0 0 24px 24px; padding: 22px 20px 26px;
-    margin: 0 -16px 18px;
-}
-.portal-topo .marca { display:flex; align-items:center; gap:8px; font-weight:800; font-size:14px; opacity:.9; }
-.portal-topo h1 { font-size: 20px; margin-top: 10px; }
-.portal-topo p { font-size: 12.5px; color: rgba(255,255,255,.82); margin-top: 3px; }
-.item-titulo { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:5px; }
-.item-titulo h3 { font-size: 14px; }
-.card p { font-size: 13px; color: var(--ink-muted); }
+.item-titulo { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:6px; }
+.item-titulo h3 { font-size:14px; }
+.card p { font-size:13px; color:var(--ink-muted); line-height:1.5; }
+.orientacao + .orientacao { margin-top:10px; padding-top:10px; border-top:1px solid var(--line); }
+.linha-sessao { display:flex; justify-content:space-between; align-items:center; gap:10px;
+                padding:9px 0; border-top:1px solid var(--line); font-size:13px; }
+.linha-sessao:first-child { border-top:none; }
+.vazio-msg { padding:18px; text-align:center; color:var(--ink-muted); font-size:12.5px; }
+.rodape-portal { text-align:center; margin-top:18px; font-size:11px; color:var(--ink-soft); }
 </style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../config.js?v=4"></script>
+<script src="../shared/supabase_client.js?v=2"></script>
 <script src="../shared/tema.js?v=2"></script>
+<script src="../shared/confirm_modal.js?v=3"></script>
+<script src="../shared/fotos.js?v=7"></script>
+<script src="../shared/auth_guard_portal.js?v=9"></script>
 </head>
 <body>
 
 <div class="portal">
     <div class="portal-topo">
-        <div class="marca">
-            <svg width="15" height="15" viewBox="0 0 100 100"><g stroke="currentColor" stroke-width="11" stroke-linecap="round">
-                <line x1="50" y1="12" x2="50" y2="88"/><line x1="17" y1="31" x2="83" y2="69"/><line x1="17" y1="69" x2="83" y2="31"/></g></svg>
-            CORTEX <span class="aba-manuscrito">aba</span>
+        <div class="topo-linha">
+            <div class="marca">
+                <svg width="16" height="16" viewBox="0 0 32 32"><g stroke="currentColor" stroke-width="1.5" fill="currentColor" stroke-linecap="round">
+                    <line x1="16" y1="16" x2="9" y2="9"/><line x1="16" y1="16" x2="23" y2="9"/>
+                    <line x1="16" y1="16" x2="9" y2="23"/><line x1="16" y1="16" x2="23" y2="23"/>
+                    <line x1="16" y1="16" x2="16" y2="7"/><line x1="16" y1="16" x2="16" y2="25"/>
+                    <circle cx="16" cy="16" r="2.8" stroke="none"/><circle cx="9" cy="9" r="1.6" stroke="none"/>
+                    <circle cx="23" cy="9" r="1.6" stroke="none"/><circle cx="9" cy="23" r="1.6" stroke="none"/>
+                    <circle cx="23" cy="23" r="1.6" stroke="none"/><circle cx="16" cy="7" r="1.4" stroke="none"/>
+                    <circle cx="16" cy="25" r="1.4" stroke="none"/></g></svg>
+                CORTEX <span class="aba-manuscrito">aba</span>
+            </div>
+            <button class="bt-topo" onclick="sair()" title="Sair">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            </button>
         </div>
-        <h1 id="ola">Olá!</h1>
-        <p>Acompanhe a terapia e as atividades da semana.</p>
-    </div>
 
-    <div class="card">
-        <div class="item-titulo">
-            <h3>Atividade da semana</h3>
-            <span class="chip chip-alerta">nova</span>
+        <div class="crianca" id="cabecalho">
+            <div class="foto-crianca" id="fotoCrianca">?</div>
+            <div><h1 id="nomeCrianca">carregando…</h1><p id="infoCrianca"></p></div>
         </div>
-        <p id="atividade"></p>
-        <button class="btn btn-bloco" style="margin-top:12px;background:var(--st-ok)"
-                onclick="this.textContent='Feito ✓'; this.disabled=true; this.style.opacity=.75">Marcar como feito</button>
-    </div>
-
-    <div class="card">
-        <div class="item-titulo"><h3>Relatório do mês</h3></div>
-        <p id="relatorio"></p>
-        <button class="btn btn-secundario btn-bloco" style="margin-top:10px"
-                onclick="alert('Sprint 4: abre o PDF liberado pela coordenação.')">Abrir PDF</button>
-    </div>
-
-    <div class="card">
-        <div class="item-titulo">
-            <h3>Termos e consentimentos</h3>
-            <span class="chip chip-alerta" id="pendencias"></span>
+        <div class="seletor" id="seletorFilhos" style="display:none">
+            <select id="selFilho" onchange="carregarFilho()"></select>
         </div>
-        <p>Uso de imagem em vídeo de sessão, para supervisão da equipe.</p>
-        <button class="btn btn-bloco" style="margin-top:10px"
-                onclick="alert('Sprint 4: assinatura digital do responsável.')">Ler e assinar</button>
     </div>
 
-    <div class="card">
-        <div class="item-titulo">
-            <h3>Anamnese</h3>
-            <span class="chip chip-ok">preenchida</span>
-        </div>
-        <p>Recebida em 12 de julho. Obrigado por responder.</p>
-    </div>
+    <div id="area"><div class="card vazio-msg">carregando…</div></div>
 
-    <div class="card">
-        <div class="item-titulo"><h3>Próximos atendimentos</h3></div>
-        <table class="tabela" style="margin-top:4px">
-            <tbody>
-                <tr><td>Segunda · 14h00</td><td style="text-align:right"><span class="chip chip-neutro">confirmado</span></td></tr>
-                <tr><td>Quarta · 14h00</td><td style="text-align:right"><span class="chip chip-neutro">confirmado</span></td></tr>
-                <tr><td>Sexta · 14h00</td><td style="text-align:right"><span class="chip chip-neutro">confirmado</span></td></tr>
-            </tbody>
-        </table>
-    </div>
-
-    <div class="aviso" style="margin-top:14px">
-        Precisa avisar uma falta? Fale com a recepção pelo telefone da clínica.
-    </div>
-
-    <div class="tiny soft" style="text-align:center; margin-top:16px">
-        Esqueleto Sprint 0 · dados fictícios ·
-        <a href="../dashboard.html?perfil=coordenador_aba">voltar ao painel</a>
+    <div class="rodape-portal">
+        Precisa avisar uma falta ou remarcar? Fale com a recepção da clínica.
     </div>
 </div>
 
 <script>
-// Portal ainda é maquete: entra de verdade no sprint da família.
-(function () {
-    document.getElementById('ola').textContent = 'Olá!';
-    document.getElementById('atividade').textContent = 'As atividades da semana aparecerão aqui.';
-    document.getElementById('relatorio').textContent = 'Os relatórios liberados aparecerão aqui.';
-    document.getElementById('pendencias').textContent = '—';
-})();
+'use strict';
+
+const MESES = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+let FAMILIA = null, FILHO = null;
+
+document.addEventListener('eq:familia-pronto', async function (ev) {
+    FAMILIA = ev.detail;
+    if (!FAMILIA.pacientes.length) {
+        document.getElementById('nomeCrianca').textContent = 'Olá, ' + (FAMILIA.responsavel.nome || '').split(' ')[0];
+        document.getElementById('area').innerHTML =
+            '<div class="card vazio-msg">Ainda não há criança vinculada a este acesso.<br>Fale com a recepção da clínica.</div>';
+        return;
+    }
+    if (FAMILIA.pacientes.length > 1) {
+        document.getElementById('seletorFilhos').style.display = '';
+        document.getElementById('selFilho').innerHTML = FAMILIA.pacientes.map(p =>
+            `<option value="${p.id}">${p.nome_completo}</option>`).join('');
+    }
+    await carregarFilho();
+});
+
+const p2 = n => String(n).padStart(2,'0');
+function brl(iso) { return iso ? iso.slice(0,10).split('-').reverse().join('/') : '—'; }
+function hojeISO() { const d = new Date(); return d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate()); }
+function idade(nasc) {
+    if (!nasc) return '';
+    const [a,m,d] = nasc.split('-').map(Number);
+    const h = new Date();
+    let anos = h.getFullYear() - a;
+    if ((h.getMonth()+1 < m) || (h.getMonth()+1 === m && h.getDate() < d)) anos--;
+    return anos + (anos === 1 ? ' ano' : ' anos');
+}
+
+async function carregarFilho() {
+    const id = FAMILIA.pacientes.length > 1
+        ? document.getElementById('selFilho').value
+        : FAMILIA.pacientes[0].id;
+    FILHO = FAMILIA.pacientes.find(p => p.id === id) || FAMILIA.pacientes[0];
+
+    document.getElementById('nomeCrianca').textContent = FILHO.nome_completo;
+    document.getElementById('infoCrianca').textContent =
+        idade(FILHO.data_nascimento) + (FILHO.parentesco ? ' · ' + FILHO.parentesco : '');
+
+    const foto = document.getElementById('fotoCrianca');
+    foto.textContent = (FILHO.nome_completo || '?')[0].toUpperCase();
+    if (FILHO.foto_url) {
+        try {
+            const url = await EqFotos.link(FILHO.foto_url);
+            if (url) { foto.style.backgroundImage = 'url(' + url + ')'; foto.textContent = ''; }
+        } catch (e) {}
+    }
+
+    document.getElementById('area').innerHTML = '<div class="card vazio-msg">carregando…</div>';
+
+    try {
+        const hoje = hojeISO();
+        const [rOr, rSes, rRel] = await Promise.all([
+            eqClient.from('orientacoes_responsavel').select('*')
+                .eq('paciente_id', FILHO.id).eq('ativo', true)
+                .order('created_at', { ascending:false }).limit(20),
+            eqClient.from('sessoes').select('data, hora_inicio, status')
+                .eq('paciente_id', FILHO.id).gte('data', hoje)
+                .order('data').order('hora_inicio').limit(6),
+            eqClient.from('relatorios_mensais').select('id, mes_referencia, status')
+                .eq('paciente_id', FILHO.id).order('mes_referencia', { ascending:false }).limit(6)
+        ]);
+        desenhar(rOr.data || [], rSes.data || [], rRel.data || []);
+    } catch (e) {
+        console.error(e);
+        document.getElementById('area').innerHTML =
+            '<div class="card vazio-msg" style="color:var(--st-bad)">Não foi possível carregar agora. Tente de novo em instantes.</div>';
+    }
+}
+
+function desenhar(orientacoes, sessoes, relatorios) {
+    const pendentes = orientacoes.filter(o => !o.executado_em && o.tipo === 'atividade');
+
+    const blocoOrientacoes = orientacoes.length ? orientacoes.map(o => `
+        <div class="orientacao">
+            <div class="item-titulo">
+                <h3>${o.titulo}</h3>
+                ${o.executado_em ? '<span class="chip chip-ok">feito</span>'
+                  : o.tipo === 'atividade' ? '<span class="chip chip-alerta">para fazer</span>'
+                  : '<span class="chip chip-neutro">' + o.tipo + '</span>'}
+            </div>
+            <p>${o.texto}</p>
+            <div class="tiny soft" style="margin-top:5px">
+                enviado em ${brl(o.created_at)}${o.vigencia_ate ? ' · até ' + brl(o.vigencia_ate) : ''}
+            </div>
+            ${o.tipo === 'atividade' && !o.executado_em
+              ? `<button class="btn btn-bloco" style="margin-top:9px;background:var(--st-ok)"
+                         onclick="marcarFeito('${o.id}')">Marcar como feito</button>` : ''}
+        </div>`).join('')
+        : '<div class="vazio-msg">Nenhuma orientação por enquanto.</div>';
+
+    const blocoSessoes = sessoes.length ? sessoes.map(s => `
+        <div class="linha-sessao">
+            <span>${brl(s.data)} · ${s.hora_inicio.slice(0,5)}</span>
+            <span class="chip ${s.status === 'agendada' ? 'chip-neutro' : 'chip-ok'}">${s.status.replace(/_/g,' ')}</span>
+        </div>`).join('')
+        : '<div class="vazio-msg">Nenhum atendimento agendado no momento.</div>';
+
+    const liberados = relatorios;
+    const blocoRelatorios = liberados.length ? liberados.map(r => {
+        const [ano, mes] = r.mes_referencia.split('-').map(Number);
+        return `<div class="linha-sessao">
+            <span>${MESES[mes-1]} de ${ano}</span>
+            <a class="chip chip-neutro" href="relatorio.html?id=${r.id}">abrir</a>
+        </div>`; }).join('')
+        : '<div class="vazio-msg">Nenhum relatório liberado ainda.</div>';
+
+    document.getElementById('area').innerHTML = `
+        ${pendentes.length ? `<div class="aviso" style="margin-bottom:12px;border-left-color:var(--st-warn)">
+            <b>${pendentes.length} atividade${pendentes.length>1?'s':''} para fazer em casa.</b>
+            Quando terminar, é só marcar aqui — assim a equipe sabe como está indo.
+        </div>` : ''}
+
+        <div class="card">
+            <div class="item-titulo"><h3>Orientações e atividades</h3></div>
+            ${blocoOrientacoes}
+        </div>
+
+        <div class="card">
+            <div class="item-titulo"><h3>Próximos atendimentos</h3></div>
+            ${blocoSessoes}
+        </div>
+
+        <div class="card">
+            <div class="item-titulo"><h3>Relatórios</h3></div>
+            ${blocoRelatorios}
+            <div class="card-legenda">Aparecem aqui os relatórios que a coordenação liberou.</div>
+        </div>`;
+}
+
+async function marcarFeito(id) {
+    const ok = await EqConfirm.mostrar({
+        titulo: 'Marcar como feito?',
+        texto: 'A equipe vai ver que a atividade foi realizada em casa.',
+        confirmar: 'Marcar', tipo: 'padrao'
+    });
+    if (!ok) return;
+    try {
+        const agora = new Date().toISOString();
+        const { error } = await eqClient.from('orientacoes_responsavel')
+            .update({ executado_em: agora, lido_em: agora }).eq('id', id);
+        if (error) throw error;
+        await carregarFilho();
+    } catch (e) {
+        console.error(e);
+        await EqConfirm.mostrar({ titulo:'Não foi possível marcar',
+            texto:'Tente de novo em instantes.', confirmar:'Fechar', cancelar:'Fechar', tipo:'alerta' });
+    }
+}
+
+async function sair() {
+    const ok = await EqConfirm.mostrar({ titulo:'Sair?', texto:'Você precisará entrar de novo.',
+        confirmar:'Sair', tipo:'alerta' });
+    if (!ok) return;
+    try { await eqClient.auth.signOut(); } catch (e) {}
+    window.location.href = '../index.html';
+}
 </script>
 </body>
 </html>

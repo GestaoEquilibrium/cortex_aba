@@ -105,6 +105,9 @@ body { min-height:100vh; display:flex; align-items:center; justify-content:cente
         const { data: prof } = await eqClient.from('profissionais')
             .select('id, ativo').eq('auth_user_id', session.user.id).maybeSingle();
         if (prof && prof.ativo) { location.href = 'dashboard.html'; return; }
+        const { data: resp } = await eqClient.from('responsaveis')
+            .select('id, ativo').eq('auth_user_id', session.user.id).maybeSingle();
+        if (resp && resp.ativo) { location.href = 'portal/index.html'; return; }
         await eqClient.auth.signOut();   // conta órfã ou inativa: não deixa em loop
     })();
 
@@ -128,8 +131,17 @@ body { min-height:100vh; display:flex; align-items:center; justify-content:cente
                 .select('id, perfil, ativo').eq('auth_user_id', data.user.id).maybeSingle();
 
             if (!prof) {
+                // pode ser responsável: portal da família tem cadastro próprio
+                const { data: resp } = await eqClient.from('responsaveis')
+                    .select('id, ativo').eq('auth_user_id', data.user.id).maybeSingle();
+                if (resp && resp.ativo) {
+                    // sem auditoria aqui: a policy exige profissional_id do próprio usuário,
+                    // e responsável não tem linha em profissionais
+                    location.href = 'portal/index.html';
+                    return;
+                }
                 await eqClient.auth.signOut();
-                mostrar('Esta conta ainda não está vinculada a um profissional. Fale com a coordenação.');
+                mostrar('Esta conta ainda não está vinculada. Fale com a coordenação.');
                 return;
             }
             if (!prof.ativo) {

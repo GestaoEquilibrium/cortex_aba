@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-tema="familia">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CORTEX aba — Relatório</title>
+<script>
+(function(){try{var m=localStorage.getItem('eqaba_modo');
+if(m!=='claro'&&m!=='escuro'){m=(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches)?'escuro':'claro';}
+document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
+</script>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#7C3AED">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../styles/base.css?v=3">
+<link rel="stylesheet" href="../styles/components.css?v=5">
+<style>
+.portal { max-width:560px; margin:0 auto; padding:20px 16px 40px; position:relative; z-index:1; }
+.voltar { display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:600;
+          color:var(--ink-muted); margin-bottom:12px; }
+.secao { margin-bottom:16px; }
+.secao h3 { font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--ink-soft);
+            margin-bottom:5px; }
+.secao p { font-size:13.5px; line-height:1.6; color:var(--ink); white-space:pre-wrap; }
+.vazio-msg { padding:26px; text-align:center; color:var(--ink-muted); font-size:13px; }
+@media print { .voltar, .nao-imprime { display:none !important; } body::before { display:none !important; }
+               .card { border:none !important; box-shadow:none !important; } @page { margin:18mm 16mm; } }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../config.js?v=4"></script>
+<script src="../shared/supabase_client.js?v=2"></script>
+<script src="../shared/tema.js?v=2"></script>
+<script src="../shared/confirm_modal.js?v=3"></script>
+<script src="../shared/fotos.js?v=7"></script>
+<script src="../shared/auth_guard_portal.js?v=9"></script>
+</head>
+<body>
+<div class="portal">
+    <a class="voltar" href="index.html">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+            <path d="M15 6l-6 6 6 6"/></svg> Voltar
+    </a>
+    <div id="area"><div class="card vazio-msg">carregando…</div></div>
+</div>
+
+<script>
+'use strict';
+const MESES = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+const SECOES = [
+    ['frequencia','Frequência no período'], ['objetivos','Objetivos trabalhados'],
+    ['progressos','Progressos observados'], ['dificuldades','Principais dificuldades'],
+    ['comportamento','Comportamento'], ['plano_proximo','Plano para o próximo período'],
+    ['conclusao','Conclusão']
+];
+
+document.addEventListener('eq:familia-pronto', async function () {
+    const id = new URLSearchParams(location.search).get('id');
+    if (!id) { document.getElementById('area').innerHTML =
+        '<div class="card vazio-msg">Relatório não informado.</div>'; return; }
+    try {
+        const { data, error } = await eqClient.from('relatorios_mensais')
+            .select('*, paciente:pacientes(nome_completo)').eq('id', id).maybeSingle();
+        if (error) throw error;
+        if (!data) { document.getElementById('area').innerHTML =
+            '<div class="card vazio-msg">Este relatório não está disponível.</div>'; return; }
+
+        const [ano, mes] = data.mes_referencia.split('-').map(Number);
+        document.getElementById('area').innerHTML = `
+        <div class="card">
+            <div style="border-bottom:2px solid var(--line);padding-bottom:10px;margin-bottom:16px">
+                <h2 style="font-size:17px">Relatório de acompanhamento</h2>
+                <p class="small muted" style="margin-top:3px">
+                    ${data.paciente ? data.paciente.nome_completo : ''} · ${MESES[mes-1]} de ${ano}</p>
+                <p class="tiny soft">Equilibrium Med Center — Setor ABA</p>
+            </div>
+            ${SECOES.filter(s => data[s[0]]).map(s => `
+                <div class="secao"><h3>${s[1]}</h3><p>${data[s[0]]}</p></div>`).join('')}
+            <button class="btn btn-bloco nao-imprime" style="margin-top:10px" onclick="window.print()">
+                Imprimir ou salvar em PDF</button>
+        </div>`;
+    } catch (e) {
+        console.error(e);
+        document.getElementById('area').innerHTML =
+            '<div class="card vazio-msg" style="color:var(--st-bad)">Não foi possível abrir agora.</div>';
+    }
+});
+</script>
+</body>
+</html>

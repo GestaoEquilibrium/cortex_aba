@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-tema="coordenacao">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CORTEX aba — Relatórios</title>
+<script>
+(function(){try{var m=localStorage.getItem('eqaba_modo');
+if(m!=='claro'&&m!=='escuro'){m=(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches)?'escuro':'claro';}
+document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
+</script>
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="../favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="../apple-touch-icon.png">
+<link rel="manifest" href="../site.webmanifest">
+<meta name="theme-color" content="#0F766E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../styles/base.css?v=3">
+<link rel="stylesheet" href="../styles/components.css?v=5">
+<style>
+.barra { display:flex; gap:9px; align-items:center; flex-wrap:wrap; margin-bottom:14px; }
+.barra select, .barra input { padding:10px 12px; font:inherit; font-size:13px; color:var(--ink);
+    border:1px solid var(--line-strong); border-radius:9px; background:var(--surface); }
+.barra select { min-width:200px; }
+
+.numeros { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; margin-bottom:14px; }
+.secao { margin-bottom:16px; }
+.secao label { display:flex; justify-content:space-between; align-items:center;
+               font-size:11.5px; font-weight:800; text-transform:uppercase; letter-spacing:.08em;
+               color:var(--ink-soft); margin-bottom:5px; }
+.secao textarea { width:100%; padding:11px 12px; font-size:13px; font-family:inherit; line-height:1.55;
+    border:1px solid var(--line-strong); border-radius:9px; background:var(--surface); color:var(--ink); resize:vertical; }
+.secao textarea:focus { outline:2px solid var(--acao); border-color:transparent; }
+.origem { font-size:10px; font-weight:600; text-transform:none; letter-spacing:0; color:var(--ink-soft); }
+.vazio-msg { padding:26px; text-align:center; color:var(--ink-muted); font-size:13px; }
+.faixa-status { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:12px; }
+
+/* ── impressão: sai o sistema, fica o documento ─────────────────────────── */
+@media print {
+    .sidebar, .faixa-perfil, .app-topo, .barra, .faixa-status, .nao-imprime { display:none !important; }
+    body::before { display:none !important; }
+    .app-main { margin:0 !important; padding:0 !important; max-width:none !important; }
+    .card { border:none !important; box-shadow:none !important; padding:0 !important; }
+    .secao textarea { border:none; padding:0; resize:none; font-size:11.5pt; color:#000; background:#fff; }
+    .secao label { color:#333; }
+    .cabecalho-impressao { display:block !important; }
+    @page { margin:18mm 16mm; }
+}
+.cabecalho-impressao { display:none; margin-bottom:16px; padding-bottom:10px; border-bottom:2px solid #333; }
+.cabecalho-impressao h2 { font-size:16pt; }
+.cabecalho-impressao p { font-size:10pt; color:#444; margin-top:3px; }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../config.js?v=4"></script>
+<script src="../shared/supabase_client.js?v=2"></script>
+<script src="../shared/tema.js?v=2"></script>
+<script src="../shared/confirm_modal.js?v=3"></script>
+<script src="../shared/fotos.js?v=7"></script>
+<script src="../shared/audit.js?v=5"></script>
+<script src="../shared/auth_guard.js?v=7"></script>
+</head>
+<body>
+
+<div class="app-shell">
+    <div id="sidebar"></div>
+    <div class="faixa-perfil"></div>
+
+    <main class="app-main" style="max-width:900px">
+        <div class="app-topo">
+            <div>
+                <h1>Relatório mensal</h1>
+                <div class="sub" id="subtitulo">escolha o paciente e o mês</div>
+            </div>
+            <div style="display:flex;gap:8px">
+                <button class="btn btn-secundario" id="btImprimir" style="display:none" onclick="window.print()">Imprimir / PDF</button>
+                <button class="btn" id="btGerar" style="display:none" onclick="gerarRascunho()">Gerar rascunho</button>
+            </div>
+        </div>
+
+        <div class="barra">
+            <select id="selPaciente" onchange="abrir()"><option value="">Selecione o paciente...</option></select>
+            <input type="month" id="selMes" onchange="abrir()">
+        </div>
+
+        <div id="area"><div class="card vazio-msg">Escolha o paciente e o mês de referência.</div></div>
+    </main>
+</div>
+
+<script src="../shared/sidebar.js?v=8"></script>
+<script>
+'use strict';
+
+const MESES = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+const SECOES = [
+    { k:'frequencia',    r:'Frequência no período',      o:'apurado das sessões' },
+    { k:'objetivos',     r:'Objetivos trabalhados',      o:'apurado do PEI' },
+    { k:'progressos',    r:'Progressos observados',      o:'apurado das tentativas' },
+    { k:'dificuldades',  r:'Principais dificuldades',    o:'escreva a partir das evoluções' },
+    { k:'comportamento', r:'Comportamento',              o:'apurado dos episódios' },
+    { k:'plano_proximo', r:'Plano para o próximo período', o:'escreva' },
+    { k:'conclusao',     r:'Conclusão',                  o:'escreva' }
+];
+
+let PACIENTES = [], PAC = null, REL = null, EU = null, PODE_EDITAR = false, NUMEROS = null;
+
+document.addEventListener('eq:pronto', async function (ev) {
+    EqSidebar.render('relatorios');
+    EU = ev.detail;
+    PODE_EDITAR = ['admin_direcao','supervisor_clinico','coordenador_aba'].includes(EU.perfil);
+
+    const d = new Date();
+    document.getElementById('selMes').value = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+
+    try {
+        const { data } = await eqClient.from('pacientes')
+            .select('id, nome_completo, data_nascimento, responsavel_nome, convenio, sessoes_semana_prescritas')
+            .in('status',['ativo','suspenso','alta']).order('nome_completo');
+        PACIENTES = data || [];
+        document.getElementById('selPaciente').innerHTML = '<option value="">Selecione o paciente...</option>' +
+            PACIENTES.map(p => `<option value="${p.id}">${p.nome_completo}</option>`).join('');
+    } catch (e) { console.error(e); }
+});
+
+const p2 = n => String(n).padStart(2,'0');
+function brl(iso) { return iso ? iso.slice(0,10).split('-').reverse().join('/') : '—'; }
+function faixaMes() {
+    const v = document.getElementById('selMes').value;
+    if (!v) return null;
+    const [ano, mes] = v.split('-').map(Number);
+    const ini = ano + '-' + p2(mes) + '-01';
+    const ultimo = new Date(ano, mes, 0).getDate();
+    return { ini, fim: ano + '-' + p2(mes) + '-' + p2(ultimo), ano, mes };
+}
+
+async function abrir() {
+    const id = document.getElementById('selPaciente').value;
+    const f = faixaMes();
+    document.getElementById('btGerar').style.display = 'none';
+    document.getElementById('btImprimir').style.display = 'none';
+
+    if (!id || !f) {
+        document.getElementById('area').innerHTML =
+            '<div class="card vazio-msg">Escolha o paciente e o mês de referência.</div>';
+        return;
+    }
+    PAC = PACIENTES.find(p => p.id === id);
+    document.getElementById('area').innerHTML = '<div class="card vazio-msg">carregando…</div>';
+
+    try {
+        const { data, error } = await eqClient.from('relatorios_mensais')
+            .select('*').eq('paciente_id', id).eq('mes_referencia', f.ini).maybeSingle();
+        if (error) throw error;
+        REL = data || null;
+        NUMEROS = REL && REL.numeros ? REL.numeros : null;
+        desenhar();
+    } catch (e) {
+        console.error(e);
+        document.getElementById('area').innerHTML =
+            '<div class="card vazio-msg" style="color:var(--st-bad)">Erro ao carregar. Veja o console.</div>';
+    }
+}
+
+// ── apuração: números vêm dos registros, nunca de estimativa ────────────────
+async function apurar() {
+    const f = faixaMes();
+    const id = PAC.id;
+
+    const [rs, rev, rpei, rc] = await Promise.all([
+        eqClient.from('sessoes').select('id, data, status').eq('paciente_id', id)
+            .gte('data', f.ini).lte('data', f.fim),
+        eqClient.from('evolucoes_diarias').select('sessao_id, texto, contexto').eq('paciente_id', id),
+        eqClient.from('pei').select('id').eq('paciente_id', id).eq('status','vigente')
+            .order('versao', { ascending:false }).limit(1).maybeSingle(),
+        eqClient.from('registros_comportamento')
+            .select('episodios, comportamento:comportamentos_alvo(nome)')
+            .eq('paciente_id', id).gte('data', f.ini).lte('data', f.fim)
+    ]);
+
+    const sessoes = rs.data || [];
+    const realizadas = sessoes.filter(s => s.status === 'realizada');
+    const faltaJ = sessoes.filter(s => s.status === 'falta_justificada').length;
+    const faltaI = sessoes.filter(s => s.status === 'falta_injustificada').length;
+    const idsRealizadas = new Set(realizadas.map(s => s.id));
+    const evolucoes = (rev.data || []).filter(e => idsRealizadas.has(e.sessao_id));
+
+    let programas = [], tentativas = [];
+    if (rpei.data) {
+        const rp = await eqClient.from('pei_programas')
+            .select('id, status, criterio_percentual, programa:biblioteca_programas(nome, area)')
+            .eq('pei_id', rpei.data.id);
+        programas = rp.data || [];
+        if (programas.length) {
+            const rt = await eqClient.from('registros_tentativa')
+                .select('pei_programa_id, resultado, sessao:sessoes(data)')
+                .in('pei_programa_id', programas.map(p => p.id));
+            tentativas = (rt.data || []).filter(t => t.sessao && t.sessao.data >= f.ini && t.sessao.data <= f.fim);
+        }
+    }
+
+    // independência por objetivo, comparando primeira e última semana do mês
+    const porPrograma = programas.map(p => {
+        const meus = tentativas.filter(t => t.pei_programa_id === p.id);
+        if (!meus.length) return null;
+        const indep = meus.filter(t => t.resultado === 'independente').length;
+        const metade = Math.floor(meus.length / 2);
+        const inicio = meus.slice(0, metade || 1);
+        const fim = meus.slice(metade);
+        const pctIni = Math.round(inicio.filter(t => t.resultado === 'independente').length / inicio.length * 100);
+        const pctFim = Math.round(fim.filter(t => t.resultado === 'independente').length / fim.length * 100);
+        return { nome: p.programa ? p.programa.nome : '—', status: p.status,
+                 tentativas: meus.length, pct: Math.round(indep / meus.length * 100),
+                 variacao: pctFim - pctIni };
+    }).filter(Boolean);
+
+    const comportamentos = {};
+    (rc.data || []).forEach(r => {
+        const n = r.comportamento ? r.comportamento.nome : 'comportamento';
+        comportamentos[n] = (comportamentos[n] || 0) + (r.episodios || 1);
+    });
+
+    const contextos = {};
+    evolucoes.forEach(e => (e.contexto || []).forEach(c => { contextos[c] = (contextos[c] || 0) + 1; }));
+
+    return {
+        previstas: sessoes.length, realizadas: realizadas.length,
+        faltaJustificada: faltaJ, faltaInjustificada: faltaI,
+        evolucoesEscritas: evolucoes.length,
+        programas: porPrograma,
+        dominados: programas.filter(p => p.status === 'dominado').length,
+        emEnsino: programas.filter(p => p.status === 'em_ensino').length,
+        comportamentos: comportamentos,
+        contextos: contextos
+    };
+}
+
+function textoDe(n) {
+    const f = faixaMes();
+    const mesNome = MESES[f.mes - 1] + ' de ' + f.ano;
+    const presenca = n.previstas ? Math.round(n.realizadas / n.previstas * 100) : 0;
+
+    const frequencia =
+        `No mês de ${mesNome} foram previstas ${n.previstas} sessões, das quais ${n.realizadas} foram realizadas ` +
+        `(${presenca}% de presença). Houve ${n.faltaJustificada} falta(s) com aviso prévio e ` +
+        `${n.faltaInjustificada} falta(s) sem aviso.` +
+        (n.faltaInjustificada >= 3 ? ' A frequência irregular no período compromete a continuidade do trabalho e foi tratada com a família.' : '');
+
+    const objetivos = n.programas.length
+        ? `Foram trabalhados ${n.programas.length} objetivos no período: ` +
+          n.programas.map(p => p.nome).join(', ') + '. ' +
+          `Atualmente ${n.emEnsino} objetivo(s) estão em ensino e ${n.dominados} já foram dados como dominados.`
+        : 'Não houve registro de objetivos trabalhados neste período.';
+
+    const subiram = n.programas.filter(p => p.variacao >= 10);
+    const cairam  = n.programas.filter(p => p.variacao <= -10);
+    const progressos = n.programas.length
+        ? n.programas.map(p =>
+            `${p.nome}: ${p.pct}% de respostas independentes em ${p.tentativas} tentativas` +
+            (p.variacao > 0 ? `, com evolução de ${p.variacao} pontos ao longo do mês` :
+             p.variacao < 0 ? `, com queda de ${Math.abs(p.variacao)} pontos ao longo do mês` :
+             ', estável no período')).join('. ') + '.' +
+          (subiram.length ? ` Destaque para o avanço em ${subiram.map(p => p.nome).join(' e ')}.` : '')
+        : 'Sem registros de tentativas suficientes para análise de progresso neste período.';
+
+    const nomesComp = Object.keys(n.comportamentos);
+    const comportamento = nomesComp.length
+        ? 'Foram registrados episódios de: ' +
+          nomesComp.map(k => `${k} (${n.comportamentos[k]} episódio(s))`).join(', ') + '.'
+        : 'Não houve registro de comportamentos-problema no período.';
+
+    const ctx = Object.keys(n.contextos);
+    const dificuldades =
+        (cairam.length ? `Observou-se queda de desempenho em ${cairam.map(p => p.nome).join(' e ')}. ` : '') +
+        (ctx.length ? `Foram registradas intercorrências que podem ter influenciado o período: ` +
+                      ctx.map(c => `${c} (${n.contextos[c]}x)`).join(', ') + '. ' : '') +
+        (!cairam.length && !ctx.length ? 'Sem dificuldades relevantes registradas no período. ' : '') +
+        '[Complemente com a leitura clínica da equipe.]';
+
+    const plano = '[Descreva os objetivos que seguem em ensino, os que entram e os ajustes de plano para o próximo mês.]';
+    const conclusao =
+        `${PAC.nome_completo} manteve ${presenca}% de presença no período` +
+        (subiram.length ? ' e apresentou evolução nos objetivos em ensino' : '') + '. ' +
+        '[Conclua com o parecer da equipe e as orientações à família.]';
+
+    return { frequencia, objetivos, progressos, dificuldades, comportamento, plano_proximo: plano, conclusao };
+}
+
+async function gerarRascunho() {
+    const existe = REL && REL.status === 'finalizado';
+    const ok = await EqConfirm.mostrar({
+        titulo: existe ? 'Regerar sobre um relatório finalizado?' : 'Gerar o rascunho?',
+        texto: existe
+            ? 'Este relatório já está finalizado. Para regerar, ele volta para "em revisão" e o texto atual será substituído.'
+            : 'O sistema monta o texto a partir dos registros do mês: frequência, objetivos, tentativas e episódios de comportamento. Depois é só revisar e ajustar.',
+        confirmar: 'Gerar', tipo: existe ? 'alerta' : 'padrao'
+    });
+    if (!ok) return;
+
+    const bt = document.getElementById('btGerar');
+    bt.disabled = true; bt.textContent = 'Apurando...';
+    try {
+        NUMEROS = await apurar();
+        const t = textoDe(NUMEROS);
+        const f = faixaMes();
+        const registro = Object.assign({
+            paciente_id: PAC.id, mes_referencia: f.ini, status: 'rascunho',
+            numeros: NUMEROS, gerado_por: EU.profissional.id
+        }, t);
+
+        const { data, error } = await eqClient.from('relatorios_mensais')
+            .upsert(registro, { onConflict: 'paciente_id,mes_referencia' }).select('*').single();
+        if (error) throw error;
+        REL = data;
+        await EqAudit.registrar('criacao', 'relatorios_mensais', REL.id,
+            { paciente: PAC.nome_completo, mes: f.ini });
+        desenhar();
+    } catch (e) {
+        console.error(e);
+        await EqConfirm.mostrar({ titulo:'Não foi possível gerar', texto: e.message || 'Erro.',
+            confirmar:'Entendi', cancelar:'Fechar', tipo:'alerta' });
+    } finally { bt.disabled = false; bt.textContent = 'Gerar rascunho'; }
+}
+
+function desenhar() {
+    const f = faixaMes();
+    const mesNome = MESES[f.mes - 1] + ' de ' + f.ano;
+    document.getElementById('subtitulo').textContent = PAC.nome_completo + ' · ' + mesNome;
+    if (PODE_EDITAR) document.getElementById('btGerar').style.display = '';
+
+    if (!REL) {
+        document.getElementById('area').innerHTML = `<div class="card vazio-msg">
+            Nenhum relatório para ${mesNome}.<br>
+            <span class="tiny soft">${PODE_EDITAR
+                ? 'Use "Gerar rascunho" — o sistema monta o texto a partir dos registros do mês.'
+                : 'A coordenação ainda não gerou este relatório.'}</span></div>`;
+        return;
+    }
+
+    document.getElementById('btImprimir').style.display = '';
+    const n = REL.numeros || {};
+    const presenca = n.previstas ? Math.round(n.realizadas / n.previstas * 100) : 0;
+    const chip = { rascunho:'chip-alerta', em_revisao:'chip-neutro', finalizado:'chip-ok' }[REL.status];
+
+    document.getElementById('area').innerHTML = `
+    <div class="card">
+        <div class="cabecalho-impressao">
+            <h2>Relatório mensal de acompanhamento — ${mesNome}</h2>
+            <p>${PAC.nome_completo}${PAC.data_nascimento ? ' · nascido em ' + brl(PAC.data_nascimento) : ''}
+               ${PAC.responsavel_nome ? ' · responsável: ' + PAC.responsavel_nome : ''}</p>
+            <p>Equilibrium Med Center — Setor ABA</p>
+        </div>
+
+        <div class="faixa-status">
+            <span class="chip ${chip}">${(REL.status || '').replace('_',' ')}</span>
+            ${REL.finalizado_em ? `<span class="tiny soft">finalizado em ${brl(REL.finalizado_em)}</span>` : ''}
+            ${REL.liberado_familia ? '<span class="chip chip-ok">liberado à família</span>' : ''}
+        </div>
+
+        <div class="numeros nao-imprime">
+            <div class="kpi" style="--kpi-cor:var(--acao)"><div class="kpi-numero">${n.realizadas || 0}</div>
+                <div class="kpi-texto">sessões realizadas de ${n.previstas || 0}</div></div>
+            <div class="kpi" style="--kpi-cor:${presenca >= 80 ? 'var(--st-ok)' : 'var(--st-warn)'}">
+                <div class="kpi-numero">${presenca}%</div><div class="kpi-texto">presença</div></div>
+            <div class="kpi" style="--kpi-cor:${(n.faltaInjustificada||0) ? 'var(--st-bad)' : 'var(--st-neutro)'}">
+                <div class="kpi-numero">${n.faltaInjustificada || 0}</div><div class="kpi-texto">faltas sem aviso</div></div>
+            <div class="kpi" style="--kpi-cor:var(--st-ok)"><div class="kpi-numero">${n.dominados || 0}</div>
+                <div class="kpi-texto">objetivos dominados</div></div>
+            <div class="kpi" style="--kpi-cor:var(--st-neutro)"><div class="kpi-numero">${n.evolucoesEscritas || 0}</div>
+                <div class="kpi-texto">evoluções escritas</div></div>
+        </div>
+
+        ${SECOES.map(s => `
+            <div class="secao">
+                <label>${s.r} <span class="origem nao-imprime">${s.o}</span></label>
+                <textarea id="s_${s.k}" rows="${s.k === 'progressos' ? 5 : 3}"
+                    ${(!PODE_EDITAR || REL.status === 'finalizado') ? 'readonly' : ''}
+                    >${REL[s.k] || ''}</textarea>
+            </div>`).join('')}
+
+        ${PODE_EDITAR ? `<div class="nao-imprime" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
+            ${REL.status !== 'finalizado' ? `
+                <button class="btn btn-secundario" onclick="salvar('rascunho')">Salvar rascunho</button>
+                <button class="btn btn-secundario" onclick="salvar('em_revisao')">Enviar para revisão</button>
+                <button class="btn" onclick="finalizar()">Finalizar</button>`
+            : `<button class="btn btn-secundario" onclick="reabrir()">Voltar para revisão</button>
+               <button class="btn ${REL.liberado_familia ? 'btn-secundario' : ''}" onclick="alternarLiberacao()">
+                   ${REL.liberado_familia ? 'Recolher da família' : 'Liberar à família'}</button>`}
+        </div>` : ''}
+
+        <div class="card-legenda nao-imprime" style="margin-top:12px">
+            O texto é um rascunho montado a partir dos registros do mês. Nenhum relatório sai do
+            sistema sem revisão e finalização por um profissional responsável.
+        </div>
+    </div>`;
+}
+
+function coletar() {
+    const o = {};
+    SECOES.forEach(s => { o[s.k] = document.getElementById('s_' + s.k).value.trim() || null; });
+    return o;
+}
+
+async function salvar(status) {
+    try {
+        const { error } = await eqClient.from('relatorios_mensais')
+            .update(Object.assign(coletar(), { status: status })).eq('id', REL.id);
+        if (error) throw error;
+        await EqAudit.registrar('edicao', 'relatorios_mensais', REL.id,
+            { paciente: PAC.nome_completo, status: status });
+        await abrir();
+    } catch (e) {
+        console.error(e);
+        await EqConfirm.mostrar({ titulo:'Não foi possível salvar', texto: e.message || 'Erro.',
+            confirmar:'Entendi', cancelar:'Fechar', tipo:'alerta' });
+    }
+}
+
+async function finalizar() {
+    const ok = await EqConfirm.mostrar({
+        titulo: 'Finalizar o relatório?',
+        texto: 'Depois de finalizado o texto fica travado. Para editar de novo será preciso voltar o status para "em revisão" — e isso fica registrado na auditoria.',
+        confirmar: 'Finalizar', tipo: 'alerta'
+    });
+    if (!ok) return;
+    try {
+        const { error } = await eqClient.from('relatorios_mensais')
+            .update(Object.assign(coletar(), {
+                status: 'finalizado',
+                finalizado_por: EU.profissional.id,
+                finalizado_em: new Date().toISOString()
+            })).eq('id', REL.id);
+        if (error) throw error;
+        await EqAudit.registrar('status', 'relatorios_mensais', REL.id,
+            { paciente: PAC.nome_completo, novo_status: 'finalizado' });
+        await abrir();
+    } catch (e) {
+        console.error(e);
+        await EqConfirm.mostrar({ titulo:'Não foi possível finalizar', texto: e.message || 'Erro.',
+            confirmar:'Entendi', cancelar:'Fechar', tipo:'alerta' });
+    }
+}
+
+async function reabrir() {
+    const ok = await EqConfirm.mostrar({
+        titulo: 'Reabrir para edição?',
+        texto: 'O relatório volta para "em revisão". Se ele já foi entregue à família ou ao convênio, a versão que saiu não muda — só a daqui para frente.',
+        confirmar: 'Reabrir', tipo: 'alerta'
+    });
+    if (!ok) return;
+    try {
+        const { error } = await eqClient.from('relatorios_mensais')
+            .update({ status: 'em_revisao' }).eq('id', REL.id);
+        if (error) throw error;
+        await EqAudit.registrar('status', 'relatorios_mensais', REL.id,
+            { paciente: PAC.nome_completo, novo_status: 'em_revisao' });
+        await abrir();
+    } catch (e) { console.error(e); }
+}
+
+async function alternarLiberacao() {
+    const novo = !REL.liberado_familia;
+    const ok = await EqConfirm.mostrar({
+        titulo: novo ? 'Liberar à família?' : 'Recolher da família?',
+        texto: novo ? 'O responsável passa a ver este relatório no portal.'
+                    : 'O relatório deixa de aparecer no portal do responsável.',
+        confirmar: novo ? 'Liberar' : 'Recolher', tipo: novo ? 'padrao' : 'alerta'
+    });
+    if (!ok) return;
+    try {
+        const { error } = await eqClient.from('relatorios_mensais')
+            .update({ liberado_familia: novo }).eq('id', REL.id);
+        if (error) throw error;
+        await EqAudit.registrar('status', 'relatorios_mensais', REL.id,
+            { paciente: PAC.nome_completo, liberado_familia: novo });
+        await abrir();
+    } catch (e) { console.error(e); }
+}
+</script>
+</body>
+</html>

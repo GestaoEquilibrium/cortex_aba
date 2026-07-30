@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-tema="coordenacao">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CORTEX aba — Tarefas</title>
+<script>
+(function(){try{var m=localStorage.getItem('eqaba_modo');
+if(m!=='claro'&&m!=='escuro'){m=(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches)?'escuro':'claro';}
+document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
+</script>
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="../favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="../apple-touch-icon.png">
+<link rel="manifest" href="../site.webmanifest">
+<meta name="theme-color" content="#0F766E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../styles/base.css?v=3">
+<link rel="stylesheet" href="../styles/components.css?v=5">
+<style>
+.filtros { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:14px; }
+.filtro { border:1px solid var(--line); background:var(--surface); color:var(--ink-muted);
+    border-radius:999px; padding:7px 13px; font:inherit; font-size:11.5px; font-weight:700; cursor:pointer; }
+.filtro[aria-pressed="true"] { background:var(--acao); color:#fff; border-color:transparent; }
+.filtros select { padding:8px 11px; font:inherit; font-size:12.5px; color:var(--ink);
+    border:1px solid var(--line-strong); border-radius:9px; background:var(--surface); }
+
+.tarefa { display:flex; gap:12px; align-items:flex-start; padding:13px 0; border-top:1px solid var(--line); }
+.tarefa:first-child { border-top:none; }
+.marca-prio { width:4px; align-self:stretch; border-radius:3px; flex:0 0 auto; }
+.tarefa-corpo { flex:1; min-width:0; }
+.tarefa-corpo b { font-size:13.5px; }
+.tarefa-corpo p { font-size:12px; color:var(--ink-muted); margin-top:3px; line-height:1.45; }
+.tarefa-meta { display:flex; gap:8px; flex-wrap:wrap; margin-top:7px; align-items:center; }
+.tarefa.feita { opacity:.55; }
+.tarefa.feita b { text-decoration:line-through; }
+.atrasada { color:var(--st-bad); font-weight:700; }
+
+.campo { margin-bottom:11px; }
+.campo label { display:block; font-size:11.5px; font-weight:700; color:var(--ink-muted); margin-bottom:4px; }
+.campo input, .campo select, .campo textarea { width:100%; padding:9px 11px; font-size:13px; font-family:inherit;
+    border:1px solid var(--line-strong); border-radius:8px; background:var(--surface-alt); color:var(--ink); }
+.campo-2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.modal-fundo { position:fixed; inset:0; background:rgba(12,27,42,.5); backdrop-filter:blur(3px);
+               display:none; align-items:center; justify-content:center; padding:20px; z-index:80; }
+.modal-fundo.aberto { display:flex; }
+.modal { background:var(--surface); border-radius:var(--radius-card); padding:22px; width:100%;
+         max-width:520px; box-shadow:var(--shadow-lg); max-height:92vh; overflow:auto; }
+.vazio-msg { padding:26px; text-align:center; color:var(--ink-muted); font-size:13px; }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../config.js?v=4"></script>
+<script src="../shared/supabase_client.js?v=2"></script>
+<script src="../shared/tema.js?v=2"></script>
+<script src="../shared/confirm_modal.js?v=3"></script>
+<script src="../shared/fotos.js?v=7"></script>
+<script src="../shared/audit.js?v=5"></script>
+<script src="../shared/auth_guard.js?v=7"></script>
+</head>
+<body>
+
+<div class="app-shell">
+    <div id="sidebar"></div>
+    <div class="faixa-perfil"></div>
+
+    <main class="app-main">
+        <div class="app-topo">
+            <div>
+                <h1>Tarefas</h1>
+                <div class="sub" id="resumo">carregando…</div>
+            </div>
+            <button class="btn" id="btNova" style="display:none" onclick="abrirNova()">Nova tarefa</button>
+        </div>
+
+        <div class="filtros">
+            <button class="filtro" data-f="abertas" aria-pressed="true"  onclick="alternar(this)">Abertas</button>
+            <button class="filtro" data-f="minhas"  aria-pressed="false" onclick="alternar(this)">Minhas</button>
+            <button class="filtro" data-f="atrasadas" aria-pressed="false" onclick="alternar(this)">Atrasadas</button>
+            <select id="fTipo" onchange="pintar()">
+                <option value="">Todos os tipos</option>
+                <option value="contato_familia">Contato com a família</option>
+                <option value="revisao_pei">Revisão de PEI</option>
+                <option value="supervisao">Supervisão</option>
+                <option value="relatorio">Relatório</option>
+                <option value="evolucao">Evolução pendente</option>
+                <option value="outro">Outro</option>
+            </select>
+        </div>
+
+        <div class="card"><div id="area"><div class="muted small">carregando…</div></div></div>
+    </main>
+</div>
+
+<!-- ── nova tarefa ─────────────────────────────────────────────────────────── -->
+<div class="modal-fundo" id="modalNova" onclick="if(event.target===this) fechar('modalNova')">
+    <div class="modal">
+        <h2 style="margin-bottom:14px">Nova tarefa</h2>
+        <form id="formNova">
+            <div class="campo"><label for="nTitulo">O que precisa ser feito *</label>
+                <input id="nTitulo" required placeholder="Contatar responsável sobre as faltas"></div>
+            <div class="campo"><label for="nDescricao">Detalhes</label>
+                <textarea id="nDescricao" rows="3"></textarea></div>
+            <div class="campo-2">
+                <div class="campo"><label for="nTipo">Tipo</label>
+                    <select id="nTipo">
+                        <option value="contato_familia">Contato com a família</option>
+                        <option value="revisao_pei">Revisão de PEI</option>
+                        <option value="supervisao">Supervisão</option>
+                        <option value="relatorio">Relatório</option>
+                        <option value="evolucao">Evolução pendente</option>
+                        <option value="outro" selected>Outro</option>
+                    </select></div>
+                <div class="campo"><label for="nPrioridade">Prioridade</label>
+                    <select id="nPrioridade">
+                        <option value="alta">Alta</option>
+                        <option value="media" selected>Média</option>
+                        <option value="baixa">Baixa</option>
+                    </select></div>
+            </div>
+            <div class="campo-2">
+                <div class="campo"><label for="nResponsavel">Responsável</label><select id="nResponsavel"></select></div>
+                <div class="campo"><label for="nPrazo">Prazo</label><input id="nPrazo" type="date"></div>
+            </div>
+            <div class="campo"><label for="nPaciente">Paciente relacionado</label>
+                <select id="nPaciente"><option value="">— nenhum —</option></select></div>
+            <div class="aviso" id="erroNova" style="display:none;border-left-color:var(--st-bad);color:var(--st-bad);margin-bottom:10px"></div>
+            <div class="grid-2">
+                <button type="button" class="btn btn-secundario btn-bloco" onclick="fechar('modalNova')">Cancelar</button>
+                <button type="submit" class="btn btn-bloco" id="btSalvarNova">Criar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script src="../shared/sidebar.js?v=8"></script>
+<script>
+'use strict';
+
+const TIPOS = {
+    contato_familia:'contato com a família', revisao_pei:'revisão de PEI',
+    supervisao:'supervisão', relatorio:'relatório', evolucao:'evolução pendente', outro:'outro'
+};
+const PRIO = { alta:'var(--st-bad)', media:'var(--st-warn)', baixa:'var(--st-neutro)' };
+
+let TAREFAS = [], EU = null, PODE_CRIAR = false;
+
+document.addEventListener('eq:pronto', async function (ev) {
+    EqSidebar.render('tarefas');
+    EU = ev.detail;
+    PODE_CRIAR = ['admin_direcao','supervisor_clinico','coordenador_aba','recepcao'].includes(EU.perfil);
+    if (PODE_CRIAR) document.getElementById('btNova').style.display = '';
+
+    // aplicador abre já filtrado nas dele
+    if (['aplicador','aplicador_itinerante','estagiario_aba'].includes(EU.perfil)) {
+        document.querySelector('[data-f="minhas"]').setAttribute('aria-pressed','true');
+    }
+
+    try {
+        const [rp, rpac] = await Promise.all([
+            eqClient.from('profissionais').select('id, nome_completo').eq('ativo', true).order('nome_completo'),
+            eqClient.from('pacientes').select('id, nome_completo').eq('status','ativo').order('nome_completo')
+        ]);
+        document.getElementById('nResponsavel').innerHTML = '<option value="">— sem responsável —</option>' +
+            (rp.data || []).map(p => `<option value="${p.id}">${p.nome_completo}</option>`).join('');
+        document.getElementById('nPaciente').innerHTML = '<option value="">— nenhum —</option>' +
+            (rpac.data || []).map(p => `<option value="${p.id}">${p.nome_completo}</option>`).join('');
+    } catch (e) { console.warn(e); }
+
+    await carregar();
+});
+
+const p2 = n => String(n).padStart(2,'0');
+function hojeISO() { const d = new Date(); return d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate()); }
+function brl(iso) { return iso ? iso.slice(0,10).split('-').reverse().join('/') : '—'; }
+
+async function carregar() {
+    try {
+        // gera as automáticas antes de listar (idempotente no banco)
+        if (['admin_direcao','coordenador_aba','supervisor_clinico','recepcao'].includes(EU.perfil)) {
+            try { await eqClient.rpc('gerar_tarefas_faltas'); } catch (e) { console.warn('geração automática', e); }
+        }
+
+        const { data, error } = await eqClient.from('tarefas')
+            .select('*, paciente:pacientes(nome_completo), responsavel:profissionais!tarefas_responsavel_id_fkey(nome_completo)')
+            .order('status').order('prazo', { nullsFirst:false }).limit(300);
+        if (error) throw error;
+        TAREFAS = data || [];
+        pintar();
+    } catch (e) {
+        console.error(e);
+        document.getElementById('area').innerHTML =
+            '<div class="vazio-msg" style="color:var(--st-bad)">Erro ao carregar. Veja o console.</div>';
+    }
+}
+
+function alternar(bt) {
+    bt.setAttribute('aria-pressed', bt.getAttribute('aria-pressed') !== 'true');
+    pintar();
+}
+function ligado(f) { return document.querySelector('[data-f="'+f+'"]').getAttribute('aria-pressed') === 'true'; }
+
+function pintar() {
+    const tipo = document.getElementById('fTipo').value;
+    const hoje = hojeISO();
+
+    const lista = TAREFAS.filter(t => {
+        if (ligado('abertas')   && t.status !== 'aberta') return false;
+        if (ligado('minhas')    && t.responsavel_id !== EU.profissional.id) return false;
+        if (ligado('atrasadas') && !(t.status === 'aberta' && t.prazo && t.prazo < hoje)) return false;
+        if (tipo && t.tipo !== tipo) return false;
+        return true;
+    });
+
+    const abertas = TAREFAS.filter(t => t.status === 'aberta').length;
+    const atrasadas = TAREFAS.filter(t => t.status === 'aberta' && t.prazo && t.prazo < hoje).length;
+    document.getElementById('resumo').textContent =
+        abertas + ' aberta' + (abertas === 1 ? '' : 's') +
+        (atrasadas ? ' · ' + atrasadas + ' atrasada' + (atrasadas === 1 ? '' : 's') : '');
+
+    document.getElementById('area').innerHTML = lista.length ? lista.map(t => {
+        const feita = t.status !== 'aberta';
+        const atrasada = !feita && t.prazo && t.prazo < hoje;
+        return `<div class="tarefa ${feita ? 'feita' : ''}">
+            <span class="marca-prio" style="background:${PRIO[t.prioridade] || PRIO.media}"></span>
+            <div class="tarefa-corpo">
+                <b>${t.titulo}</b>
+                ${t.descricao ? `<p>${t.descricao}</p>` : ''}
+                <div class="tarefa-meta">
+                    <span class="chip chip-neutro">${TIPOS[t.tipo] || t.tipo}</span>
+                    ${t.paciente ? `<span class="chip chip-neutro">${t.paciente.nome_completo}</span>` : ''}
+                    ${t.responsavel ? `<span class="tiny soft">${t.responsavel.nome_completo}</span>` : '<span class="tiny soft">sem responsável</span>'}
+                    ${t.prazo ? `<span class="tiny ${atrasada ? 'atrasada' : 'soft'}">${atrasada ? 'atrasada · ' : ''}${brl(t.prazo)}</span>` : ''}
+                    ${t.origem === 'automatica' ? '<span class="chip chip-alerta">automática</span>' : ''}
+                    ${feita ? `<span class="chip chip-ok">concluída ${t.concluida_em ? 'em ' + brl(t.concluida_em) : ''}</span>` : ''}
+                </div>
+            </div>
+            ${!feita ? `<button class="btn btn-secundario" style="padding:7px 12px;font-size:12px"
+                onclick="concluir('${t.id}','${t.titulo.replace(/'/g,"\\'")}')">Concluir</button>` : ''}
+        </div>`;
+    }).join('')
+    : '<div class="vazio-msg">Nenhuma tarefa com esses filtros.</div>';
+}
+
+async function concluir(id, titulo) {
+    const ok = await EqConfirm.mostrar({
+        titulo: 'Concluir tarefa?',
+        texto: titulo,
+        confirmar: 'Concluir', tipo: 'padrao'
+    });
+    if (!ok) return;
+    try {
+        const { error } = await eqClient.from('tarefas').update({
+            status: 'concluida',
+            concluida_em: new Date().toISOString(),
+            concluida_por: EU.profissional.id
+        }).eq('id', id);
+        if (error) throw error;
+        await EqAudit.registrar('status', 'tarefas', id, { titulo: titulo, novo_status: 'concluida' });
+        await carregar();
+    } catch (e) {
+        console.error(e);
+        await EqConfirm.mostrar({ titulo:'Não foi possível concluir', texto: e.message || 'Erro.',
+            confirmar:'Entendi', cancelar:'Fechar', tipo:'alerta' });
+    }
+}
+
+function abrirNova()  { document.getElementById('modalNova').classList.add('aberto');
+                        document.getElementById('nTitulo').focus(); }
+function fechar(id)   { document.getElementById(id).classList.remove('aberto');
+                        document.getElementById('erroNova').style.display = 'none'; }
+
+document.getElementById('formNova').addEventListener('submit', async function (ev) {
+    ev.preventDefault();
+    const bt = document.getElementById('btSalvarNova'), erro = document.getElementById('erroNova');
+    bt.disabled = true; bt.textContent = 'Criando...'; erro.style.display = 'none';
+    try {
+        const { data, error } = await eqClient.from('tarefas').insert({
+            titulo: document.getElementById('nTitulo').value.trim(),
+            descricao: document.getElementById('nDescricao').value.trim() || null,
+            tipo: document.getElementById('nTipo').value,
+            prioridade: document.getElementById('nPrioridade').value,
+            responsavel_id: document.getElementById('nResponsavel').value || null,
+            paciente_id: document.getElementById('nPaciente').value || null,
+            prazo: document.getElementById('nPrazo').value || null,
+            criado_por: EU.profissional.id
+        }).select('id').single();
+        if (error) throw error;
+        await EqAudit.registrar('criacao', 'tarefas', data.id,
+            { titulo: document.getElementById('nTitulo').value.trim() });
+        fechar('modalNova'); this.reset();
+        await carregar();
+    } catch (e) {
+        console.error(e);
+        erro.textContent = 'Não foi possível criar: ' + (e.message || 'erro');
+        erro.style.display = 'block';
+    } finally { bt.disabled = false; bt.textContent = 'Criar'; }
+});
+</script>
+</body>
+</html>

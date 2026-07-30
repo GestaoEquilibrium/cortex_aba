@@ -65,13 +65,12 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
                 </div>
 
                 <div class="card">
-                    <div class="card-titulo"><h3>Ainda não implantado</h3></div>
-                    <div class="lista">
-                        <div class="lista-item"><span class="lista-ponto" style="background:var(--st-neutro)"></span><div>Evoluções diárias e compliance de lançamento</div></div>
-                        <div class="lista-item"><span class="lista-ponto" style="background:var(--st-neutro)"></span><div>Programas, PEI e critério de domínio</div></div>
-                        <div class="lista-item"><span class="lista-ponto" style="background:var(--st-neutro)"></span><div>Tarefas da coordenação</div></div>
+                    <div class="card-titulo">
+                        <h3>Evoluções lançadas · 7 dias</h3>
+                        <a class="tiny" href="tarefas/index.html">tarefas</a>
                     </div>
-                    <div class="card-legenda">Estes números entram nos próximos sprints, quando as tabelas existirem. Nada é estimado aqui.</div>
+                    <div id="compliance"><div class="muted small">carregando…</div></div>
+                    <div class="card-legenda">Porcentagem das sessões realizadas que já têm evolução escrita.</div>
                 </div>
             </div>
         </div>
@@ -89,7 +88,6 @@ document.addEventListener('eq:pronto', async function (ev) {
     const s = ev.detail;
     EqSidebar.render('painel');
 
-    // ── cabeçalho ───────────────────────────────────────────────────────────
     const agora = new Date();
     const dias  = ['domingo','segunda-feira','terça-feira','quarta-feira','quinta-feira','sexta-feira','sábado'];
     const meses = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
@@ -99,79 +97,117 @@ document.addEventListener('eq:pronto', async function (ev) {
         (h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite') + (primeiroNome ? ', ' + primeiroNome : '');
     document.getElementById('rotuloEquipe').textContent = s.equipe || '';
 
-    // data local no formato aceito pelo Postgres (sem UTC — evita o off-by-one)
-    const p2 = n => String(n).padStart(2, '0');
-    const hojeISO = agora.getFullYear() + '-' + p2(agora.getMonth() + 1) + '-' + p2(agora.getDate());
+    const p2 = n => String(n).padStart(2,'0');
+    const iso = d => d.getFullYear() + '-' + p2(d.getMonth()+1) + '-' + p2(d.getDate());
+    const hojeISO = iso(agora);
+    const seg = new Date(agora); seg.setDate(agora.getDate() - ((agora.getDay()+6) % 7));
+    const segISO = iso(seg);
+    const sete = new Date(agora); sete.setDate(agora.getDate() - 7);
+    const seteISO = iso(sete);
 
-    // segunda-feira desta semana
-    const seg = new Date(agora);
-    seg.setDate(agora.getDate() - ((agora.getDay() + 6) % 7));
-    const segISO = seg.getFullYear() + '-' + p2(seg.getMonth() + 1) + '-' + p2(seg.getDate());
+    const coordena = ['admin_direcao','coordenador_aba','supervisor_clinico','recepcao'].includes(s.perfil);
 
     try {
-        // ── consultas (RLS já filtra o que cada perfil pode ver) ────────────
-        const [ativos, fila, sessoesHoje, faltas] = await Promise.all([
-            eqClient.from('pacientes').select('id', { count: 'exact', head: true }).eq('status', 'ativo'),
-            eqClient.from('pacientes').select('id', { count: 'exact', head: true }).eq('status', 'fila_espera'),
-            // `sessoes` referencia `profissionais` duas vezes (profissional_id e
-            // registrado_por). Sem apontar a FK, o PostgREST devolve PGRST201.
+        // gera tarefas automáticas de falta antes de contar
+        if (coordena) { try { await eqClient.rpc('gerar_tarefas_faltas'); } catch (e) { console.warn(e); } }
+
+        const [rHoje, rSemana, rEvol, rTarefas, rAtivos, rFila] = await Promise.all([
             eqClient.from('sessoes')
-                .select(`hora_inicio, status,
+                .select(`id, hora_inicio, status,
                          paciente:pacientes!sessoes_paciente_id_fkey(nome_completo),
-                         profissional:profissionais!sessoes_profissional_id_fkey(nome_completo)`)
+                         profissional:profissionais!sessoes_profissional_id_fkey(id, nome_completo)`)
                 .eq('data', hojeISO).order('hora_inicio'),
-            eqClient.from('sessoes').select('id', { count: 'exact', head: true })
-                .gte('data', segISO).in('status', ['falta_injustificada','falta_justificada'])
+            eqClient.from('sessoes')
+                .select('id, data, status, profissional_id')
+                .gte('data', seteISO).lte('data', hojeISO),
+            eqClient.from('evolucoes_diarias').select('sessao_id'),
+            eqClient.from('tarefas').select('id, status, prazo').eq('status','aberta'),
+            eqClient.from('pacientes').select('id', { count:'exact', head:true }).eq('status','ativo'),
+            eqClient.from('pacientes').select('id', { count:'exact', head:true }).eq('status','fila_espera')
         ]);
+        if (rHoje.error) throw rHoje.error;
 
-        if (sessoesHoje.error) throw sessoesHoje.error;
+        const doDia = rHoje.data || [];
+        const daSemana = rSemana.data || [];
+        const comEvolucao = new Set((rEvol.data || []).map(e => e.sessao_id));
 
-        const lista = sessoesHoje.data || [];
-        const realizadas = lista.filter(x => x.status === 'realizada').length;
+        const realizadasSemana = daSemana.filter(x => x.status === 'realizada');
+        const semEvolucao = realizadasSemana.filter(x => !comEvolucao.has(x.id));
+        const faltasSemana = daSemana.filter(x => x.data >= segISO && x.status && x.status.indexOf('falta') === 0);
+        const tarefasAbertas = (rTarefas.data || []).length;
+        const tarefasAtrasadas = (rTarefas.data || []).filter(t => t.prazo && t.prazo < hojeISO).length;
 
         document.getElementById('linhaData').textContent =
             dias[agora.getDay()] + ', ' + agora.getDate() + ' de ' + meses[agora.getMonth()] +
-            ' · ' + lista.length + (lista.length === 1 ? ' sessão prevista' : ' sessões previstas');
+            ' · ' + doDia.length + (doDia.length === 1 ? ' sessão prevista' : ' sessões previstas');
 
-        // ── KPIs ────────────────────────────────────────────────────────────
         const kpis = [
-            { n: lista.length,        t: 'sessões agendadas para hoje',   cor: 'var(--acao)' },
-            { n: realizadas,          t: 'já realizadas hoje',            cor: 'var(--st-ok)' },
-            { n: faltas.count || 0,   t: 'faltas nesta semana',           cor: (faltas.count ? 'var(--st-bad)' : 'var(--st-neutro)') },
-            { n: ativos.count || 0,   t: 'pacientes ativos',              cor: 'var(--st-neutro)' }
+            { n: semEvolucao.length, t: 'evoluções pendentes (7 dias)',
+              cor: semEvolucao.length ? 'var(--st-bad)' : 'var(--st-ok)' },
+            { n: faltasSemana.length, t: 'faltas nesta semana',
+              cor: faltasSemana.length ? 'var(--st-warn)' : 'var(--st-neutro)' },
+            { n: tarefasAbertas, t: tarefasAtrasadas ? tarefasAtrasadas + ' delas atrasadas' : 'tarefas abertas',
+              cor: tarefasAtrasadas ? 'var(--st-bad)' : 'var(--acao)' },
+            { n: rAtivos.count || 0, t: 'pacientes ativos', cor: 'var(--st-neutro)' }
         ];
         document.getElementById('kpis').innerHTML = kpis.map(k => `
             <div class="kpi" style="--kpi-cor:${k.cor}">
-                <div class="kpi-numero">${k.n}</div>
-                <div class="kpi-texto">${k.t}</div>
+                <div class="kpi-numero">${k.n}</div><div class="kpi-texto">${k.t}</div>
             </div>`).join('');
 
-        // ── agenda ──────────────────────────────────────────────────────────
-        const chipDe = st => ({
-            realizada: 'chip-ok', em_andamento: 'chip-neutro', agendada: 'chip-neutro',
-            falta_injustificada: 'chip-erro', falta_justificada: 'chip-alerta',
-            cancelada_clinica: 'chip-alerta', remarcada: 'chip-neutro',
-            substituicao: 'chip-alerta', feriado: 'chip-neutro'
-        }[st] || 'chip-neutro');
+        const chipDe = st => ({ realizada:'chip-ok', em_andamento:'chip-neutro', agendada:'chip-neutro',
+            falta_injustificada:'chip-erro', falta_justificada:'chip-alerta',
+            cancelada_clinica:'chip-alerta', remarcada:'chip-neutro',
+            substituicao:'chip-alerta', feriado:'chip-neutro' }[st] || 'chip-neutro');
 
-        const tb = document.getElementById('tbAgenda');
-        tb.innerHTML = lista.length ? lista.map(x => `
+        document.getElementById('tbAgenda').innerHTML = doDia.length ? doDia.map(x => `
             <tr>
                 <td style="font-weight:700">${(x.hora_inicio || '').slice(0,5)}</td>
                 <td>${x.paciente ? x.paciente.nome_completo : '—'}</td>
                 <td class="muted">${x.profissional ? x.profissional.nome_completo : '—'}</td>
-                <td><span class="chip ${chipDe(x.status)}">${(x.status || '').replace(/_/g,' ')}</span></td>
+                <td><span class="chip ${chipDe(x.status)}">${(x.status || '').replace(/_/g,' ')}</span>
+                    ${x.status === 'realizada' && !comEvolucao.has(x.id)
+                      ? '<span class="chip chip-alerta" style="margin-left:5px">sem evolução</span>' : ''}</td>
             </tr>`).join('')
             : '<tr><td colspan="4" class="muted">Nenhuma sessão registrada para hoje.</td></tr>';
 
-        // ── situação dos pacientes ──────────────────────────────────────────
+        // compliance de evolução por aplicador (7 dias)
+        const porProf = {};
+        realizadasSemana.forEach(x => {
+            const id = x.profissional_id || 'sem';
+            if (!porProf[id]) porProf[id] = { total:0, ok:0 };
+            porProf[id].total++;
+            if (comEvolucao.has(x.id)) porProf[id].ok++;
+        });
+        const nomes = {};
+        doDia.forEach(x => { if (x.profissional) nomes[x.profissional.id] = x.profissional.nome_completo; });
+        try {
+            const { data } = await eqClient.from('profissionais').select('id, nome_completo');
+            (data || []).forEach(p => { nomes[p.id] = p.nome_completo; });
+        } catch (e) {}
+
+        const linhas = Object.keys(porProf).map(id => ({
+            nome: nomes[id] || 'sem responsável',
+            pct: Math.round(porProf[id].ok / porProf[id].total * 100),
+            total: porProf[id].total
+        })).sort((a,b) => a.pct - b.pct);
+
+        const corPct = p => p >= 90 ? 'var(--st-ok)' : p >= 60 ? 'var(--st-warn)' : 'var(--st-bad)';
+        document.getElementById('compliance').innerHTML = linhas.length ? linhas.map(a => `
+            <div class="barra-linha">
+                <span class="rotulo" title="${a.nome}">${a.nome.split(' ')[0]}</span>
+                <span class="barra-trilho"><span class="barra-preenche" style="width:${a.pct}%;background:${corPct(a.pct)}"></span></span>
+                <span class="barra-valor" style="color:${corPct(a.pct)}">${a.pct}%</span>
+            </div>`).join('')
+            : '<div class="muted small">Nenhuma sessão realizada nos últimos 7 dias.</div>';
+
         document.getElementById('statusPacientes').innerHTML = `
             <div class="barra-linha"><span class="rotulo">Ativos</span>
-                <span class="barra-valor" style="width:auto">${ativos.count || 0}</span></div>
+                <span class="barra-valor" style="width:auto">${rAtivos.count || 0}</span></div>
             <div class="barra-linha"><span class="rotulo">Fila de espera</span>
-                <span class="barra-valor" style="width:auto">${fila.count || 0}</span></div>`;
+                <span class="barra-valor" style="width:auto">${rFila.count || 0}</span></div>`;
 
-        if (!(ativos.count || fila.count || lista.length)) {
+        if (!(rAtivos.count || rFila.count || doDia.length)) {
             document.getElementById('avisoVazio').style.display = 'block';
         }
 

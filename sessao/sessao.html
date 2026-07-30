@@ -333,10 +333,18 @@ function desenhar() {
 function rodape() {
     const jaEncerrada = SESSAO.status === 'realizada';
     return `<div class="rodape">
-        <button class="btn btn-bloco" onclick="abrirEvolucao()" ${jaEncerrada ? 'disabled style="opacity:.6"' : ''}>
-            ${jaEncerrada ? 'Sessão já encerrada' : 'Encerrar e escrever evolução'}
-        </button>
+        <div class="grid-2">
+            <button class="btn btn-secundario btn-bloco" onclick="registrarComportamento()">Registrar comportamento</button>
+            <button class="btn btn-bloco" onclick="abrirEvolucao()" ${jaEncerrada ? 'disabled style="opacity:.6"' : ''}>
+                ${jaEncerrada ? 'Sessão já encerrada' : 'Encerrar e escrever evolução'}
+            </button>
+        </div>
     </div>`;
+}
+
+function registrarComportamento() {
+    // leva o paciente junto para a tela já abrir no caso certo
+    window.location.href = '../comportamento/index.html?paciente=' + encodeURIComponent(SESSAO.paciente_id);
 }
 
 function escolherAlvo(progId, alvoId) { ALVO_SEL[progId] = alvoId; desenhar(); }

@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-tema="coordenacao">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CORTEX aba — Comportamento</title>
+<script>
+(function(){try{var m=localStorage.getItem('eqaba_modo');
+if(m!=='claro'&&m!=='escuro'){m=(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches)?'escuro':'claro';}
+document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
+</script>
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="../favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="../apple-touch-icon.png">
+<link rel="manifest" href="../site.webmanifest">
+<meta name="theme-color" content="#0F766E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../styles/base.css?v=3">
+<link rel="stylesheet" href="../styles/components.css?v=5">
+<style>
+.barra { display:flex; gap:9px; align-items:center; flex-wrap:wrap; margin-bottom:14px; }
+.barra select { padding:10px 12px; font:inherit; font-size:13px; color:var(--ink);
+    border:1px solid var(--line-strong); border-radius:9px; background:var(--surface); min-width:210px; }
+.grafico-caixa { position:relative; height:210px; margin-top:8px; }
+.abc { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-top:4px; }
+.abc > div { background:var(--surface-alt); border:1px solid var(--line); border-radius:9px; padding:9px 10px; }
+.abc span { display:block; font-size:9.5px; text-transform:uppercase; letter-spacing:.09em;
+            font-weight:700; color:var(--st-bad); margin-bottom:3px; }
+.abc p { font-size:12px; color:var(--ink); line-height:1.4; }
+.episodio { padding:11px 0; border-top:1px solid var(--line); }
+.episodio:first-child { border-top:none; }
+.epi-topo { display:flex; gap:9px; align-items:center; flex-wrap:wrap; font-size:12px; color:var(--ink-muted); }
+.epi-topo b { color:var(--ink); font-size:12.5px; }
+.intensidade { display:inline-flex; gap:2px; }
+.intensidade i { width:7px; height:7px; border-radius:2px; background:var(--line); }
+.intensidade i.on { background:var(--st-bad); }
+.plano { border-left:3px solid var(--st-warn); background:var(--st-warn-bg); color:#7C4A05;
+         border-radius:var(--radius-card); padding:12px 14px; font-size:12.5px; margin-top:10px; }
+.plano b { display:block; margin-bottom:2px; }
+.plano div + div { margin-top:8px; }
+.alerta-escalada { border-left:3px solid var(--st-bad); background:var(--st-bad-bg); color:var(--st-bad);
+                   border-radius:var(--radius-card); padding:12px 14px; font-size:12.5px; margin-top:10px; font-weight:600; }
+.legenda { display:flex; gap:16px; flex-wrap:wrap; font-size:11px; color:var(--ink-muted); margin-top:9px; }
+.legenda span { display:flex; align-items:center; gap:6px; }
+.legenda i { width:12px; height:3px; border-radius:2px; }
+
+.campo { margin-bottom:11px; }
+.campo label { display:block; font-size:11.5px; font-weight:700; color:var(--ink-muted); margin-bottom:4px; }
+.campo input, .campo select, .campo textarea { width:100%; padding:9px 11px; font-size:13px; font-family:inherit;
+    border:1px solid var(--line-strong); border-radius:8px; background:var(--surface-alt); color:var(--ink); }
+.campo-2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.campo-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
+.modal-fundo { position:fixed; inset:0; background:rgba(12,27,42,.5); backdrop-filter:blur(3px);
+               display:none; align-items:center; justify-content:center; padding:20px; z-index:80; }
+.modal-fundo.aberto { display:flex; }
+.modal { background:var(--surface); border-radius:var(--radius-card); padding:22px; width:100%;
+         max-width:560px; box-shadow:var(--shadow-lg); max-height:92vh; overflow:auto; }
+.vazio-msg { padding:26px; text-align:center; color:var(--ink-muted); font-size:13px; }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="../config.js?v=4"></script>
+<script src="../shared/supabase_client.js?v=2"></script>
+<script src="../shared/tema.js?v=2"></script>
+<script src="../shared/confirm_modal.js?v=3"></script>
+<script src="../shared/fotos.js?v=7"></script>
+<script src="../shared/audit.js?v=5"></script>
+<script src="../shared/auth_guard.js?v=7"></script>
+</head>
+<body>
+
+<div class="app-shell">
+    <div id="sidebar"></div>
+    <div class="faixa-perfil"></div>
+
+    <main class="app-main">
+        <div class="app-topo">
+            <div>
+                <h1>Comportamento</h1>
+                <div class="sub" id="subtitulo">escolha um paciente</div>
+            </div>
+            <div style="display:flex;gap:8px">
+                <button class="btn btn-secundario" id="btNovo" style="display:none" onclick="abrirNovoComp()">Novo comportamento</button>
+                <button class="btn" id="btEpisodio" style="display:none" onclick="abrirEpisodio()">Registrar episódio</button>
+            </div>
+        </div>
+
+        <div class="barra">
+            <select id="selPaciente" onchange="carregarPaciente()">
+                <option value="">Selecione o paciente...</option>
+            </select>
+        </div>
+
+        <div id="area"><div class="card vazio-msg">Escolha um paciente.</div></div>
+    </main>
+</div>
+
+<!-- ── novo comportamento ──────────────────────────────────────────────────── -->
+<div class="modal-fundo" id="modalComp" onclick="if(event.target===this) fechar('modalComp')">
+    <div class="modal">
+        <h2 style="margin-bottom:4px">Novo comportamento-alvo</h2>
+        <p class="tiny soft" style="margin-bottom:14px">Antes de intervir, precisa medir. A linha de base é o período em que só se registra.</p>
+        <form id="formComp">
+            <div class="campo"><label for="cNome">Nome *</label>
+                <input id="cNome" required placeholder="Agressão física a terceiros"></div>
+            <div class="campo"><label for="cDefinicao">Definição observável</label>
+                <textarea id="cDefinicao" rows="2" placeholder="O que conta e o que não conta. Ex.: bater com a mão aberta ou fechada em outra pessoa. Não conta esbarrão acidental."></textarea>
+                <div class="tiny soft" style="margin-top:3px">Sem isso, cada aplicador registra uma coisa diferente e o gráfico não significa nada.</div>
+            </div>
+            <div class="campo-3">
+                <div class="campo"><label for="cTipo">Tipo</label>
+                    <select id="cTipo">
+                        <option value="agressao">Agressão</option><option value="autolesao">Autolesão</option>
+                        <option value="fuga">Fuga</option><option value="estereotipia">Estereotipia</option>
+                        <option value="birra">Birra</option><option value="destruicao">Destruição</option>
+                        <option value="outro" selected>Outro</option>
+                    </select></div>
+                <div class="campo"><label for="cFuncao">Função hipotetizada</label>
+                    <select id="cFuncao">
+                        <option value="indefinida" selected>Ainda indefinida</option>
+                        <option value="atencao">Atenção</option><option value="fuga">Fuga/esquiva</option>
+                        <option value="tangivel">Acesso a item</option><option value="sensorial">Sensorial</option>
+                    </select></div>
+                <div class="campo"><label for="cLinhaBase">Linha de base até</label>
+                    <input id="cLinhaBase" type="date"></div>
+            </div>
+            <div class="aviso" id="erroComp" style="display:none;border-left-color:var(--st-bad);color:var(--st-bad);margin-bottom:10px"></div>
+            <div class="grid-2">
+                <button type="button" class="btn btn-secundario btn-bloco" onclick="fechar('modalComp')">Cancelar</button>
+                <button type="submit" class="btn btn-bloco" id="btSalvarComp">Criar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ── registrar episódio ──────────────────────────────────────────────────── -->
+<div class="modal-fundo" id="modalEpisodio" onclick="if(event.target===this) fechar('modalEpisodio')">
+    <div class="modal">
+        <h2 style="margin-bottom:14px">Registrar episódio</h2>
+        <form id="formEpisodio">
+            <div class="campo"><label for="eComp">Comportamento *</label><select id="eComp" required></select></div>
+            <div class="campo-2">
+                <div class="campo"><label for="eData">Data</label><input id="eData" type="date"></div>
+                <div class="campo"><label for="eHora">Hora</label><input id="eHora" type="time"></div>
+            </div>
+            <div class="campo"><label for="eAntecedente">Antes — o que aconteceu antes</label>
+                <textarea id="eAntecedente" rows="2" placeholder="Pedido de guardar o brinquedo, transição de atividade, barulho..."></textarea></div>
+            <div class="campo"><label for="eDescricao">Durante — o que a criança fez</label>
+                <textarea id="eDescricao" rows="2"></textarea></div>
+            <div class="campo"><label for="eConsequencia">Depois — o que veio a seguir</label>
+                <textarea id="eConsequencia" rows="2" placeholder="Como a equipe respondeu, o que a criança conseguiu"></textarea></div>
+            <div class="campo-3">
+                <div class="campo"><label for="eIntensidade">Intensidade</label>
+                    <select id="eIntensidade">
+                        <option value="">—</option>
+                        <option value="1">1 — leve</option><option value="2">2</option>
+                        <option value="3" selected>3 — moderada</option><option value="4">4</option>
+                        <option value="5">5 — grave</option>
+                    </select></div>
+                <div class="campo"><label for="eDuracao">Duração (min)</label><input id="eDuracao" type="number" min="0" max="240"></div>
+                <div class="campo"><label for="eEpisodios">Nº de episódios</label><input id="eEpisodios" type="number" min="1" max="99" value="1"></div>
+            </div>
+            <div class="aviso" id="erroEpisodio" style="display:none;border-left-color:var(--st-bad);color:var(--st-bad);margin-bottom:10px"></div>
+            <div class="grid-2">
+                <button type="button" class="btn btn-secundario btn-bloco" onclick="fechar('modalEpisodio')">Cancelar</button>
+                <button type="submit" class="btn btn-bloco" id="btSalvarEpisodio">Registrar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ── plano de manejo ─────────────────────────────────────────────────────── -->
+<div class="modal-fundo" id="modalPlano" onclick="if(event.target===this) fechar('modalPlano')">
+    <div class="modal">
+        <h2 id="tituloPlano" style="margin-bottom:4px">Plano de manejo</h2>
+        <p class="tiny soft" style="margin-bottom:14px">Todos que atendem a criança leem o mesmo plano — inclusive quem está cobrindo.</p>
+        <form id="formPlano">
+            <input type="hidden" id="pComp">
+            <div class="campo"><label for="pPreventiva">Estratégia preventiva</label>
+                <textarea id="pPreventiva" rows="2" placeholder="O que fazer para o episódio não acontecer. Ex.: avisar 2 min antes da transição."></textarea></div>
+            <div class="campo"><label for="pResposta">Como a equipe responde</label>
+                <textarea id="pResposta" rows="2" placeholder="O que fazer quando acontecer, de forma igual por todos."></textarea></div>
+            <div class="campo"><label for="pSubstituto">Comportamento a ensinar no lugar</label>
+                <textarea id="pSubstituto" rows="2" placeholder="Ex.: pedir pausa com o cartão, em vez de empurrar."></textarea>
+                <div class="tiny soft" style="margin-top:3px">Reduzir sem ensinar o substituto costuma trazer o comportamento de volta em outra forma.</div>
+            </div>
+            <div class="aviso" id="erroPlano" style="display:none;border-left-color:var(--st-bad);color:var(--st-bad);margin-bottom:10px"></div>
+            <div class="grid-2">
+                <button type="button" class="btn btn-secundario btn-bloco" onclick="fechar('modalPlano')">Cancelar</button>
+                <button type="submit" class="btn btn-bloco" id="btSalvarPlano">Salvar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script src="../shared/sidebar.js?v=8"></script>
+<script>
+'use strict';
+
+const TIPOS = { agressao:'agressão', autolesao:'autolesão', fuga:'fuga', estereotipia:'estereotipia',
+                birra:'birra', destruicao:'destruição', outro:'outro' };
+const FUNCOES = { atencao:'atenção', fuga:'fuga/esquiva', tangivel:'acesso a item',
+                  sensorial:'sensorial', indefinida:'função ainda indefinida' };
+
+let PACIENTE = null, COMPS = [], REGISTROS = [], PLANOS = [], CHARTS = [], PODE_EDITAR = false, EU = null;
+
+document.addEventListener('eq:pronto', async function (ev) {
+    EqSidebar.render('comportamento');
+    EU = ev.detail;
+    PODE_EDITAR = ['admin_direcao','supervisor_clinico','coordenador_aba'].includes(EU.perfil);
+    try {
+        const { data } = await eqClient.from('pacientes')
+            .select('id, nome_completo').in('status',['ativo','suspenso']).order('nome_completo');
+        document.getElementById('selPaciente').innerHTML = '<option value="">Selecione o paciente...</option>' +
+            (data || []).map(p => `<option value="${p.id}">${p.nome_completo}</option>`).join('');
+    } catch (e) { console.error(e); }
+
+    const url = new URLSearchParams(location.search).get('paciente');
+    if (url) { document.getElementById('selPaciente').value = url; carregarPaciente(); }
+});
+
+const p2 = n => String(n).padStart(2,'0');
+const isoLocal = d => d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate());
+function hojeISO() { return isoLocal(new Date()); }
+function brl(iso) { return iso ? iso.slice(0,10).split('-').reverse().join('/') : '—'; }
+function comoData(s) { const [a,m,d] = s.split('-').map(Number); return new Date(a, m-1, d); }
+
+async function carregarPaciente() {
+    PACIENTE = document.getElementById('selPaciente').value;
+    limpar();
+    if (!PACIENTE) {
+        document.getElementById('area').innerHTML = '<div class="card vazio-msg">Escolha um paciente.</div>';
+        document.getElementById('btNovo').style.display = 'none';
+        document.getElementById('btEpisodio').style.display = 'none';
+        return;
+    }
+    if (PODE_EDITAR) document.getElementById('btNovo').style.display = '';
+    document.getElementById('area').innerHTML = '<div class="card vazio-msg">carregando…</div>';
+
+    try {
+        const [rc, rr, rp] = await Promise.all([
+            eqClient.from('comportamentos_alvo').select('*').eq('paciente_id', PACIENTE)
+                .neq('status','arquivado').order('created_at'),
+            eqClient.from('registros_comportamento')
+                .select('*, registrado:profissionais(nome_completo)')
+                .eq('paciente_id', PACIENTE).order('data', { ascending:false }).limit(400),
+            eqClient.from('planos_manejo').select('*').eq('ativo', true)
+        ]);
+        if (rc.error) throw rc.error;
+        COMPS = rc.data || []; REGISTROS = rr.data || []; PLANOS = rp.data || [];
+
+        document.getElementById('btEpisodio').style.display = COMPS.length ? '' : 'none';
+        desenhar();
+        await EqAudit.registrar('acesso', 'comportamentos_alvo', PACIENTE, { comportamentos: COMPS.length });
+
+    } catch (e) {
+        console.error(e);
+        document.getElementById('area').innerHTML =
+            '<div class="card vazio-msg" style="color:var(--st-bad)">Erro ao carregar. Veja o console.</div>';
+    }
+}
+
+function limpar() { CHARTS.forEach(c => { try { c.destroy(); } catch (e) {} }); CHARTS = []; }
+
+// agrupa por semana (segunda-feira de referência)
+function porSemana(regs) {
+    const mapa = {};
+    regs.forEach(r => {
+        const d = comoData(r.data);
+        const seg = new Date(d); seg.setDate(d.getDate() - ((d.getDay()+6) % 7));
+        const chave = isoLocal(seg);
+        mapa[chave] = (mapa[chave] || 0) + (r.episodios || 1);
+    });
+    return mapa;
+}
+
+function desenhar() {
+    limpar();
+    document.getElementById('subtitulo').textContent =
+        COMPS.length ? COMPS.length + ' comportamento' + (COMPS.length === 1 ? '' : 's') + ' acompanhado' + (COMPS.length === 1 ? '' : 's')
+                     : 'nenhum comportamento cadastrado';
+
+    if (!COMPS.length) {
+        document.getElementById('area').innerHTML =
+            `<div class="card vazio-msg">Nenhum comportamento acompanhado.<br>
+             <span class="tiny soft">Cadastre o que a equipe está tentando reduzir, defina a linha de base e comece a registrar.</span></div>`;
+        return;
+    }
+
+    document.getElementById('area').innerHTML = COMPS.map((c, i) => {
+        const regs = REGISTROS.filter(r => r.comportamento_id === c.id);
+        const plano = PLANOS.find(p => p.comportamento_id === c.id);
+        const semanas = porSemana(regs);
+        const chaves = Object.keys(semanas).sort();
+
+        // escalada: duas últimas semanas contra as duas anteriores
+        let alerta = null;
+        if (chaves.length >= 4) {
+            const ult = semanas[chaves[chaves.length-1]] + semanas[chaves[chaves.length-2]];
+            const ant = semanas[chaves[chaves.length-3]] + semanas[chaves[chaves.length-4]];
+            if (ant > 0 && ult > ant * 1.3) {
+                alerta = 'Aumento de ' + Math.round((ult/ant - 1) * 100) +
+                         '% nas duas últimas semanas em relação às duas anteriores. Vale revisar o plano.';
+            }
+        }
+
+        const ultimos = regs.slice(0, 5);
+        const totalMes = regs.filter(r => r.data >= hojeISO().slice(0,8) + '01')
+                             .reduce((s,r) => s + (r.episodios||1), 0);
+
+        return `<div class="card" style="margin-bottom:12px">
+            <div class="card-titulo">
+                <div>
+                    <h3>${c.nome}</h3>
+                    <span class="tiny soft">${TIPOS[c.tipo] || c.tipo} · ${FUNCOES[c.funcao_hipotetizada] || 'função ainda indefinida'}
+                    ${c.linha_base_ate ? ' · linha de base até ' + brl(c.linha_base_ate) : ' · sem linha de base definida'}</span>
+                </div>
+                <div style="display:flex;gap:6px">
+                    ${PODE_EDITAR ? `<button class="btn btn-secundario" style="padding:6px 11px;font-size:11.5px"
+                        onclick="abrirPlano('${c.id}','${c.nome.replace(/'/g,"\\'")}')">${plano ? 'Editar plano' : 'Criar plano'}</button>` : ''}
+                </div>
+            </div>
+
+            ${c.definicao ? `<p class="small muted" style="margin-bottom:8px">${c.definicao}</p>` : ''}
+
+            <div class="grid-4" style="margin-bottom:6px">
+                <div class="kpi" style="--kpi-cor:var(--st-bad)">
+                    <div class="kpi-numero">${totalMes}</div><div class="kpi-texto">episódios neste mês</div></div>
+                <div class="kpi" style="--kpi-cor:var(--st-neutro)">
+                    <div class="kpi-numero">${regs.reduce((s,r)=>s+(r.episodios||1),0)}</div><div class="kpi-texto">no total registrado</div></div>
+                <div class="kpi" style="--kpi-cor:var(--acao)">
+                    <div class="kpi-numero">${chaves.length}</div><div class="kpi-texto">semanas com registro</div></div>
+                <div class="kpi" style="--kpi-cor:${plano ? 'var(--st-ok)' : 'var(--st-warn)'}">
+                    <div class="kpi-numero" style="font-size:15px;padding-top:6px">${plano ? 'sim' : 'não'}</div>
+                    <div class="kpi-texto">plano de manejo definido</div></div>
+            </div>
+
+            ${chaves.length ? `<div class="grafico-caixa"><canvas id="gc${i}"></canvas></div>
+            <div class="legenda">
+                <span><i style="background:var(--st-bad)"></i>episódios por semana</span>
+                ${c.linha_base_ate ? '<span><i style="background:var(--ink-soft);height:0;border-top:2px dashed var(--ink-soft)"></i>início da intervenção</span>' : ''}
+            </div>` : '<div class="vazio-msg">Nenhum episódio registrado ainda.</div>'}
+
+            ${alerta ? `<div class="alerta-escalada">${alerta}</div>` : ''}
+
+            ${plano ? `<div class="plano">
+                <b>Plano de manejo</b>
+                ${plano.estrategia_preventiva ? `<div><b>Prevenir:</b> ${plano.estrategia_preventiva}</div>` : ''}
+                ${plano.resposta_equipe ? `<div><b>Responder:</b> ${plano.resposta_equipe}</div>` : ''}
+                ${plano.comportamento_substituto ? `<div><b>Ensinar no lugar:</b> ${plano.comportamento_substituto}</div>` : ''}
+            </div>` : ''}
+
+            ${ultimos.length ? `<div style="margin-top:12px">
+                <div class="tiny soft" style="margin-bottom:4px">ÚLTIMOS EPISÓDIOS</div>
+                ${ultimos.map(r => `<div class="episodio">
+                    <div class="epi-topo">
+                        <b>${brl(r.data)}${r.hora ? ' · ' + r.hora.slice(0,5) : ''}</b>
+                        ${r.episodios > 1 ? `<span class="chip chip-erro">${r.episodios}x</span>` : ''}
+                        ${r.intensidade ? `<span class="intensidade" title="intensidade ${r.intensidade}">${
+                            [1,2,3,4,5].map(n => `<i class="${n <= r.intensidade ? 'on' : ''}"></i>`).join('')}</span>` : ''}
+                        ${r.duracao_seg ? `<span>${Math.round(r.duracao_seg/60)} min</span>` : ''}
+                        <span class="soft">${r.registrado ? r.registrado.nome_completo : ''}</span>
+                    </div>
+                    ${(r.antecedente || r.descricao || r.consequencia) ? `<div class="abc">
+                        <div><span>Antes</span><p>${r.antecedente || '—'}</p></div>
+                        <div><span>Durante</span><p>${r.descricao || '—'}</p></div>
+                        <div><span>Depois</span><p>${r.consequencia || '—'}</p></div>
+                    </div>` : ''}
+                </div>`).join('')}
+            </div>` : ''}
+        </div>`;
+    }).join('');
+
+    COMPS.forEach((c, i) => montarGrafico(c, i));
+}
+
+function montarGrafico(c, i) {
+    const el = document.getElementById('gc' + i);
+    if (!el || typeof Chart === 'undefined') return;
+    const regs = REGISTROS.filter(r => r.comportamento_id === c.id);
+    const semanas = porSemana(regs);
+    const chaves = Object.keys(semanas).sort();
+    if (!chaves.length) return;
+
+    const escuro = document.documentElement.getAttribute('data-modo') === 'escuro';
+    const corTexto = escuro ? '#93A6B4' : '#5C7284';
+    const corGrade = escuro ? 'rgba(255,255,255,.07)' : 'rgba(12,27,42,.07)';
+
+    // separa visualmente linha de base e intervenção
+    const cores = chaves.map(k => (c.linha_base_ate && k <= c.linha_base_ate) ? '#94A3B8' : '#DC2626');
+
+    CHARTS.push(new Chart(el, {
+        type: 'bar',
+        data: {
+            labels: chaves.map(k => brl(k).slice(0,5)),
+            datasets: [{ label:'episódios', data: chaves.map(k => semanas[k]),
+                         backgroundColor: cores, borderRadius: 4, maxBarThickness: 34 }]
+        },
+        options: {
+            responsive:true, maintainAspectRatio:false,
+            plugins:{
+                legend:{ display:false },
+                tooltip:{ callbacks:{ title: it => 'semana de ' + it[0].label,
+                                      label: it => it.parsed.y + ' episódio' + (it.parsed.y === 1 ? '' : 's') } }
+            },
+            scales:{
+                y:{ beginAtZero:true, ticks:{ color:corTexto, precision:0 }, grid:{ color:corGrade } },
+                x:{ ticks:{ color:corTexto, maxRotation:0, autoSkipPadding:12 }, grid:{ display:false } }
+            }
+        }
+    }));
+}
+
+// ── formulários ─────────────────────────────────────────────────────────────
+function fechar(id) { document.getElementById(id).classList.remove('aberto');
+                      document.querySelectorAll('.aviso[id^=erro]').forEach(e => e.style.display='none'); }
+
+function abrirNovoComp() {
+    document.getElementById('formComp').reset();
+    document.getElementById('cLinhaBase').value = hojeISO();
+    document.getElementById('modalComp').classList.add('aberto');
+}
+
+document.getElementById('formComp').addEventListener('submit', async function (ev) {
+    ev.preventDefault();
+    const bt = document.getElementById('btSalvarComp'), erro = document.getElementById('erroComp');
+    bt.disabled = true; bt.textContent = 'Criando...'; erro.style.display = 'none';
+    try {
+        const { data, error } = await eqClient.from('comportamentos_alvo').insert({
+            paciente_id: PACIENTE,
+            nome: document.getElementById('cNome').value.trim(),
+            definicao: document.getElementById('cDefinicao').value.trim() || null,
+            tipo: document.getElementById('cTipo').value,
+            funcao_hipotetizada: document.getElementById('cFuncao').value,
+            linha_base_ate: document.getElementById('cLinhaBase').value || null
+        }).select('id').single();
+        if (error) throw error;
+        await EqAudit.registrar('criacao', 'comportamentos_alvo', data.id,
+            { nome: document.getElementById('cNome').value.trim() });
+        fechar('modalComp'); await carregarPaciente();
+    } catch (e) {
+        console.error(e);
+        erro.textContent = 'Não foi possível criar: ' + (e.message || 'erro');
+        erro.style.display = 'block';
+    } finally { bt.disabled = false; bt.textContent = 'Criar'; }
+});
+
+function abrirEpisodio() {
+    document.getElementById('eComp').innerHTML = COMPS.map(c =>
+        `<option value="${c.id}">${c.nome}</option>`).join('');
+    document.getElementById('eData').value = hojeISO();
+    const agora = new Date();
+    document.getElementById('eHora').value = p2(agora.getHours()) + ':' + p2(agora.getMinutes());
+    document.getElementById('modalEpisodio').classList.add('aberto');
+}
+
+document.getElementById('formEpisodio').addEventListener('submit', async function (ev) {
+    ev.preventDefault();
+    const bt = document.getElementById('btSalvarEpisodio'), erro = document.getElementById('erroEpisodio');
+    bt.disabled = true; bt.textContent = 'Registrando...'; erro.style.display = 'none';
+    const dur = document.getElementById('eDuracao').value;
+    const inten = document.getElementById('eIntensidade').value;
+    try {
+        const { data, error } = await eqClient.from('registros_comportamento').insert({
+            comportamento_id: document.getElementById('eComp').value,
+            paciente_id: PACIENTE,
+            data: document.getElementById('eData').value || hojeISO(),
+            hora: document.getElementById('eHora').value || null,
+            antecedente: document.getElementById('eAntecedente').value.trim() || null,
+            descricao: document.getElementById('eDescricao').value.trim() || null,
+            consequencia: document.getElementById('eConsequencia').value.trim() || null,
+            intensidade: inten ? parseInt(inten,10) : null,
+            duracao_seg: dur ? parseInt(dur,10) * 60 : null,
+            episodios: parseInt(document.getElementById('eEpisodios').value || '1', 10),
+            registrado_por: EU.profissional.id
+        }).select('id').single();
+        if (error) throw error;
+        await EqAudit.registrar('criacao', 'registros_comportamento', data.id, { paciente_id: PACIENTE });
+        fechar('modalEpisodio'); this.reset();
+        await carregarPaciente();
+    } catch (e) {
+        console.error(e);
+        erro.textContent = 'Não foi possível registrar: ' + (e.message || 'erro');
+        erro.style.display = 'block';
+    } finally { bt.disabled = false; bt.textContent = 'Registrar'; }
+});
+
+function abrirPlano(compId, nome) {
+    const p = PLANOS.find(x => x.comportamento_id === compId);
+    document.getElementById('tituloPlano').textContent = 'Plano de manejo · ' + nome;
+    document.getElementById('pComp').value = compId;
+    document.getElementById('pPreventiva').value = p ? (p.estrategia_preventiva || '') : '';
+    document.getElementById('pResposta').value  = p ? (p.resposta_equipe || '') : '';
+    document.getElementById('pSubstituto').value = p ? (p.comportamento_substituto || '') : '';
+    document.getElementById('modalPlano').classList.add('aberto');
+}
+
+document.getElementById('formPlano').addEventListener('submit', async function (ev) {
+    ev.preventDefault();
+    const bt = document.getElementById('btSalvarPlano'), erro = document.getElementById('erroPlano');
+    bt.disabled = true; bt.textContent = 'Salvando...'; erro.style.display = 'none';
+    const compId = document.getElementById('pComp').value;
+    const existente = PLANOS.find(x => x.comportamento_id === compId);
+    const reg = {
+        comportamento_id: compId,
+        estrategia_preventiva: document.getElementById('pPreventiva').value.trim() || null,
+        resposta_equipe: document.getElementById('pResposta').value.trim() || null,
+        comportamento_substituto: document.getElementById('pSubstituto').value.trim() || null,
+        criado_por: EU.profissional.id
+    };
+    try {
+        if (existente) {
+            const { error } = await eqClient.from('planos_manejo').update(reg).eq('id', existente.id);
+            if (error) throw error;
+            await EqAudit.registrar('edicao', 'planos_manejo', existente.id, { comportamento_id: compId });
+        } else {
+            const { data, error } = await eqClient.from('planos_manejo').insert(reg).select('id').single();
+            if (error) throw error;
+            await EqAudit.registrar('criacao', 'planos_manejo', data.id, { comportamento_id: compId });
+        }
+        fechar('modalPlano'); await carregarPaciente();
+    } catch (e) {
+        console.error(e);
+        erro.textContent = 'Não foi possível salvar: ' + (e.message || 'erro');
+        erro.style.display = 'block';
+    } finally { bt.disabled = false; bt.textContent = 'Salvar'; }
+});
+</script>
+</body>
+</html>

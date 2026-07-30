@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-tema="coordenacao">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EQ ABA — Agenda</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../styles/base.css?v=2">
+<link rel="stylesheet" href="../styles/components.css?v=2">
+<style>
+.barra-dia { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
+.barra-dia input[type=date] {
+    padding:9px 11px; font-size:13px; font-family:inherit; color:var(--ink);
+    border:1px solid var(--line-strong); border-radius:9px; background:var(--surface);
+}
+.nav-dia {
+    border:1px solid var(--line-strong); background:var(--surface); color:var(--ink);
+    border-radius:9px; width:34px; height:34px; cursor:pointer; font-size:15px; font-weight:700;
+}
+.nav-dia:hover { background:var(--surface-alt); }
+
+.sessao {
+    display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+    padding:12px 0; border-top:1px solid var(--line);
+}
+.sessao:first-child { border-top:none; }
+.sessao .hora { font-weight:800; font-size:14px; width:52px; flex:0 0 auto; }
+.sessao .quem { flex:1; min-width:170px; }
+.sessao .quem b { display:block; font-size:13.5px; }
+.sessao .quem span { font-size:11.5px; color:var(--ink-muted); }
+.acoes-presenca { display:flex; gap:5px; flex-wrap:wrap; }
+.bt-presenca {
+    border:1px solid var(--line-strong); background:var(--surface); color:var(--ink-muted);
+    border-radius:8px; padding:6px 11px; font-size:11.5px; font-weight:700;
+    font-family:inherit; cursor:pointer; transition:var(--transition-base);
+}
+.bt-presenca:hover { border-color:currentColor; }
+.bt-presenca[data-on="1"] { color:#fff; border-color:transparent; }
+.bt-presenca[disabled] { opacity:.5; cursor:not-allowed; }
+
+.grade { width:100%; border-collapse:separate; border-spacing:3px; font-size:11.5px; }
+.grade th { font-size:10px; text-transform:uppercase; letter-spacing:.08em;
+            color:var(--ink-soft); font-weight:700; padding-bottom:4px; }
+.grade td { padding:0; vertical-align:top; }
+.grade .hora-col { width:46px; color:var(--ink-soft); font-weight:700; padding-top:8px; }
+.bloco {
+    border-radius:8px; padding:7px 8px; line-height:1.3;
+    background:var(--acao-soft); border:1px solid var(--line);
+}
+.bloco b { display:block; font-size:11.5px; color:var(--ink); }
+.bloco span { font-size:10px; color:var(--ink-muted); }
+.vazio { height:100%; min-height:34px; border-radius:8px; background:var(--surface-alt);
+         border:1px dashed var(--line); }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../config.js?v=2"></script>
+<script src="../shared/supabase_client.js?v=2"></script>
+<script src="../shared/tema.js?v=2"></script>
+<script src="../shared/confirm_modal.js?v=3"></script>
+<script src="../shared/auth_guard.js?v=2"></script>
+</head>
+<body>
+
+<div class="app-shell">
+    <div id="sidebar"></div>
+    <div class="faixa-perfil"></div>
+
+    <main class="app-main">
+        <div class="app-topo">
+            <div>
+                <h1>Agenda</h1>
+                <div class="sub" id="resumoDia">carregando…</div>
+            </div>
+            <button class="btn" id="btGerar" style="display:none" onclick="gerarSessoes()">Gerar sessões do dia</button>
+        </div>
+
+        <div class="barra-dia">
+            <button class="nav-dia" onclick="andarDia(-1)" title="Dia anterior">‹</button>
+            <input type="date" id="dataSel" onchange="carregarDia()">
+            <button class="nav-dia" onclick="andarDia(1)" title="Próximo dia">›</button>
+            <button class="btn btn-secundario" onclick="irHoje()">Hoje</button>
+            <span class="tiny soft" id="rotuloDia"></span>
+        </div>
+
+        <div class="card">
+            <div class="card-titulo">
+                <h3>Sessões do dia</h3>
+                <span class="tiny soft" id="contaSessoes"></span>
+            </div>
+            <div id="listaSessoes"><div class="muted small">carregando…</div></div>
+        </div>
+
+        <div class="card" style="margin-top:12px">
+            <div class="card-titulo">
+                <h3>Grade fixa da semana</h3>
+                <span class="tiny soft">o que se repete toda semana</span>
+            </div>
+            <div style="overflow-x:auto">
+                <table class="grade" id="grade">
+                    <thead><tr><th></th><th>Segunda</th><th>Terça</th><th>Quarta</th><th>Quinta</th><th>Sexta</th></tr></thead>
+                    <tbody><tr><td colspan="6" class="muted">carregando…</td></tr></tbody>
+                </table>
+            </div>
+            <div class="card-legenda">As sessões de cada dia nascem desta grade. Alterações na grade valem daqui para frente — o que já foi lançado não muda.</div>
+        </div>
+    </main>
+</div>
+
+<script src="../shared/sidebar.js?v=2"></script>
+<script>
+'use strict';
+
+const DIAS = ['domingo','segunda-feira','terça-feira','quarta-feira','quinta-feira','sexta-feira','sábado'];
+const STATUS = {
+    agendada:            { rotulo:'Agendada',   cor:'var(--st-neutro)' },
+    em_andamento:        { rotulo:'Em atendimento', cor:'var(--acao)' },
+    realizada:           { rotulo:'Realizada',  cor:'var(--st-ok)' },
+    falta_justificada:   { rotulo:'Falta justificada',  cor:'var(--st-warn)' },
+    falta_injustificada: { rotulo:'Falta sem aviso',    cor:'var(--st-bad)' },
+    cancelada_clinica:   { rotulo:'Cancelada pela clínica', cor:'var(--st-warn)' },
+    remarcada:           { rotulo:'Remarcada', cor:'var(--st-neutro)' },
+    substituicao:        { rotulo:'Cobertura', cor:'var(--st-warn)' },
+    feriado:             { rotulo:'Feriado',   cor:'var(--st-neutro)' }
+};
+// o que o aplicador lança direto na tela; o resto fica com a coordenação
+const RAPIDOS = ['realizada','falta_justificada','falta_injustificada'];
+
+let PERFIL = null;
+
+document.addEventListener('eq:pronto', async function (ev) {
+    EqSidebar.render('agenda');
+    PERFIL = ev.detail.perfil;
+    if (['admin_direcao','coordenador_aba','recepcao'].includes(PERFIL)) {
+        document.getElementById('btGerar').style.display = '';
+    }
+    irHoje();
+    carregarGrade();
+});
+
+// ── datas em horário local (nada de toISOString) ────────────────────────────
+function hojeISO() {
+    const d = new Date(), p = n => String(n).padStart(2,'0');
+    return d.getFullYear() + '-' + p(d.getMonth()+1) + '-' + p(d.getDate());
+}
+function dataSelecionada() { return document.getElementById('dataSel').value || hojeISO(); }
+function diaDaSemana(iso) {
+    const [a,m,d] = iso.split('-').map(Number);
+    return new Date(a, m-1, d).getDay();
+}
+function irHoje()   { document.getElementById('dataSel').value = hojeISO(); carregarDia(); }
+function andarDia(n) {
+    const [a,m,d] = dataSelecionada().split('-').map(Number);
+    const nova = new Date(a, m-1, d + n), p = x => String(x).padStart(2,'0');
+    document.getElementById('dataSel').value =
+        nova.getFullYear() + '-' + p(nova.getMonth()+1) + '-' + p(nova.getDate());
+    carregarDia();
+}
+
+// ── sessões do dia ──────────────────────────────────────────────────────────
+async function carregarDia() {
+    const iso = dataSelecionada();
+    const alvo = document.getElementById('listaSessoes');
+    document.getElementById('rotuloDia').textContent = DIAS[diaDaSemana(iso)];
+    alvo.innerHTML = '<div class="muted small">carregando…</div>';
+
+    try {
+        const { data, error } = await eqClient
+            .from('sessoes')
+            .select(`id, hora_inicio, duracao_min, status, observacao,
+                     paciente:pacientes!sessoes_paciente_id_fkey(id, nome_completo, cartao_seguranca),
+                     profissional:profissionais!sessoes_profissional_id_fkey(id, nome_completo)`)
+            .eq('data', iso)
+            .order('hora_inicio');
+        if (error) throw error;
+
+        const ss = data || [];
+        const feitas = ss.filter(s => s.status === 'realizada').length;
+        const faltas = ss.filter(s => s.status.startsWith('falta')).length;
+
+        document.getElementById('contaSessoes').textContent =
+            ss.length ? `${ss.length} sessões · ${feitas} realizadas · ${faltas} faltas` : '';
+        document.getElementById('resumoDia').textContent =
+            ss.length ? `${ss.length} sessões em ${iso.split('-').reverse().join('/')}`
+                      : 'Nenhuma sessão neste dia';
+
+        if (!ss.length) {
+            alvo.innerHTML = `<div class="muted small">Nenhuma sessão lançada.
+                ${['admin_direcao','coordenador_aba','recepcao'].includes(PERFIL)
+                  ? 'Use “Gerar sessões do dia” para criar a partir da grade.' : ''}</div>`;
+            return;
+        }
+
+        alvo.innerHTML = ss.map(s => {
+            const st = STATUS[s.status] || STATUS.agendada;
+            const bts = RAPIDOS.map(k => `
+                <button class="bt-presenca" data-on="${s.status === k ? 1 : 0}"
+                        style="${s.status === k ? 'background:' + STATUS[k].cor : ''}"
+                        onclick="marcar('${s.id}','${k}','${(s.paciente && s.paciente.nome_completo || '').replace(/'/g,'')}')">
+                    ${STATUS[k].rotulo}
+                </button>`).join('');
+            return `
+            <div class="sessao">
+                <div class="hora">${(s.hora_inicio || '').slice(0,5)}</div>
+                <div class="quem">
+                    <b>${s.paciente ? s.paciente.nome_completo : '—'}
+                       ${s.paciente && s.paciente.cartao_seguranca
+                         ? '<span title="Tem cartão de segurança" style="color:var(--st-warn)">⚠</span>' : ''}</b>
+                    <span>${s.profissional ? s.profissional.nome_completo : '—'} · ${s.duracao_min} min</span>
+                </div>
+                <span class="chip" style="background:transparent;border:1px solid ${st.cor};color:${st.cor}">${st.rotulo}</span>
+                <div class="acoes-presenca">${bts}</div>
+            </div>`;
+        }).join('');
+
+    } catch (e) {
+        console.error(e);
+        alvo.innerHTML = '<div style="color:var(--st-bad)" class="small">Erro ao carregar as sessões. Veja o console.</div>';
+    }
+}
+
+// ── lançamento de presença ──────────────────────────────────────────────────
+async function marcar(id, status, paciente) {
+    if (status === 'falta_injustificada') {
+        const ok = await EqConfirm.mostrar({
+            titulo: 'Marcar falta sem aviso?',
+            texto: `A falta de ${paciente || 'paciente'} entra no indicador de absenteísmo e, na segunda seguida, gera contato com a família.`,
+            confirmar: 'Marcar falta',
+            tipo: 'perigo'
+        });
+        if (!ok) return;
+    }
+    try {
+        const { error } = await eqClient.from('sessoes').update({ status }).eq('id', id);
+        if (error) throw error;
+        await carregarDia();
+    } catch (e) {
+        console.error(e);
+        await EqConfirm.mostrar({
+            titulo: 'Não foi possível lançar',
+            texto: e.message || 'Erro ao gravar. Se você não é o aplicador desta sessão, só a coordenação pode alterá-la.',
+            confirmar: 'Entendi', cancelar: 'Fechar', tipo: 'alerta'
+        });
+    }
+}
+
+// ── geração a partir da grade ───────────────────────────────────────────────
+async function gerarSessoes() {
+    const iso = dataSelecionada();
+    const ok = await EqConfirm.mostrar({
+        titulo: 'Gerar sessões deste dia?',
+        texto: `Cria as sessões de ${DIAS[diaDaSemana(iso)]}, ${iso.split('-').reverse().join('/')}, a partir da grade fixa. O que já existe não é duplicado nem alterado.`,
+        confirmar: 'Gerar',
+        tipo: 'padrao'
+    });
+    if (!ok) return;
+
+    const bt = document.getElementById('btGerar');
+    bt.disabled = true; bt.textContent = 'Gerando...';
+    try {
+        // rpc devolve PostgrestBuilder, não Promise — sempre try/catch, nunca .catch()
+        const { data, error } = await eqClient.rpc('gerar_sessoes', { p_data: iso });
+        if (error) throw error;
+        await carregarDia();
+        await EqConfirm.mostrar({
+            titulo: data > 0 ? `${data} sessões criadas` : 'Nada a criar',
+            texto: data > 0
+                ? 'As sessões já aparecem na lista, prontas para o lançamento de presença.'
+                : 'Ou já existiam, ou não há grade ativa para este dia da semana.',
+            confirmar: 'Fechar', cancelar: 'Fechar', tipo: 'padrao'
+        });
+    } catch (e) {
+        console.error(e);
+        await EqConfirm.mostrar({
+            titulo: 'Não foi possível gerar',
+            texto: e.message || 'Erro ao chamar a função no banco.',
+            confirmar: 'Entendi', cancelar: 'Fechar', tipo: 'alerta'
+        });
+    } finally {
+        bt.disabled = false; bt.textContent = 'Gerar sessões do dia';
+    }
+}
+
+// ── grade semanal ───────────────────────────────────────────────────────────
+async function carregarGrade() {
+    const corpo = document.querySelector('#grade tbody');
+    try {
+        const { data, error } = await eqClient
+            .from('cronograma_terapeutico')
+            .select(`id, dia_semana, hora_inicio, duracao_min, sala,
+                     paciente:pacientes(nome_completo),
+                     profissional:profissionais(nome_completo)`)
+            .eq('ativo', true)
+            .order('hora_inicio');
+        if (error) throw error;
+
+        const itens = data || [];
+        if (!itens.length) {
+            corpo.innerHTML = '<tr><td colspan="6" class="muted">Nenhuma grade cadastrada ainda.</td></tr>';
+            return;
+        }
+
+        const horas = [...new Set(itens.map(i => i.hora_inicio.slice(0,5)))].sort();
+        corpo.innerHTML = horas.map(h => {
+            const celulas = [1,2,3,4,5].map(d => {
+                const nesta = itens.filter(i => i.dia_semana === d && i.hora_inicio.slice(0,5) === h);
+                if (!nesta.length) return '<td><div class="vazio"></div></td>';
+                return '<td>' + nesta.map(i => `
+                    <div class="bloco">
+                        <b>${i.paciente ? i.paciente.nome_completo : '—'}</b>
+                        <span>${i.profissional ? i.profissional.nome_completo : '—'}${i.sala ? ' · ' + i.sala : ''}</span>
+                    </div>`).join('') + '</td>';
+            }).join('');
+            return `<tr><td class="hora-col">${h}</td>${celulas}</tr>`;
+        }).join('');
+
+    } catch (e) {
+        console.error(e);
+        corpo.innerHTML = '<tr><td colspan="6" style="color:var(--st-bad)">Erro ao carregar a grade.</td></tr>';
+    }
+}
+</script>
+</body>
+</html>

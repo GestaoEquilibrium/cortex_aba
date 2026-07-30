@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-tema="coordenacao">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EQ ABA — Equipe</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../styles/base.css?v=2">
+<link rel="stylesheet" href="../styles/components.css?v=2">
+<style>
+.modal-fundo { position:fixed; inset:0; background:rgba(12,27,42,.5); backdrop-filter:blur(3px);
+               display:none; align-items:center; justify-content:center; padding:20px; z-index:80; }
+.modal-fundo.aberto { display:flex; }
+.modal { background:var(--surface); border-radius:var(--radius-card); padding:22px;
+         width:100%; max-width:520px; box-shadow:var(--shadow-lg); max-height:90vh; overflow:auto; }
+.modal h2 { margin-bottom:14px; }
+.campo { margin-bottom:11px; }
+.campo label { display:block; font-size:11.5px; font-weight:700; color:var(--ink-muted); margin-bottom:4px; }
+.campo input, .campo select { width:100%; padding:9px 11px; font-size:13px; font-family:inherit;
+    border:1px solid var(--line-strong); border-radius:8px; background:var(--surface-alt); color:var(--ink); }
+.campo-2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.sem-conta { font-size:10.5px; font-weight:700; color:var(--st-warn); }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../config.js?v=2"></script>
+<script src="../shared/supabase_client.js?v=2"></script>
+<script src="../shared/tema.js?v=2"></script>
+<script src="../shared/confirm_modal.js?v=3"></script>
+<script src="../shared/auth_guard.js?v=2"></script>
+</head>
+<body>
+
+<div class="app-shell">
+    <div id="sidebar"></div>
+    <div class="faixa-perfil"></div>
+
+    <main class="app-main">
+        <div class="app-topo">
+            <div>
+                <h1>Equipe</h1>
+                <div class="sub" id="contagem">carregando…</div>
+            </div>
+            <div style="display:flex; gap:8px">
+                <button class="btn btn-secundario" id="btEquipe" style="display:none" onclick="abrir('modalEquipe')">Nova equipe</button>
+                <button class="btn" id="btProf" style="display:none" onclick="abrir('modalProf')">Novo profissional</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-titulo"><h3>Profissionais</h3></div>
+            <table class="tabela">
+                <thead><tr><th>Nome</th><th>Perfil</th><th>Turno</th><th>Equipe</th><th>Acesso</th><th></th></tr></thead>
+                <tbody id="tbProf"><tr><td colspan="6" class="muted">carregando…</td></tr></tbody>
+            </table>
+        </div>
+
+        <div class="card" style="margin-top:12px">
+            <div class="card-titulo"><h3>Equipes</h3></div>
+            <table class="tabela">
+                <thead><tr><th>Equipe</th><th>Turno</th><th>Coordenação</th><th>Profissionais</th><th>Capacidade</th></tr></thead>
+                <tbody id="tbEquipes"><tr><td colspan="5" class="muted">carregando…</td></tr></tbody>
+            </table>
+        </div>
+
+        <div class="aviso" style="margin-top:14px">
+            <b>Como liberar o acesso de alguém.</b> Cadastre a pessoa aqui com o e-mail dela.
+            Depois, no Supabase, em Authentication → Users → Add user, crie a conta com <b>o mesmo e-mail</b>.
+            O vínculo é feito sozinho — não precisa copiar UUID.
+        </div>
+    </main>
+</div>
+
+<!-- ── novo profissional ───────────────────────────────────────────────────── -->
+<div class="modal-fundo" id="modalProf" onclick="if(event.target===this) fechar('modalProf')">
+    <div class="modal">
+        <h2>Novo profissional</h2>
+        <form id="formProf">
+            <div class="campo"><label for="pNome">Nome completo *</label><input id="pNome" required></div>
+            <div class="campo"><label for="pEmail">E-mail * <span class="soft">(o mesmo que será usado no acesso)</span></label>
+                <input id="pEmail" type="email" required></div>
+            <div class="campo-2">
+                <div class="campo"><label for="pPerfil">Perfil *</label>
+                    <select id="pPerfil" required>
+                        <option value="aplicador">Aplicador</option>
+                        <option value="aplicador_itinerante">Aplicador itinerante</option>
+                        <option value="estagiario_aba">Estagiário</option>
+                        <option value="coordenador_aba">Coordenação</option>
+                        <option value="supervisor_clinico">Supervisão clínica</option>
+                        <option value="recepcao">Recepção</option>
+                        <option value="admin_direcao">Direção</option>
+                    </select></div>
+                <div class="campo"><label for="pTurno">Turno</label>
+                    <select id="pTurno"><option value="">—</option>
+                        <option value="manha">Manhã</option><option value="tarde">Tarde</option>
+                        <option value="integral">Integral</option></select></div>
+            </div>
+            <div class="campo-2">
+                <div class="campo"><label for="pJornada">Jornada (horas/dia)</label>
+                    <input id="pJornada" type="number" step="0.25" min="0" max="12"></div>
+                <div class="campo"><label for="pEquipe">Equipe</label>
+                    <select id="pEquipe"><option value="">—</option></select></div>
+            </div>
+            <div class="campo-2">
+                <div class="campo"><label for="pRegistro">Registro de conselho</label><input id="pRegistro"></div>
+                <div class="campo"><label for="pTelefone">Telefone</label><input id="pTelefone"></div>
+            </div>
+            <div class="aviso" id="erroProf" style="display:none; border-left-color:var(--st-bad); color:var(--st-bad); margin-bottom:10px"></div>
+            <div class="grid-2" style="margin-top:6px">
+                <button type="button" class="btn btn-secundario btn-bloco" onclick="fechar('modalProf')">Cancelar</button>
+                <button type="submit" class="btn btn-bloco" id="btSalvarProf">Salvar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ── nova equipe ─────────────────────────────────────────────────────────── -->
+<div class="modal-fundo" id="modalEquipe" onclick="if(event.target===this) fechar('modalEquipe')">
+    <div class="modal">
+        <h2>Nova equipe</h2>
+        <form id="formEquipe">
+            <div class="campo"><label for="eNome">Nome *</label><input id="eNome" required placeholder="Equipe Tarde"></div>
+            <div class="campo-2">
+                <div class="campo"><label for="eTurno">Turno *</label>
+                    <select id="eTurno" required><option value="manha">Manhã</option>
+                        <option value="tarde">Tarde</option><option value="integral">Integral</option></select></div>
+                <div class="campo"><label for="eCapacidade">Capacidade de pacientes</label>
+                    <input id="eCapacidade" type="number" min="0" max="200"></div>
+            </div>
+            <div class="campo"><label for="eCoord">Coordenação responsável</label>
+                <select id="eCoord"><option value="">—</option></select></div>
+            <div class="aviso" id="erroEquipe" style="display:none; border-left-color:var(--st-bad); color:var(--st-bad); margin-bottom:10px"></div>
+            <div class="grid-2" style="margin-top:6px">
+                <button type="button" class="btn btn-secundario btn-bloco" onclick="fechar('modalEquipe')">Cancelar</button>
+                <button type="submit" class="btn btn-bloco" id="btSalvarEquipe">Salvar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script src="../shared/sidebar.js?v=2"></script>
+<script>
+'use strict';
+
+const ROTULO_PERFIL = {
+    admin_direcao:'Direção', coordenador_aba:'Coordenação', supervisor_clinico:'Supervisão',
+    aplicador:'Aplicador', aplicador_itinerante:'Itinerante', estagiario_aba:'Estagiário',
+    recepcao:'Recepção', responsavel:'Responsável'
+};
+let SOU_ADMIN = false;
+
+document.addEventListener('eq:pronto', async function (ev) {
+    EqSidebar.render('equipe');
+    SOU_ADMIN = ['admin_direcao','supervisor_clinico'].includes(ev.detail.perfil);
+    if (SOU_ADMIN) {
+        document.getElementById('btProf').style.display = '';
+        document.getElementById('btEquipe').style.display = '';
+    }
+    await Promise.all([carregarProfissionais(), carregarEquipes()]);
+});
+
+function abrir(id)  { document.getElementById(id).classList.add('aberto'); }
+function fechar(id) { document.getElementById(id).classList.remove('aberto');
+                      document.querySelectorAll('.aviso[id^=erro]').forEach(e => e.style.display='none'); }
+
+async function carregarProfissionais() {
+    const tb = document.getElementById('tbProf');
+    try {
+        const { data, error } = await eqClient
+            .from('profissionais')
+            .select('id, nome_completo, email, perfil, turno, equipe_id, ativo, auth_user_id')
+            .order('nome_completo');
+        if (error) throw error;
+
+        const { data: eqs } = await eqClient.from('equipes_aba').select('id, nome');
+        const nomeEquipe = id => (eqs || []).find(e => e.id === id)?.nome || '—';
+
+        const ps = data || [];
+        document.getElementById('contagem').textContent =
+            ps.filter(p => p.ativo).length + ' ativos · ' + (eqs || []).length + ' equipes';
+
+        tb.innerHTML = ps.length ? ps.map(p => `
+            <tr style="${p.ativo ? '' : 'opacity:.55'}">
+                <td><b>${p.nome_completo}</b><br><span class="tiny soft">${p.email}</span></td>
+                <td>${ROTULO_PERFIL[p.perfil] || p.perfil}</td>
+                <td class="muted">${p.turno || '—'}</td>
+                <td class="muted">${nomeEquipe(p.equipe_id)}</td>
+                <td>${p.auth_user_id
+                        ? '<span class="chip chip-ok">com acesso</span>'
+                        : '<span class="sem-conta">sem conta</span>'}</td>
+                <td style="text-align:right">${SOU_ADMIN ? `
+                    <button class="bt-acao btn btn-secundario" style="padding:5px 10px;font-size:11.5px"
+                            onclick="alternarAtivo('${p.id}', ${p.ativo}, '${p.nome_completo.replace(/'/g,'')}')">
+                        ${p.ativo ? 'Desativar' : 'Reativar'}</button>` : ''}</td>
+            </tr>`).join('')
+            : '<tr><td colspan="6" class="muted">Nenhum profissional cadastrado.</td></tr>';
+
+        // popula selects
+        const selEquipe = document.getElementById('pEquipe');
+        const selCoord  = document.getElementById('eCoord');
+        selEquipe.innerHTML = '<option value="">—</option>' +
+            (eqs || []).map(e => `<option value="${e.id}">${e.nome}</option>`).join('');
+        selCoord.innerHTML = '<option value="">—</option>' +
+            ps.filter(p => ['coordenador_aba','admin_direcao','supervisor_clinico'].includes(p.perfil) && p.ativo)
+              .map(p => `<option value="${p.id}">${p.nome_completo}</option>`).join('');
+
+    } catch (e) {
+        console.error(e);
+        tb.innerHTML = '<tr><td colspan="6" style="color:var(--st-bad)">Erro ao carregar. Veja o console.</td></tr>';
+    }
+}
+
+async function carregarEquipes() {
+    const tb = document.getElementById('tbEquipes');
+    try {
+        const [{ data: eqs, error }, { data: profs }] = await Promise.all([
+            eqClient.from('equipes_aba').select('id, nome, turno, capacidade_pacientes, coordenador_id').order('nome'),
+            eqClient.from('profissionais').select('id, nome_completo, equipe_id, ativo')
+        ]);
+        if (error) throw error;
+
+        const nome = id => (profs || []).find(p => p.id === id)?.nome_completo || '—';
+        const conta = id => (profs || []).filter(p => p.equipe_id === id && p.ativo).length;
+
+        tb.innerHTML = (eqs || []).length ? eqs.map(e => `
+            <tr>
+                <td><b>${e.nome}</b></td>
+                <td class="muted">${e.turno}</td>
+                <td class="muted">${nome(e.coordenador_id)}</td>
+                <td>${conta(e.id)}</td>
+                <td class="muted">${e.capacidade_pacientes ?? '—'}</td>
+            </tr>`).join('')
+            : '<tr><td colspan="5" class="muted">Nenhuma equipe cadastrada.</td></tr>';
+    } catch (e) {
+        console.error(e);
+        tb.innerHTML = '<tr><td colspan="5" style="color:var(--st-bad)">Erro ao carregar.</td></tr>';
+    }
+}
+
+async function alternarAtivo(id, ativo, nome) {
+    const ok = await EqConfirm.mostrar({
+        titulo: ativo ? 'Desativar profissional?' : 'Reativar profissional?',
+        texto: ativo
+            ? `${nome} perde o acesso ao sistema e some das listas. Os registros feitos por ele continuam no histórico.`
+            : `${nome} volta a ter acesso e a aparecer nas listas.`,
+        confirmar: ativo ? 'Desativar' : 'Reativar',
+        tipo: ativo ? 'perigo' : 'padrao'
+    });
+    if (!ok) return;
+    try {
+        const { error } = await eqClient.from('profissionais').update({ ativo: !ativo }).eq('id', id);
+        if (error) throw error;
+        await carregarProfissionais();
+    } catch (e) {
+        console.error(e);
+        await EqConfirm.mostrar({ titulo:'Não foi possível alterar', texto: e.message || 'Erro ao gravar.',
+                                  confirmar:'Entendi', cancelar:'Fechar', tipo:'alerta' });
+    }
+}
+
+document.getElementById('formProf').addEventListener('submit', async function (ev) {
+    ev.preventDefault();
+    const bt = document.getElementById('btSalvarProf'), erro = document.getElementById('erroProf');
+    bt.disabled = true; bt.textContent = 'Salvando...'; erro.style.display = 'none';
+    const jornada = document.getElementById('pJornada').value;
+    try {
+        const { error } = await eqClient.from('profissionais').insert({
+            nome_completo: document.getElementById('pNome').value.trim(),
+            email: document.getElementById('pEmail').value.trim().toLowerCase(),
+            perfil: document.getElementById('pPerfil').value,
+            turno: document.getElementById('pTurno').value || null,
+            jornada_horas: jornada ? parseFloat(jornada) : null,
+            equipe_id: document.getElementById('pEquipe').value || null,
+            registro_conselho: document.getElementById('pRegistro').value.trim() || null,
+            telefone: document.getElementById('pTelefone').value.trim() || null
+        });
+        if (error) throw error;
+        fechar('modalProf'); this.reset();
+        await Promise.all([carregarProfissionais(), carregarEquipes()]);
+    } catch (e) {
+        console.error(e);
+        erro.textContent = e.message && e.message.includes('duplicate')
+            ? 'Já existe profissional com este e-mail.'
+            : 'Não foi possível salvar: ' + (e.message || 'erro desconhecido');
+        erro.style.display = 'block';
+    } finally { bt.disabled = false; bt.textContent = 'Salvar'; }
+});
+
+document.getElementById('formEquipe').addEventListener('submit', async function (ev) {
+    ev.preventDefault();
+    const bt = document.getElementById('btSalvarEquipe'), erro = document.getElementById('erroEquipe');
+    bt.disabled = true; bt.textContent = 'Salvando...'; erro.style.display = 'none';
+    const cap = document.getElementById('eCapacidade').value;
+    try {
+        const { error } = await eqClient.from('equipes_aba').insert({
+            nome: document.getElementById('eNome').value.trim(),
+            turno: document.getElementById('eTurno').value,
+            capacidade_pacientes: cap ? parseInt(cap, 10) : null,
+            coordenador_id: document.getElementById('eCoord').value || null
+        });
+        if (error) throw error;
+        fechar('modalEquipe'); this.reset();
+        await Promise.all([carregarProfissionais(), carregarEquipes()]);
+    } catch (e) {
+        console.error(e);
+        erro.textContent = 'Não foi possível salvar: ' + (e.message || 'erro desconhecido');
+        erro.style.display = 'block';
+    } finally { bt.disabled = false; bt.textContent = 'Salvar'; }
+});
+</script>
+</body>
+</html>

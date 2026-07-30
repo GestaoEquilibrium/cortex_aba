@@ -182,7 +182,15 @@ body::before {
     background-size: 14px 14px;
 }
 [data-modo="escuro"] body::before { --dot-cor: rgba(255,255,255,.07); }
-.app-shell, .app-main, .sidebar, .portal { position: relative; z-index: 1; }
+/* Tudo que é conteúdo precisa de contexto próprio: o pseudo-elemento do fundo é
+   posicionado e, sem isto, ele pinta POR CIMA dos elementos estáticos da página
+   (foi o que aconteceu no cartão de login). */
+.app-shell, .app-main, .sidebar, .portal, .login,
+.modal-fundo, .eqc-fundo { position: relative; z-index: 1; }
+.modal-fundo, .eqc-fundo { position: fixed; }
+
+/* Telas de fundo escuro (login): ponto claro, senão o pattern some */
+body.tela-escura::before { --dot-cor: rgba(255,255,255,.07); }
 
 /* ══════════════════════════════════════════════════════════════════════════
    RESET / BASE

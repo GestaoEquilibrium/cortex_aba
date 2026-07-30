@@ -18,7 +18,7 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles/base.css?v=3">
+<link rel="stylesheet" href="styles/base.css?v=4">
 <link rel="stylesheet" href="styles/components.css?v=5">
 <style>
 .aba-manuscrito { font-family:'Caveat', cursive; font-size:1.25em; font-weight:700;
@@ -51,7 +51,7 @@ body { min-height:100vh; display:flex; align-items:center; justify-content:cente
 <script src="shared/tema.js?v=2"></script>
 <script src="shared/audit.js?v=5"></script>
 </head>
-<body>
+<body class="tela-escura">
 
 <div class="login">
     <div class="login-marca">
@@ -86,6 +86,19 @@ body { min-height:100vh; display:flex; align-items:center; justify-content:cente
 (function () {
     'use strict';
     const recado  = document.getElementById('recado');
+
+    // Cada perfil abre na tela em que ele realmente trabalha, não numa
+    // página genérica que ele teria que atravessar todo dia.
+    function destinoDe(perfil) {
+        switch (perfil) {
+            case 'aplicador':
+            case 'aplicador_itinerante':
+            case 'estagiario_aba':   return 'sessao/sessao.html';
+            case 'recepcao':         return 'agenda/agenda.html';
+            case 'responsavel':      return 'portal/index.html';
+            default:                 return 'dashboard.html';   // coordenação, supervisão, direção
+        }
+    }
     const bt      = document.getElementById('btEntrar');
 
     function mostrar(texto, tipo) {
@@ -103,10 +116,10 @@ body { min-height:100vh; display:flex; align-items:center; justify-content:cente
         const { data: { session } } = await eqClient.auth.getSession();
         if (!session) return;
         const { data: prof } = await eqClient.from('profissionais')
-            .select('id, ativo').eq('auth_user_id', session.user.id).maybeSingle();
-        if (prof && prof.ativo) { location.href = 'dashboard.html'; return; }
+            .select('id, perfil, ativo').eq('auth_user_id', session.user.id).maybeSingle();
+        if (prof && prof.ativo) { location.href = destinoDe(prof.perfil); return; }
         const { data: resp } = await eqClient.from('responsaveis')
-            .select('id, ativo').eq('auth_user_id', session.user.id).maybeSingle();
+            .select('id, perfil, ativo').eq('auth_user_id', session.user.id).maybeSingle();
         if (resp && resp.ativo) { location.href = 'portal/index.html'; return; }
         await eqClient.auth.signOut();   // conta órfã ou inativa: não deixa em loop
     })();
@@ -158,7 +171,7 @@ body { min-height:100vh; display:flex; align-items:center; justify-content:cente
                 });
             } catch (e) { console.warn('entrada não registrada', e); }
 
-            location.href = prof.perfil === 'responsavel' ? 'portal/index.html' : 'dashboard.html';
+            location.href = destinoDe(prof.perfil);
 
         } catch (e) {
             console.error(e);

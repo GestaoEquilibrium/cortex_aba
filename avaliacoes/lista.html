@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-tema="coordenacao">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CORTEX aba — Avaliações</title>
+<script>
+(function(){try{var m=localStorage.getItem('eqaba_modo');
+if(m!=='claro'&&m!=='escuro'){m=(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches)?'escuro':'claro';}
+document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
+</script>
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="../apple-touch-icon.png">
+<link rel="manifest" href="../site.webmanifest">
+<meta name="theme-color" content="#0F766E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../styles/base.css?v=4">
+<link rel="stylesheet" href="../styles/components.css?v=5">
+<style>
+.barra { display:flex; gap:9px; align-items:center; flex-wrap:wrap; margin-bottom:14px; }
+.barra select { padding:10px 12px; font:inherit; font-size:13px; color:var(--ink);
+    border:1px solid var(--line-strong); border-radius:9px; background:var(--surface); min-width:210px; }
+.abas { display:flex; gap:4px; border-bottom:1px solid var(--line); margin-bottom:16px; }
+.abas button { border:none; background:transparent; padding:10px 14px; font:inherit; font-size:13px;
+    font-weight:700; color:var(--ink-muted); cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px; }
+.abas button[aria-pressed="true"] { color:var(--acao); border-bottom-color:var(--acao); }
+.painel { display:none; } .painel.on { display:block; }
+.grafico-caixa { position:relative; height:250px; margin-top:8px; }
+.campo { margin-bottom:11px; }
+.campo label { display:block; font-size:11.5px; font-weight:700; color:var(--ink-muted); margin-bottom:4px; }
+.campo input, .campo select, .campo textarea { width:100%; padding:9px 11px; font-size:13px; font-family:inherit;
+    border:1px solid var(--line-strong); border-radius:8px; background:var(--surface-alt); color:var(--ink); }
+.campo textarea { font-family:ui-monospace,'SF Mono',Menlo,monospace; font-size:12px; }
+.campo-2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.campo-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
+.modal-fundo { position:fixed; inset:0; background:rgba(12,27,42,.5); backdrop-filter:blur(3px);
+               display:none; align-items:center; justify-content:center; padding:20px; z-index:80; }
+.modal-fundo.aberto { display:flex; }
+.modal { background:var(--surface); border-radius:var(--radius-card); padding:22px; width:100%;
+         max-width:600px; box-shadow:var(--shadow-lg); max-height:92vh; overflow:auto; }
+.vazio-msg { padding:26px; text-align:center; color:var(--ink-muted); font-size:13px; }
+.selo-origem { font-size:9.5px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="../config.js?v=4"></script>
+<script src="../shared/supabase_client.js?v=2"></script>
+<script src="../shared/tema.js?v=2"></script>
+<script src="../shared/confirm_modal.js?v=3"></script>
+<script src="../shared/fotos.js?v=7"></script>
+<script src="../shared/audit.js?v=5"></script>
+<script src="../shared/auth_guard.js?v=7"></script>
+</head>
+<body>
+
+<div class="app-shell">
+    <div id="sidebar"></div>
+    <div class="faixa-perfil"></div>
+
+    <main class="app-main">
+        <div class="app-topo">
+            <div>
+                <h1>Avaliações</h1>
+                <div class="sub" id="subtitulo">carregando…</div>
+            </div>
+            <div style="display:flex;gap:8px">
+                <button class="btn btn-secundario" id="btProtocolo" style="display:none" onclick="abrirProtocolo()">Novo protocolo</button>
+                <button class="btn" id="btAvaliar" style="display:none" onclick="abrirNovaAvaliacao()">Nova avaliação</button>
+            </div>
+        </div>
+
+        <div class="abas">
+            <button data-p="pacientes" aria-pressed="true"  onclick="aba('pacientes')">Por paciente</button>
+            <button data-p="protocolos" aria-pressed="false" onclick="aba('protocolos')">Protocolos</button>
+        </div>
+
+        <div class="painel on" id="p-pacientes">
+            <div class="barra">
+                <select id="selPaciente" onchange="carregarPaciente()">
+                    <option value="">Selecione o paciente...</option>
+                </select>
+            </div>
+            <div id="areaPaciente"><div class="card vazio-msg">Escolha um paciente.</div></div>
+        </div>
+
+        <div class="painel" id="p-protocolos">
+            <div id="areaProtocolos"><div class="card vazio-msg">carregando…</div></div>
+        </div>
+    </main>
+</div>
+
+<!-- ── novo protocolo ──────────────────────────────────────────────────────── -->
+<div class="modal-fundo" id="modalProtocolo" onclick="if(event.target===this) fechar('modalProtocolo')">
+    <div class="modal">
+        <h2 style="margin-bottom:4px">Novo protocolo</h2>
+        <p class="tiny soft" style="margin-bottom:14px">Estrutura livre: você define os domínios e os itens.</p>
+        <form id="formProtocolo">
+            <div class="campo-2">
+                <div class="campo"><label for="tNome">Nome *</label><input id="tNome" required placeholder="Protocolo de habilidades iniciais"></div>
+                <div class="campo"><label for="tVersao">Versão</label><input id="tVersao" placeholder="1.0"></div>
+            </div>
+            <div class="campo-2">
+                <div class="campo"><label for="tFaixa">Faixa etária</label><input id="tFaixa" placeholder="2 a 6 anos"></div>
+                <div class="campo"><label for="tOrigem">Origem *</label>
+                    <select id="tOrigem" onchange="avisoDireitos()">
+                        <option value="propria">Próprio da clínica</option>
+                        <option value="dominio_publico">Domínio público</option>
+                        <option value="licenciada">Instrumento licenciado</option>
+                    </select></div>
+            </div>
+            <div class="campo" id="campoDireitos" style="display:none">
+                <label for="tDireitos">Autorização de uso</label>
+                <input id="tDireitos" placeholder="nº da licença, contrato ou autorização do detentor">
+                <div class="tiny" style="color:var(--st-warn);margin-top:3px">
+                    Instrumento publicado só deve ser digitalizado com autorização do detentor dos direitos.
+                </div>
+            </div>
+            <div class="campo-3">
+                <div class="campo"><label for="tMin">Escala — mínimo</label><input id="tMin" type="number" value="0"></div>
+                <div class="campo"><label for="tMax">Escala — máximo</label><input id="tMax" type="number" value="3"></div>
+                <div class="campo"><label for="tRotulos">Rótulos (opcional)</label><input id="tRotulos" placeholder="não faz, emergente, parcial, domina"></div>
+            </div>
+            <div class="campo">
+                <label for="tEstrutura">Domínios e itens *</label>
+                <textarea id="tEstrutura" rows="9" required placeholder="# Linguagem receptiva
+Aponta para objeto nomeado
+Segue instrução de um passo
+Identifica partes do corpo
+
+# Linguagem expressiva
+Nomeia objetos comuns
+Pede o que quer com palavra"></textarea>
+                <div class="tiny soft" style="margin-top:3px">
+                    Linha começando com <b>#</b> vira domínio. As demais viram itens daquele domínio.
+                </div>
+            </div>
+            <div class="aviso" id="erroProtocolo" style="display:none;border-left-color:var(--st-bad);color:var(--st-bad);margin-bottom:10px"></div>
+            <div class="grid-2">
+                <button type="button" class="btn btn-secundario btn-bloco" onclick="fechar('modalProtocolo')">Cancelar</button>
+                <button type="submit" class="btn btn-bloco" id="btSalvarProtocolo">Criar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ── nova avaliação ──────────────────────────────────────────────────────── -->
+<div class="modal-fundo" id="modalAvaliacao" onclick="if(event.target===this) fechar('modalAvaliacao')">
+    <div class="modal">
+        <h2 style="margin-bottom:14px">Nova avaliação</h2>
+        <form id="formAvaliacao">
+            <div class="campo"><label for="aProtocolo">Protocolo *</label><select id="aProtocolo" required></select></div>
+            <div class="campo-3">
+                <div class="campo"><label for="aOnda">Onda</label><input id="aOnda" type="number" min="1" max="20" value="1"></div>
+                <div class="campo"><label for="aData">Data</label><input id="aData" type="date"></div>
+                <div class="campo"><label for="aDuracao">Duração (min)</label><input id="aDuracao" type="number" min="0" max="600"></div>
+            </div>
+            <div class="campo"><label for="aContexto">Contexto da observação</label>
+                <input id="aContexto" placeholder="sala de atendimento, com a mãe presente..."></div>
+            <div class="aviso" id="erroAvaliacao" style="display:none;border-left-color:var(--st-bad);color:var(--st-bad);margin-bottom:10px"></div>
+            <div class="grid-2">
+                <button type="button" class="btn btn-secundario btn-bloco" onclick="fechar('modalAvaliacao')">Cancelar</button>
+                <button type="submit" class="btn btn-bloco" id="btSalvarAvaliacao">Criar e aplicar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script src="../shared/sidebar.js?v=8"></script>
+<script>
+'use strict';
+
+const ORIGENS = {
+    propria:{r:'próprio da clínica',c:'var(--st-ok)'},
+    dominio_publico:{r:'domínio público',c:'var(--st-neutro)'},
+    licenciada:{r:'licenciado',c:'var(--st-warn)'}
+};
+const CORES = ['#2563EB','#7C3AED','#06B6D4','#16A34A','#F59E0B','#EC4899','#0F766E','#EF4444'];
+
+let PROTOCOLOS = [], PACIENTE = null, AVALIACOES = [], EU = null, PODE_EDITAR = false, CHART = null;
+
+document.addEventListener('eq:pronto', async function (ev) {
+    EqSidebar.render('avaliacoes');
+    EU = ev.detail;
+    PODE_EDITAR = ['admin_direcao','supervisor_clinico','coordenador_aba'].includes(EU.perfil);
+    if (PODE_EDITAR) document.getElementById('btProtocolo').style.display = '';
+
+    try {
+        const [rpac, rprot] = await Promise.all([
+            eqClient.from('pacientes').select('id, nome_completo')
+                .in('status',['ativo','suspenso']).order('nome_completo'),
+            eqClient.from('protocolos_avaliacao')
+                .select('*, dominios:protocolo_dominios(id, nome, ordem, itens:protocolo_itens(id))')
+                .eq('ativo', true).order('nome')
+        ]);
+        document.getElementById('selPaciente').innerHTML = '<option value="">Selecione o paciente...</option>' +
+            (rpac.data || []).map(p => `<option value="${p.id}">${p.nome_completo}</option>`).join('');
+        PROTOCOLOS = rprot.data || [];
+        document.getElementById('subtitulo').textContent =
+            PROTOCOLOS.length + ' protocolo' + (PROTOCOLOS.length === 1 ? '' : 's') + ' cadastrado' + (PROTOCOLOS.length === 1 ? '' : 's');
+        pintarProtocolos();
+    } catch (e) { console.error(e); }
+});
+
+function aba(k) {
+    ['pacientes','protocolos'].forEach(x => {
+        document.getElementById('p-' + x).classList.toggle('on', x === k);
+        document.querySelector('[data-p="' + x + '"]').setAttribute('aria-pressed', x === k);
+    });
+}
+function fechar(id) { document.getElementById(id).classList.remove('aberto');
+                      document.querySelectorAll('.aviso[id^=erro]').forEach(e => e.style.display='none'); }
+const p2 = n => String(n).padStart(2,'0');
+function brl(iso) { return iso ? iso.slice(0,10).split('-').reverse().join('/') : '—'; }
+function hojeISO() { const d=new Date(); return d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate()); }
+
+// ── protocolos ──────────────────────────────────────────────────────────────
+function pintarProtocolos() {
+    document.getElementById('areaProtocolos').innerHTML = PROTOCOLOS.length
+        ? PROTOCOLOS.map(p => {
+            const o = ORIGENS[p.origem] || ORIGENS.propria;
+            const itens = (p.dominios || []).reduce((s,d) => s + (d.itens ? d.itens.length : 0), 0);
+            return `<div class="card" style="margin-bottom:10px">
+                <div class="card-titulo">
+                    <div>
+                        <h3>${p.nome} ${p.versao ? '<span class="tiny soft">v' + p.versao + '</span>' : ''}</h3>
+                        <span class="tiny soft">${(p.dominios||[]).length} domínios · ${itens} itens
+                        ${p.faixa_etaria ? ' · ' + p.faixa_etaria : ''}</span>
+                    </div>
+                    <span class="selo-origem" style="color:${o.c}">${o.r}</span>
+                </div>
+                ${p.descricao ? `<p class="small muted">${p.descricao}</p>` : ''}
+                ${p.origem === 'licenciada' ? `<div class="aviso" style="border-left-color:var(--st-warn);margin-top:8px">
+                    <b>Instrumento licenciado.</b> ${p.observacao_direitos || 'Autorização de uso não registrada.'}
+                </div>` : ''}
+                <div class="tiny soft" style="margin-top:8px">
+                    Domínios: ${(p.dominios||[]).sort((a,b)=>a.ordem-b.ordem).map(d => d.nome).join(' · ') || '—'}
+                </div>
+            </div>`; }).join('')
+        : `<div class="card vazio-msg">Nenhum protocolo cadastrado.<br>
+           <span class="tiny soft">Comece pelo protocolo próprio da clínica — instrumentos publicados exigem autorização do detentor.</span></div>`;
+}
+
+function avisoDireitos() {
+    const o = document.getElementById('tOrigem').value;
+    document.getElementById('campoDireitos').style.display = (o === 'licenciada') ? '' : 'none';
+}
+
+document.getElementById('formProtocolo').addEventListener('submit', async function (ev) {
+    ev.preventDefault();
+    const bt = document.getElementById('btSalvarProtocolo'), erro = document.getElementById('erroProtocolo');
+    bt.disabled = true; bt.textContent = 'Criando...'; erro.style.display = 'none';
+
+    // interpreta o texto: "# domínio" e linhas de item
+    const linhas = document.getElementById('tEstrutura').value.split('\n').map(l => l.trim()).filter(Boolean);
+    const estrutura = [];
+    linhas.forEach(l => {
+        if (l.startsWith('#')) estrutura.push({ nome: l.replace(/^#+\s*/,''), itens: [] });
+        else if (estrutura.length) estrutura[estrutura.length-1].itens.push(l);
+    });
+
+    if (!estrutura.length || !estrutura.some(d => d.itens.length)) {
+        erro.textContent = 'Informe ao menos um domínio (linha com #) e um item.';
+        erro.style.display = 'block';
+        bt.disabled = false; bt.textContent = 'Criar'; return;
+    }
+
+    const origem = document.getElementById('tOrigem').value;
+    if (origem === 'licenciada' && !document.getElementById('tDireitos').value.trim()) {
+        const segue = await EqConfirm.mostrar({
+            titulo: 'Cadastrar instrumento licenciado sem registrar a autorização?',
+            texto: 'Digitalizar instrumento publicado sem autorização do detentor expõe a clínica. O campo fica registrado para auditoria.',
+            confirmar: 'Cadastrar assim mesmo', tipo: 'alerta'
+        });
+        if (!segue) { bt.disabled = false; bt.textContent = 'Criar'; return; }
+    }
+
+    const rot = document.getElementById('tRotulos').value.split(',').map(s => s.trim()).filter(Boolean);
+    const min = parseInt(document.getElementById('tMin').value || '0', 10);
+    const rotulos = {};
+    rot.forEach((r,i) => { rotulos[min + i] = r; });
+
+    try {
+        const { data: prot, error } = await eqClient.from('protocolos_avaliacao').insert({
+            nome: document.getElementById('tNome').value.trim(),
+            versao: document.getElementById('tVersao').value.trim() || null,
+            faixa_etaria: document.getElementById('tFaixa').value.trim() || null,
+            origem: origem,
+            observacao_direitos: document.getElementById('tDireitos').value.trim() || null,
+            escala_min: min,
+            escala_max: parseInt(document.getElementById('tMax').value || '3', 10),
+            escala_rotulos: rot.length ? rotulos : null,
+            criado_por: EU.profissional.id
+        }).select('id').single();
+        if (error) throw error;
+
+        for (let i = 0; i < estrutura.length; i++) {
+            const d = estrutura[i];
+            const { data: dom, error: e2 } = await eqClient.from('protocolo_dominios').insert({
+                protocolo_id: prot.id, nome: d.nome, ordem: i, cor: CORES[i % CORES.length]
+            }).select('id').single();
+            if (e2) throw e2;
+            if (d.itens.length) {
+                const { error: e3 } = await eqClient.from('protocolo_itens').insert(
+                    d.itens.map((t, j) => ({ dominio_id: dom.id, enunciado: t, ordem: j })));
+                if (e3) throw e3;
+            }
+        }
+
+        await EqAudit.registrar('criacao', 'protocolos_avaliacao', prot.id,
+            { nome: document.getElementById('tNome').value.trim(), origem: origem,
+              dominios: estrutura.length });
+        fechar('modalProtocolo'); this.reset();
+        location.reload();
+    } catch (e) {
+        console.error(e);
+        erro.textContent = 'Não foi possível criar: ' + (e.message || 'erro');
+        erro.style.display = 'block';
+    } finally { bt.disabled = false; bt.textContent = 'Criar'; }
+});
+
+function abrirProtocolo() {
+    document.getElementById('formProtocolo').reset();
+    avisoDireitos();
+    document.getElementById('modalProtocolo').classList.add('aberto');
+}
+
+// ── avaliações do paciente ──────────────────────────────────────────────────
+async function carregarPaciente() {
+    PACIENTE = document.getElementById('selPaciente').value;
+    if (CHART) { try { CHART.destroy(); } catch (e) {} CHART = null; }
+    document.getElementById('btAvaliar').style.display = (PACIENTE && PODE_EDITAR) ? '' : 'none';
+    if (!PACIENTE) {
+        document.getElementById('areaPaciente').innerHTML = '<div class="card vazio-msg">Escolha um paciente.</div>';
+        return;
+    }
+    document.getElementById('areaPaciente').innerHTML = '<div class="card vazio-msg">carregando…</div>';
+
+    try {
+        const { data, error } = await eqClient.from('avaliacoes')
+            .select(`id, onda, data, status, contexto, duracao_min,
+                     protocolo:protocolos_avaliacao(id, nome, escala_max),
+                     avaliador:profissionais(nome_completo),
+                     respostas:avaliacao_respostas(pontuacao, item:protocolo_itens(id, dominio_id))`)
+            .eq('paciente_id', PACIENTE).order('onda');
+        if (error) throw error;
+        AVALIACOES = data || [];
+        await pintarPaciente();
+    } catch (e) {
+        console.error(e);
+        document.getElementById('areaPaciente').innerHTML =
+            '<div class="card vazio-msg" style="color:var(--st-bad)">Erro ao carregar. Veja o console.</div>';
+    }
+}
+
+async function pintarPaciente() {
+    if (!AVALIACOES.length) {
+        document.getElementById('areaPaciente').innerHTML =
+            `<div class="card vazio-msg">Nenhuma avaliação para este paciente.
+             ${PODE_EDITAR ? '<br><span class="tiny soft">Use "Nova avaliação" para começar.</span>' : ''}</div>`;
+        return;
+    }
+
+    // domínios do protocolo da primeira avaliação (para o comparativo)
+    const protId = AVALIACOES[0].protocolo ? AVALIACOES[0].protocolo.id : null;
+    let dominios = [];
+    if (protId) {
+        const { data } = await eqClient.from('protocolo_dominios')
+            .select('id, nome, ordem, cor, itens:protocolo_itens(id)')
+            .eq('protocolo_id', protId).order('ordem');
+        dominios = data || [];
+    }
+
+    const lista = AVALIACOES.map(a => {
+        const respondidas = (a.respostas || []).filter(r => r.pontuacao !== null).length;
+        const total = (a.respostas || []).length;
+        return `<div class="card" style="margin-bottom:10px">
+            <div class="card-titulo">
+                <div>
+                    <h3>AV${a.onda} · ${a.protocolo ? a.protocolo.nome : '—'}</h3>
+                    <span class="tiny soft">${brl(a.data)}
+                        ${a.avaliador ? ' · ' + a.avaliador.nome_completo : ''}
+                        ${a.duracao_min ? ' · ' + a.duracao_min + ' min' : ''}
+                        ${a.contexto ? ' · ' + a.contexto : ''}</span>
+                </div>
+                <div style="display:flex;gap:8px;align-items:center">
+                    <span class="chip ${a.status === 'concluida' ? 'chip-ok' : 'chip-alerta'}">${a.status.replace('_',' ')}</span>
+                    <a class="btn btn-secundario" style="padding:6px 12px;font-size:12px"
+                       href="aplicar.html?id=${a.id}">${a.status === 'concluida' ? 'Ver' : 'Continuar'}</a>
+                </div>
+            </div>
+            <div class="tiny soft">${respondidas} de ${total} itens respondidos</div>
+        </div>`;
+    }).join('');
+
+    const comparativo = (AVALIACOES.length >= 1 && dominios.length)
+        ? `<div class="card" style="margin-bottom:12px">
+             <div class="card-titulo"><h3>Comparação entre as ondas</h3>
+                <span class="tiny soft">% do máximo possível em cada domínio</span></div>
+             <div class="grafico-caixa"><canvas id="gComp"></canvas></div>
+           </div>` : '';
+
+    document.getElementById('areaPaciente').innerHTML = comparativo + lista;
+
+    if (comparativo) montarComparativo(dominios);
+}
+
+function montarComparativo(dominios) {
+    const el = document.getElementById('gComp');
+    if (!el || typeof Chart === 'undefined') return;
+    const escuro = document.documentElement.getAttribute('data-modo') === 'escuro';
+    const corTexto = escuro ? '#93A6B4' : '#5C7284';
+    const corGrade = escuro ? 'rgba(255,255,255,.07)' : 'rgba(12,27,42,.07)';
+
+    const paleta = ['#94A3B8','#16A34A','#2563EB','#7C3AED','#F59E0B'];
+    const datasets = AVALIACOES.map((a, i) => {
+        const max = a.protocolo ? a.protocolo.escala_max : 3;
+        const dados = dominios.map(d => {
+            const itensDoDominio = new Set((d.itens || []).map(x => x.id));
+            const respostas = (a.respostas || []).filter(r =>
+                r.item && itensDoDominio.has(r.item.id) && r.pontuacao !== null);
+            if (!respostas.length) return 0;
+            const soma = respostas.reduce((s,r) => s + r.pontuacao, 0);
+            return Math.round(soma / (respostas.length * max) * 100);
+        });
+        return { label: 'AV' + a.onda + ' · ' + brl(a.data),
+                 data: dados, backgroundColor: paleta[i % paleta.length], borderRadius: 5 };
+    });
+
+    CHART = new Chart(el, {
+        type: 'bar',
+        data: { labels: dominios.map(d => d.nome), datasets: datasets },
+        options: {
+            responsive:true, maintainAspectRatio:false, indexAxis:'y',
+            plugins:{ legend:{ position:'bottom', labels:{ color:corTexto, boxWidth:12, font:{ size:11 } } },
+                      tooltip:{ callbacks:{ label: c => c.dataset.label + ': ' + c.parsed.x + '%' } } },
+            scales:{ x:{ min:0, max:100, ticks:{ color:corTexto, callback:v => v + '%' }, grid:{ color:corGrade } },
+                     y:{ ticks:{ color:corTexto }, grid:{ display:false } } }
+        }
+    });
+}
+
+function abrirNovaAvaliacao() {
+    if (!PROTOCOLOS.length) {
+        EqConfirm.mostrar({ titulo:'Nenhum protocolo cadastrado',
+            texto:'Cadastre um protocolo antes de avaliar.', confirmar:'Fechar', cancelar:'Fechar', tipo:'padrao' });
+        return;
+    }
+    document.getElementById('aProtocolo').innerHTML = PROTOCOLOS.map(p =>
+        `<option value="${p.id}">${p.nome}${p.versao ? ' v' + p.versao : ''}</option>`).join('');
+    const ondas = AVALIACOES.map(a => a.onda);
+    document.getElementById('aOnda').value = ondas.length ? Math.max.apply(null, ondas) + 1 : 1;
+    document.getElementById('aData').value = hojeISO();
+    document.getElementById('modalAvaliacao').classList.add('aberto');
+}
+
+document.getElementById('formAvaliacao').addEventListener('submit', async function (ev) {
+    ev.preventDefault();
+    const bt = document.getElementById('btSalvarAvaliacao'), erro = document.getElementById('erroAvaliacao');
+    bt.disabled = true; bt.textContent = 'Criando...'; erro.style.display = 'none';
+    const dur = document.getElementById('aDuracao').value;
+    try {
+        const { data, error } = await eqClient.from('avaliacoes').insert({
+            paciente_id: PACIENTE,
+            protocolo_id: document.getElementById('aProtocolo').value,
+            onda: parseInt(document.getElementById('aOnda').value, 10),
+            data: document.getElementById('aData').value || hojeISO(),
+            avaliador_id: EU.profissional.id,
+            contexto: document.getElementById('aContexto').value.trim() || null,
+            duracao_min: dur ? parseInt(dur,10) : null
+        }).select('id').single();
+        if (error) throw error;
+        await EqAudit.registrar('criacao', 'avaliacoes', data.id, { paciente_id: PACIENTE });
+        location.href = 'aplicar.html?id=' + data.id;
+    } catch (e) {
+        console.error(e);
+        erro.textContent = e.message && e.message.includes('duplicate')
+            ? 'Já existe uma avaliação desta onda com este protocolo.'
+            : 'Não foi possível criar: ' + (e.message || 'erro');
+        erro.style.display = 'block';
+        bt.disabled = false; bt.textContent = 'Criar e aplicar';
+    }
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-tema="coordenacao">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CORTEX aba — Aplicar avaliação</title>
+<script>
+(function(){try{var m=localStorage.getItem('eqaba_modo');
+if(m!=='claro'&&m!=='escuro'){m=(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches)?'escuro':'claro';}
+document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
+</script>
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<link rel="manifest" href="../site.webmanifest">
+<meta name="theme-color" content="#0F766E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../styles/base.css?v=4">
+<link rel="stylesheet" href="../styles/components.css?v=5">
+<style>
+.voltar { display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:600;
+          color:var(--ink-muted); margin-bottom:12px; }
+.dominio { margin-bottom:16px; }
+.dominio-topo { display:flex; justify-content:space-between; align-items:center; gap:10px;
+                padding:10px 12px; border-radius:10px 10px 0 0; color:#fff; font-weight:700; font-size:13px; }
+.dominio-corpo { border:1px solid var(--line); border-top:none; border-radius:0 0 10px 10px;
+                 background:var(--surface); }
+.item { display:flex; gap:12px; align-items:center; padding:10px 12px; border-top:1px solid var(--line); flex-wrap:wrap; }
+.item:first-child { border-top:none; }
+.item-texto { flex:1; min-width:180px; font-size:13px; }
+.notas { display:flex; gap:4px; flex-wrap:wrap; }
+.notas button { min-width:38px; border:1px solid var(--line-strong); background:var(--surface);
+                color:var(--ink-muted); border-radius:8px; padding:8px 10px; font:inherit;
+                font-size:12px; font-weight:700; cursor:pointer; }
+.notas button[aria-pressed="true"] { background:var(--acao); color:#fff; border-color:transparent; }
+.notas button.na[aria-pressed="true"] { background:var(--st-neutro); }
+.barra-topo { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:14px; }
+.progresso { flex:1; min-width:160px; height:8px; background:var(--line); border-radius:5px; overflow:hidden; }
+.progresso i { display:block; height:8px; background:var(--st-ok); border-radius:5px; }
+.rodape { position:sticky; bottom:0; background:var(--bg); padding:12px 0 4px;
+          border-top:1px solid var(--line); margin-top:10px; }
+.vazio-msg { padding:26px; text-align:center; color:var(--ink-muted); font-size:13px; }
+.resultado { display:flex; align-items:center; gap:10px; font-size:12px; color:var(--ink-muted); margin-top:8px; }
+.resultado .trilho { flex:1; height:7px; background:var(--line); border-radius:4px; }
+.resultado .trilho i { display:block; height:7px; border-radius:4px; }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../config.js?v=4"></script>
+<script src="../shared/supabase_client.js?v=2"></script>
+<script src="../shared/tema.js?v=2"></script>
+<script src="../shared/confirm_modal.js?v=3"></script>
+<script src="../shared/fotos.js?v=7"></script>
+<script src="../shared/audit.js?v=5"></script>
+<script src="../shared/auth_guard.js?v=7"></script>
+</head>
+<body>
+
+<div class="app-shell">
+    <div id="sidebar"></div>
+    <div class="faixa-perfil"></div>
+
+    <main class="app-main" style="max-width:860px">
+        <a class="voltar" href="lista.html">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+                <path d="M15 6l-6 6 6 6"/></svg> Avaliações
+        </a>
+
+        <div class="app-topo">
+            <div>
+                <h1 id="titulo">Avaliação</h1>
+                <div class="sub" id="subtitulo">carregando…</div>
+            </div>
+            <span class="chip" id="chipStatus"></span>
+        </div>
+
+        <div class="barra-topo">
+            <span class="progresso"><i id="barraProg" style="width:0%"></i></span>
+            <span class="tiny soft" id="contador"></span>
+        </div>
+
+        <div id="area"><div class="card vazio-msg">carregando…</div></div>
+    </main>
+</div>
+
+<script src="../shared/sidebar.js?v=8"></script>
+<script>
+'use strict';
+
+const ID = new URLSearchParams(location.search).get('id');
+let AVAL = null, DOMINIOS = [], RESPOSTAS = {}, EU = null, PODE_EDITAR = false;
+
+document.addEventListener('eq:pronto', async function (ev) {
+    EqSidebar.render('avaliacoes');
+    EU = ev.detail;
+    PODE_EDITAR = ['admin_direcao','supervisor_clinico','coordenador_aba'].includes(EU.perfil);
+    if (!ID) {
+        document.getElementById('area').innerHTML =
+            '<div class="card vazio-msg">Avaliação não informada. <a href="lista.html">Voltar</a>.</div>';
+        return;
+    }
+    await carregar();
+});
+
+function brl(iso) { return iso ? iso.slice(0,10).split('-').reverse().join('/') : '—'; }
+
+async function carregar() {
+    try {
+        const { data, error } = await eqClient.from('avaliacoes')
+            .select(`*, paciente:pacientes(nome_completo),
+                     protocolo:protocolos_avaliacao(id, nome, versao, escala_min, escala_max, escala_rotulos),
+                     avaliador:profissionais(nome_completo)`)
+            .eq('id', ID).maybeSingle();
+        if (error) throw error;
+        if (!data) {
+            document.getElementById('area').innerHTML =
+                '<div class="card vazio-msg">Avaliação não encontrada.</div>';
+            return;
+        }
+        AVAL = data;
+
+        const [rd, rr] = await Promise.all([
+            eqClient.from('protocolo_dominios')
+                .select('id, nome, ordem, cor, itens:protocolo_itens(id, codigo, enunciado, ordem)')
+                .eq('protocolo_id', AVAL.protocolo.id).order('ordem'),
+            eqClient.from('avaliacao_respostas').select('item_id, pontuacao, observacao').eq('avaliacao_id', ID)
+        ]);
+        DOMINIOS = (rd.data || []).map(d => Object.assign({}, d,
+            { itens: (d.itens || []).sort((a,b) => (a.ordem||0) - (b.ordem||0)) }));
+        RESPOSTAS = {};
+        (rr.data || []).forEach(r => { RESPOSTAS[r.item_id] = r.pontuacao; });
+
+        desenhar();
+    } catch (e) {
+        console.error(e);
+        document.getElementById('area').innerHTML =
+            '<div class="card vazio-msg" style="color:var(--st-bad)">Erro ao carregar. Veja o console.</div>';
+    }
+}
+
+function totalItens() { return DOMINIOS.reduce((s,d) => s + d.itens.length, 0); }
+function respondidos() { return Object.keys(RESPOSTAS).length; }
+
+function desenhar() {
+    const p = AVAL.protocolo;
+    document.getElementById('titulo').textContent =
+        (AVAL.paciente ? AVAL.paciente.nome_completo : '—') + ' · AV' + AVAL.onda;
+    document.getElementById('subtitulo').textContent =
+        p.nome + (p.versao ? ' v' + p.versao : '') + ' · ' + brl(AVAL.data) +
+        (AVAL.avaliador ? ' · ' + AVAL.avaliador.nome_completo : '');
+
+    const chip = document.getElementById('chipStatus');
+    chip.textContent = AVAL.status.replace('_',' ');
+    chip.className = 'chip ' + (AVAL.status === 'concluida' ? 'chip-ok' : 'chip-alerta');
+
+    const total = totalItens(), feitos = respondidos();
+    document.getElementById('barraProg').style.width = total ? Math.round(feitos/total*100) + '%' : '0%';
+    document.getElementById('contador').textContent = feitos + ' de ' + total + ' itens';
+
+    const notas = [];
+    for (let n = p.escala_min; n <= p.escala_max; n++) notas.push(n);
+    const rotulos = p.escala_rotulos || {};
+    const bloqueado = AVAL.status === 'concluida' || !PODE_EDITAR;
+
+    document.getElementById('area').innerHTML = DOMINIOS.map(d => {
+        const doDom = d.itens.filter(i => RESPOSTAS[i.id] !== undefined && RESPOSTAS[i.id] !== null);
+        const soma = doDom.reduce((s,i) => s + RESPOSTAS[i.id], 0);
+        const pct = doDom.length ? Math.round(soma / (doDom.length * p.escala_max) * 100) : 0;
+        const cor = d.cor || 'var(--acao)';
+
+        return `<div class="dominio">
+            <div class="dominio-topo" style="background:${cor}">
+                <span>${d.nome}</span>
+                <span style="font-weight:600;font-size:11.5px">${doDom.length}/${d.itens.length} · ${pct}%</span>
+            </div>
+            <div class="dominio-corpo">
+                ${d.itens.map(i => `
+                    <div class="item">
+                        <div class="item-texto">${i.codigo ? '<b>' + i.codigo + '</b> ' : ''}${i.enunciado}</div>
+                        <div class="notas">
+                            ${notas.map(n => `<button type="button" ${bloqueado ? 'disabled' : ''}
+                                aria-pressed="${RESPOSTAS[i.id] === n}"
+                                title="${rotulos[n] || n}"
+                                onclick="marcar('${i.id}', ${n})">${n}</button>`).join('')}
+                            <button type="button" class="na" ${bloqueado ? 'disabled' : ''}
+                                aria-pressed="${RESPOSTAS[i.id] === null}"
+                                title="não aplicável" onclick="marcar('${i.id}', null)">N-A</button>
+                        </div>
+                    </div>`).join('')}
+            </div>
+            <div class="resultado">
+                <span style="width:120px">Pontuação do domínio</span>
+                <span class="trilho"><i style="width:${pct}%;background:${cor}"></i></span>
+                <b>${pct}%</b>
+            </div>
+        </div>`;
+    }).join('') + rodape();
+}
+
+function rodape() {
+    if (!PODE_EDITAR) return '';
+    if (AVAL.status === 'concluida') {
+        return `<div class="rodape"><button class="btn btn-secundario btn-bloco" onclick="reabrir()">Reabrir para edição</button></div>`;
+    }
+    const falta = totalItens() - respondidos();
+    return `<div class="rodape">
+        <button class="btn btn-bloco" onclick="concluir()">
+            ${falta ? 'Concluir mesmo com ' + falta + ' item(ns) em branco' : 'Concluir avaliação'}
+        </button>
+    </div>`;
+}
+
+async function marcar(itemId, valor) {
+    const antes = RESPOSTAS[itemId];
+    RESPOSTAS[itemId] = valor;      // desenha antes de gravar
+    desenhar();
+    try {
+        const { error } = await eqClient.from('avaliacao_respostas')
+            .upsert({ avaliacao_id: ID, item_id: itemId, pontuacao: valor },
+                    { onConflict: 'avaliacao_id,item_id' });
+        if (error) throw error;
+    } catch (e) {
+        console.error(e);
+        if (antes === undefined) delete RESPOSTAS[itemId]; else RESPOSTAS[itemId] = antes;
+        desenhar();
+        await EqConfirm.mostrar({ titulo:'Não foi possível gravar',
+            texto: e.message || 'Verifique a conexão e tente de novo.',
+            confirmar:'Entendi', cancelar:'Fechar', tipo:'alerta' });
+    }
+}
+
+async function concluir() {
+    const falta = totalItens() - respondidos();
+    const ok = await EqConfirm.mostrar({
+        titulo: 'Concluir a avaliação?',
+        texto: falta
+            ? falta + ' item(ns) ficaram em branco e não entram no cálculo dos domínios. Depois de concluída, a avaliação trava para edição.'
+            : 'Depois de concluída, a avaliação trava para edição. Você pode reabrir se precisar corrigir.',
+        confirmar: 'Concluir', tipo: falta ? 'alerta' : 'padrao'
+    });
+    if (!ok) return;
+    try {
+        const { error } = await eqClient.from('avaliacoes').update({ status: 'concluida' }).eq('id', ID);
+        if (error) throw error;
+        await EqAudit.registrar('status', 'avaliacoes', ID, {
+            paciente: AVAL.paciente ? AVAL.paciente.nome_completo : null,
+            onda: AVAL.onda, itens_respondidos: respondidos(), em_branco: falta
+        });
+        AVAL.status = 'concluida';
+        desenhar();
+    } catch (e) {
+        console.error(e);
+        await EqConfirm.mostrar({ titulo:'Não foi possível concluir', texto: e.message || 'Erro.',
+            confirmar:'Entendi', cancelar:'Fechar', tipo:'alerta' });
+    }
+}
+
+async function reabrir() {
+    const ok = await EqConfirm.mostrar({
+        titulo: 'Reabrir a avaliação?',
+        texto: 'Ela volta a aceitar alterações. A reabertura fica registrada na auditoria.',
+        confirmar: 'Reabrir', tipo: 'alerta'
+    });
+    if (!ok) return;
+    try {
+        const { error } = await eqClient.from('avaliacoes').update({ status: 'em_andamento' }).eq('id', ID);
+        if (error) throw error;
+        await EqAudit.registrar('status', 'avaliacoes', ID, { novo_status: 'em_andamento' });
+        AVAL.status = 'em_andamento';
+        desenhar();
+    } catch (e) { console.error(e); }
+}
+</script>
+</body>
+</html>

@@ -18,7 +18,15 @@ const SUPABASE_CONFIG = {
             // Mesmo padrão do CORTEX (Sprint 81): sessão presa à aba.
             storage: window.sessionStorage
         }
-    }
+    },
+
+    // Minutos de inatividade até derrubar a sessão.
+    // 0 = desligado (decisão do Wess, sprint 2b).
+    // Para religar, basta trocar por 15, 30, 60... — nada mais precisa mudar.
+    // Vale revisar antes de a equipe usar em tablet compartilhado na clínica:
+    // com a sessão presa à aba, fechar a aba já encerra o acesso, mas um tablet
+    // deixado aberto na sala segue logado.
+    inatividadeMinutos: 0
 };
 
 // `const` não vira propriedade de window — checar com typeof, nunca window.X

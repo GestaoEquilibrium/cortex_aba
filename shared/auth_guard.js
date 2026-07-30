@@ -39,9 +39,14 @@ window.EqSessao = null;
         setTimeout(() => { window.location.href = raiz + 'index.html' + (query || ''); }, 50);
     }
 
-    // ── inatividade ─────────────────────────────────────────────────────────
+    // ── inatividade (desligada por padrão — ver config.js) ──────────────────
     function monitorarInatividade() {
-        const LIMITE = 15 * 60 * 1000;
+        const minutos = (typeof SUPABASE_CONFIG !== 'undefined' &&
+                         typeof SUPABASE_CONFIG.inatividadeMinutos === 'number')
+                        ? SUPABASE_CONFIG.inatividadeMinutos : 0;
+        if (!minutos || minutos <= 0) return;   // 0 = não derruba ninguém
+
+        const LIMITE = minutos * 60 * 1000;
         const KEY = 'eqaba_ultima_atividade';
         const ultima = () => {
             const v = sessionStorage.getItem(KEY);

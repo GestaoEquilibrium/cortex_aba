@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-tema="coordenacao">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CORTEX aba — Gráficos</title>
+<script>
+(function(){try{var m=localStorage.getItem('eqaba_modo');
+if(m!=='claro'&&m!=='escuro'){m=(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches)?'escuro':'claro';}
+document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
+</script>
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="../favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="../apple-touch-icon.png">
+<link rel="manifest" href="../site.webmanifest">
+<meta name="theme-color" content="#0F766E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../styles/base.css?v=3">
+<link rel="stylesheet" href="../styles/components.css?v=5">
+<style>
+.barra { display:flex; gap:9px; align-items:center; flex-wrap:wrap; margin-bottom:14px; }
+.barra select { padding:10px 12px; font:inherit; font-size:13px; color:var(--ink);
+    border:1px solid var(--line-strong); border-radius:9px; background:var(--surface); min-width:210px; }
+.grafico-caixa { position:relative; height:230px; margin-top:6px; }
+.legenda { display:flex; gap:16px; flex-wrap:wrap; font-size:11.5px; color:var(--ink-muted); margin-top:10px; }
+.legenda span { display:flex; align-items:center; gap:6px; }
+.legenda i { width:14px; height:3px; border-radius:2px; }
+.selo-area { font-size:10px; font-weight:800; padding:3px 9px; border-radius:999px; color:#fff; }
+.vazio-msg { padding:26px; text-align:center; color:var(--ink-muted); font-size:13px; }
+.resumo-linha { display:flex; gap:16px; flex-wrap:wrap; font-size:12px; color:var(--ink-muted); margin-top:8px; }
+.resumo-linha b { color:var(--ink); }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="../config.js?v=4"></script>
+<script src="../shared/supabase_client.js?v=2"></script>
+<script src="../shared/tema.js?v=2"></script>
+<script src="../shared/confirm_modal.js?v=3"></script>
+<script src="../shared/fotos.js?v=7"></script>
+<script src="../shared/audit.js?v=5"></script>
+<script src="../shared/auth_guard.js?v=7"></script>
+</head>
+<body>
+
+<div class="app-shell">
+    <div id="sidebar"></div>
+    <div class="faixa-perfil"></div>
+
+    <main class="app-main">
+        <div class="app-topo">
+            <div>
+                <h1>Gráficos</h1>
+                <div class="sub" id="subtitulo">escolha um paciente</div>
+            </div>
+        </div>
+
+        <div class="barra">
+            <select id="selPaciente" onchange="carregarPaciente()">
+                <option value="">Selecione o paciente...</option>
+            </select>
+            <select id="selPeriodo" onchange="desenhar()">
+                <option value="30">Últimos 30 dias</option>
+                <option value="60">Últimos 60 dias</option>
+                <option value="90" selected>Últimos 90 dias</option>
+                <option value="0">Todo o histórico</option>
+            </select>
+        </div>
+
+        <div id="area"><div class="card vazio-msg">Escolha um paciente para ver a evolução dos objetivos.</div></div>
+    </main>
+</div>
+
+<script src="../shared/sidebar.js?v=8"></script>
+<script>
+'use strict';
+
+const AREAS = {
+    receptiva:{r:'receptiva',c:'#2563EB'}, expressiva:{r:'expressiva',c:'#7C3AED'},
+    cognicao:{r:'cognição',c:'#06B6D4'}, motora:{r:'motora',c:'#16A34A'},
+    social:{r:'social',c:'#F59E0B'}, autocuidado:{r:'autocuidado',c:'#EC4899'}
+};
+const ST = { em_ensino:'em ensino', em_manutencao:'em manutenção', dominado:'dominado',
+             suspenso:'suspenso', arquivado:'arquivado' };
+
+let PROGRAMAS = [], TENTATIVAS = [], CHARTS = [];
+
+document.addEventListener('eq:pronto', async function () {
+    EqSidebar.render('graficos');
+    try {
+        const { data, error } = await eqClient.from('pacientes')
+            .select('id, nome_completo').in('status', ['ativo','suspenso']).order('nome_completo');
+        if (error) throw error;
+        document.getElementById('selPaciente').innerHTML =
+            '<option value="">Selecione o paciente...</option>' +
+            (data || []).map(p => `<option value="${p.id}">${p.nome_completo}</option>`).join('');
+    } catch (e) { console.error(e); }
+});
+
+const p2 = n => String(n).padStart(2,'0');
+function brl(iso) { return iso ? iso.slice(0,10).split('-').reverse().slice(0,2).join('/') : ''; }
+
+async function carregarPaciente() {
+    const id = document.getElementById('selPaciente').value;
+    limparGraficos();
+    if (!id) {
+        document.getElementById('area').innerHTML =
+            '<div class="card vazio-msg">Escolha um paciente para ver a evolução dos objetivos.</div>';
+        document.getElementById('subtitulo').textContent = 'escolha um paciente';
+        return;
+    }
+    document.getElementById('area').innerHTML = '<div class="card vazio-msg">carregando…</div>';
+
+    try {
+        const rpei = await eqClient.from('pei').select('id')
+            .eq('paciente_id', id).eq('status','vigente')
+            .order('versao', { ascending:false }).limit(1).maybeSingle();
+
+        if (!rpei.data) {
+            PROGRAMAS = []; TENTATIVAS = [];
+            document.getElementById('area').innerHTML =
+                '<div class="card vazio-msg">Este paciente ainda não tem PEI.</div>';
+            return;
+        }
+
+        const rprog = await eqClient.from('pei_programas')
+            .select('id, status, criterio_percentual, criterio_sessoes, tentativas_por_sessao, programa:biblioteca_programas(nome, area)')
+            .eq('pei_id', rpei.data.id).order('prioridade');
+        PROGRAMAS = rprog.data || [];
+
+        if (!PROGRAMAS.length) {
+            TENTATIVAS = [];
+            document.getElementById('area').innerHTML =
+                '<div class="card vazio-msg">O PEI ainda não tem objetivos.</div>';
+            return;
+        }
+
+        const rt = await eqClient.from('registros_tentativa')
+            .select('pei_programa_id, resultado, nivel_dica, sessao:sessoes(data)')
+            .in('pei_programa_id', PROGRAMAS.map(p => p.id));
+        TENTATIVAS = (rt.data || []).filter(t => t.sessao && t.sessao.data);
+
+        await EqAudit.registrar('acesso', 'graficos', id, { tentativas: TENTATIVAS.length });
+        desenhar();
+
+    } catch (e) {
+        console.error(e);
+        document.getElementById('area').innerHTML =
+            '<div class="card vazio-msg" style="color:var(--st-bad)">Erro ao carregar. Veja o console.</div>';
+    }
+}
+
+function limparGraficos() { CHARTS.forEach(c => { try { c.destroy(); } catch (e) {} }); CHARTS = []; }
+
+function desenhar() {
+    limparGraficos();
+    if (!PROGRAMAS.length) return;
+
+    const dias = parseInt(document.getElementById('selPeriodo').value, 10);
+    let corte = null;
+    if (dias) {
+        const d = new Date(); d.setDate(d.getDate() - dias);
+        corte = d.getFullYear() + '-' + p2(d.getMonth()+1) + '-' + p2(d.getDate());
+    }
+
+    const tudo = TENTATIVAS.filter(t => !corte || t.sessao.data >= corte);
+    document.getElementById('subtitulo').textContent =
+        tudo.length + ' tentativas registradas no período';
+
+    if (!tudo.length) {
+        document.getElementById('area').innerHTML =
+            '<div class="card vazio-msg">Nenhuma tentativa registrada neste período.<br>' +
+            '<span class="tiny soft">Os gráficos aparecem conforme o aplicador registra as sessões.</span></div>';
+        return;
+    }
+
+    // um cartão por objetivo que tenha registro
+    const blocos = PROGRAMAS.map((p, i) => {
+        const desteProg = tudo.filter(t => t.pei_programa_id === p.id);
+        if (!desteProg.length) return null;
+
+        const porData = {};
+        desteProg.forEach(t => {
+            const d = t.sessao.data;
+            if (!porData[d]) porData[d] = { total:0, indep:0, ajuda:0, erro:0 };
+            porData[d].total++;
+            if (t.resultado === 'independente') porData[d].indep++;
+            else if (t.resultado === 'com_ajuda') porData[d].ajuda++;
+            else porData[d].erro++;
+        });
+
+        const datas = Object.keys(porData).sort();
+        const serieIndep = datas.map(d => Math.round(porData[d].indep / porData[d].total * 100));
+        const serieAjuda = datas.map(d => Math.round(porData[d].ajuda / porData[d].total * 100));
+
+        const a = AREAS[p.programa ? p.programa.area : ''] || { r:'', c:'#0F766E' };
+        const ultimas = serieIndep.slice(-p.criterio_sessoes);
+        const noCriterio = ultimas.length >= p.criterio_sessoes &&
+                           ultimas.every(v => v >= p.criterio_percentual);
+        const media = Math.round(serieIndep.reduce((s,v) => s+v, 0) / serieIndep.length);
+
+        return { p, i, a, datas, serieIndep, serieAjuda, noCriterio, media,
+                 sessoes: datas.length, total: desteProg.length };
+    }).filter(Boolean);
+
+    if (!blocos.length) {
+        document.getElementById('area').innerHTML =
+            '<div class="card vazio-msg">Ainda não há registros nos objetivos deste PEI.</div>';
+        return;
+    }
+
+    document.getElementById('area').innerHTML = blocos.map(b => `
+        <div class="card" style="margin-bottom:12px">
+            <div class="card-titulo">
+                <div>
+                    <h3>${b.p.programa ? b.p.programa.nome : '—'}</h3>
+                    <span class="tiny soft">${ST[b.p.status] || b.p.status} · critério ${b.p.criterio_percentual}% em ${b.p.criterio_sessoes} sessões</span>
+                </div>
+                <span class="selo-area" style="background:${b.a.c}">${b.a.r}</span>
+            </div>
+            <div class="grafico-caixa"><canvas id="g${b.i}"></canvas></div>
+            <div class="resumo-linha">
+                <span><b>${b.sessoes}</b> sessões</span>
+                <span><b>${b.total}</b> tentativas</span>
+                <span>média de independência: <b>${b.media}%</b></span>
+                <span>última sessão: <b>${b.serieIndep[b.serieIndep.length-1]}%</b></span>
+                ${b.noCriterio ? '<span class="chip chip-ok">atingiu o critério</span>' : ''}
+            </div>
+            <div class="legenda">
+                <span><i style="background:var(--st-ok)"></i>independente</span>
+                <span><i style="background:var(--st-warn)"></i>com ajuda</span>
+                <span><i style="background:var(--ink-soft);height:0;border-top:2px dashed var(--ink-soft)"></i>critério de domínio</span>
+            </div>
+        </div>`).join('');
+
+    // desenha depois do HTML existir
+    blocos.forEach(b => montarGrafico(b));
+}
+
+function montarGrafico(b) {
+    const el = document.getElementById('g' + b.i);
+    if (!el || typeof Chart === 'undefined') return;
+
+    const escuro = document.documentElement.getAttribute('data-modo') === 'escuro';
+    const corTexto = escuro ? '#93A6B4' : '#5C7284';
+    const corGrade = escuro ? 'rgba(255,255,255,.07)' : 'rgba(12,27,42,.07)';
+
+    CHARTS.push(new Chart(el, {
+        type: 'line',
+        data: {
+            labels: b.datas.map(brl),
+            datasets: [
+                { label:'independente', data:b.serieIndep, borderColor:'#16A34A',
+                  backgroundColor:'rgba(22,163,74,.10)', borderWidth:2.6, tension:.25,
+                  pointRadius:3.5, pointBackgroundColor:'#16A34A', fill:true },
+                { label:'com ajuda', data:b.serieAjuda, borderColor:'#D97706',
+                  borderWidth:2.2, borderDash:[6,4], tension:.25, pointRadius:2.5,
+                  pointBackgroundColor:'#D97706', fill:false },
+                { label:'critério', data:b.datas.map(() => b.p.criterio_percentual),
+                  borderColor: corTexto, borderWidth:1.4, borderDash:[3,3],
+                  pointRadius:0, fill:false }
+            ]
+        },
+        options: {
+            responsive:true, maintainAspectRatio:false,
+            interaction:{ intersect:false, mode:'index' },
+            plugins:{
+                legend:{ display:false },
+                tooltip:{ callbacks:{ label: c => c.dataset.label + ': ' + c.parsed.y + '%' } }
+            },
+            scales:{
+                y:{ min:0, max:100, ticks:{ color:corTexto, stepSize:25, callback:v => v + '%' },
+                    grid:{ color:corGrade } },
+                x:{ ticks:{ color:corTexto, maxRotation:0, autoSkipPadding:14 }, grid:{ display:false } }
+            }
+        }
+    }));
+}
+</script>
+</body>
+</html>

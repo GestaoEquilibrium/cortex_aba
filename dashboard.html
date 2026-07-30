@@ -9,8 +9,11 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles/base.css">
 <link rel="stylesheet" href="styles/components.css">
-<script src="shared/mock.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script src="shared/supabase_client.js"></script>
 <script src="shared/tema.js"></script>
+<script src="shared/auth_guard.js"></script>
 </head>
 <body>
 
@@ -22,19 +25,9 @@
         <div class="app-topo">
             <div>
                 <h1 id="saudacao">Painel</h1>
-                <div class="sub" id="linhaData"></div>
+                <div class="sub" id="linhaData">carregando…</div>
             </div>
-            <button class="btn" onclick="alert('Sprint 1: abre a lista de pendências do dia.')">Abrir pendências</button>
-        </div>
-
-        <div class="aviso aviso-mock" style="margin-bottom:16px">
-            <b>Esqueleto navegável (Sprint 0).</b> Dados fictícios, sem banco ligado. Troque o perfil na barra abaixo
-            para ver as três identidades aprovadas na opção A.
-            <div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap">
-                <a class="chip chip-neutro" href="dashboard.html?perfil=coordenador_aba">coordenação</a>
-                <a class="chip chip-neutro" href="sessao/sessao.html?perfil=aplicador">aplicador</a>
-                <a class="chip chip-neutro" href="portal/index.html?perfil=responsavel">responsável</a>
-            </div>
+            <button class="btn" onclick="location.href='pacientes/lista.html'">Ver pacientes</button>
         </div>
 
         <div class="grid-4" id="kpis"></div>
@@ -43,86 +36,134 @@
             <div class="card">
                 <div class="card-titulo">
                     <h3>Agenda de hoje</h3>
-                    <span class="tiny soft">turno tarde</span>
+                    <span class="tiny soft" id="rotuloEquipe"></span>
                 </div>
                 <table class="tabela">
                     <thead><tr><th>Hora</th><th>Paciente</th><th>Aplicador</th><th>Status</th></tr></thead>
-                    <tbody id="tbAgenda"></tbody>
+                    <tbody id="tbAgenda"><tr><td colspan="4" class="muted">carregando…</td></tr></tbody>
                 </table>
             </div>
 
             <div>
                 <div class="card">
-                    <div class="card-titulo"><h3>Evoluções lançadas · 7 dias</h3></div>
-                    <div id="compliance"></div>
-                    <div class="card-legenda">Clique no nome abre o que está pendente (Sprint 1).</div>
+                    <div class="card-titulo"><h3>Situação dos pacientes</h3></div>
+                    <div id="statusPacientes" class="muted small">carregando…</div>
                 </div>
 
                 <div class="card">
-                    <div class="card-titulo"><h3>Tarefas</h3></div>
-                    <div class="lista" id="tarefas"></div>
+                    <div class="card-titulo"><h3>Ainda não implantado</h3></div>
+                    <div class="lista">
+                        <div class="lista-item"><span class="lista-ponto" style="background:var(--st-neutro)"></span><div>Evoluções diárias e compliance de lançamento</div></div>
+                        <div class="lista-item"><span class="lista-ponto" style="background:var(--st-neutro)"></span><div>Programas, PEI e critério de domínio</div></div>
+                        <div class="lista-item"><span class="lista-ponto" style="background:var(--st-neutro)"></span><div>Tarefas da coordenação</div></div>
+                    </div>
+                    <div class="card-legenda">Estes números entram nos próximos sprints, quando as tabelas existirem. Nada é estimado aqui.</div>
                 </div>
             </div>
+        </div>
+
+        <div class="aviso" id="avisoVazio" style="margin-top:14px; display:none">
+            <b>Banco ligado, ainda sem dados.</b> Cadastre a equipe e os primeiros pacientes para o painel começar a mostrar movimento.
         </div>
     </main>
 </div>
 
 <script src="shared/sidebar.js"></script>
 <script>
-(function () {
-    const m = EqMock;
-
-    // saudação + data
-    const hoje = new Date();
-    const dias = ['domingo','segunda-feira','terça-feira','quarta-feira','quinta-feira','sexta-feira','sábado'];
-    const meses = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
-    const h = hoje.getHours();
-    document.getElementById('saudacao').textContent =
-        (h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite') + ', coordenação';
-    document.getElementById('linhaData').textContent =
-        dias[hoje.getDay()] + ', ' + hoje.getDate() + ' de ' + meses[hoje.getMonth()] +
-        ' · ' + m.painel.agendaHoje.length + ' sessões previstas';
-
-    // KPIs
-    document.getElementById('kpis').innerHTML = m.painel.kpis.map(k => `
-        <div class="kpi" style="--kpi-cor:${k.cor}">
-            <div class="kpi-numero">${k.n}</div>
-            <div class="kpi-texto">${k.t}</div>
-        </div>`).join('');
-
-    // Agenda
-    const classeStatus = s =>
-        s === 'realizada'      ? 'chip-ok' :
-        s === 'em andamento'   ? 'chip-neutro' :
-        s === 'falta sem aviso'? 'chip-erro' :
-        s === 'cobertura'      ? 'chip-alerta' : 'chip-neutro';
-
-    document.getElementById('tbAgenda').innerHTML = m.painel.agendaHoje.map(s => `
-        <tr>
-            <td style="font-weight:700">${s.hora}</td>
-            <td>${s.paciente}</td>
-            <td class="muted">${s.aplicador}</td>
-            <td><span class="chip ${classeStatus(s.status)}">${s.status}</span></td>
-        </tr>`).join('');
-
-    // Compliance
-    const corPct = p => p >= 90 ? 'var(--st-ok)' : p >= 60 ? 'var(--st-warn)' : 'var(--st-bad)';
-    document.getElementById('compliance').innerHTML = m.painel.compliance.map(a => `
-        <div class="barra-linha">
-            <span class="rotulo">${a.nome}</span>
-            <span class="barra-trilho"><span class="barra-preenche" style="width:${a.pct}%;background:${corPct(a.pct)}"></span></span>
-            <span class="barra-valor" style="color:${corPct(a.pct)}">${a.pct}%</span>
-        </div>`).join('');
-
-    // Tarefas
-    document.getElementById('tarefas').innerHTML = m.painel.tarefas.map(t => `
-        <div class="lista-item">
-            <span class="lista-ponto" style="background:${t.cor}"></span>
-            <div>${t.texto} <span class="soft">· ${t.prazo}</span></div>
-        </div>`).join('');
-
+document.addEventListener('eq:pronto', async function (ev) {
+    'use strict';
+    const s = ev.detail;
     EqSidebar.render('painel');
-})();
+
+    // ── cabeçalho ───────────────────────────────────────────────────────────
+    const agora = new Date();
+    const dias  = ['domingo','segunda-feira','terça-feira','quarta-feira','quinta-feira','sexta-feira','sábado'];
+    const meses = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+    const h = agora.getHours();
+    const primeiroNome = (s.nome || '').split(' ')[0];
+    document.getElementById('saudacao').textContent =
+        (h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite') + (primeiroNome ? ', ' + primeiroNome : '');
+    document.getElementById('rotuloEquipe').textContent = s.equipe || '';
+
+    // data local no formato aceito pelo Postgres (sem UTC — evita o off-by-one)
+    const p2 = n => String(n).padStart(2, '0');
+    const hojeISO = agora.getFullYear() + '-' + p2(agora.getMonth() + 1) + '-' + p2(agora.getDate());
+
+    // segunda-feira desta semana
+    const seg = new Date(agora);
+    seg.setDate(agora.getDate() - ((agora.getDay() + 6) % 7));
+    const segISO = seg.getFullYear() + '-' + p2(seg.getMonth() + 1) + '-' + p2(seg.getDate());
+
+    try {
+        // ── consultas (RLS já filtra o que cada perfil pode ver) ────────────
+        const [ativos, fila, sessoesHoje, faltas] = await Promise.all([
+            eqClient.from('pacientes').select('id', { count: 'exact', head: true }).eq('status', 'ativo'),
+            eqClient.from('pacientes').select('id', { count: 'exact', head: true }).eq('status', 'fila_espera'),
+            eqClient.from('sessoes')
+                .select('hora_inicio, status, paciente:pacientes(nome_completo), profissional:profissionais(nome_completo)')
+                .eq('data', hojeISO).order('hora_inicio'),
+            eqClient.from('sessoes').select('id', { count: 'exact', head: true })
+                .gte('data', segISO).in('status', ['falta_injustificada','falta_justificada'])
+        ]);
+
+        if (sessoesHoje.error) throw sessoesHoje.error;
+
+        const lista = sessoesHoje.data || [];
+        const realizadas = lista.filter(x => x.status === 'realizada').length;
+
+        document.getElementById('linhaData').textContent =
+            dias[agora.getDay()] + ', ' + agora.getDate() + ' de ' + meses[agora.getMonth()] +
+            ' · ' + lista.length + (lista.length === 1 ? ' sessão prevista' : ' sessões previstas');
+
+        // ── KPIs ────────────────────────────────────────────────────────────
+        const kpis = [
+            { n: lista.length,        t: 'sessões agendadas para hoje',   cor: 'var(--acao)' },
+            { n: realizadas,          t: 'já realizadas hoje',            cor: 'var(--st-ok)' },
+            { n: faltas.count || 0,   t: 'faltas nesta semana',           cor: (faltas.count ? 'var(--st-bad)' : 'var(--st-neutro)') },
+            { n: ativos.count || 0,   t: 'pacientes ativos',              cor: 'var(--st-neutro)' }
+        ];
+        document.getElementById('kpis').innerHTML = kpis.map(k => `
+            <div class="kpi" style="--kpi-cor:${k.cor}">
+                <div class="kpi-numero">${k.n}</div>
+                <div class="kpi-texto">${k.t}</div>
+            </div>`).join('');
+
+        // ── agenda ──────────────────────────────────────────────────────────
+        const chipDe = st => ({
+            realizada: 'chip-ok', em_andamento: 'chip-neutro', agendada: 'chip-neutro',
+            falta_injustificada: 'chip-erro', falta_justificada: 'chip-alerta',
+            cancelada_clinica: 'chip-alerta', remarcada: 'chip-neutro',
+            substituicao: 'chip-alerta', feriado: 'chip-neutro'
+        }[st] || 'chip-neutro');
+
+        const tb = document.getElementById('tbAgenda');
+        tb.innerHTML = lista.length ? lista.map(x => `
+            <tr>
+                <td style="font-weight:700">${(x.hora_inicio || '').slice(0,5)}</td>
+                <td>${x.paciente ? x.paciente.nome_completo : '—'}</td>
+                <td class="muted">${x.profissional ? x.profissional.nome_completo : '—'}</td>
+                <td><span class="chip ${chipDe(x.status)}">${(x.status || '').replace(/_/g,' ')}</span></td>
+            </tr>`).join('')
+            : '<tr><td colspan="4" class="muted">Nenhuma sessão registrada para hoje.</td></tr>';
+
+        // ── situação dos pacientes ──────────────────────────────────────────
+        document.getElementById('statusPacientes').innerHTML = `
+            <div class="barra-linha"><span class="rotulo">Ativos</span>
+                <span class="barra-valor" style="width:auto">${ativos.count || 0}</span></div>
+            <div class="barra-linha"><span class="rotulo">Fila de espera</span>
+                <span class="barra-valor" style="width:auto">${fila.count || 0}</span></div>`;
+
+        if (!(ativos.count || fila.count || lista.length)) {
+            document.getElementById('avisoVazio').style.display = 'block';
+        }
+
+    } catch (e) {
+        console.error('EQ ABA: falha ao carregar o painel', e);
+        document.getElementById('linhaData').textContent = 'Não foi possível carregar os dados.';
+        document.getElementById('tbAgenda').innerHTML =
+            '<tr><td colspan="4" style="color:var(--st-bad)">Erro ao consultar o banco. Veja o console.</td></tr>';
+    }
+});
 </script>
 </body>
 </html>

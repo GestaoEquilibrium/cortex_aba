@@ -9,8 +9,24 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../styles/base.css">
 <link rel="stylesheet" href="../styles/components.css">
-<script src="../shared/mock.js"></script>
+<style>
+.modal-fundo { position:fixed; inset:0; background:rgba(12,27,42,.55); backdrop-filter:blur(3px);
+               display:none; align-items:center; justify-content:center; padding:20px; z-index:80; }
+.modal-fundo.aberto { display:flex; }
+.modal { background:var(--surface); border-radius:var(--radius-card); padding:22px;
+         width:100%; max-width:520px; box-shadow:var(--shadow-lg); max-height:90vh; overflow:auto; }
+.modal h2 { margin-bottom:14px; }
+.campo { margin-bottom:11px; }
+.campo label { display:block; font-size:11.5px; font-weight:700; color:var(--ink-muted); margin-bottom:4px; }
+.campo input, .campo select { width:100%; padding:9px 11px; font-size:13px; font-family:inherit;
+    border:1px solid var(--line-strong); border-radius:8px; background:var(--surface-alt); color:var(--ink); }
+.campo-2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../config.js"></script>
+<script src="../shared/supabase_client.js"></script>
 <script src="../shared/tema.js"></script>
+<script src="../shared/auth_guard.js"></script>
 </head>
 <body>
 
@@ -22,53 +38,182 @@
         <div class="app-topo">
             <div>
                 <h1>Pacientes</h1>
-                <div class="sub" id="contagem"></div>
+                <div class="sub" id="contagem">carregando…</div>
             </div>
-            <button class="btn" onclick="alert('Sprint 1: cadastro de paciente com responsável, encaminhamento e convênio.')">Novo paciente</button>
+            <button class="btn" id="btNovo" style="display:none" onclick="abrirModal()">Novo paciente</button>
         </div>
 
         <div class="card">
             <table class="tabela">
                 <thead>
-                    <tr>
-                        <th>Paciente</th><th>Idade</th><th>Aplicador</th>
-                        <th>Frequência</th><th>Programas ativos</th><th>Faltas no mês</th><th>Status</th>
-                    </tr>
+                    <tr><th>Paciente</th><th>Idade</th><th>Aplicador titular</th>
+                        <th>Sessões/semana</th><th>Convênio</th><th>Status</th></tr>
                 </thead>
-                <tbody id="tb"></tbody>
+                <tbody id="tb"><tr><td colspan="6" class="muted">carregando…</td></tr></tbody>
             </table>
-        </div>
-
-        <div class="aviso" style="margin-top:14px">
-            <b>Próximo passo desta tela.</b> Abrir a pasta do paciente com linha do tempo, PEI vigente,
-            documentos, cartão de segurança e histórico de avaliações.
         </div>
     </main>
 </div>
 
+<!-- ── cadastro básico ─────────────────────────────────────────────────────── -->
+<div class="modal-fundo" id="modal" onclick="if(event.target===this) fecharModal()">
+    <div class="modal">
+        <h2>Novo paciente</h2>
+        <form id="formPaciente">
+            <div class="campo">
+                <label for="nome">Nome completo *</label>
+                <input id="nome" required>
+            </div>
+            <div class="campo-2">
+                <div class="campo">
+                    <label for="nascimento">Data de nascimento *</label>
+                    <input id="nascimento" type="date" required>
+                </div>
+                <div class="campo">
+                    <label for="status">Situação</label>
+                    <select id="status">
+                        <option value="fila_espera">Fila de espera</option>
+                        <option value="ativo">Ativo</option>
+                    </select>
+                </div>
+            </div>
+            <div class="campo">
+                <label for="responsavel">Responsável legal</label>
+                <input id="responsavel">
+            </div>
+            <div class="campo-2">
+                <div class="campo">
+                    <label for="telefone">Telefone do responsável</label>
+                    <input id="telefone">
+                </div>
+                <div class="campo">
+                    <label for="convenio">Convênio</label>
+                    <input id="convenio" placeholder="particular, se não houver">
+                </div>
+            </div>
+            <div class="campo-2">
+                <div class="campo">
+                    <label for="sessoes">Sessões por semana (prescritas)</label>
+                    <input id="sessoes" type="number" min="0" max="20">
+                </div>
+                <div class="campo">
+                    <label for="medico">Médico encaminhador</label>
+                    <input id="medico">
+                </div>
+            </div>
+            <div class="campo">
+                <label for="seguranca">Cartão de segurança (alergias, gatilhos, manejo)</label>
+                <input id="seguranca" placeholder="visível a quem assumir o atendimento">
+            </div>
+
+            <div id="erroForm" class="aviso" style="display:none; border-left-color:var(--st-bad); color:var(--st-bad); margin-bottom:10px"></div>
+
+            <div class="grid-2" style="margin-top:6px">
+                <button type="button" class="btn btn-secundario btn-bloco" onclick="fecharModal()">Cancelar</button>
+                <button type="submit" class="btn btn-bloco" id="btSalvar">Salvar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script src="../shared/sidebar.js"></script>
 <script>
-(function () {
-    const ps = EqMock.pacientes;
-    document.getElementById('contagem').textContent =
-        ps.filter(p => p.status === 'ativo').length + ' ativos · ' +
-        ps.filter(p => p.status === 'fila de espera').length + ' na fila de espera';
+let PODE_CADASTRAR = false;
 
-    const chip = s => s === 'ativo' ? 'chip-ok' : s === 'atenção' ? 'chip-alerta' : 'chip-neutro';
-
-    document.getElementById('tb').innerHTML = ps.map(p => `
-        <tr style="cursor:pointer" onclick="alert('Sprint 1: abre a pasta de ${p.nome}.')">
-            <td style="font-weight:700">${p.nome}</td>
-            <td class="muted">${p.idade}</td>
-            <td class="muted">${p.aplicador}</td>
-            <td class="muted">${p.sessoes}</td>
-            <td>${p.prog}</td>
-            <td style="color:${p.faltas >= 3 ? 'var(--st-bad)' : p.faltas > 0 ? 'var(--st-warn)' : 'var(--ink-muted)'};font-weight:700">${p.faltas}</td>
-            <td><span class="chip ${chip(p.status)}">${p.status}</span></td>
-        </tr>`).join('');
-
+document.addEventListener('eq:pronto', async function (ev) {
     EqSidebar.render('pacientes');
-})();
+    PODE_CADASTRAR = ['admin_direcao','coordenador_aba','recepcao'].includes(ev.detail.perfil);
+    if (PODE_CADASTRAR) document.getElementById('btNovo').style.display = '';
+    await carregar();
+});
+
+function idade(nascimento) {
+    if (!nascimento) return '—';
+    // parse manual: 'new Date("2019-05-10")' vira UTC e pode voltar um dia no fuso BRT
+    const [a, m, d] = nascimento.split('-').map(Number);
+    const hoje = new Date();
+    let anos = hoje.getFullYear() - a;
+    const jaFez = (hoje.getMonth() + 1 > m) || (hoje.getMonth() + 1 === m && hoje.getDate() >= d);
+    if (!jaFez) anos--;
+    return anos + (anos === 1 ? ' ano' : ' anos');
+}
+
+async function carregar() {
+    const tb = document.getElementById('tb');
+    try {
+        const { data, error } = await eqClient
+            .from('pacientes')
+            .select(`id, nome_completo, data_nascimento, status, convenio, sessoes_semana_prescritas,
+                     vinculos:vinculos_paciente_aplicador(tipo, ativo, profissional:profissionais(nome_completo))`)
+            .order('nome_completo');
+        if (error) throw error;
+
+        const ps = data || [];
+        document.getElementById('contagem').textContent =
+            ps.filter(p => p.status === 'ativo').length + ' ativos · ' +
+            ps.filter(p => p.status === 'fila_espera').length + ' na fila de espera';
+
+        const chipDe = st => ({ ativo:'chip-ok', fila_espera:'chip-neutro', suspenso:'chip-alerta',
+                                alta:'chip-neutro', desligado:'chip-neutro' }[st] || 'chip-neutro');
+
+        tb.innerHTML = ps.length ? ps.map(p => {
+            const t = (p.vinculos || []).find(v => v.ativo && v.tipo === 'titular');
+            return `<tr>
+                <td style="font-weight:700">${p.nome_completo}</td>
+                <td class="muted">${idade(p.data_nascimento)}</td>
+                <td class="muted">${t && t.profissional ? t.profissional.nome_completo : '—'}</td>
+                <td class="muted">${p.sessoes_semana_prescritas ?? '—'}</td>
+                <td class="muted">${p.convenio || '—'}</td>
+                <td><span class="chip ${chipDe(p.status)}">${(p.status || '').replace('_',' ')}</span></td>
+            </tr>`;
+        }).join('')
+        : '<tr><td colspan="6" class="muted">Nenhum paciente cadastrado ainda.</td></tr>';
+
+    } catch (e) {
+        console.error(e);
+        tb.innerHTML = '<tr><td colspan="6" style="color:var(--st-bad)">Erro ao consultar o banco. Veja o console.</td></tr>';
+    }
+}
+
+function abrirModal()  { document.getElementById('modal').classList.add('aberto'); document.getElementById('nome').focus(); }
+function fecharModal() { document.getElementById('modal').classList.remove('aberto');
+                         document.getElementById('erroForm').style.display = 'none'; }
+
+document.getElementById('formPaciente').addEventListener('submit', async function (ev) {
+    ev.preventDefault();
+    const bt = document.getElementById('btSalvar');
+    const erro = document.getElementById('erroForm');
+    bt.disabled = true; bt.textContent = 'Salvando...';
+    erro.style.display = 'none';
+
+    const sessoes = document.getElementById('sessoes').value;
+    const registro = {
+        nome_completo: document.getElementById('nome').value.trim(),
+        data_nascimento: document.getElementById('nascimento').value,
+        status: document.getElementById('status').value,
+        responsavel_nome: document.getElementById('responsavel').value.trim() || null,
+        responsavel_telefone: document.getElementById('telefone').value.trim() || null,
+        convenio: document.getElementById('convenio').value.trim() || null,
+        sessoes_semana_prescritas: sessoes ? parseInt(sessoes, 10) : null,
+        medico_encaminhador: document.getElementById('medico').value.trim() || null,
+        cartao_seguranca: document.getElementById('seguranca').value.trim() || null,
+        equipe_id: (window.EqSessao && EqSessao.equipeId) || null
+    };
+
+    try {
+        const { error } = await eqClient.from('pacientes').insert(registro);
+        if (error) throw error;
+        fecharModal();
+        document.getElementById('formPaciente').reset();
+        await carregar();
+    } catch (e) {
+        console.error(e);
+        erro.textContent = 'Não foi possível salvar: ' + (e.message || 'erro desconhecido');
+        erro.style.display = 'block';
+    } finally {
+        bt.disabled = false; bt.textContent = 'Salvar';
+    }
+});
 </script>
 </body>
 </html>

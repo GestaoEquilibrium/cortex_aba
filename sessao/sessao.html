@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-tema="equipe">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EQ ABA — Sessão</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../styles/base.css">
+<link rel="stylesheet" href="../styles/components.css">
+<style>
+/* ── Tela de coleta: alvo é tablet. Botão grande, pouco texto. ───────────── */
+.prog { border: 1px solid var(--line); border-radius: var(--radius-card); padding: 14px; margin-bottom: 12px; background: var(--surface); }
+.prog-topo { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:4px; }
+.prog-nome { font-size: 15px; font-weight: 800; }
+.prog-meta { font-size: 12px; color: var(--ink-muted); margin-bottom: 12px; }
+.selo-area { font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: var(--radius-full); color:#fff; white-space: nowrap; }
+
+/* Botões de tentativa — cores funcionais globais, nunca as primárias do tema */
+.tentativa { display: flex; gap: 8px; }
+.tentativa button {
+    flex: 1; border: none; border-radius: 10px; padding: 16px 6px;
+    font-size: 13px; font-weight: 800; color: #fff; cursor: pointer;
+    transition: transform .12s ease, filter .12s ease;
+}
+.tentativa button:active { transform: scale(.97); }
+.tentativa button:hover  { filter: brightness(1.06); }
+.bt-indep { background: var(--st-ok); }
+.bt-ajuda { background: var(--st-warn); }
+.bt-erro  { background: var(--st-bad); }
+
+.dicas { display: flex; gap: 6px; margin-top: 8px; }
+.dicas button {
+    flex: 1; border: 1px solid var(--st-warn); background: var(--st-warn-bg);
+    color: var(--st-warn); border-radius: 8px; padding: 9px 4px;
+    font-size: 11.5px; font-weight: 700; cursor: pointer;
+}
+.dicas button.on { background: var(--st-warn); color: #fff; }
+
+.progresso-tentativas { display: flex; gap: 4px; margin-top: 12px; }
+.pt { flex: 1; height: 9px; border-radius: 3px; background: var(--line); }
+
+.rodape-fixo {
+    position: sticky; bottom: 0; background: var(--bg);
+    padding: 12px 0 0; border-top: 1px solid var(--line); margin-top: 6px;
+}
+.cartao-seguranca {
+    border: 1px solid var(--st-warn); background: var(--st-warn-bg);
+    border-radius: var(--radius-card); padding: 12px 14px; font-size: 12.5px; color: #7C4A05;
+}
+.cartao-seguranca b { display:block; margin-bottom: 3px; color:#7C4A05; }
+</style>
+<script src="../shared/mock.js"></script>
+<script src="../shared/tema.js"></script>
+</head>
+<body>
+
+<div class="app-shell">
+    <div id="sidebar"></div>
+    <div class="faixa-perfil"></div>
+
+    <main class="app-main" style="max-width:860px">
+        <div class="app-topo">
+            <div>
+                <h1 id="tituloSessao">Sessão</h1>
+                <div class="sub" id="subSessao"></div>
+            </div>
+            <span class="chip chip-ok">presente</span>
+        </div>
+
+        <div class="cartao-seguranca" style="margin-bottom:14px">
+            <b>Cartão de segurança</b>
+            <span id="seguranca"></span>
+        </div>
+
+        <div id="programas"></div>
+
+        <div class="card" style="margin-bottom:14px">
+            <div class="card-titulo"><h3>Contexto do dia</h3></div>
+            <div class="chips">
+                <button class="chip chip-neutro" onclick="marcarContexto(this)">dormiu mal</button>
+                <button class="chip chip-neutro" onclick="marcarContexto(this)">não almoçou</button>
+                <button class="chip chip-neutro" onclick="marcarContexto(this)">medicação alterada</button>
+                <button class="chip chip-neutro" onclick="marcarContexto(this)">doente</button>
+                <button class="chip chip-neutro" onclick="marcarContexto(this)">intercorrência em casa</button>
+            </div>
+            <div class="card-legenda">Meio minuto aqui explica uma queda no gráfico daqui a três semanas.</div>
+        </div>
+
+        <div class="rodape-fixo">
+            <div class="grid-2">
+                <button class="btn btn-secundario btn-bloco" onclick="alert('Sprint 2: registro ABC do comportamento.')">Registrar comportamento</button>
+                <button class="btn btn-bloco" onclick="alert('Sprint 1: grava a sessão e abre a evolução diária.')">Encerrar e escrever evolução</button>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script src="../shared/sidebar.js"></script>
+<script>
+(function () {
+    const s = EqMock.sessao;
+    const areas = EqMock.areas;
+
+    document.getElementById('tituloSessao').textContent = s.paciente + ' · ' + s.hora;
+    document.getElementById('subSessao').textContent = s.duracao + ' · ' + s.programas.length + ' programas no PEI de hoje';
+    document.getElementById('seguranca').textContent = s.seguranca;
+
+    document.getElementById('programas').innerHTML = s.programas.map(p => {
+        const a = areas[p.area];
+        const pct = p.feitas ? Math.round(p.indep / p.feitas * 100) : 0;
+        return `
+        <div class="prog" id="prog-${p.id}">
+            <div class="prog-topo">
+                <div>
+                    <div class="prog-nome">${p.nome}</div>
+                    <div class="prog-meta">alvo: ${p.alvo} · tentativa <b id="n-${p.id}">${p.feitas + 1}</b> de ${p.tentativas}</div>
+                </div>
+                <span class="selo-area" style="background:${a.cor}">${a.rotulo}</span>
+            </div>
+
+            <div class="tentativa">
+                <button class="bt-indep" onclick="registrar('${p.id}','independente')">Independente</button>
+                <button class="bt-ajuda" onclick="registrar('${p.id}','com ajuda')">Com ajuda</button>
+                <button class="bt-erro"  onclick="registrar('${p.id}','erro')">Erro</button>
+            </div>
+
+            <div class="dicas" data-prog="${p.id}">
+                <button onclick="marcarDica(this)">gestual</button>
+                <button onclick="marcarDica(this)">verbal</button>
+                <button onclick="marcarDica(this)">modelo</button>
+                <button onclick="marcarDica(this)">física</button>
+            </div>
+
+            <div class="progresso-tentativas" id="pt-${p.id}" data-proxima="${p.feitas}" data-total="${p.tentativas}">
+                ${Array.from({length: p.tentativas}, (_, i) =>
+                    `<span class="pt" style="background:${i < p.indep ? 'var(--st-ok)' : i < p.feitas ? 'var(--st-warn)' : 'var(--line)'}"></span>`).join('')}
+            </div>
+            <div class="card-legenda" id="leg-${p.id}">${p.feitas} de ${p.tentativas} registradas · ${pct}% independente</div>
+        </div>`;
+    }).join('');
+
+    EqSidebar.render('sessao');
+})();
+
+function registrar(id, resultado) {
+    const trilha = document.getElementById('pt-' + id);
+    const total  = parseInt(trilha.dataset.total, 10);
+    let i        = parseInt(trilha.dataset.proxima, 10);
+
+    if (i >= total) {
+        alert('As ' + total + ' tentativas deste programa já foram registradas.');
+        return;
+    }
+
+    const cor = resultado === 'independente' ? 'var(--st-ok)'
+              : resultado === 'com ajuda'    ? 'var(--st-warn)'
+              : 'var(--st-bad)';
+
+    trilha.children[i].style.background = cor;
+    trilha.children[i].dataset.resultado = resultado;
+    i++;
+    trilha.dataset.proxima = i;
+
+    // contador da tentativa atual
+    document.getElementById('n-' + id).textContent = Math.min(i + 1, total);
+
+    // legenda: % de independência sobre o que já foi registrado
+    const indep = Array.from(trilha.children).filter(c => c.dataset.resultado === 'independente').length
+                + Array.from(trilha.children).filter(c => !c.dataset.resultado &&
+                    c.style.background.includes('--st-ok')).length;
+    const pct = Math.round(indep / i * 100);
+    document.getElementById('leg-' + id).textContent =
+        i + ' de ' + total + ' registradas · ' + pct + '% independente';
+
+    // Sprint 1: grava em `registros_tentativa` — fila local + sincronização.
+}
+
+function marcarDica(bt) {
+    bt.parentElement.querySelectorAll('button').forEach(b => b.classList.remove('on'));
+    bt.classList.add('on');
+}
+
+function marcarContexto(bt) {
+    const ativo = bt.classList.toggle('chip-alerta');
+    bt.classList.toggle('chip-neutro', !ativo);
+}
+</script>
+</body>
+</html>

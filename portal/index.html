@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-tema="familia">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EQ ABA — Portal do responsável</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../styles/base.css">
+<link rel="stylesheet" href="../styles/components.css">
+<style>
+/* Portal é externo: sem sidebar, layout de celular, um cartão por assunto. */
+body { background: var(--bg); }
+.portal { max-width: 460px; margin: 0 auto; padding: 0 16px 34px; }
+.portal-topo {
+    background: var(--side-bg); color: #fff;
+    border-radius: 0 0 24px 24px; padding: 22px 20px 26px;
+    margin: 0 -16px 18px;
+}
+.portal-topo .marca { display:flex; align-items:center; gap:8px; font-weight:800; font-size:14px; opacity:.9; }
+.portal-topo h1 { font-size: 20px; margin-top: 10px; }
+.portal-topo p { font-size: 12.5px; color: rgba(255,255,255,.82); margin-top: 3px; }
+.item-titulo { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:5px; }
+.item-titulo h3 { font-size: 14px; }
+.card p { font-size: 13px; color: var(--ink-muted); }
+</style>
+<script src="../shared/mock.js"></script>
+<script src="../shared/tema.js"></script>
+</head>
+<body>
+
+<div class="portal">
+    <div class="portal-topo">
+        <div class="marca">
+            <svg width="15" height="15" viewBox="0 0 100 100"><g stroke="currentColor" stroke-width="11" stroke-linecap="round">
+                <line x1="50" y1="12" x2="50" y2="88"/><line x1="17" y1="31" x2="83" y2="69"/><line x1="17" y1="69" x2="83" y2="31"/></g></svg>
+            EQ ABA
+        </div>
+        <h1 id="ola">Olá!</h1>
+        <p>Acompanhe a terapia e as atividades da semana.</p>
+    </div>
+
+    <div class="card">
+        <div class="item-titulo">
+            <h3>Atividade da semana</h3>
+            <span class="chip chip-alerta">nova</span>
+        </div>
+        <p id="atividade"></p>
+        <button class="btn btn-bloco" style="margin-top:12px;background:var(--st-ok)"
+                onclick="this.textContent='Feito ✓'; this.disabled=true; this.style.opacity=.75">Marcar como feito</button>
+    </div>
+
+    <div class="card">
+        <div class="item-titulo"><h3>Relatório do mês</h3></div>
+        <p id="relatorio"></p>
+        <button class="btn btn-secundario btn-bloco" style="margin-top:10px"
+                onclick="alert('Sprint 4: abre o PDF liberado pela coordenação.')">Abrir PDF</button>
+    </div>
+
+    <div class="card">
+        <div class="item-titulo">
+            <h3>Termos e consentimentos</h3>
+            <span class="chip chip-alerta" id="pendencias"></span>
+        </div>
+        <p>Uso de imagem em vídeo de sessão, para supervisão da equipe.</p>
+        <button class="btn btn-bloco" style="margin-top:10px"
+                onclick="alert('Sprint 4: assinatura digital do responsável.')">Ler e assinar</button>
+    </div>
+
+    <div class="card">
+        <div class="item-titulo">
+            <h3>Anamnese</h3>
+            <span class="chip chip-ok">preenchida</span>
+        </div>
+        <p>Recebida em 12 de julho. Obrigado por responder.</p>
+    </div>
+
+    <div class="card">
+        <div class="item-titulo"><h3>Próximos atendimentos</h3></div>
+        <table class="tabela" style="margin-top:4px">
+            <tbody>
+                <tr><td>Segunda · 14h00</td><td style="text-align:right"><span class="chip chip-neutro">confirmado</span></td></tr>
+                <tr><td>Quarta · 14h00</td><td style="text-align:right"><span class="chip chip-neutro">confirmado</span></td></tr>
+                <tr><td>Sexta · 14h00</td><td style="text-align:right"><span class="chip chip-neutro">confirmado</span></td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="aviso" style="margin-top:14px">
+        Precisa avisar uma falta? Fale com a recepção pelo telefone da clínica.
+    </div>
+
+    <div class="tiny soft" style="text-align:center; margin-top:16px">
+        Esqueleto Sprint 0 · dados fictícios ·
+        <a href="../dashboard.html?perfil=coordenador_aba">voltar ao painel</a>
+    </div>
+</div>
+
+<script>
+(function () {
+    const p = EqMock.portal;
+    document.getElementById('ola').textContent = 'Olá! Acompanhamento de ' + p.crianca;
+    document.getElementById('atividade').textContent = p.atividade;
+    document.getElementById('relatorio').textContent = p.relatorio;
+    document.getElementById('pendencias').textContent = p.pendencias + ' pendente';
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-tema="coordenacao">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EQ ABA — Pacientes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../styles/base.css">
+<link rel="stylesheet" href="../styles/components.css">
+<script src="../shared/mock.js"></script>
+<script src="../shared/tema.js"></script>
+</head>
+<body>
+
+<div class="app-shell">
+    <div id="sidebar"></div>
+    <div class="faixa-perfil"></div>
+
+    <main class="app-main">
+        <div class="app-topo">
+            <div>
+                <h1>Pacientes</h1>
+                <div class="sub" id="contagem"></div>
+            </div>
+            <button class="btn" onclick="alert('Sprint 1: cadastro de paciente com responsável, encaminhamento e convênio.')">Novo paciente</button>
+        </div>
+
+        <div class="card">
+            <table class="tabela">
+                <thead>
+                    <tr>
+                        <th>Paciente</th><th>Idade</th><th>Aplicador</th>
+                        <th>Frequência</th><th>Programas ativos</th><th>Faltas no mês</th><th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="tb"></tbody>
+            </table>
+        </div>
+
+        <div class="aviso" style="margin-top:14px">
+            <b>Próximo passo desta tela.</b> Abrir a pasta do paciente com linha do tempo, PEI vigente,
+            documentos, cartão de segurança e histórico de avaliações.
+        </div>
+    </main>
+</div>
+
+<script src="../shared/sidebar.js"></script>
+<script>
+(function () {
+    const ps = EqMock.pacientes;
+    document.getElementById('contagem').textContent =
+        ps.filter(p => p.status === 'ativo').length + ' ativos · ' +
+        ps.filter(p => p.status === 'fila de espera').length + ' na fila de espera';
+
+    const chip = s => s === 'ativo' ? 'chip-ok' : s === 'atenção' ? 'chip-alerta' : 'chip-neutro';
+
+    document.getElementById('tb').innerHTML = ps.map(p => `
+        <tr style="cursor:pointer" onclick="alert('Sprint 1: abre a pasta de ${p.nome}.')">
+            <td style="font-weight:700">${p.nome}</td>
+            <td class="muted">${p.idade}</td>
+            <td class="muted">${p.aplicador}</td>
+            <td class="muted">${p.sessoes}</td>
+            <td>${p.prog}</td>
+            <td style="color:${p.faltas >= 3 ? 'var(--st-bad)' : p.faltas > 0 ? 'var(--st-warn)' : 'var(--ink-muted)'};font-weight:700">${p.faltas}</td>
+            <td><span class="chip ${chip(p.status)}">${p.status}</span></td>
+        </tr>`).join('');
+
+    EqSidebar.render('pacientes');
+})();
+</script>
+</body>
+</html>

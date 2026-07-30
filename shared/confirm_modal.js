@@ -1,5 +1,5 @@
 // ============================================================================
-// EQ ABA — Modal de confirmação compartilhado
+// CORTEX aba — Modal de confirmação compartilhado
 // ----------------------------------------------------------------------------
 // Obrigatório em TODA ação destrutiva ou que muda o fluxo do atendimento.
 // Mesmo padrão do CORTEX (fundo desfocado), lendo as cores do tema ativo.

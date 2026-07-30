@@ -1,5 +1,5 @@
 // ============================================================================
-// EQ ABA — Sidebar
+// CORTEX aba — Sidebar
 // Chrome copiado do CORTEX (badge do logo, sino, recolher, item ativo em pílula
 // branca, cartão do usuário no rodapé). Estrutura e permissões são do ABA:
 // menu próprio, agrupado em Clínico e Gestão, filtrado por perfil.
@@ -101,7 +101,39 @@ window.EqSidebar = (function () {
     }
 
     function aplicarLargura(recolhida) {
-        document.documentElement.style.setProperty('--sidebar-width', recolhida ? '66px' : '236px');
+        document.documentElement.style.setProperty('--sidebar-width', recolhida ? '78px' : '248px');
+    }
+
+    // ── modo claro / escuro ────────────────────────────────────────────────
+    const CHAVE_MODO = 'eqaba_modo';
+
+    function modoAtual() {
+        try {
+            const salvo = localStorage.getItem(CHAVE_MODO);
+            if (salvo === 'claro' || salvo === 'escuro') return salvo;
+        } catch (e) {}
+        // sem preferência salva, segue o sistema operacional
+        return (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)
+               ? 'escuro' : 'claro';
+    }
+
+    function aplicarModo(modo) {
+        document.documentElement.setAttribute('data-modo', modo);
+        const meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) meta.setAttribute('content', modo === 'escuro' ? '#0C1420' : '#0F766E');
+    }
+
+    function alternarModo() {
+        const novo = modoAtual() === 'escuro' ? 'claro' : 'escuro';
+        try { localStorage.setItem(CHAVE_MODO, novo); } catch (e) {}
+        aplicarModo(novo);
+        const nav = document.getElementById('eqSidebar');
+        if (nav) {
+            const casca = document.createElement('div');
+            casca.id = 'sidebar';
+            nav.replaceWith(casca);
+            render(window.__eqAtivo);
+        }
     }
 
     function render(ativo) {
@@ -114,17 +146,26 @@ window.EqSidebar = (function () {
         const nome    = s.nome || '—';
         const foto    = s.fotoAssinada || null;
         const recolhida = estaRecolhida();
+        const modo = modoAtual();
         aplicarLargura(recolhida);
 
         let html = `<nav class="sidebar${recolhida ? ' recolhida' : ''}" id="eqSidebar" aria-label="Menu principal">
             <div class="sidebar-topo">
                 <div class="sidebar-badge">${LOGO}</div>
-                <div class="sidebar-marca">EQ ABA</div>
+                <div class="sidebar-marca">CORTEX <span class="aba">aba</span></div>
                 <button class="sidebar-bt" id="btSino" type="button" title="Avisos"
                         onclick="EqSidebar.avisos()">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round">
                         <path d="M18 15v-5a6 6 0 1 0-12 0v5l-1.5 2h15z"/><path d="M10 20h4"/>
                     </svg>
+                </button>
+                <button class="sidebar-bt" id="btModo" type="button" title="Alternar claro e escuro"
+                        onclick="EqSidebar.alternarModo()">
+                    ${modo === 'escuro'
+                      ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round">
+                            <circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4"/></svg>`
+                      : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round">
+                            <path d="M20 14.5A8 8 0 0 1 9.5 4a7 7 0 1 0 10.5 10.5z"/></svg>`}
                 </button>
                 <button class="sidebar-bt" type="button" title="Recolher menu"
                         onclick="EqSidebar.recolher()">
@@ -210,8 +251,9 @@ window.EqSidebar = (function () {
         window.location.href = caminho('index.html');
     }
 
-    // largura correta desde o primeiro pixel, antes de o guard responder
+    // largura e modo corretos desde o primeiro pixel, antes de o guard responder
     aplicarLargura(estaRecolhida());
+    aplicarModo(modoAtual());
 
-    return { render, recolher, avisos, sair, ITENS };
+    return { render, recolher, avisos, sair, alternarModo, modoAtual, ITENS };
 })();

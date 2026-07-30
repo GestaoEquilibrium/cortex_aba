@@ -1,5 +1,5 @@
 // ============================================================================
-// EQ ABA — Auth Guard
+// CORTEX aba — Auth Guard
 // ----------------------------------------------------------------------------
 // Incluir em toda página autenticada, DEPOIS de supabase_client.js e tema.js.
 // Faz, nesta ordem:
@@ -21,7 +21,7 @@ window.EqSessao = null;
     'use strict';
 
     if (!window.eqClient) {
-        console.error('EQ ABA: eqClient não inicializado.');
+        console.error('CORTEX aba: eqClient não inicializado.');
         return;
     }
 
@@ -34,7 +34,7 @@ window.EqSessao = null;
     const raiz = subir > 0 ? '../'.repeat(subir) : './';
 
     async function paraLogin(motivo, query) {
-        console.warn('EQ ABA: ' + motivo);
+        console.warn('CORTEX aba: ' + motivo);
         try { await window.eqClient.auth.signOut(); } catch (e) {}
         setTimeout(() => { window.location.href = raiz + 'index.html' + (query || ''); }, 50);
     }
@@ -86,7 +86,7 @@ window.EqSessao = null;
             .eq('auth_user_id', session.user.id)
             .maybeSingle();
 
-        if (error) { console.error('EQ ABA: erro ao ler profissionais', error); }
+        if (error) { console.error('CORTEX aba: erro ao ler profissionais', error); }
         if (!prof)       { paraLogin('conta sem vínculo em profissionais'); return; }
         if (!prof.ativo) { paraLogin('profissional inativo'); return; }
 
@@ -100,7 +100,7 @@ window.EqSessao = null;
                     .eq('id', prof.equipe_id)
                     .maybeSingle();
                 equipe = eq || null;
-            } catch (e) { console.warn('EQ ABA: não foi possível ler a equipe', e); }
+            } catch (e) { console.warn('CORTEX aba: não foi possível ler a equipe', e); }
         }
         prof.equipe = equipe;
 
@@ -125,7 +125,7 @@ window.EqSessao = null;
         document.dispatchEvent(new CustomEvent('eq:pronto', { detail: window.EqSessao }));
 
     } catch (e) {
-        console.error('EQ ABA: falha no auth guard', e);
+        console.error('CORTEX aba: falha no auth guard', e);
         paraLogin('erro inesperado na verificação de sessão');
     }
 })();

@@ -3,17 +3,25 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>EQ ABA — Portal do responsável</title>
+<title>CORTEX aba — Portal do responsável</title>
+<script>
+(function(){try{var m=localStorage.getItem('eqaba_modo');
+if(m!=='claro'&&m!=='escuro'){m=(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches)?'escuro':'claro';}
+document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
+</script>
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#7C3AED">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../styles/base.css?v=2">
-<link rel="stylesheet" href="../styles/components.css?v=3">
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../styles/base.css?v=3">
+<link rel="stylesheet" href="../styles/components.css?v=4">
 <style>
+.aba-manuscrito { font-family:'Caveat', cursive; font-size:1.25em; font-weight:700;
+                  color:var(--acao); transform:rotate(-6deg); display:inline-block; }
+
 /* Portal é externo: sem sidebar, layout de celular, um cartão por assunto. */
 body { background: var(--bg); }
 .portal { max-width: 460px; margin: 0 auto; padding: 0 16px 34px; }
@@ -29,7 +37,6 @@ body { background: var(--bg); }
 .item-titulo h3 { font-size: 14px; }
 .card p { font-size: 13px; color: var(--ink-muted); }
 </style>
-<script src="../shared/mock.js?v=1"></script>
 <script src="../shared/tema.js?v=2"></script>
 </head>
 <body>
@@ -39,7 +46,7 @@ body { background: var(--bg); }
         <div class="marca">
             <svg width="15" height="15" viewBox="0 0 100 100"><g stroke="currentColor" stroke-width="11" stroke-linecap="round">
                 <line x1="50" y1="12" x2="50" y2="88"/><line x1="17" y1="31" x2="83" y2="69"/><line x1="17" y1="69" x2="83" y2="31"/></g></svg>
-            EQ ABA
+            CORTEX <span class="aba-manuscrito">aba</span>
         </div>
         <h1 id="ola">Olá!</h1>
         <p>Acompanhe a terapia e as atividades da semana.</p>
@@ -102,12 +109,12 @@ body { background: var(--bg); }
 </div>
 
 <script>
+// Portal ainda é maquete: entra de verdade no sprint da família.
 (function () {
-    const p = EqMock.portal;
-    document.getElementById('ola').textContent = 'Olá! Acompanhamento de ' + p.crianca;
-    document.getElementById('atividade').textContent = p.atividade;
-    document.getElementById('relatorio').textContent = p.relatorio;
-    document.getElementById('pendencias').textContent = p.pendencias + ' pendente';
+    document.getElementById('ola').textContent = 'Olá!';
+    document.getElementById('atividade').textContent = 'As atividades da semana aparecerão aqui.';
+    document.getElementById('relatorio').textContent = 'Os relatórios liberados aparecerão aqui.';
+    document.getElementById('pendencias').textContent = '—';
 })();
 </script>
 </body>

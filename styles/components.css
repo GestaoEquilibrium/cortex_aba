@@ -1,44 +1,50 @@
 /* ============================================================================
-   EQ ABA — Componentes
+   CORTEX aba — Componentes
    Cards, KPIs, chips de status, botões, barras de progresso, sidebar, tabela.
    Tudo lê as variáveis do tema ativo (base.css).
    ============================================================================ */
 
-/* ── Sidebar (chrome copiado do CORTEX; estrutura e cores do EQ ABA) ─────── */
+/* ── Sidebar flutuante (chrome do CORTEX, descolada da borda) ───────────── */
 .sidebar {
-    position: fixed; top: 0; left: 0; bottom: 0;
-    width: var(--sidebar-width);
+    position: fixed;
+    top: var(--sidebar-margem); left: var(--sidebar-margem); bottom: var(--sidebar-margem);
+    width: calc(var(--sidebar-width) - var(--sidebar-margem) * 2);
     background: var(--side-bg);
     color: var(--side-ink);
     display: flex; flex-direction: column;
-    padding: 14px 12px 14px;
+    padding: 14px 11px;
+    border-radius: 18px;
+    box-shadow: 0 12px 30px rgba(11,26,41,.26);
     z-index: 50;
     transition: width var(--transition-base);
 }
 
-/* topo: badge + nome + sino + recolher */
+/* topo: badge + marca + sino + modo + recolher */
 .sidebar-topo {
-    display: flex; align-items: center; gap: 9px;
-    padding-bottom: 14px; margin-bottom: 12px;
-    border-bottom: 1px solid rgba(255,255,255,.12);
+    display: flex; align-items: center; gap: 8px;
+    padding-bottom: 13px; margin-bottom: 11px;
+    border-bottom: 1px solid rgba(255,255,255,.13);
 }
 .sidebar-badge {
-    width: 34px; height: 34px; border-radius: 10px; flex: 0 0 auto;
+    width: 33px; height: 33px; border-radius: 10px; flex: 0 0 auto;
     background: rgba(255,255,255,.13); color: #fff;
     display: flex; align-items: center; justify-content: center;
 }
-.sidebar-marca { font-size: 15px; font-weight: 800; color: #fff; letter-spacing: -.01em; flex: 1; white-space: nowrap; }
+.sidebar-marca {
+    flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 4px;
+    font-size: 15.5px; font-weight: 800; color: #fff; letter-spacing: -.01em; white-space: nowrap;
+}
+.sidebar-marca .aba {
+    font-family: 'Caveat', cursive; font-size: 19px; font-weight: 700;
+    color: var(--side-hot-ink, #6EE7B7); letter-spacing: 0; transform: rotate(-6deg); line-height: 1;
+}
 .sidebar-bt {
-    width: 28px; height: 28px; border-radius: 8px; flex: 0 0 auto;
+    width: 27px; height: 27px; border-radius: 8px; flex: 0 0 auto;
     background: rgba(255,255,255,.10); border: none; color: var(--side-ink);
     display: flex; align-items: center; justify-content: center; cursor: pointer;
     transition: var(--transition-base); position: relative;
 }
 .sidebar-bt:hover { background: rgba(255,255,255,.20); color: #fff; }
-.sidebar-bt .ponto {
-    position: absolute; top: 5px; right: 5px; width: 6px; height: 6px;
-    border-radius: 50%; background: var(--st-warn);
-}
 
 /* navegação */
 .sidebar-nav { display: flex; flex-direction: column; gap: 3px; overflow-y: auto; }
@@ -49,12 +55,11 @@
     opacity: .78; transition: var(--transition-base); cursor: pointer; white-space: nowrap;
 }
 .sidebar-item:hover { opacity: 1; background: rgba(255,255,255,.09); }
-/* ativo = pílula branca, igual ao CORTEX, em qualquer um dos três temas */
 .sidebar-item.ativo { background: #FFFFFF; color: #0C1B2A; opacity: 1; font-weight: 700; }
 .sidebar-item svg { width: 17px; height: 17px; flex: 0 0 auto; }
 .sidebar-grupo {
     font-size: 9.5px; text-transform: uppercase; letter-spacing: .14em;
-    color: var(--side-ink-soft); font-weight: 700; padding: 14px 12px 5px; white-space: nowrap;
+    color: var(--side-ink-soft); font-weight: 700; padding: 13px 12px 5px; white-space: nowrap;
 }
 
 /* cartão do usuário */
@@ -63,10 +68,10 @@
     background: rgba(255,255,255,.09); border-radius: 12px; padding: 8px 9px;
 }
 .sidebar-avatar {
-    width: 34px; height: 34px; border-radius: 50%; flex: 0 0 auto; object-fit: cover;
+    width: 33px; height: 33px; border-radius: 50%; flex: 0 0 auto; object-fit: cover;
     background: rgba(255,255,255,.18); color: #fff;
     display: flex; align-items: center; justify-content: center;
-    font-size: 12.5px; font-weight: 800;
+    font-size: 12.5px; font-weight: 800; background-size: cover; background-position: center;
 }
 .sidebar-dados { flex: 1; min-width: 0; }
 .sidebar-dados b {
@@ -75,21 +80,21 @@
 }
 .sidebar-dados span { font-size: 11px; color: var(--side-ink-soft); }
 
-/* recolhido */
-.sidebar.recolhida { padding: 14px 8px; }
+/* recolhida */
+.sidebar.recolhida { padding: 14px 7px; }
 .sidebar.recolhida .sidebar-marca,
 .sidebar.recolhida .sidebar-grupo,
 .sidebar.recolhida .sidebar-dados,
 .sidebar.recolhida .sidebar-item span,
 .sidebar.recolhida #btSino { display: none; }
-.sidebar.recolhida .sidebar-topo { flex-direction: column; gap: 8px; }
+.sidebar.recolhida .sidebar-topo { flex-direction: column; gap: 7px; }
 .sidebar.recolhida .sidebar-item { justify-content: center; padding: 11px 0; }
 .sidebar.recolhida .sidebar-usuario { justify-content: center; padding: 8px 0; }
 
 @media (max-width: 860px) {
     .sidebar {
-        position: static; width: 100%; flex-direction: row; overflow-x: auto;
-        padding: 10px; gap: 5px; align-items: center; border-bottom: 1px solid rgba(255,255,255,.12);
+        position: static; width: auto; margin: 8px 8px 0; flex-direction: row;
+        overflow-x: auto; padding: 9px; gap: 5px; align-items: center; border-radius: 14px;
     }
     .sidebar-topo, .sidebar-usuario, .sidebar-grupo { display: none; }
     .sidebar-nav { flex-direction: row; gap: 5px; }

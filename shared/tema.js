@@ -1,5 +1,5 @@
 // ============================================================================
-// EQ ABA — Tema por perfil (decisão: OPÇÃO A · três identidades)
+// CORTEX aba — Tema por perfil (decisão: OPÇÃO A · três identidades)
 // ----------------------------------------------------------------------------
 //   coordenacao → verde e navy fechado
 //   equipe      → quatro cores primárias  (aplicador, estagiário, itinerante)

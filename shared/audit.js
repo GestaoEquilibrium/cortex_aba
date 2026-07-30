@@ -1,5 +1,5 @@
 // ============================================================================
-// EQ ABA — Auditoria
+// CORTEX aba — Auditoria
 // ----------------------------------------------------------------------------
 // Registra quem fez o quê, quando. Equivalente ao CortexAudit do CORTEX.
 //
@@ -30,10 +30,10 @@ window.EqAudit = (function () {
                 detalhes: detalhes || null,
                 pagina: window.location.pathname.split('/').slice(-1)[0] || null
             });
-            if (error) console.warn('EQ ABA: auditoria não gravada', error);
+            if (error) console.warn('CORTEX aba: auditoria não gravada', error);
 
         } catch (e) {
-            console.warn('EQ ABA: auditoria falhou', e);
+            console.warn('CORTEX aba: auditoria falhou', e);
         }
     }
 

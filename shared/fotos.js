@@ -1,5 +1,5 @@
 // ============================================================================
-// EQ ABA — Fotos (pacientes e profissionais)
+// CORTEX aba — Fotos (pacientes e profissionais)
 // ----------------------------------------------------------------------------
 // O bucket `fotos` é PRIVADO. Nada de URL pública: cada exibição usa um link
 // assinado com validade curta, gerado na hora. Foto de criança não fica
@@ -73,7 +73,7 @@ window.EqFotos = (function () {
             cache[caminho] = { url: data.signedUrl, expira: agora + (VALIDADE - 120) * 1000 };
             return data.signedUrl;
         } catch (e) {
-            console.warn('EQ ABA: não foi possível gerar link da foto', e);
+            console.warn('CORTEX aba: não foi possível gerar link da foto', e);
             return null;
         }
     }

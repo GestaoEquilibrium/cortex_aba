@@ -1,5 +1,5 @@
 // ============================================================================
-// EQ ABA — Cliente Supabase compartilhado
+// CORTEX aba — Cliente Supabase compartilhado
 // Incluir DEPOIS do CDN do supabase-js e do config.js.
 // ============================================================================
 
@@ -7,11 +7,11 @@
     'use strict';
 
     if (typeof supabase === 'undefined') {
-        console.error('EQ ABA: supabase-js não carregado. Inclua o CDN antes deste script.');
+        console.error('CORTEX aba: supabase-js não carregado. Inclua o CDN antes deste script.');
         return;
     }
     if (typeof SUPABASE_CONFIG === 'undefined') {
-        console.error('EQ ABA: config.js não carregado. Inclua-o antes deste script.');
+        console.error('CORTEX aba: config.js não carregado. Inclua-o antes deste script.');
         return;
     }
 

@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-tema="coordenacao">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EQ ABA — Pasta do paciente</title>
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="../favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="../apple-touch-icon.png">
+<link rel="manifest" href="../site.webmanifest">
+<meta name="theme-color" content="#0F766E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../styles/base.css?v=2">
+<link rel="stylesheet" href="../styles/components.css?v=3">
+<style>
+.voltar { display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:600;
+          color:var(--ink-muted); margin-bottom:12px; }
+.voltar:hover { color:var(--acao); }
+
+.cabecalho { display:flex; gap:16px; align-items:flex-start; flex-wrap:wrap; }
+.avatar-pac { width:60px; height:60px; border-radius:18px; flex:0 0 auto; color:#fff;
+              display:flex; align-items:center; justify-content:center; font-size:23px; font-weight:800; }
+.cab-dados { flex:1; min-width:200px; }
+.cab-dados h1 { font-size:22px; }
+.cab-dados .linha { font-size:12.5px; color:var(--ink-muted); margin-top:3px; }
+
+.seguranca { border:1px solid var(--st-warn); background:var(--st-warn-bg); color:#7C4A05;
+             border-radius:var(--radius-card); padding:12px 14px; font-size:12.5px; margin-top:14px; }
+.seguranca b { display:block; margin-bottom:3px; }
+
+.abas { display:flex; gap:4px; border-bottom:1px solid var(--line); margin:18px 0 16px; flex-wrap:wrap; }
+.abas button { border:none; background:transparent; padding:10px 14px; font:inherit; font-size:13px;
+               font-weight:700; color:var(--ink-muted); cursor:pointer; border-bottom:2px solid transparent;
+               margin-bottom:-1px; }
+.abas button[aria-pressed="true"] { color:var(--acao); border-bottom-color:var(--acao); }
+.painel { display:none; } .painel.on { display:block; }
+
+.dl { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:14px; }
+.dl div span { display:block; font-size:10.5px; text-transform:uppercase; letter-spacing:.08em;
+               color:var(--ink-soft); font-weight:700; margin-bottom:2px; }
+.dl div b { font-size:13.5px; font-weight:600; }
+
+.campo { margin-bottom:11px; }
+.campo label { display:block; font-size:11.5px; font-weight:700; color:var(--ink-muted); margin-bottom:4px; }
+.campo input, .campo select, .campo textarea {
+    width:100%; padding:9px 11px; font-size:13px; font-family:inherit;
+    border:1px solid var(--line-strong); border-radius:8px; background:var(--surface-alt); color:var(--ink); }
+.campo-2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.modal-fundo { position:fixed; inset:0; background:rgba(12,27,42,.5); backdrop-filter:blur(3px);
+               display:none; align-items:center; justify-content:center; padding:20px; z-index:80; }
+.modal-fundo.aberto { display:flex; }
+.modal { background:var(--surface); border-radius:var(--radius-card); padding:22px; width:100%;
+         max-width:520px; box-shadow:var(--shadow-lg); max-height:90vh; overflow:auto; }
+.aviso-sala { font-size:11.5px; color:var(--st-warn); margin-top:-6px; margin-bottom:10px; display:none; }
+.vazio-msg { padding:22px; text-align:center; color:var(--ink-muted); font-size:13px; }
+
+.tl { position:relative; padding-left:20px; }
+.tl::before { content:''; position:absolute; left:5px; top:4px; bottom:4px; width:2px; background:var(--line); }
+.tl-item { position:relative; padding-bottom:14px; }
+.tl-item::before { content:''; position:absolute; left:-19px; top:4px; width:10px; height:10px;
+                   border-radius:50%; background:var(--cor,var(--acao)); border:2px solid var(--surface); }
+.tl-item b { font-size:13px; }
+.tl-item span { display:block; font-size:11.5px; color:var(--ink-muted); }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../config.js?v=4"></script>
+<script src="../shared/supabase_client.js?v=2"></script>
+<script src="../shared/tema.js?v=2"></script>
+<script src="../shared/confirm_modal.js?v=3"></script>
+<script src="../shared/audit.js?v=5"></script>
+<script src="../shared/auth_guard.js?v=4"></script>
+</head>
+<body>
+
+<div class="app-shell">
+    <div id="sidebar"></div>
+    <div class="faixa-perfil"></div>
+
+    <main class="app-main">
+        <a class="voltar" href="lista.html">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+                <path d="M15 6l-6 6 6 6"/></svg> Pacientes
+        </a>
+
+        <div id="conteudo"><div class="muted small">carregando…</div></div>
+    </main>
+</div>
+
+<!-- ── editar cadastro ─────────────────────────────────────────────────────── -->
+<div class="modal-fundo" id="modalEditar" onclick="if(event.target===this) fechar('modalEditar')">
+    <div class="modal">
+        <h2 style="margin-bottom:14px">Editar cadastro</h2>
+        <form id="formEditar">
+            <div class="campo"><label for="eNome">Nome completo *</label><input id="eNome" required></div>
+            <div class="campo-2">
+                <div class="campo"><label for="eNasc">Nascimento *</label><input id="eNasc" type="date" required></div>
+                <div class="campo"><label for="eStatus">Situação</label>
+                    <select id="eStatus">
+                        <option value="fila_espera">Fila de espera</option>
+                        <option value="ativo">Ativo</option>
+                        <option value="suspenso">Suspenso</option>
+                        <option value="alta">Alta</option>
+                        <option value="desligado">Desligado</option>
+                    </select></div>
+            </div>
+            <div class="campo"><label for="eResp">Responsável legal</label><input id="eResp"></div>
+            <div class="campo-2">
+                <div class="campo"><label for="eTel">Telefone</label><input id="eTel"></div>
+                <div class="campo"><label for="eConv">Convênio</label><input id="eConv"></div>
+            </div>
+            <div class="campo-2">
+                <div class="campo"><label for="eSess">Sessões/semana</label><input id="eSess" type="number" min="0" max="20"></div>
+                <div class="campo"><label for="eGuia">Validade da guia</label><input id="eGuia" type="date"></div>
+            </div>
+            <div class="campo-2">
+                <div class="campo"><label for="eMedico">Médico encaminhador</label><input id="eMedico"></div>
+                <div class="campo"><label for="eEscola">Escola</label><input id="eEscola"></div>
+            </div>
+            <div class="campo"><label for="eSeg">Cartão de segurança</label>
+                <textarea id="eSeg" rows="2" placeholder="alergias, gatilhos, sinais de pré-crise, manejo"></textarea></div>
+            <div class="aviso" id="erroEditar" style="display:none;border-left-color:var(--st-bad);color:var(--st-bad);margin-bottom:10px"></div>
+            <div class="grid-2">
+                <button type="button" class="btn btn-secundario btn-bloco" onclick="fechar('modalEditar')">Cancelar</button>
+                <button type="submit" class="btn btn-bloco" id="btSalvarEditar">Salvar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ── novo horário na grade ───────────────────────────────────────────────── -->
+<div class="modal-fundo" id="modalGrade" onclick="if(event.target===this) fechar('modalGrade')">
+    <div class="modal">
+        <h2 style="margin-bottom:4px">Novo horário fixo</h2>
+        <p class="tiny soft" style="margin-bottom:14px">Entra na grade semanal. As sessões do dia nascem daqui.</p>
+        <form id="formGrade">
+            <div class="campo"><label for="gProf">Aplicador *</label><select id="gProf" required></select></div>
+            <div class="campo-2">
+                <div class="campo"><label for="gDia">Dia da semana *</label>
+                    <select id="gDia" required onchange="checarSala()">
+                        <option value="1">Segunda</option><option value="2">Terça</option>
+                        <option value="3">Quarta</option><option value="4">Quinta</option>
+                        <option value="5">Sexta</option><option value="6">Sábado</option>
+                    </select></div>
+                <div class="campo"><label for="gHora">Horário *</label>
+                    <input id="gHora" type="time" required value="14:00" onchange="checarSala()"></div>
+            </div>
+            <div class="campo-2">
+                <div class="campo"><label for="gDur">Duração (min)</label>
+                    <input id="gDur" type="number" min="15" max="240" step="15" value="60" onchange="checarSala()"></div>
+                <div class="campo"><label for="gSala">Sala</label><input id="gSala" placeholder="Sala 2"></div>
+            </div>
+            <div class="aviso-sala" id="avisoSala"></div>
+            <div class="campo-2">
+                <div class="campo"><label for="gInicio">Vigência a partir de</label><input id="gInicio" type="date"></div>
+                <div class="campo"><label for="gFim">Até (opcional)</label><input id="gFim" type="date"></div>
+            </div>
+            <div class="aviso" id="erroGrade" style="display:none;border-left-color:var(--st-bad);color:var(--st-bad);margin-bottom:10px"></div>
+            <div class="grid-2">
+                <button type="button" class="btn btn-secundario btn-bloco" onclick="fechar('modalGrade')">Cancelar</button>
+                <button type="submit" class="btn btn-bloco" id="btSalvarGrade">Adicionar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script src="../shared/sidebar.js?v=6"></script>
+<script>
+'use strict';
+
+const DIAS = ['domingo','segunda','terça','quarta','quinta','sexta','sábado'];
+const CORES = ['#2563EB','#7C3AED','#06B6D4','#16A34A','#F59E0B','#EC4899'];
+const STATUS_SESSAO = {
+    agendada:{r:'agendada',c:'chip-neutro'}, em_andamento:{r:'em atendimento',c:'chip-neutro'},
+    realizada:{r:'realizada',c:'chip-ok'}, falta_justificada:{r:'falta c/ aviso',c:'chip-alerta'},
+    falta_injustificada:{r:'falta s/ aviso',c:'chip-erro'}, cancelada_clinica:{r:'cancelada',c:'chip-alerta'},
+    remarcada:{r:'remarcada',c:'chip-neutro'}, substituicao:{r:'cobertura',c:'chip-alerta'},
+    feriado:{r:'feriado',c:'chip-neutro'}
+};
+
+const ID = new URLSearchParams(location.search).get('id');
+let PAC = null, GRADE = [], SESSOES = [], VINCULOS = [], PROFS = [], PODE_EDITAR = false;
+
+document.addEventListener('eq:pronto', async function (ev) {
+    EqSidebar.render('pacientes');
+    PODE_EDITAR = ['admin_direcao','coordenador_aba','recepcao'].includes(ev.detail.perfil);
+    if (!ID) {
+        document.getElementById('conteudo').innerHTML =
+            '<div class="card vazio-msg">Paciente não informado. <a href="lista.html">Voltar à lista</a>.</div>';
+        return;
+    }
+    await carregar();
+});
+
+const p2 = n => String(n).padStart(2,'0');
+const isoLocal = d => d.getFullYear() + '-' + p2(d.getMonth()+1) + '-' + p2(d.getDate());
+function hojeISO() { return isoLocal(new Date()); }
+function brl(iso) { return iso ? iso.slice(0,10).split('-').reverse().join('/') : '—'; }
+
+function idadeTexto(nasc) {
+    if (!nasc) return '—';
+    const [a,m,d] = nasc.split('-').map(Number);
+    const h = new Date();
+    let anos = h.getFullYear() - a;
+    const jaFez = (h.getMonth()+1 > m) || (h.getMonth()+1 === m && h.getDate() >= d);
+    if (!jaFez) anos--;
+    let meses = (h.getMonth()+1) - m + (jaFez ? 0 : 12);
+    if (h.getDate() < d) meses--;
+    if (meses < 0) meses += 12;
+    return anos + (anos === 1 ? ' ano' : ' anos') + (meses ? ' e ' + meses + (meses === 1 ? ' mês' : ' meses') : '');
+}
+
+// ── carga ───────────────────────────────────────────────────────────────────
+async function carregar() {
+    try {
+        const mesInicio = hojeISO().slice(0,8) + '01';
+        const [rp, rg, rs, rv, rpr] = await Promise.all([
+            eqClient.from('pacientes').select('*').eq('id', ID).maybeSingle(),
+            eqClient.from('cronograma_terapeutico')
+                .select('id, dia_semana, hora_inicio, duracao_min, sala, vigencia_inicio, vigencia_fim, ativo, profissional:profissionais(id, nome_completo)')
+                .eq('paciente_id', ID).order('dia_semana').order('hora_inicio'),
+            eqClient.from('sessoes')
+                .select('id, data, hora_inicio, status, profissional:profissionais!sessoes_profissional_id_fkey(nome_completo)')
+                .eq('paciente_id', ID).order('data', { ascending:false }).limit(60),
+            eqClient.from('vinculos_paciente_aplicador')
+                .select('id, tipo, ativo, data_inicio, profissional:profissionais(id, nome_completo)')
+                .eq('paciente_id', ID).eq('ativo', true),
+            eqClient.from('profissionais').select('id, nome_completo, perfil').eq('ativo', true).order('nome_completo')
+        ]);
+
+        if (rp.error) throw rp.error;
+        if (!rp.data) {
+            document.getElementById('conteudo').innerHTML =
+                '<div class="card vazio-msg">Paciente não encontrado ou fora do seu acesso.</div>';
+            return;
+        }
+
+        PAC = rp.data; GRADE = rg.data || []; SESSOES = rs.data || [];
+        VINCULOS = rv.data || []; PROFS = (rpr.data || []).filter(p =>
+            ['aplicador','aplicador_itinerante','estagiario_aba','coordenador_aba'].includes(p.perfil));
+
+        desenhar();
+        await EqAudit.registrar('acesso', 'pacientes', ID, { nome: PAC.nome_completo });
+
+    } catch (e) {
+        console.error(e);
+        document.getElementById('conteudo').innerHTML =
+            '<div class="card vazio-msg" style="color:var(--st-bad)">Erro ao carregar. Veja o console.</div>';
+    }
+}
+
+// ── desenho ─────────────────────────────────────────────────────────────────
+function desenhar() {
+    const cor = CORES[(PAC.nome_completo || '').length % CORES.length];
+    const inicial = (PAC.nome_completo || '?').trim()[0].toUpperCase();
+    const titular = VINCULOS.find(v => v.tipo === 'titular');
+
+    const mesInicio = hojeISO().slice(0,8) + '01';
+    const doMes = SESSOES.filter(s => s.data >= mesInicio);
+    const faltas = doMes.filter(s => s.status.indexOf('falta') === 0).length;
+    const feitas = doMes.filter(s => s.status === 'realizada').length;
+    const prox = SESSOES.filter(s => s.data >= hojeISO() && s.status === 'agendada')
+                        .sort((a,b) => (a.data + a.hora_inicio) > (b.data + b.hora_inicio) ? 1 : -1)[0];
+
+    const chip = {ativo:'chip-ok', fila_espera:'chip-neutro', suspenso:'chip-alerta'}[PAC.status] || 'chip-neutro';
+
+    document.getElementById('conteudo').innerHTML = `
+    <div class="card">
+        <div class="cabecalho">
+            <div class="avatar-pac" style="background:${cor}">${inicial}</div>
+            <div class="cab-dados">
+                <h1>${PAC.nome_completo}</h1>
+                <div class="linha">${idadeTexto(PAC.data_nascimento)} · nascido em ${brl(PAC.data_nascimento)}</div>
+                <div class="linha">${titular && titular.profissional ? 'Aplicador titular: ' + titular.profissional.nome_completo : 'Sem aplicador titular'}</div>
+                <div class="chips" style="margin-top:8px">
+                    <span class="chip ${chip}">${(PAC.status||'').replace('_',' ')}</span>
+                    ${PAC.convenio ? `<span class="chip chip-neutro">${PAC.convenio}</span>` : ''}
+                    ${PAC.sessoes_semana_prescritas ? `<span class="chip chip-neutro">${PAC.sessoes_semana_prescritas}x/semana prescritas</span>` : ''}
+                    ${faltas ? `<span class="chip ${faltas>=3?'chip-erro':'chip-alerta'}">${faltas} falta${faltas>1?'s':''} no mês</span>` : ''}
+                </div>
+            </div>
+            ${PODE_EDITAR ? '<button class="btn btn-secundario" onclick="abrirEditar()">Editar cadastro</button>' : ''}
+        </div>
+
+        ${PAC.cartao_seguranca ? `<div class="seguranca"><b>Cartão de segurança</b>${PAC.cartao_seguranca}</div>` : ''}
+    </div>
+
+    <div class="grid-4" style="margin-top:12px">
+        <div class="kpi" style="--kpi-cor:var(--acao)">
+            <div class="kpi-numero">${feitas}</div><div class="kpi-texto">sessões realizadas no mês</div></div>
+        <div class="kpi" style="--kpi-cor:${faltas ? 'var(--st-bad)' : 'var(--st-neutro)'}">
+            <div class="kpi-numero">${faltas}</div><div class="kpi-texto">faltas no mês</div></div>
+        <div class="kpi" style="--kpi-cor:var(--st-ok)">
+            <div class="kpi-numero">${GRADE.filter(g => g.ativo).length}</div><div class="kpi-texto">horários fixos na grade</div></div>
+        <div class="kpi" style="--kpi-cor:var(--st-neutro)">
+            <div class="kpi-numero" style="font-size:16px;padding-top:5px">${prox ? brl(prox.data) + ' ' + prox.hora_inicio.slice(0,5) : '—'}</div>
+            <div class="kpi-texto">próxima sessão</div></div>
+    </div>
+
+    <div class="abas">
+        <button data-p="resumo"  aria-pressed="true"  onclick="aba('resumo')">Resumo</button>
+        <button data-p="grade"   aria-pressed="false" onclick="aba('grade')">Grade semanal</button>
+        <button data-p="sessoes" aria-pressed="false" onclick="aba('sessoes')">Sessões</button>
+        <button data-p="tempo"   aria-pressed="false" onclick="aba('tempo')">Linha do tempo</button>
+    </div>
+
+    <div class="painel on" id="p-resumo">${painelResumo()}</div>
+    <div class="painel"    id="p-grade">${painelGrade()}</div>
+    <div class="painel"    id="p-sessoes">${painelSessoes()}</div>
+    <div class="painel"    id="p-tempo">${painelTempo()}</div>`;
+}
+
+function aba(k) {
+    ['resumo','grade','sessoes','tempo'].forEach(x => {
+        document.getElementById('p-' + x).classList.toggle('on', x === k);
+        document.querySelector('[data-p="' + x + '"]').setAttribute('aria-pressed', x === k);
+    });
+}
+
+function painelResumo() {
+    const outros = VINCULOS.filter(v => v.tipo !== 'titular');
+    return `<div class="card">
+        <div class="card-titulo"><h3>Cadastro</h3></div>
+        <div class="dl">
+            <div><span>Responsável legal</span><b>${PAC.responsavel_nome || '—'}</b></div>
+            <div><span>Telefone</span><b>${PAC.responsavel_telefone || '—'}</b></div>
+            <div><span>Convênio</span><b>${PAC.convenio || 'particular'}</b></div>
+            <div><span>Validade da guia</span><b style="${PAC.guia_validade && PAC.guia_validade < hojeISO() ? 'color:var(--st-bad)' : ''}">${brl(PAC.guia_validade)}</b></div>
+            <div><span>Sessões prescritas</span><b>${PAC.sessoes_semana_prescritas ? PAC.sessoes_semana_prescritas + 'x por semana' : '—'}</b></div>
+            <div><span>Médico encaminhador</span><b>${PAC.medico_encaminhador || '—'}</b></div>
+            <div><span>Escola</span><b>${PAC.escola || '—'}</b></div>
+            <div><span>Entrada na clínica</span><b>${brl(PAC.data_entrada)}</b></div>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-titulo"><h3>Equipe do paciente</h3></div>
+        ${VINCULOS.length ? `<div class="lista">
+            ${VINCULOS.map(v => `<div class="lista-item">
+                <span class="lista-ponto" style="background:${v.tipo === 'titular' ? 'var(--acao)' : 'var(--st-neutro)'}"></span>
+                <div><b>${v.profissional ? v.profissional.nome_completo : '—'}</b>
+                     <span class="soft"> · ${v.tipo}${v.data_inicio ? ' desde ' + brl(v.data_inicio) : ''}</span></div>
+            </div>`).join('')}</div>`
+        : '<div class="vazio-msg">Nenhum aplicador vinculado. O vínculo é criado junto com o horário na grade.</div>'}
+    </div>`;
+}
+
+function painelGrade() {
+    const ativos = GRADE.filter(g => g.ativo);
+    return `<div class="card">
+        <div class="card-titulo">
+            <h3>Horários fixos</h3>
+            ${PODE_EDITAR ? '<button class="btn btn-secundario" style="padding:7px 12px;font-size:12px" onclick="abrirGrade()">Adicionar horário</button>' : ''}
+        </div>
+        ${ativos.length ? `<table class="tabela">
+            <thead><tr><th>Dia</th><th>Horário</th><th>Duração</th><th>Aplicador</th><th>Sala</th><th>Vigência</th><th></th></tr></thead>
+            <tbody>${ativos.map(g => `<tr>
+                <td style="font-weight:700">${DIAS[g.dia_semana]}</td>
+                <td>${g.hora_inicio.slice(0,5)}</td>
+                <td class="muted">${g.duracao_min} min</td>
+                <td class="muted">${g.profissional ? g.profissional.nome_completo : '—'}</td>
+                <td class="muted">${g.sala || '—'}</td>
+                <td class="muted">${brl(g.vigencia_inicio)}${g.vigencia_fim ? ' até ' + brl(g.vigencia_fim) : ''}</td>
+                <td style="text-align:right">${PODE_EDITAR ? `<button class="btn btn-secundario" style="padding:5px 10px;font-size:11.5px"
+                    onclick="encerrarHorario('${g.id}','${DIAS[g.dia_semana]} ${g.hora_inicio.slice(0,5)}')">Encerrar</button>` : ''}</td>
+            </tr>`).join('')}</tbody></table>`
+        : '<div class="vazio-msg">Sem grade fixa. Enquanto não houver, nenhuma sessão será gerada para este paciente.</div>'}
+        <div class="card-legenda">Encerrar um horário não apaga o histórico: as sessões já lançadas permanecem.</div>
+    </div>`;
+}
+
+function painelSessoes() {
+    if (!SESSOES.length) return '<div class="card vazio-msg">Nenhuma sessão registrada.</div>';
+    return `<div class="card">
+        <div class="card-titulo"><h3>Últimas sessões</h3><span class="tiny soft">${SESSOES.length} registros</span></div>
+        <table class="tabela">
+            <thead><tr><th>Data</th><th>Hora</th><th>Aplicador</th><th>Status</th></tr></thead>
+            <tbody>${SESSOES.slice(0,30).map(s => {
+                const st = STATUS_SESSAO[s.status] || STATUS_SESSAO.agendada;
+                return `<tr>
+                    <td style="font-weight:700">${brl(s.data)}</td>
+                    <td class="muted">${s.hora_inicio.slice(0,5)}</td>
+                    <td class="muted">${s.profissional ? s.profissional.nome_completo : '—'}</td>
+                    <td><span class="chip ${st.c}">${st.r}</span></td>
+                </tr>`; }).join('')}</tbody>
+        </table>
+    </div>`;
+}
+
+function painelTempo() {
+    const eventos = [];
+    if (PAC.created_at)   eventos.push({ d: PAC.created_at.slice(0,10), t: 'Cadastro criado no sistema', c: 'var(--st-neutro)' });
+    if (PAC.data_entrada) eventos.push({ d: PAC.data_entrada, t: 'Entrada na clínica', c: 'var(--acao)' });
+    VINCULOS.forEach(v => { if (v.data_inicio) eventos.push({
+        d: v.data_inicio, c: 'var(--acao)',
+        t: 'Vínculo com ' + (v.profissional ? v.profissional.nome_completo : '—') + ' (' + v.tipo + ')' }); });
+
+    const primeira = SESSOES.filter(s => s.status === 'realizada').sort((a,b) => a.data < b.data ? -1 : 1)[0];
+    if (primeira) eventos.push({ d: primeira.data, t: 'Primeira sessão realizada', c: 'var(--st-ok)' });
+
+    SESSOES.filter(s => s.status.indexOf('falta') === 0).slice(0,5).forEach(s =>
+        eventos.push({ d: s.data, c: s.status === 'falta_injustificada' ? 'var(--st-bad)' : 'var(--st-warn)',
+                       t: s.status === 'falta_injustificada' ? 'Falta sem aviso' : 'Falta justificada' }));
+
+    eventos.sort((a,b) => a.d < b.d ? 1 : -1);
+
+    return `<div class="card">
+        <div class="card-titulo"><h3>Linha do tempo</h3></div>
+        ${eventos.length ? `<div class="tl">${eventos.map(e => `
+            <div class="tl-item" style="--cor:${e.c}"><b>${e.t}</b><span>${brl(e.d)}</span></div>`).join('')}</div>`
+        : '<div class="vazio-msg">Sem eventos ainda.</div>'}
+        <div class="card-legenda">Avaliações, PEI, evoluções e relatórios entram aqui conforme os módulos ficarem prontos.</div>
+    </div>`;
+}
+
+// ── editar cadastro ─────────────────────────────────────────────────────────
+function fechar(id) { document.getElementById(id).classList.remove('aberto');
+                      document.querySelectorAll('.aviso[id^=erro]').forEach(e => e.style.display = 'none'); }
+
+function abrirEditar() {
+    document.getElementById('eNome').value   = PAC.nome_completo || '';
+    document.getElementById('eNasc').value   = PAC.data_nascimento || '';
+    document.getElementById('eStatus').value = PAC.status || 'fila_espera';
+    document.getElementById('eResp').value   = PAC.responsavel_nome || '';
+    document.getElementById('eTel').value    = PAC.responsavel_telefone || '';
+    document.getElementById('eConv').value   = PAC.convenio || '';
+    document.getElementById('eSess').value   = PAC.sessoes_semana_prescritas || '';
+    document.getElementById('eGuia').value   = PAC.guia_validade || '';
+    document.getElementById('eMedico').value = PAC.medico_encaminhador || '';
+    document.getElementById('eEscola').value = PAC.escola || '';
+    document.getElementById('eSeg').value    = PAC.cartao_seguranca || '';
+    document.getElementById('modalEditar').classList.add('aberto');
+}
+
+document.getElementById('formEditar').addEventListener('submit', async function (ev) {
+    ev.preventDefault();
+    const bt = document.getElementById('btSalvarEditar'), erro = document.getElementById('erroEditar');
+    bt.disabled = true; bt.textContent = 'Salvando...'; erro.style.display = 'none';
+
+    const sess = document.getElementById('eSess').value;
+    const novo = {
+        nome_completo: document.getElementById('eNome').value.trim(),
+        data_nascimento: document.getElementById('eNasc').value,
+        status: document.getElementById('eStatus').value,
+        responsavel_nome: document.getElementById('eResp').value.trim() || null,
+        responsavel_telefone: document.getElementById('eTel').value.trim() || null,
+        convenio: document.getElementById('eConv').value.trim() || null,
+        sessoes_semana_prescritas: sess ? parseInt(sess,10) : null,
+        guia_validade: document.getElementById('eGuia').value || null,
+        medico_encaminhador: document.getElementById('eMedico').value.trim() || null,
+        escola: document.getElementById('eEscola').value.trim() || null,
+        cartao_seguranca: document.getElementById('eSeg').value.trim() || null
+    };
+
+    if (novo.status !== PAC.status) {
+        const ok = await EqConfirm.mostrar({
+            titulo: 'Mudar a situação do paciente?',
+            texto: 'De "' + (PAC.status||'').replace('_',' ') + '" para "' + novo.status.replace('_',' ') +
+                   '". Isso muda onde ele aparece nas listas e se entra na geração de sessões.',
+            confirmar: 'Mudar', tipo: 'alerta'
+        });
+        if (!ok) { bt.disabled = false; bt.textContent = 'Salvar'; return; }
+    }
+
+    try {
+        const mudou = EqAudit.camposAlterados(PAC, novo);
+        const { error } = await eqClient.from('pacientes').update(novo).eq('id', ID);
+        if (error) throw error;
+        await EqAudit.registrar('edicao', 'pacientes', ID, { campos: mudou });
+        fechar('modalEditar');
+        await carregar();
+    } catch (e) {
+        console.error(e);
+        erro.textContent = 'Não foi possível salvar: ' + (e.message || 'erro desconhecido');
+        erro.style.display = 'block';
+    } finally { bt.disabled = false; bt.textContent = 'Salvar'; }
+});
+
+// ── grade ───────────────────────────────────────────────────────────────────
+function abrirGrade() {
+    const sel = document.getElementById('gProf');
+    sel.innerHTML = PROFS.map(p => `<option value="${p.id}">${p.nome_completo}</option>`).join('');
+    const titular = VINCULOS.find(v => v.tipo === 'titular');
+    if (titular && titular.profissional) sel.value = titular.profissional.id;
+    document.getElementById('gInicio').value = hojeISO();
+    document.getElementById('avisoSala').style.display = 'none';
+    document.getElementById('modalGrade').classList.add('aberto');
+}
+
+async function checarSala() {
+    const aviso = document.getElementById('avisoSala');
+    try {
+        const { data, error } = await eqClient.rpc('salas_ocupadas', {
+            p_dia: parseInt(document.getElementById('gDia').value, 10),
+            p_hora: document.getElementById('gHora').value,
+            p_duracao: parseInt(document.getElementById('gDur').value || '60', 10)
+        });
+        if (error) throw error;
+        const ocupadas = (data || []).map(x => x.sala).filter(Boolean);
+        if (ocupadas.length) {
+            aviso.textContent = 'Neste horário já estão em uso: ' + [...new Set(ocupadas)].join(', ') + '.';
+            aviso.style.display = 'block';
+        } else {
+            aviso.style.display = 'none';
+        }
+    } catch (e) { console.warn('checagem de sala falhou', e); }
+}
+
+document.getElementById('formGrade').addEventListener('submit', async function (ev) {
+    ev.preventDefault();
+    const bt = document.getElementById('btSalvarGrade'), erro = document.getElementById('erroGrade');
+    bt.disabled = true; bt.textContent = 'Adicionando...'; erro.style.display = 'none';
+
+    const profId = document.getElementById('gProf').value;
+    const registro = {
+        paciente_id: ID,
+        profissional_id: profId,
+        dia_semana: parseInt(document.getElementById('gDia').value, 10),
+        hora_inicio: document.getElementById('gHora').value,
+        duracao_min: parseInt(document.getElementById('gDur').value || '60', 10),
+        sala: document.getElementById('gSala').value.trim() || null,
+        vigencia_inicio: document.getElementById('gInicio').value || hojeISO(),
+        vigencia_fim: document.getElementById('gFim').value || null
+    };
+
+    try {
+        const { data, error } = await eqClient.from('cronograma_terapeutico')
+            .insert(registro).select('id').single();
+        if (error) throw error;
+        await EqAudit.registrar('criacao', 'cronograma_terapeutico', data.id,
+            { paciente: PAC.nome_completo, dia: DIAS[registro.dia_semana], hora: registro.hora_inicio });
+
+        // primeiro horário com este aplicador cria o vínculo automaticamente
+        const jaVinculado = VINCULOS.some(v => v.profissional && v.profissional.id === profId);
+        if (!jaVinculado) {
+            const tipo = VINCULOS.length ? 'secundario' : 'titular';
+            const { error: e2 } = await eqClient.from('vinculos_paciente_aplicador')
+                .insert({ paciente_id: ID, profissional_id: profId, tipo: tipo });
+            if (e2) console.warn('vínculo não criado', e2);
+        }
+
+        fechar('modalGrade'); this.reset();
+        await carregar();
+        aba('grade');
+
+    } catch (e) {
+        console.error(e);
+        // o trigger do banco devolve a mensagem de conflito já pronta
+        erro.textContent = e.message || 'Não foi possível adicionar.';
+        erro.style.display = 'block';
+    } finally { bt.disabled = false; bt.textContent = 'Adicionar'; }
+});
+
+async function encerrarHorario(id, descricao) {
+    const ok = await EqConfirm.mostrar({
+        titulo: 'Encerrar este horário?',
+        texto: descricao + ' sai da grade e deixa de gerar novas sessões. As sessões já lançadas permanecem no histórico.',
+        confirmar: 'Encerrar', tipo: 'perigo'
+    });
+    if (!ok) return;
+    try {
+        const { error } = await eqClient.from('cronograma_terapeutico')
+            .update({ ativo: false, vigencia_fim: hojeISO() }).eq('id', id);
+        if (error) throw error;
+        await EqAudit.registrar('status', 'cronograma_terapeutico', id, { encerrado: descricao });
+        await carregar();
+        aba('grade');
+    } catch (e) {
+        console.error(e);
+        await EqConfirm.mostrar({ titulo:'Não foi possível encerrar', texto: e.message || 'Erro ao gravar.',
+            confirmar:'Entendi', cancelar:'Fechar', tipo:'alerta' });
+    }
+}
+</script>
+</body>
+</html>

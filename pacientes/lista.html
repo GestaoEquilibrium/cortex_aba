@@ -318,7 +318,7 @@ function pintar() {
 
 function cardDe(p) {
     return `
-    <button class="pc" onclick="abrirPasta('${p.id}','${p.nome_completo.replace(/'/g,"\\'")}')">
+    <button class="pc" onclick="abrirPasta('${p.id}')">
         <div class="pc-topo">
             <div class="ini" style="background:${p.cor}">${p.inicial}</div>
             <div style="flex:1; min-width:0">
@@ -343,7 +343,7 @@ function linhaDe(lista) {
         <thead><tr><th>Paciente</th><th>Idade</th><th>Aplicador</th><th>Freq.</th>
             <th>Próxima</th><th>Faltas</th><th>Última evolução</th><th>Status</th></tr></thead>
         <tbody>` + lista.map(p => `
-            <tr style="cursor:pointer" onclick="abrirPasta('${p.id}','${p.nome_completo.replace(/'/g,"\\'")}')">
+            <tr style="cursor:pointer" onclick="abrirPasta('${p.id}')">
                 <td><b>${p.nome_completo}</b>${p.cartao_seguranca ? ' <span class="aviso-seg" title="Cartão de segurança">⚠</span>' : ''}</td>
                 <td class="muted">${textoIdade(p.idade)}</td>
                 <td class="muted">${p.aplicador || '—'}</td>
@@ -355,13 +355,8 @@ function linhaDe(lista) {
             </tr>`).join('') + `</tbody></table></div>`;
 }
 
-function abrirPasta(id, nome) {
-    // Sprint 4: pacientes/pasta.html?id=...
-    EqConfirm.mostrar({
-        titulo: 'Pasta do paciente',
-        texto: 'A pasta de ' + nome + ' entra no próximo sprint: linha do tempo, PEI vigente, documentos, cartão de segurança e avaliações.',
-        confirmar: 'Fechar', cancelar: 'Fechar', tipo: 'padrao'
-    });
+function abrirPasta(id) {
+    window.location.href = 'pasta.html?id=' + encodeURIComponent(id);
 }
 
 // ── cadastro ────────────────────────────────────────────────────────────────

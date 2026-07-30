@@ -4,28 +4,71 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>EQ ABA — Pacientes</title>
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="../favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="../apple-touch-icon.png">
+<link rel="manifest" href="../site.webmanifest">
+<meta name="theme-color" content="#0F766E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../styles/base.css?v=2">
 <link rel="stylesheet" href="../styles/components.css?v=2">
 <style>
-.modal-fundo { position:fixed; inset:0; background:rgba(12,27,42,.55); backdrop-filter:blur(3px);
-               display:none; align-items:center; justify-content:center; padding:20px; z-index:80; }
-.modal-fundo.aberto { display:flex; }
-.modal { background:var(--surface); border-radius:var(--radius-card); padding:22px;
-         width:100%; max-width:520px; box-shadow:var(--shadow-lg); max-height:90vh; overflow:auto; }
-.modal h2 { margin-bottom:14px; }
-.campo { margin-bottom:11px; }
-.campo label { display:block; font-size:11.5px; font-weight:700; color:var(--ink-muted); margin-bottom:4px; }
-.campo input, .campo select { width:100%; padding:9px 11px; font-size:13px; font-family:inherit;
-    border:1px solid var(--line-strong); border-radius:8px; background:var(--surface-alt); color:var(--ink); }
-.campo-2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+/* ── busca e filtros ─────────────────────────────────────────────────────── */
+.barra-busca { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:14px; }
+.campo-busca { flex:1; min-width:230px; position:relative; }
+.campo-busca input {
+    width:100%; padding:10px 12px 10px 34px; font:inherit; font-size:13px; color:var(--ink);
+    border:1px solid var(--line); border-radius:10px; background:var(--surface);
+}
+.campo-busca input:focus { outline:2px solid var(--acao); border-color:transparent; }
+.campo-busca svg { position:absolute; left:11px; top:11px; color:var(--ink-soft); }
+.filtro {
+    border:1px solid var(--line); background:var(--surface); color:var(--ink-muted);
+    border-radius:999px; padding:7px 13px; font:inherit; font-size:11.5px; font-weight:700; cursor:pointer;
+    transition:var(--transition-base);
+}
+.filtro:hover { border-color:var(--acao); }
+.filtro[aria-pressed="true"] { background:var(--acao); color:#fff; border-color:transparent; }
+.alternar { display:flex; border:1px solid var(--line); border-radius:9px; overflow:hidden; background:var(--surface); }
+.alternar button {
+    border:none; background:transparent; padding:9px 13px; font:inherit; font-size:12px;
+    font-weight:700; color:var(--ink-muted); cursor:pointer;
+}
+.alternar button[aria-pressed="true"] { background:var(--acao); color:#fff; }
+
+/* ── cards ───────────────────────────────────────────────────────────────── */
+.cards { display:grid; grid-template-columns:repeat(auto-fill, minmax(250px,1fr)); gap:12px; }
+.pc {
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-card);
+    padding:14px; cursor:pointer; transition:var(--transition-base); text-align:left; font:inherit; color:inherit;
+    display:block; width:100%;
+}
+.pc:hover { transform:translateY(-2px); box-shadow:var(--shadow-md); border-color:var(--acao); }
+.pc:focus-visible { outline:2px solid var(--acao); outline-offset:2px; }
+.pc-topo { display:flex; gap:10px; align-items:flex-start; margin-bottom:10px; }
+.ini {
+    width:40px; height:40px; border-radius:12px; flex:0 0 auto; color:#fff;
+    display:flex; align-items:center; justify-content:center; font-weight:800; font-size:15px;
+}
+.pc-nome { font-size:14.5px; font-weight:800; line-height:1.2; }
+.pc-sub  { font-size:11.5px; color:var(--ink-muted); }
+.pc-linha { display:flex; justify-content:space-between; gap:8px; font-size:11.5px; color:var(--ink-muted); margin-top:5px; }
+.pc-linha b { color:var(--ink); font-weight:700; }
+.mini-barra { height:5px; background:var(--line); border-radius:3px; margin-top:8px; overflow:hidden; }
+.mini-barra i { display:block; height:5px; border-radius:3px; background:var(--st-ok); }
+.pc-rodape { display:flex; gap:5px; flex-wrap:wrap; margin-top:11px; padding-top:10px; border-top:1px solid var(--line); }
+.aviso-seg { color:var(--st-warn); font-size:15px; line-height:1; }
+.vazio-msg { padding:26px; text-align:center; color:var(--ink-muted); font-size:13px; }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../config.js?v=4"></script>
 <script src="../shared/supabase_client.js?v=2"></script>
 <script src="../shared/tema.js?v=2"></script>
+<script src="../shared/confirm_modal.js?v=3"></script>
+<script src="../shared/audit.js?v=5"></script>
 <script src="../shared/auth_guard.js?v=4"></script>
 </head>
 <body>
@@ -43,71 +86,52 @@
             <button class="btn" id="btNovo" style="display:none" onclick="abrirModal()">Novo paciente</button>
         </div>
 
-        <div class="card">
-            <table class="tabela">
-                <thead>
-                    <tr><th>Paciente</th><th>Idade</th><th>Aplicador titular</th>
-                        <th>Sessões/semana</th><th>Convênio</th><th>Status</th></tr>
-                </thead>
-                <tbody id="tb"><tr><td colspan="6" class="muted">carregando…</td></tr></tbody>
-            </table>
+        <div class="barra-busca">
+            <div class="campo-busca">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+                    <circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+                <input id="busca" placeholder="Buscar por nome do paciente ou do responsável..." oninput="pintar()">
+            </div>
+            <button class="filtro" data-f="ativo"  aria-pressed="true"  onclick="alternarFiltro(this)">Ativos</button>
+            <button class="filtro" data-f="meus"   aria-pressed="false" onclick="alternarFiltro(this)">Meus pacientes</button>
+            <button class="filtro" data-f="faltas" aria-pressed="false" onclick="alternarFiltro(this)">Com faltas</button>
+            <button class="filtro" data-f="fila"   aria-pressed="false" onclick="alternarFiltro(this)">Fila de espera</button>
+            <div class="alternar">
+                <button id="vCards" aria-pressed="true"  onclick="trocarVisao('cards')">Cards</button>
+                <button id="vLista" aria-pressed="false" onclick="trocarVisao('lista')">Lista</button>
+            </div>
         </div>
+
+        <div id="area"><div class="muted small">carregando…</div></div>
     </main>
 </div>
 
-<!-- ── cadastro básico ─────────────────────────────────────────────────────── -->
-<div class="modal-fundo" id="modal" onclick="if(event.target===this) fecharModal()">
-    <div class="modal">
-        <h2>Novo paciente</h2>
+<!-- ── cadastro ────────────────────────────────────────────────────────────── -->
+<div class="modal-fundo" id="modal" onclick="if(event.target===this) fecharModal()"
+     style="position:fixed;inset:0;background:rgba(12,27,42,.5);backdrop-filter:blur(3px);
+            display:none;align-items:center;justify-content:center;padding:20px;z-index:80">
+    <div style="background:var(--surface);border-radius:var(--radius-card);padding:22px;
+                width:100%;max-width:520px;box-shadow:var(--shadow-lg);max-height:90vh;overflow:auto">
+        <h2 style="margin-bottom:14px">Novo paciente</h2>
         <form id="formPaciente">
-            <div class="campo">
-                <label for="nome">Nome completo *</label>
-                <input id="nome" required>
+            <div class="campo"><label for="nome">Nome completo *</label><input id="nome" required></div>
+            <div class="campo-2">
+                <div class="campo"><label for="nascimento">Data de nascimento *</label><input id="nascimento" type="date" required></div>
+                <div class="campo"><label for="status">Situação</label>
+                    <select id="status"><option value="fila_espera">Fila de espera</option><option value="ativo">Ativo</option></select></div>
+            </div>
+            <div class="campo"><label for="responsavel">Responsável legal</label><input id="responsavel"></div>
+            <div class="campo-2">
+                <div class="campo"><label for="telefone">Telefone do responsável</label><input id="telefone"></div>
+                <div class="campo"><label for="convenio">Convênio</label><input id="convenio" placeholder="particular, se não houver"></div>
             </div>
             <div class="campo-2">
-                <div class="campo">
-                    <label for="nascimento">Data de nascimento *</label>
-                    <input id="nascimento" type="date" required>
-                </div>
-                <div class="campo">
-                    <label for="status">Situação</label>
-                    <select id="status">
-                        <option value="fila_espera">Fila de espera</option>
-                        <option value="ativo">Ativo</option>
-                    </select>
-                </div>
+                <div class="campo"><label for="sessoes">Sessões por semana</label><input id="sessoes" type="number" min="0" max="20"></div>
+                <div class="campo"><label for="medico">Médico encaminhador</label><input id="medico"></div>
             </div>
-            <div class="campo">
-                <label for="responsavel">Responsável legal</label>
-                <input id="responsavel">
-            </div>
-            <div class="campo-2">
-                <div class="campo">
-                    <label for="telefone">Telefone do responsável</label>
-                    <input id="telefone">
-                </div>
-                <div class="campo">
-                    <label for="convenio">Convênio</label>
-                    <input id="convenio" placeholder="particular, se não houver">
-                </div>
-            </div>
-            <div class="campo-2">
-                <div class="campo">
-                    <label for="sessoes">Sessões por semana (prescritas)</label>
-                    <input id="sessoes" type="number" min="0" max="20">
-                </div>
-                <div class="campo">
-                    <label for="medico">Médico encaminhador</label>
-                    <input id="medico">
-                </div>
-            </div>
-            <div class="campo">
-                <label for="seguranca">Cartão de segurança (alergias, gatilhos, manejo)</label>
-                <input id="seguranca" placeholder="visível a quem assumir o atendimento">
-            </div>
-
-            <div id="erroForm" class="aviso" style="display:none; border-left-color:var(--st-bad); color:var(--st-bad); margin-bottom:10px"></div>
-
+            <div class="campo"><label for="seguranca">Cartão de segurança</label>
+                <input id="seguranca" placeholder="alergias, gatilhos, manejo — visível a quem assumir"></div>
+            <div class="aviso" id="erroForm" style="display:none;border-left-color:var(--st-bad);color:var(--st-bad);margin-bottom:10px"></div>
             <div class="grid-2" style="margin-top:6px">
                 <button type="button" class="btn btn-secundario btn-bloco" onclick="fecharModal()">Cancelar</button>
                 <button type="submit" class="btn btn-bloco" id="btSalvar">Salvar</button>
@@ -115,76 +139,240 @@
         </form>
     </div>
 </div>
+<style>
+.campo { margin-bottom:11px; }
+.campo label { display:block; font-size:11.5px; font-weight:700; color:var(--ink-muted); margin-bottom:4px; }
+.campo input, .campo select { width:100%; padding:9px 11px; font-size:13px; font-family:inherit;
+    border:1px solid var(--line-strong); border-radius:8px; background:var(--surface-alt); color:var(--ink); }
+.campo-2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+</style>
 
 <script src="../shared/sidebar.js?v=2"></script>
 <script>
-let PODE_CADASTRAR = false;
+'use strict';
+
+let PACIENTES = [];
+let VISAO = 'cards';
+let MEU_ID = null;
+const CORES = ['#2563EB','#7C3AED','#06B6D4','#16A34A','#F59E0B','#EC4899'];
 
 document.addEventListener('eq:pronto', async function (ev) {
     EqSidebar.render('pacientes');
-    PODE_CADASTRAR = ['admin_direcao','coordenador_aba','recepcao'].includes(ev.detail.perfil);
-    if (PODE_CADASTRAR) document.getElementById('btNovo').style.display = '';
+    MEU_ID = ev.detail.profissional.id;
+
+    if (['admin_direcao','coordenador_aba','recepcao'].includes(ev.detail.perfil)) {
+        document.getElementById('btNovo').style.display = '';
+    }
+    // aplicador tem poucos pacientes e quer os dele: já entra filtrado
+    if (['aplicador','aplicador_itinerante','estagiario_aba'].includes(ev.detail.perfil)) {
+        document.querySelector('[data-f="meus"]').setAttribute('aria-pressed','true');
+    }
     await carregar();
 });
 
-function idade(nascimento) {
-    if (!nascimento) return '—';
-    // parse manual: 'new Date("2019-05-10")' vira UTC e pode voltar um dia no fuso BRT
-    const [a, m, d] = nascimento.split('-').map(Number);
+// ── idade sem armadilha de fuso ─────────────────────────────────────────────
+function idadeAnos(nascimento) {
+    if (!nascimento) return null;
+    const [a,m,d] = nascimento.split('-').map(Number);
     const hoje = new Date();
     let anos = hoje.getFullYear() - a;
-    const jaFez = (hoje.getMonth() + 1 > m) || (hoje.getMonth() + 1 === m && hoje.getDate() >= d);
+    const jaFez = (hoje.getMonth()+1 > m) || (hoje.getMonth()+1 === m && hoje.getDate() >= d);
     if (!jaFez) anos--;
-    return anos + (anos === 1 ? ' ano' : ' anos');
+    return anos;
+}
+function textoIdade(n) { return n === null ? '—' : n + (n === 1 ? ' ano' : ' anos'); }
+
+function diasDesde(iso) {
+    if (!iso) return null;
+    const [a,m,d] = iso.slice(0,10).split('-').map(Number);
+    const then = new Date(a, m-1, d), hoje = new Date();
+    return Math.round((new Date(hoje.getFullYear(),hoje.getMonth(),hoje.getDate()) - then) / 86400000);
+}
+function textoDias(n) {
+    if (n === null) return 'sem registro';
+    if (n === 0) return 'hoje';
+    if (n === 1) return 'ontem';
+    return 'há ' + n + ' dias';
 }
 
+// ── carga ───────────────────────────────────────────────────────────────────
 async function carregar() {
-    const tb = document.getElementById('tb');
+    const area = document.getElementById('area');
     try {
-        const { data, error } = await eqClient
-            .from('pacientes')
-            .select(`id, nome_completo, data_nascimento, status, convenio, sessoes_semana_prescritas,
-                     vinculos:vinculos_paciente_aplicador(tipo, ativo, profissional:profissionais(nome_completo))`)
-            .order('nome_completo');
-        if (error) throw error;
+        const hoje = (() => { const d=new Date(), p=n=>String(n).padStart(2,'0');
+            return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate()); })();
+        const mesInicio = hoje.slice(0,8) + '01';
 
-        const ps = data || [];
-        document.getElementById('contagem').textContent =
-            ps.filter(p => p.status === 'ativo').length + ' ativos · ' +
-            ps.filter(p => p.status === 'fila_espera').length + ' na fila de espera';
+        const [pac, vinc, sess] = await Promise.all([
+            eqClient.from('pacientes')
+                .select('id, nome_completo, data_nascimento, status, convenio, responsavel_nome, sessoes_semana_prescritas, cartao_seguranca')
+                .order('nome_completo'),
+            eqClient.from('vinculos_paciente_aplicador')
+                .select('paciente_id, profissional_id, tipo, ativo, profissional:profissionais(nome_completo)')
+                .eq('ativo', true),
+            eqClient.from('sessoes')
+                .select('paciente_id, data, hora_inicio, status')
+                .gte('data', mesInicio)
+        ]);
+        if (pac.error) throw pac.error;
 
-        const chipDe = st => ({ ativo:'chip-ok', fila_espera:'chip-neutro', suspenso:'chip-alerta',
-                                alta:'chip-neutro', desligado:'chip-neutro' }[st] || 'chip-neutro');
+        const vincs = vinc.data || [];
+        const sesss = sess.data || [];
 
-        tb.innerHTML = ps.length ? ps.map(p => {
-            const t = (p.vinculos || []).find(v => v.ativo && v.tipo === 'titular');
-            return `<tr>
-                <td style="font-weight:700">${p.nome_completo}</td>
-                <td class="muted">${idade(p.data_nascimento)}</td>
-                <td class="muted">${t && t.profissional ? t.profissional.nome_completo : '—'}</td>
-                <td class="muted">${p.sessoes_semana_prescritas ?? '—'}</td>
-                <td class="muted">${p.convenio || '—'}</td>
-                <td><span class="chip ${chipDe(p.status)}">${(p.status || '').replace('_',' ')}</span></td>
-            </tr>`;
-        }).join('')
-        : '<tr><td colspan="6" class="muted">Nenhum paciente cadastrado ainda.</td></tr>';
+        PACIENTES = (pac.data || []).map((p, i) => {
+            const titular = vincs.find(v => v.paciente_id === p.id && v.tipo === 'titular');
+            const minhas  = vincs.some(v => v.paciente_id === p.id && v.profissional_id === MEU_ID);
+            const doPac   = sesss.filter(s => s.paciente_id === p.id);
+            const faltas  = doPac.filter(s => s.status && s.status.startsWith('falta')).length;
+            const feitas  = doPac.filter(s => s.status === 'realizada')
+                                 .sort((a,b) => a.data < b.data ? 1 : -1);
+            const futuras = doPac.filter(s => s.data >= hoje && s.status === 'agendada')
+                                 .sort((a,b) => (a.data + a.hora_inicio) > (b.data + b.hora_inicio) ? 1 : -1);
+            return {
+                ...p,
+                cor: CORES[i % CORES.length],
+                inicial: (p.nome_completo || '?').trim()[0].toUpperCase(),
+                idade: idadeAnos(p.data_nascimento),
+                aplicador: titular && titular.profissional ? titular.profissional.nome_completo : null,
+                meu: minhas,
+                faltas: faltas,
+                proxima: futuras[0] || null,
+                ultimaSessao: feitas[0] ? diasDesde(feitas[0].data) : null
+            };
+        });
+
+        pintar();
 
     } catch (e) {
         console.error(e);
-        tb.innerHTML = '<tr><td colspan="6" style="color:var(--st-bad)">Erro ao consultar o banco. Veja o console.</td></tr>';
+        area.innerHTML = '<div class="vazio-msg" style="color:var(--st-bad)">Erro ao carregar. Veja o console.</div>';
     }
 }
 
-function abrirModal()  { document.getElementById('modal').classList.add('aberto'); document.getElementById('nome').focus(); }
-function fecharModal() { document.getElementById('modal').classList.remove('aberto');
+// ── filtros e busca ─────────────────────────────────────────────────────────
+function alternarFiltro(bt) {
+    bt.setAttribute('aria-pressed', bt.getAttribute('aria-pressed') !== 'true');
+    // ativos e fila são excludentes
+    if (bt.dataset.f === 'ativo' && bt.getAttribute('aria-pressed') === 'true')
+        document.querySelector('[data-f="fila"]').setAttribute('aria-pressed','false');
+    if (bt.dataset.f === 'fila' && bt.getAttribute('aria-pressed') === 'true')
+        document.querySelector('[data-f="ativo"]').setAttribute('aria-pressed','false');
+    pintar();
+}
+function ligado(f) { return document.querySelector('[data-f="'+f+'"]').getAttribute('aria-pressed') === 'true'; }
+
+function filtrados() {
+    const termo = (document.getElementById('busca').value || '').trim().toLowerCase();
+    return PACIENTES.filter(p => {
+        if (ligado('ativo')  && p.status !== 'ativo') return false;
+        if (ligado('fila')   && p.status !== 'fila_espera') return false;
+        if (ligado('meus')   && !p.meu) return false;
+        if (ligado('faltas') && !p.faltas) return false;
+        if (termo) {
+            const alvo = (p.nome_completo + ' ' + (p.responsavel_nome || '')).toLowerCase();
+            if (!alvo.includes(termo)) return false;
+        }
+        return true;
+    });
+}
+
+function trocarVisao(v) {
+    VISAO = v;
+    document.getElementById('vCards').setAttribute('aria-pressed', v === 'cards');
+    document.getElementById('vLista').setAttribute('aria-pressed', v === 'lista');
+    pintar();
+}
+
+// ── desenho ─────────────────────────────────────────────────────────────────
+function chipStatus(p) {
+    if (p.status === 'ativo')       return '<span class="chip chip-ok">ativo</span>';
+    if (p.status === 'fila_espera') return '<span class="chip chip-neutro">fila de espera</span>';
+    if (p.status === 'suspenso')    return '<span class="chip chip-alerta">suspenso</span>';
+    return '<span class="chip chip-neutro">' + (p.status || '').replace('_',' ') + '</span>';
+}
+function textoProxima(p) {
+    if (!p.proxima) return '—';
+    const [a,m,d] = p.proxima.data.split('-').map(Number);
+    const dif = diasDesde(p.proxima.data);
+    const hora = (p.proxima.hora_inicio || '').slice(0,5);
+    if (dif === 0)  return 'hoje ' + hora;
+    if (dif === -1) return 'amanhã ' + hora;
+    return String(d).padStart(2,'0') + '/' + String(m).padStart(2,'0') + ' ' + hora;
+}
+
+function pintar() {
+    const lista = filtrados();
+    const area = document.getElementById('area');
+    document.getElementById('contagem').textContent =
+        lista.length + ' de ' + PACIENTES.length + ' pacientes';
+
+    if (!lista.length) {
+        area.innerHTML = '<div class="card"><div class="vazio-msg">Nenhum paciente com esses filtros.</div></div>';
+        return;
+    }
+
+    area.innerHTML = VISAO === 'cards'
+        ? '<div class="cards">' + lista.map(cardDe).join('') + '</div>'
+        : linhaDe(lista);
+}
+
+function cardDe(p) {
+    return `
+    <button class="pc" onclick="abrirPasta('${p.id}','${p.nome_completo.replace(/'/g,"\\'")}')">
+        <div class="pc-topo">
+            <div class="ini" style="background:${p.cor}">${p.inicial}</div>
+            <div style="flex:1; min-width:0">
+                <div class="pc-nome">${p.nome_completo}</div>
+                <div class="pc-sub">${textoIdade(p.idade)}${p.aplicador ? ' · ' + p.aplicador : ''}</div>
+            </div>
+            ${p.cartao_seguranca ? '<span class="aviso-seg" title="Tem cartão de segurança">⚠</span>' : ''}
+        </div>
+        <div class="pc-linha"><span>Próxima sessão</span><b>${textoProxima(p)}</b></div>
+        <div class="pc-linha"><span>Frequência</span><b>${p.sessoes_semana_prescritas ? p.sessoes_semana_prescritas + 'x/semana' : '—'}</b></div>
+        <div class="pc-linha"><span>Última evolução</span><b>${textoDias(p.ultimaSessao)}</b></div>
+        <div class="pc-rodape">
+            ${chipStatus(p)}
+            ${p.faltas ? `<span class="chip ${p.faltas >= 3 ? 'chip-erro' : 'chip-alerta'}">${p.faltas} falta${p.faltas > 1 ? 's' : ''} no mês</span>` : ''}
+            ${p.convenio ? `<span class="chip chip-neutro">${p.convenio}</span>` : ''}
+        </div>
+    </button>`;
+}
+
+function linhaDe(lista) {
+    return `<div class="card"><table class="tabela">
+        <thead><tr><th>Paciente</th><th>Idade</th><th>Aplicador</th><th>Freq.</th>
+            <th>Próxima</th><th>Faltas</th><th>Última evolução</th><th>Status</th></tr></thead>
+        <tbody>` + lista.map(p => `
+            <tr style="cursor:pointer" onclick="abrirPasta('${p.id}','${p.nome_completo.replace(/'/g,"\\'")}')">
+                <td><b>${p.nome_completo}</b>${p.cartao_seguranca ? ' <span class="aviso-seg" title="Cartão de segurança">⚠</span>' : ''}</td>
+                <td class="muted">${textoIdade(p.idade)}</td>
+                <td class="muted">${p.aplicador || '—'}</td>
+                <td class="muted">${p.sessoes_semana_prescritas ? p.sessoes_semana_prescritas + 'x' : '—'}</td>
+                <td class="muted">${textoProxima(p)}</td>
+                <td style="font-weight:700;color:${p.faltas >= 3 ? 'var(--st-bad)' : p.faltas ? 'var(--st-warn)' : 'var(--ink-muted)'}">${p.faltas}</td>
+                <td class="muted">${textoDias(p.ultimaSessao)}</td>
+                <td>${chipStatus(p)}</td>
+            </tr>`).join('') + `</tbody></table></div>`;
+}
+
+function abrirPasta(id, nome) {
+    // Sprint 4: pacientes/pasta.html?id=...
+    EqConfirm.mostrar({
+        titulo: 'Pasta do paciente',
+        texto: 'A pasta de ' + nome + ' entra no próximo sprint: linha do tempo, PEI vigente, documentos, cartão de segurança e avaliações.',
+        confirmar: 'Fechar', cancelar: 'Fechar', tipo: 'padrao'
+    });
+}
+
+// ── cadastro ────────────────────────────────────────────────────────────────
+function abrirModal()  { document.getElementById('modal').style.display = 'flex'; document.getElementById('nome').focus(); }
+function fecharModal() { document.getElementById('modal').style.display = 'none';
                          document.getElementById('erroForm').style.display = 'none'; }
 
 document.getElementById('formPaciente').addEventListener('submit', async function (ev) {
     ev.preventDefault();
-    const bt = document.getElementById('btSalvar');
-    const erro = document.getElementById('erroForm');
-    bt.disabled = true; bt.textContent = 'Salvando...';
-    erro.style.display = 'none';
+    const bt = document.getElementById('btSalvar'), erro = document.getElementById('erroForm');
+    bt.disabled = true; bt.textContent = 'Salvando...'; erro.style.display = 'none';
 
     const sessoes = document.getElementById('sessoes').value;
     const registro = {
@@ -197,22 +385,24 @@ document.getElementById('formPaciente').addEventListener('submit', async functio
         sessoes_semana_prescritas: sessoes ? parseInt(sessoes, 10) : null,
         medico_encaminhador: document.getElementById('medico').value.trim() || null,
         cartao_seguranca: document.getElementById('seguranca').value.trim() || null,
-        equipe_id: (window.EqSessao && EqSessao.equipeId) || null
+        equipe_id: (window.EqSessao && EqSessao.equipeId) || null,
+        data_entrada: document.getElementById('status').value === 'ativo'
+            ? (() => { const d=new Date(), p=n=>String(n).padStart(2,'0');
+                       return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate()); })()
+            : null
     };
 
     try {
-        const { error } = await eqClient.from('pacientes').insert(registro);
+        const { data, error } = await eqClient.from('pacientes').insert(registro).select('id').single();
         if (error) throw error;
-        fecharModal();
-        document.getElementById('formPaciente').reset();
+        await EqAudit.registrar('criacao', 'pacientes', data.id, { nome: registro.nome_completo });
+        fecharModal(); this.reset();
         await carregar();
     } catch (e) {
         console.error(e);
         erro.textContent = 'Não foi possível salvar: ' + (e.message || 'erro desconhecido');
         erro.style.display = 'block';
-    } finally {
-        bt.disabled = false; bt.textContent = 'Salvar';
-    }
+    } finally { bt.disabled = false; bt.textContent = 'Salvar'; }
 });
 </script>
 </body>

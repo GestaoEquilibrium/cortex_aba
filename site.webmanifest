@@ -1,0 +1,14 @@
+{
+    "name": "EQ ABA — Equilibrium Med Center",
+    "short_name": "EQ ABA",
+    "description": "Sistema de terapia ABA",
+    "icons": [
+        { "src": "favicon.svg",  "type": "image/svg+xml", "sizes": "any" },
+        { "src": "icon-192.png", "type": "image/png", "sizes": "192x192" },
+        { "src": "icon-512.png", "type": "image/png", "sizes": "512x512" }
+    ],
+    "theme_color": "#0F766E",
+    "background_color": "#F1F6F4",
+    "display": "standalone",
+    "start_url": "./index.html"
+}

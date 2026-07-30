@@ -4,6 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>EQ ABA — Agenda</title>
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="../favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="../apple-touch-icon.png">
+<link rel="manifest" href="../site.webmanifest">
+<meta name="theme-color" content="#0F766E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -59,6 +65,7 @@
 <script src="../shared/supabase_client.js?v=2"></script>
 <script src="../shared/tema.js?v=2"></script>
 <script src="../shared/confirm_modal.js?v=3"></script>
+<script src="../shared/audit.js?v=5"></script>
 <script src="../shared/auth_guard.js?v=4"></script>
 </head>
 <body>
@@ -234,6 +241,7 @@ async function marcar(id, status, paciente) {
     try {
         const { error } = await eqClient.from('sessoes').update({ status }).eq('id', id);
         if (error) throw error;
+        await EqAudit.registrar('status', 'sessoes', id, { novo_status: status, paciente: paciente });
         await carregarDia();
     } catch (e) {
         console.error(e);
@@ -262,6 +270,7 @@ async function gerarSessoes() {
         // rpc devolve PostgrestBuilder, não Promise — sempre try/catch, nunca .catch()
         const { data, error } = await eqClient.rpc('gerar_sessoes', { p_data: iso });
         if (error) throw error;
+        await EqAudit.registrar('criacao', 'sessoes', null, { data: iso, quantidade: data });
         await carregarDia();
         await EqConfirm.mostrar({
             titulo: data > 0 ? `${data} sessões criadas` : 'Nada a criar',

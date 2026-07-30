@@ -1,0 +1,14 @@
+{
+    "name": "EQ ABA — Portal do responsável",
+    "short_name": "EQ ABA",
+    "description": "Acompanhamento da terapia",
+    "icons": [
+        { "src": "favicon.svg",  "type": "image/svg+xml", "sizes": "any" },
+        { "src": "icon-192.png", "type": "image/png", "sizes": "192x192" },
+        { "src": "icon-512.png", "type": "image/png", "sizes": "512x512" }
+    ],
+    "theme_color": "#7C3AED",
+    "background_color": "#F8F6FF",
+    "display": "standalone",
+    "start_url": "./index.html"
+}

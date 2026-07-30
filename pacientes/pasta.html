@@ -174,6 +174,87 @@
     </div>
 </div>
 
+
+<!-- ── adicionar objetivo ao PEI ────────────────────────────────────────────── -->
+<div class="modal-fundo" id="modalAdicionar" onclick="if(event.target===this) fechar('modalAdicionar')">
+    <div class="modal">
+        <h2 style="margin-bottom:4px">Adicionar objetivo</h2>
+        <p class="tiny soft" style="margin-bottom:14px">Escolha da biblioteca. Os valores vêm preenchidos e podem ser ajustados para esta criança.</p>
+        <form id="formAdicionar">
+            <div class="campo"><label for="aPrograma">Programa *</label>
+                <select id="aPrograma" required onchange="sincronizarPadroes()"></select></div>
+            <div class="campo-2">
+                <div class="campo"><label for="aAplicador">Aplicador responsável</label><select id="aAplicador"></select></div>
+                <div class="campo"><label for="aPrioridade">Prioridade</label>
+                    <select id="aPrioridade">
+                        <option value="1">1 — máxima</option><option value="2">2</option>
+                        <option value="3" selected>3 — média</option><option value="4">4</option>
+                        <option value="5">5 — baixa</option>
+                    </select></div>
+            </div>
+            <div class="campo-2">
+                <div class="campo"><label for="aTentativas">Tentativas por sessão</label>
+                    <input id="aTentativas" type="number" min="1" max="100" value="10"></div>
+                <div class="campo"><label for="aPct">Critério (% de acerto)</label>
+                    <input id="aPct" type="number" min="1" max="100" value="80"></div>
+            </div>
+            <div class="campo"><label for="aSessoes">Em quantas sessões seguidas</label>
+                <input id="aSessoes" type="number" min="1" max="20" value="3"></div>
+            <div class="campo"><label for="aAlvos">Alvos (separados por vírgula)</label>
+                <input id="aAlvos" placeholder="banana, maçã, pão, leite">
+                <div class="tiny soft" style="margin-top:3px">Opcional. Alvos são os itens específicos que serão trabalhados dentro do objetivo.</div>
+            </div>
+            <div class="aviso" id="erroAdicionar" style="display:none;border-left-color:var(--st-bad);color:var(--st-bad);margin-bottom:10px"></div>
+            <div class="grid-2">
+                <button type="button" class="btn btn-secundario btn-bloco" onclick="fechar('modalAdicionar')">Cancelar</button>
+                <button type="submit" class="btn btn-bloco" id="btAdicionar">Adicionar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ── ajustar objetivo ─────────────────────────────────────────────────────── -->
+<div class="modal-fundo" id="modalAjuste" onclick="if(event.target===this) fechar('modalAjuste')">
+    <div class="modal">
+        <h2 id="tituloAjuste" style="margin-bottom:14px">Objetivo</h2>
+        <form id="formAjuste">
+            <div class="campo"><label for="jAplicador">Aplicador responsável</label><select id="jAplicador"></select></div>
+            <div class="campo-2">
+                <div class="campo"><label for="jTentativas">Tentativas por sessão</label>
+                    <input id="jTentativas" type="number" min="1" max="100"></div>
+                <div class="campo"><label for="jStatus">Situação</label>
+                    <select id="jStatus">
+                        <option value="em_ensino">Em ensino</option>
+                        <option value="em_manutencao">Em manutenção</option>
+                        <option value="dominado">Dominado</option>
+                        <option value="suspenso">Suspenso</option>
+                        <option value="arquivado">Arquivado</option>
+                    </select></div>
+            </div>
+            <div class="campo-2">
+                <div class="campo"><label for="jPct">Critério (%)</label><input id="jPct" type="number" min="1" max="100"></div>
+                <div class="campo"><label for="jSessoes">Sessões seguidas</label><input id="jSessoes" type="number" min="1" max="20"></div>
+            </div>
+            <div class="campo">
+                <label>Generalização demonstrada</label>
+                <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;margin-top:4px">
+                    <label style="display:flex;gap:6px;align-items:center;font-weight:500">
+                        <input type="checkbox" id="jPessoa" style="width:auto"> outra pessoa</label>
+                    <label style="display:flex;gap:6px;align-items:center;font-weight:500">
+                        <input type="checkbox" id="jAmbiente" style="width:auto"> outro ambiente</label>
+                    <label style="display:flex;gap:6px;align-items:center;font-weight:500">
+                        <input type="checkbox" id="jMaterial" style="width:auto"> outro material</label>
+                </div>
+            </div>
+            <div class="aviso" id="erroAjuste" style="display:none;border-left-color:var(--st-bad);color:var(--st-bad);margin-bottom:10px"></div>
+            <div class="grid-2">
+                <button type="button" class="btn btn-secundario btn-bloco" onclick="fechar('modalAjuste')">Cancelar</button>
+                <button type="submit" class="btn btn-bloco" id="btAjuste">Salvar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script src="../shared/sidebar.js?v=7"></script>
 <script>
 'use strict';
@@ -190,7 +271,7 @@ const STATUS_SESSAO = {
 
 const ID = new URLSearchParams(location.search).get('id');
 let PAC = null, GRADE = [], SESSOES = [], VINCULOS = [], PROFS = [], PODE_EDITAR = false;
-let FOTO = null;
+let FOTO = null, PEI = null, PEI_PROGS = [], BIBLIOTECA = [];
 
 document.addEventListener('eq:pronto', async function (ev) {
     EqSidebar.render('pacientes');
@@ -225,7 +306,7 @@ function idadeTexto(nasc) {
 async function carregar() {
     try {
         const mesInicio = hojeISO().slice(0,8) + '01';
-        const [rp, rg, rs, rv, rpr] = await Promise.all([
+        const [rp, rg, rs, rv, rpr, rpei, rbib] = await Promise.all([
             eqClient.from('pacientes').select('*').eq('id', ID).maybeSingle(),
             eqClient.from('cronograma_terapeutico')
                 .select('id, dia_semana, hora_inicio, duracao_min, sala, vigencia_inicio, vigencia_fim, ativo, profissional:profissionais(id, nome_completo)')
@@ -236,7 +317,11 @@ async function carregar() {
             eqClient.from('vinculos_paciente_aplicador')
                 .select('id, tipo, ativo, data_inicio, profissional:profissionais(id, nome_completo)')
                 .eq('paciente_id', ID).eq('ativo', true),
-            eqClient.from('profissionais').select('id, nome_completo, perfil').eq('ativo', true).order('nome_completo')
+            eqClient.from('profissionais').select('id, nome_completo, perfil').eq('ativo', true).order('nome_completo'),
+            eqClient.from('pei').select('*').eq('paciente_id', ID).eq('status','vigente')
+                .order('versao', { ascending:false }).limit(1).maybeSingle(),
+            eqClient.from('biblioteca_programas').select('id, nome, area, tentativas_padrao, criterio_percentual, criterio_sessoes')
+                .eq('ativo', true).order('area').order('nome')
         ]);
 
         if (rp.error) throw rp.error;
@@ -249,6 +334,16 @@ async function carregar() {
         PAC = rp.data; GRADE = rg.data || []; SESSOES = rs.data || [];
         VINCULOS = rv.data || []; PROFS = (rpr.data || []).filter(p =>
             ['aplicador','aplicador_itinerante','estagiario_aba','coordenador_aba'].includes(p.perfil));
+
+        PEI = rpei && rpei.data ? rpei.data : null;
+        BIBLIOTECA = rbib && rbib.data ? rbib.data : [];
+        PEI_PROGS = [];
+        if (PEI) {
+            const rprog = await eqClient.from('pei_programas')
+                .select('*, programa:biblioteca_programas(nome, area, tipo_registro), profissional:profissionais(nome_completo)')
+                .eq('pei_id', PEI.id).order('prioridade');
+            PEI_PROGS = rprog.data || [];
+        }
 
         FOTO = PAC.foto_url ? await EqFotos.link(PAC.foto_url) : null;
         desenhar();
@@ -316,19 +411,21 @@ function desenhar() {
 
     <div class="abas">
         <button data-p="resumo"  aria-pressed="true"  onclick="aba('resumo')">Resumo</button>
+        <button data-p="pei"     aria-pressed="false" onclick="aba('pei')">PEI</button>
         <button data-p="grade"   aria-pressed="false" onclick="aba('grade')">Grade semanal</button>
         <button data-p="sessoes" aria-pressed="false" onclick="aba('sessoes')">Sessões</button>
         <button data-p="tempo"   aria-pressed="false" onclick="aba('tempo')">Linha do tempo</button>
     </div>
 
     <div class="painel on" id="p-resumo">${painelResumo()}</div>
+    <div class="painel"    id="p-pei">${painelPei()}</div>
     <div class="painel"    id="p-grade">${painelGrade()}</div>
     <div class="painel"    id="p-sessoes">${painelSessoes()}</div>
     <div class="painel"    id="p-tempo">${painelTempo()}</div>`;
 }
 
 function aba(k) {
-    ['resumo','grade','sessoes','tempo'].forEach(x => {
+    ['resumo','pei','grade','sessoes','tempo'].forEach(x => {
         document.getElementById('p-' + x).classList.toggle('on', x === k);
         document.querySelector('[data-p="' + x + '"]').setAttribute('aria-pressed', x === k);
     });
@@ -428,6 +525,233 @@ function painelTempo() {
         <div class="card-legenda">Avaliações, PEI, evoluções e relatórios entram aqui conforme os módulos ficarem prontos.</div>
     </div>`;
 }
+
+
+// ── PEI ─────────────────────────────────────────────────────────────────────
+const AREAS_COR = {
+    receptiva:'var(--area-receptiva)', expressiva:'var(--area-expressiva)',
+    cognicao:'var(--area-cognicao)', motora:'var(--area-motora)',
+    social:'var(--area-social)', autocuidado:'var(--area-autocuidado)'
+};
+const AREAS_NOME = {
+    receptiva:'Ling. receptiva', expressiva:'Ling. expressiva', cognicao:'Cognição',
+    motora:'Motricidade', social:'Socialização', autocuidado:'Autocuidado'
+};
+const ST_PROG = {
+    em_ensino:{r:'em ensino',c:'chip-neutro'}, em_manutencao:{r:'em manutenção',c:'chip-alerta'},
+    dominado:{r:'dominado',c:'chip-ok'}, suspenso:{r:'suspenso',c:'chip-alerta'},
+    arquivado:{r:'arquivado',c:'chip-neutro'}
+};
+
+function painelPei() {
+    if (!PEI) {
+        return `<div class="card">
+            <div class="vazio-msg">
+                Este paciente ainda não tem PEI.<br>
+                <span class="tiny soft">O PEI é a lista de objetivos que o aplicador trabalha em cada sessão.</span>
+                ${PODE_EDITAR ? '<div style="margin-top:14px"><button class="btn" onclick="criarPei()">Criar PEI</button></div>' : ''}
+            </div></div>`;
+    }
+
+    const emEnsino = PEI_PROGS.filter(p => p.status === 'em_ensino');
+    const outros   = PEI_PROGS.filter(p => p.status !== 'em_ensino');
+
+    const linha = p => {
+        const cor = AREAS_COR[p.programa ? p.programa.area : ''] || 'var(--acao)';
+        const st = ST_PROG[p.status] || ST_PROG.em_ensino;
+        const gen = ['pessoa','ambiente','material'].filter(k => p['generalizou_' + k]).length;
+        return `<tr>
+            <td><b>${p.programa ? p.programa.nome : '—'}</b>
+                <br><span class="tiny" style="color:${cor};font-weight:700">${AREAS_NOME[p.programa ? p.programa.area : ''] || ''}</span></td>
+            <td class="muted">${p.profissional ? p.profissional.nome_completo : 'sem responsável'}</td>
+            <td>${p.tentativas_por_sessao}</td>
+            <td class="muted">${p.criterio_percentual}% em ${p.criterio_sessoes}</td>
+            <td class="muted">${gen}/3</td>
+            <td><span class="chip ${st.c}">${st.r}</span></td>
+            <td style="text-align:right">${PODE_EDITAR ? `
+                <button class="btn btn-secundario" style="padding:5px 9px;font-size:11px"
+                        onclick="abrirProgramaPei('${p.id}')">Ajustar</button>` : ''}</td>
+        </tr>`;
+    };
+
+    return `<div class="card">
+        <div class="card-titulo">
+            <h3>PEI vigente · versão ${PEI.versao}</h3>
+            <span class="tiny soft">desde ${brl(PEI.data_inicio)}${PEI.data_revisao ? ' · revisar em ' + brl(PEI.data_revisao) : ''}</span>
+        </div>
+        <div class="grid-4" style="margin-bottom:14px">
+            <div class="kpi" style="--kpi-cor:var(--acao)"><div class="kpi-numero">${emEnsino.length}</div>
+                <div class="kpi-texto">objetivos em ensino</div></div>
+            <div class="kpi" style="--kpi-cor:var(--st-ok)"><div class="kpi-numero">${PEI_PROGS.filter(p=>p.status==='dominado').length}</div>
+                <div class="kpi-texto">dominados</div></div>
+            <div class="kpi" style="--kpi-cor:var(--st-warn)"><div class="kpi-numero">${PEI_PROGS.filter(p=>p.status==='em_manutencao').length}</div>
+                <div class="kpi-texto">em manutenção</div></div>
+            <div class="kpi" style="--kpi-cor:var(--st-neutro)"><div class="kpi-numero">${PEI_PROGS.reduce((s,p)=>s+p.tentativas_por_sessao,0)}</div>
+                <div class="kpi-texto">tentativas por sessão completa</div></div>
+        </div>
+        ${PODE_EDITAR ? '<button class="btn btn-secundario" style="margin-bottom:12px" onclick="abrirAdicionar()">Adicionar objetivo</button>' : ''}
+        ${PEI_PROGS.length ? `<table class="tabela">
+            <thead><tr><th>Objetivo</th><th>Aplicador</th><th>Tent.</th><th>Critério</th><th>Gen.</th><th>Status</th><th></th></tr></thead>
+            <tbody>${emEnsino.map(linha).join('')}${outros.map(linha).join('')}</tbody></table>`
+        : '<div class="vazio-msg">Nenhum objetivo no PEI ainda. Adicione a partir da biblioteca de programas.</div>'}
+        <div class="card-legenda">"Gen." é a generalização: com outra pessoa, em outro ambiente e com outro material. Só com as três o objetivo deveria ser dado como dominado.</div>
+    </div>`;
+}
+
+async function criarPei() {
+    const ok = await EqConfirm.mostrar({
+        titulo: 'Criar o PEI deste paciente?',
+        texto: 'Cria a versão 1. Depois é só ir adicionando os objetivos da biblioteca.',
+        confirmar: 'Criar', tipo: 'padrao'
+    });
+    if (!ok) return;
+    try {
+        const { data, error } = await eqClient.from('pei').insert({
+            paciente_id: ID, versao: 1, status: 'vigente',
+            coordenador_id: (window.EqSessao && EqSessao.profissional.id) || null
+        }).select('id').single();
+        if (error) throw error;
+        await EqAudit.registrar('criacao', 'pei', data.id, { paciente: PAC.nome_completo, versao: 1 });
+        await carregar(); aba('pei');
+    } catch (e) {
+        console.error(e);
+        await EqConfirm.mostrar({ titulo:'Não foi possível criar', texto: e.message || 'Erro.',
+            confirmar:'Entendi', cancelar:'Fechar', tipo:'alerta' });
+    }
+}
+
+function abrirAdicionar() {
+    const jaTem = PEI_PROGS.map(p => p.programa_id);
+    const opcoes = BIBLIOTECA.filter(b => !jaTem.includes(b.id));
+    if (!opcoes.length) {
+        EqConfirm.mostrar({ titulo:'Sem programas disponíveis',
+            texto: BIBLIOTECA.length ? 'Todos os programas da biblioteca já estão neste PEI.'
+                                     : 'A biblioteca está vazia. Cadastre programas em Clínico → Programas.',
+            confirmar:'Fechar', cancelar:'Fechar', tipo:'padrao' });
+        return;
+    }
+    document.getElementById('aPrograma').innerHTML = opcoes.map(b =>
+        `<option value="${b.id}" data-t="${b.tentativas_padrao}" data-p="${b.criterio_percentual}" data-s="${b.criterio_sessoes}">
+            ${AREAS_NOME[b.area] || b.area} · ${b.nome}</option>`).join('');
+    document.getElementById('aAplicador').innerHTML = '<option value="">—</option>' +
+        PROFS.map(p => `<option value="${p.id}">${p.nome_completo}</option>`).join('');
+    const titular = VINCULOS.find(v => v.tipo === 'titular');
+    if (titular && titular.profissional) document.getElementById('aAplicador').value = titular.profissional.id;
+    sincronizarPadroes();
+    document.getElementById('modalAdicionar').classList.add('aberto');
+}
+
+function sincronizarPadroes() {
+    const op = document.getElementById('aPrograma').selectedOptions[0];
+    if (!op) return;
+    document.getElementById('aTentativas').value = op.dataset.t || 10;
+    document.getElementById('aPct').value = op.dataset.p || 80;
+    document.getElementById('aSessoes').value = op.dataset.s || 3;
+}
+
+document.getElementById('formAdicionar').addEventListener('submit', async function (ev) {
+    ev.preventDefault();
+    const bt = document.getElementById('btAdicionar'), erro = document.getElementById('erroAdicionar');
+    bt.disabled = true; bt.textContent = 'Adicionando...'; erro.style.display = 'none';
+    const sel = document.getElementById('aPrograma');
+    try {
+        const { data, error } = await eqClient.from('pei_programas').insert({
+            pei_id: PEI.id, paciente_id: ID,
+            programa_id: sel.value,
+            profissional_id: document.getElementById('aAplicador').value || null,
+            prioridade: parseInt(document.getElementById('aPrioridade').value, 10),
+            tentativas_por_sessao: parseInt(document.getElementById('aTentativas').value, 10),
+            criterio_percentual: parseInt(document.getElementById('aPct').value, 10),
+            criterio_sessoes: parseInt(document.getElementById('aSessoes').value, 10)
+        }).select('id').single();
+        if (error) throw error;
+
+        const alvos = (document.getElementById('aAlvos').value || '')
+            .split(',').map(s => s.trim()).filter(Boolean);
+        if (alvos.length) {
+            const { error: e2 } = await eqClient.from('pei_alvos').insert(
+                alvos.map((nome, i) => ({ pei_programa_id: data.id, nome: nome, ordem: i })));
+            if (e2) console.warn('alvos não gravados', e2);
+        }
+
+        await EqAudit.registrar('criacao', 'pei_programas', data.id, {
+            paciente: PAC.nome_completo,
+            programa: sel.selectedOptions[0].textContent.trim(),
+            alvos: alvos.length
+        });
+        fechar('modalAdicionar'); this.reset();
+        await carregar(); aba('pei');
+    } catch (e) {
+        console.error(e);
+        erro.textContent = 'Não foi possível adicionar: ' + (e.message || 'erro');
+        erro.style.display = 'block';
+    } finally { bt.disabled = false; bt.textContent = 'Adicionar'; }
+});
+
+let PROG_EDIT = null;
+function abrirProgramaPei(id) {
+    const p = PEI_PROGS.find(x => x.id === id);
+    if (!p) return;
+    PROG_EDIT = p;
+    document.getElementById('tituloAjuste').textContent = p.programa ? p.programa.nome : 'Objetivo';
+    document.getElementById('jAplicador').innerHTML = '<option value="">—</option>' +
+        PROFS.map(x => `<option value="${x.id}">${x.nome_completo}</option>`).join('');
+    document.getElementById('jAplicador').value = p.profissional_id || '';
+    document.getElementById('jTentativas').value = p.tentativas_por_sessao;
+    document.getElementById('jPct').value = p.criterio_percentual;
+    document.getElementById('jSessoes').value = p.criterio_sessoes;
+    document.getElementById('jStatus').value = p.status;
+    document.getElementById('jPessoa').checked   = p.generalizou_pessoa;
+    document.getElementById('jAmbiente').checked = p.generalizou_ambiente;
+    document.getElementById('jMaterial').checked = p.generalizou_material;
+    document.getElementById('modalAjuste').classList.add('aberto');
+}
+
+document.getElementById('formAjuste').addEventListener('submit', async function (ev) {
+    ev.preventDefault();
+    const bt = document.getElementById('btAjuste'), erro = document.getElementById('erroAjuste');
+    bt.disabled = true; bt.textContent = 'Salvando...'; erro.style.display = 'none';
+
+    const novo = {
+        profissional_id: document.getElementById('jAplicador').value || null,
+        tentativas_por_sessao: parseInt(document.getElementById('jTentativas').value, 10),
+        criterio_percentual: parseInt(document.getElementById('jPct').value, 10),
+        criterio_sessoes: parseInt(document.getElementById('jSessoes').value, 10),
+        status: document.getElementById('jStatus').value,
+        generalizou_pessoa: document.getElementById('jPessoa').checked,
+        generalizou_ambiente: document.getElementById('jAmbiente').checked,
+        generalizou_material: document.getElementById('jMaterial').checked
+    };
+
+    if (novo.status === 'dominado' &&
+        !(novo.generalizou_pessoa && novo.generalizou_ambiente && novo.generalizou_material)) {
+        const segue = await EqConfirm.mostrar({
+            titulo: 'Marcar como dominado sem generalização completa?',
+            texto: 'A criança ainda não demonstrou com outra pessoa, em outro ambiente e com outro material. Dar o objetivo como dominado agora costuma resultar em perda depois.',
+            confirmar: 'Marcar assim mesmo', tipo: 'alerta'
+        });
+        if (!segue) { bt.disabled = false; bt.textContent = 'Salvar'; return; }
+    }
+
+    if (novo.status !== PROG_EDIT.status) novo.data_status = new Date().toISOString().slice(0,10);
+
+    try {
+        const { error } = await eqClient.from('pei_programas').update(novo).eq('id', PROG_EDIT.id);
+        if (error) throw error;
+        await EqAudit.registrar(novo.status !== PROG_EDIT.status ? 'status' : 'edicao',
+            'pei_programas', PROG_EDIT.id, {
+                paciente: PAC.nome_completo,
+                programa: PROG_EDIT.programa ? PROG_EDIT.programa.nome : null,
+                campos: EqAudit.camposAlterados(PROG_EDIT, novo)
+            });
+        fechar('modalAjuste');
+        await carregar(); aba('pei');
+    } catch (e) {
+        console.error(e);
+        erro.textContent = 'Não foi possível salvar: ' + (e.message || 'erro');
+        erro.style.display = 'block';
+    } finally { bt.disabled = false; bt.textContent = 'Salvar'; }
+});
 
 // ── editar cadastro ─────────────────────────────────────────────────────────
 function fechar(id) { document.getElementById(id).classList.remove('aberto');

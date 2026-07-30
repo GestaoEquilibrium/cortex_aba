@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-tema="coordenacao">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EQ ABA — Biblioteca de programas</title>
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="../favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="../apple-touch-icon.png">
+<link rel="manifest" href="../site.webmanifest">
+<meta name="theme-color" content="#0F766E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../styles/base.css?v=2">
+<link rel="stylesheet" href="../styles/components.css?v=3">
+<style>
+.barra { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:14px; }
+.campo-busca { flex:1; min-width:220px; position:relative; }
+.campo-busca input { width:100%; padding:10px 12px 10px 34px; font:inherit; font-size:13px; color:var(--ink);
+    border:1px solid var(--line); border-radius:10px; background:var(--surface); }
+.campo-busca svg { position:absolute; left:11px; top:11px; color:var(--ink-soft); }
+.filtro { border:1px solid var(--line); background:var(--surface); color:var(--ink-muted);
+    border-radius:999px; padding:7px 13px; font:inherit; font-size:11.5px; font-weight:700; cursor:pointer; }
+.filtro[aria-pressed="true"] { color:#fff; border-color:transparent; }
+
+.cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:12px; }
+.prog { background:var(--surface); border:1px solid var(--line); border-left:4px solid var(--cor);
+        border-radius:var(--radius-card); padding:14px; text-align:left; font:inherit; color:inherit;
+        cursor:pointer; width:100%; transition:var(--transition-base); }
+.prog:hover { transform:translateY(-2px); box-shadow:var(--shadow-md); }
+.prog h3 { font-size:14px; margin-bottom:3px; }
+.prog .area { font-size:10.5px; font-weight:800; text-transform:uppercase; letter-spacing:.07em; color:var(--cor); }
+.prog p { font-size:12px; color:var(--ink-muted); margin-top:7px; line-height:1.4;
+          display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.prog .rodape { display:flex; gap:5px; flex-wrap:wrap; margin-top:10px; }
+
+.campo { margin-bottom:11px; }
+.campo label { display:block; font-size:11.5px; font-weight:700; color:var(--ink-muted); margin-bottom:4px; }
+.campo input, .campo select, .campo textarea { width:100%; padding:9px 11px; font-size:13px; font-family:inherit;
+    border:1px solid var(--line-strong); border-radius:8px; background:var(--surface-alt); color:var(--ink); }
+.campo-2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.campo-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
+.dica-campo { font-size:11px; color:var(--ink-soft); margin-top:3px; }
+.modal-fundo { position:fixed; inset:0; background:rgba(12,27,42,.5); backdrop-filter:blur(3px);
+               display:none; align-items:center; justify-content:center; padding:20px; z-index:80; }
+.modal-fundo.aberto { display:flex; }
+.modal { background:var(--surface); border-radius:var(--radius-card); padding:22px; width:100%;
+         max-width:600px; box-shadow:var(--shadow-lg); max-height:92vh; overflow:auto; }
+.vazio-msg { padding:26px; text-align:center; color:var(--ink-muted); font-size:13px; }
+.dl { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:13px; }
+.dl div span { display:block; font-size:10.5px; text-transform:uppercase; letter-spacing:.08em;
+               color:var(--ink-soft); font-weight:700; margin-bottom:2px; }
+.dl div b { font-size:13px; font-weight:600; }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../config.js?v=4"></script>
+<script src="../shared/supabase_client.js?v=2"></script>
+<script src="../shared/tema.js?v=2"></script>
+<script src="../shared/confirm_modal.js?v=3"></script>
+<script src="../shared/fotos.js?v=7"></script>
+<script src="../shared/audit.js?v=5"></script>
+<script src="../shared/auth_guard.js?v=7"></script>
+</head>
+<body>
+
+<div class="app-shell">
+    <div id="sidebar"></div>
+    <div class="faixa-perfil"></div>
+
+    <main class="app-main">
+        <div class="app-topo">
+            <div>
+                <h1>Biblioteca de programas</h1>
+                <div class="sub" id="contagem">carregando…</div>
+            </div>
+            <button class="btn" id="btNovo" style="display:none" onclick="abrirNovo()">Novo programa</button>
+        </div>
+
+        <div class="aviso" style="margin-bottom:14px">
+            Cada programa é escrito uma vez e reaproveitado em todos os pacientes. No PEI de cada criança
+            você escolhe daqui e ajusta o número de tentativas e o critério, se precisar.
+        </div>
+
+        <div class="barra">
+            <div class="campo-busca">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+                    <circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+                <input id="busca" placeholder="Buscar programa..." oninput="pintar()">
+            </div>
+            <div id="filtrosArea" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+        </div>
+
+        <div id="area"><div class="muted small">carregando…</div></div>
+    </main>
+</div>
+
+<!-- ── ver / editar ────────────────────────────────────────────────────────── -->
+<div class="modal-fundo" id="modalVer" onclick="if(event.target===this) fechar('modalVer')">
+    <div class="modal" id="conteudoVer"></div>
+</div>
+
+<!-- ── novo / editar ───────────────────────────────────────────────────────── -->
+<div class="modal-fundo" id="modalForm" onclick="if(event.target===this) fechar('modalForm')">
+    <div class="modal">
+        <h2 id="tituloForm" style="margin-bottom:14px">Novo programa</h2>
+        <form id="form">
+            <input type="hidden" id="fId">
+            <div class="campo"><label for="fNome">Nome do programa *</label>
+                <input id="fNome" required placeholder="Nomear alimentos"></div>
+            <div class="campo-2">
+                <div class="campo"><label for="fArea">Área *</label>
+                    <select id="fArea" required></select></div>
+                <div class="campo"><label for="fFaixa">Faixa etária sugerida</label>
+                    <input id="fFaixa" placeholder="3 a 6 anos"></div>
+            </div>
+            <div class="campo"><label for="fObjetivo">Objetivo de ensino</label>
+                <textarea id="fObjetivo" rows="2" placeholder="O que a criança deve conseguir fazer ao final"></textarea></div>
+
+            <div class="campo"><label for="fSd">O que o aplicador apresenta (instrução)</label>
+                <input id="fSd" placeholder='Mostrar a figura e perguntar "o que é isso?"'></div>
+            <div class="campo-2">
+                <div class="campo"><label for="fResposta">Resposta esperada</label>
+                    <input id="fResposta" placeholder="Nomear o item corretamente"></div>
+                <div class="campo"><label for="fConsequencia">Como reforçar</label>
+                    <input id="fConsequencia" placeholder="Elogio + item preferido"></div>
+            </div>
+
+            <div class="campo-2">
+                <div class="campo"><label for="fTipo">Tipo de registro</label>
+                    <select id="fTipo">
+                        <option value="tentativas_discretas">Tentativas (certo/errado/com ajuda)</option>
+                        <option value="frequencia">Frequência (quantas vezes)</option>
+                        <option value="duracao">Duração (quanto tempo)</option>
+                        <option value="latencia">Latência (tempo até responder)</option>
+                        <option value="intervalo">Intervalo (amostragem)</option>
+                        <option value="analise_tarefa">Análise de tarefa (passos)</option>
+                    </select></div>
+                <div class="campo"><label for="fTentativas">Tentativas por sessão</label>
+                    <input id="fTentativas" type="number" min="1" max="100" value="10"></div>
+            </div>
+
+            <div class="campo-3">
+                <div class="campo"><label for="fPct">Critério: % de acerto</label>
+                    <input id="fPct" type="number" min="1" max="100" value="80"></div>
+                <div class="campo"><label for="fSessoes">Em quantas sessões</label>
+                    <input id="fSessoes" type="number" min="1" max="20" value="3"></div>
+                <div class="campo"><label for="fManutencao">Sondagem (dias)</label>
+                    <input id="fManutencao" value="15,30,60"></div>
+            </div>
+            <div class="dica-campo" style="margin-bottom:11px">
+                Exemplo: 80% de independência em 3 sessões seguidas encerra o ensino; depois o sistema
+                sonda em 15, 30 e 60 dias.
+            </div>
+
+            <div class="campo"><label for="fGeneralizacao">Critério de generalização</label>
+                <input id="fGeneralizacao" placeholder="Com outra pessoa, em outro ambiente e com outro material"></div>
+            <div class="campo-2">
+                <div class="campo"><label for="fMateriais">Materiais</label><input id="fMateriais"></div>
+                <div class="campo"><label for="fPre">Pré-requisitos</label><input id="fPre"></div>
+            </div>
+
+            <div class="aviso" id="erroForm" style="display:none;border-left-color:var(--st-bad);color:var(--st-bad);margin-bottom:10px"></div>
+            <div class="grid-2">
+                <button type="button" class="btn btn-secundario btn-bloco" onclick="fechar('modalForm')">Cancelar</button>
+                <button type="submit" class="btn btn-bloco" id="btSalvar">Salvar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script src="../shared/sidebar.js?v=7"></script>
+<script>
+'use strict';
+
+const AREAS = {
+    receptiva:   { r:'Linguagem receptiva',  c:'var(--area-receptiva)' },
+    expressiva:  { r:'Linguagem expressiva', c:'var(--area-expressiva)' },
+    cognicao:    { r:'Cognição',             c:'var(--area-cognicao)' },
+    motora:      { r:'Motricidade',          c:'var(--area-motora)' },
+    social:      { r:'Socialização',         c:'var(--area-social)' },
+    autocuidado: { r:'Autocuidado',          c:'var(--area-autocuidado)' }
+};
+const TIPOS = {
+    tentativas_discretas:'tentativas', frequencia:'frequência', duracao:'duração',
+    latencia:'latência', intervalo:'intervalo', analise_tarefa:'análise de tarefa'
+};
+
+let PROGRAMAS = [], PODE_EDITAR = false, AREA_FILTRO = '';
+
+document.addEventListener('eq:pronto', async function (ev) {
+    EqSidebar.render('programas');
+    PODE_EDITAR = ['admin_direcao','supervisor_clinico','coordenador_aba'].includes(ev.detail.perfil);
+    if (PODE_EDITAR) document.getElementById('btNovo').style.display = '';
+
+    document.getElementById('filtrosArea').innerHTML = Object.keys(AREAS).map(k =>
+        `<button class="filtro" data-a="${k}" aria-pressed="false"
+                 style="--c:${AREAS[k].c}" onclick="filtrarArea('${k}')">${AREAS[k].r}</button>`).join('');
+    document.getElementById('fArea').innerHTML = Object.keys(AREAS).map(k =>
+        `<option value="${k}">${AREAS[k].r}</option>`).join('');
+
+    await carregar();
+});
+
+async function carregar() {
+    try {
+        const { data, error } = await eqClient.from('biblioteca_programas')
+            .select('*').eq('ativo', true).order('area').order('nome');
+        if (error) throw error;
+        PROGRAMAS = data || [];
+        pintar();
+    } catch (e) {
+        console.error(e);
+        document.getElementById('area').innerHTML =
+            '<div class="card vazio-msg" style="color:var(--st-bad)">Erro ao carregar. Veja o console.</div>';
+    }
+}
+
+function filtrarArea(k) {
+    AREA_FILTRO = AREA_FILTRO === k ? '' : k;
+    document.querySelectorAll('[data-a]').forEach(b => {
+        const on = b.dataset.a === AREA_FILTRO;
+        b.setAttribute('aria-pressed', on);
+        b.style.background = on ? AREAS[b.dataset.a].c : '';
+    });
+    pintar();
+}
+
+function pintar() {
+    const termo = (document.getElementById('busca').value || '').trim().toLowerCase();
+    const lista = PROGRAMAS.filter(p => {
+        if (AREA_FILTRO && p.area !== AREA_FILTRO) return false;
+        if (termo && !((p.nome + ' ' + (p.objetivo || '')).toLowerCase().includes(termo))) return false;
+        return true;
+    });
+
+    document.getElementById('contagem').textContent =
+        lista.length + ' de ' + PROGRAMAS.length + ' programas';
+
+    document.getElementById('area').innerHTML = lista.length
+        ? '<div class="cards">' + lista.map(p => {
+            const a = AREAS[p.area] || { r:p.area, c:'var(--acao)' };
+            return `<button class="prog" style="--cor:${a.c}" onclick="ver('${p.id}')">
+                <div class="area">${a.r}</div>
+                <h3>${p.nome}</h3>
+                <p>${p.objetivo || 'Sem objetivo descrito.'}</p>
+                <div class="rodape">
+                    <span class="chip chip-neutro">${TIPOS[p.tipo_registro] || p.tipo_registro}</span>
+                    <span class="chip chip-neutro">${p.tentativas_padrao} tentativas</span>
+                    <span class="chip chip-ok">${p.criterio_percentual}% em ${p.criterio_sessoes} sessões</span>
+                </div>
+            </button>`; }).join('') + '</div>'
+        : '<div class="card vazio-msg">Nenhum programa aqui ainda.' +
+          (PODE_EDITAR ? ' Comece cadastrando os que a equipe já usa no dia a dia.' : '') + '</div>';
+}
+
+function fechar(id) { document.getElementById(id).classList.remove('aberto');
+                      const e = document.getElementById('erroForm'); if (e) e.style.display = 'none'; }
+
+function ver(id) {
+    const p = PROGRAMAS.find(x => x.id === id);
+    if (!p) return;
+    const a = AREAS[p.area] || { r:p.area, c:'var(--acao)' };
+    document.getElementById('conteudoVer').innerHTML = `
+        <div class="area" style="color:${a.c};font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.07em">${a.r}</div>
+        <h2 style="margin:3px 0 12px">${p.nome}</h2>
+        ${p.objetivo ? `<p style="font-size:13px;color:var(--ink-muted);margin-bottom:14px">${p.objetivo}</p>` : ''}
+        <div class="dl" style="margin-bottom:14px">
+            <div><span>Instrução</span><b>${p.sd || '—'}</b></div>
+            <div><span>Resposta esperada</span><b>${p.resposta_esperada || '—'}</b></div>
+            <div><span>Como reforçar</span><b>${p.consequencia || '—'}</b></div>
+            <div><span>Registro</span><b>${TIPOS[p.tipo_registro] || p.tipo_registro}</b></div>
+            <div><span>Tentativas por sessão</span><b>${p.tentativas_padrao}</b></div>
+            <div><span>Critério de domínio</span><b>${p.criterio_percentual}% em ${p.criterio_sessoes} sessões</b></div>
+            <div><span>Sondagem depois</span><b>${(p.manutencao_dias || []).join(', ')} dias</b></div>
+            <div><span>Faixa etária</span><b>${p.faixa_etaria || '—'}</b></div>
+            <div><span>Generalização</span><b>${p.criterio_generalizacao || '—'}</b></div>
+            <div><span>Materiais</span><b>${p.materiais || '—'}</b></div>
+            <div><span>Pré-requisitos</span><b>${p.pre_requisitos || '—'}</b></div>
+        </div>
+        <div class="grid-2">
+            <button class="btn btn-secundario btn-bloco" onclick="fechar('modalVer')">Fechar</button>
+            ${PODE_EDITAR ? `<button class="btn btn-bloco" onclick="abrirEditar('${p.id}')">Editar</button>` : ''}
+        </div>`;
+    document.getElementById('modalVer').classList.add('aberto');
+}
+
+function abrirNovo() {
+    document.getElementById('tituloForm').textContent = 'Novo programa';
+    document.getElementById('form').reset();
+    document.getElementById('fId').value = '';
+    document.getElementById('fTentativas').value = 10;
+    document.getElementById('fPct').value = 80;
+    document.getElementById('fSessoes').value = 3;
+    document.getElementById('fManutencao').value = '15,30,60';
+    document.getElementById('modalForm').classList.add('aberto');
+}
+
+function abrirEditar(id) {
+    const p = PROGRAMAS.find(x => x.id === id);
+    if (!p) return;
+    fechar('modalVer');
+    document.getElementById('tituloForm').textContent = 'Editar programa';
+    document.getElementById('fId').value = p.id;
+    document.getElementById('fNome').value = p.nome || '';
+    document.getElementById('fArea').value = p.area;
+    document.getElementById('fFaixa').value = p.faixa_etaria || '';
+    document.getElementById('fObjetivo').value = p.objetivo || '';
+    document.getElementById('fSd').value = p.sd || '';
+    document.getElementById('fResposta').value = p.resposta_esperada || '';
+    document.getElementById('fConsequencia').value = p.consequencia || '';
+    document.getElementById('fTipo').value = p.tipo_registro;
+    document.getElementById('fTentativas').value = p.tentativas_padrao;
+    document.getElementById('fPct').value = p.criterio_percentual;
+    document.getElementById('fSessoes').value = p.criterio_sessoes;
+    document.getElementById('fManutencao').value = (p.manutencao_dias || []).join(',');
+    document.getElementById('fGeneralizacao').value = p.criterio_generalizacao || '';
+    document.getElementById('fMateriais').value = p.materiais || '';
+    document.getElementById('fPre').value = p.pre_requisitos || '';
+    document.getElementById('modalForm').classList.add('aberto');
+}
+
+document.getElementById('form').addEventListener('submit', async function (ev) {
+    ev.preventDefault();
+    const bt = document.getElementById('btSalvar'), erro = document.getElementById('erroForm');
+    bt.disabled = true; bt.textContent = 'Salvando...'; erro.style.display = 'none';
+
+    const id = document.getElementById('fId').value;
+    const dias = (document.getElementById('fManutencao').value || '')
+        .split(',').map(x => parseInt(x.trim(), 10)).filter(x => !isNaN(x) && x > 0);
+
+    const reg = {
+        nome: document.getElementById('fNome').value.trim(),
+        area: document.getElementById('fArea').value,
+        faixa_etaria: document.getElementById('fFaixa').value.trim() || null,
+        objetivo: document.getElementById('fObjetivo').value.trim() || null,
+        sd: document.getElementById('fSd').value.trim() || null,
+        resposta_esperada: document.getElementById('fResposta').value.trim() || null,
+        consequencia: document.getElementById('fConsequencia').value.trim() || null,
+        tipo_registro: document.getElementById('fTipo').value,
+        tentativas_padrao: parseInt(document.getElementById('fTentativas').value || '10', 10),
+        criterio_percentual: parseInt(document.getElementById('fPct').value || '80', 10),
+        criterio_sessoes: parseInt(document.getElementById('fSessoes').value || '3', 10),
+        manutencao_dias: dias.length ? dias : [15,30,60],
+        criterio_generalizacao: document.getElementById('fGeneralizacao').value.trim() || null,
+        materiais: document.getElementById('fMateriais').value.trim() || null,
+        pre_requisitos: document.getElementById('fPre').value.trim() || null
+    };
+
+    try {
+        if (id) {
+            const antes = PROGRAMAS.find(x => x.id === id);
+            const { error } = await eqClient.from('biblioteca_programas').update(reg).eq('id', id);
+            if (error) throw error;
+            await EqAudit.registrar('edicao', 'biblioteca_programas', id,
+                { nome: reg.nome, campos: EqAudit.camposAlterados(antes, reg) });
+        } else {
+            reg.autor_id = (window.EqSessao && EqSessao.profissional.id) || null;
+            const { data, error } = await eqClient.from('biblioteca_programas')
+                .insert(reg).select('id').single();
+            if (error) throw error;
+            await EqAudit.registrar('criacao', 'biblioteca_programas', data.id, { nome: reg.nome });
+        }
+        fechar('modalForm');
+        await carregar();
+    } catch (e) {
+        console.error(e);
+        erro.textContent = 'Não foi possível salvar: ' + (e.message || 'erro desconhecido');
+        erro.style.display = 'block';
+    } finally { bt.disabled = false; bt.textContent = 'Salvar'; }
+});
+</script>
+</body>
+</html>

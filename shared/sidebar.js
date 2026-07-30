@@ -1,16 +1,19 @@
 // ============================================================================
 // EQ ABA — Sidebar
-// Sprint 1: nome, perfil e equipe vêm de window.EqSessao (auth_guard).
-// Uso:
-//   <div id="sidebar"></div>
-//   EqSidebar.render('painel');
+// Chrome copiado do CORTEX (badge do logo, sino, recolher, item ativo em pílula
+// branca, cartão do usuário no rodapé). Estrutura e permissões são do ABA:
+// menu próprio, agrupado em Clínico e Gestão, filtrado por perfil.
+//
+// Uso:  <div id="sidebar"></div>  →  EqSidebar.render('painel');
 // ============================================================================
 
 window.EqSidebar = (function () {
     'use strict';
 
+    const CHAVE_RECOLHIDA = 'eqaba_sidebar_recolhida';
+
     const ITENS = [
-        { id:'painel',    label:'Painel',     href:'dashboard.html',        perfis:'*',
+        { id:'painel',    label:'Dashboard',  href:'dashboard.html',        perfis:'*',
           icon:'<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>' },
 
         { id:'pacientes', label:'Pacientes',  href:'pacientes/lista.html',  perfis:'*',
@@ -57,11 +60,15 @@ window.EqSidebar = (function () {
           icon:'<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/>' }
     ];
 
-    const LOGO = `<svg width="17" height="17" viewBox="0 0 100 100" aria-hidden="true">
-        <g stroke="currentColor" stroke-width="11" stroke-linecap="round">
-            <line x1="50" y1="12" x2="50" y2="88"/>
-            <line x1="17" y1="31" x2="83" y2="69"/>
-            <line x1="17" y1="69" x2="83" y2="31"/>
+    const LOGO = `<svg width="19" height="19" viewBox="0 0 32 32" aria-hidden="true">
+        <g stroke="currentColor" stroke-width="1.5" fill="currentColor" stroke-linecap="round">
+            <line x1="16" y1="16" x2="9"  y2="9"/><line x1="16" y1="16" x2="23" y2="9"/>
+            <line x1="16" y1="16" x2="9"  y2="23"/><line x1="16" y1="16" x2="23" y2="23"/>
+            <line x1="16" y1="16" x2="16" y2="7"/><line x1="16" y1="16" x2="16" y2="25"/>
+            <circle cx="16" cy="16" r="2.8" stroke="none"/>
+            <circle cx="9" cy="9" r="1.6" stroke="none"/><circle cx="23" cy="9" r="1.6" stroke="none"/>
+            <circle cx="9" cy="23" r="1.6" stroke="none"/><circle cx="23" cy="23" r="1.6" stroke="none"/>
+            <circle cx="16" cy="7" r="1.4" stroke="none"/><circle cx="16" cy="25" r="1.4" stroke="none"/>
         </g></svg>`;
 
     const PASTAS = ['pacientes','sessao','portal','agenda','programas','avaliacoes',
@@ -79,16 +86,49 @@ window.EqSidebar = (function () {
         return Array.isArray(item.perfis) && item.perfis.includes(perfil);
     }
 
+    function iniciais(nome) {
+        const p = (nome || '').trim().split(/\s+/);
+        if (!p[0]) return '?';
+        return (p[0][0] + (p.length > 1 ? p[p.length - 1][0] : '')).toUpperCase();
+    }
+
+    function estaRecolhida() {
+        try { return localStorage.getItem(CHAVE_RECOLHIDA) === '1'; } catch (e) { return false; }
+    }
+
+    function aplicarLargura(recolhida) {
+        document.documentElement.style.setProperty('--sidebar-width', recolhida ? '66px' : '236px');
+    }
+
     function render(ativo) {
         const alvo = document.getElementById('sidebar');
         if (!alvo) return;
 
-        const s      = window.EqSessao || {};
-        const perfil = s.perfil || (window.EqTema ? EqTema.perfilAtual() : 'coordenador_aba');
-        const rotulo = window.EqTema ? EqTema.rotulo(perfil) : perfil;
+        const s       = window.EqSessao || {};
+        const perfil  = s.perfil || (window.EqTema ? EqTema.perfilAtual() : 'coordenador_aba');
+        const rotulo  = window.EqTema ? EqTema.rotulo(perfil) : perfil;
+        const nome    = s.nome || '—';
+        const foto    = s.profissional && s.profissional.foto_url;
+        const recolhida = estaRecolhida();
+        aplicarLargura(recolhida);
 
-        let html = `<nav class="sidebar" aria-label="Menu principal">
-            <div class="sidebar-brand">${LOGO} EQ ABA</div>
+        let html = `<nav class="sidebar${recolhida ? ' recolhida' : ''}" id="eqSidebar" aria-label="Menu principal">
+            <div class="sidebar-topo">
+                <div class="sidebar-badge">${LOGO}</div>
+                <div class="sidebar-marca">EQ ABA</div>
+                <button class="sidebar-bt" id="btSino" type="button" title="Avisos"
+                        onclick="EqSidebar.avisos()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round">
+                        <path d="M18 15v-5a6 6 0 1 0-12 0v5l-1.5 2h15z"/><path d="M10 20h4"/>
+                    </svg>
+                </button>
+                <button class="sidebar-bt" type="button" title="Recolher menu"
+                        onclick="EqSidebar.recolher()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+                        <path d="${recolhida ? 'M9 6l6 6-6 6' : 'M15 6l-6 6 6 6'}"/>
+                    </svg>
+                </button>
+            </div>
             <div class="sidebar-nav">`;
 
         let grupoPendente = null;
@@ -99,32 +139,74 @@ window.EqSidebar = (function () {
                 html += `<div class="sidebar-grupo">${grupoPendente}</div>`;
                 grupoPendente = null;
             }
-            html += `<a class="sidebar-item ${item.id === ativo ? 'ativo' : ''}" href="${caminho(item.href)}">
+            html += `<a class="sidebar-item ${item.id === ativo ? 'ativo' : ''}"
+                        href="${caminho(item.href)}" title="${item.label}">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1"
                      stroke-linecap="round" stroke-linejoin="round">${item.icon}</svg>
                 <span>${item.label}</span></a>`;
         });
 
         html += `</div>
-            <div class="sidebar-rodape">
-                <b>${s.nome || '—'}</b>
-                ${rotulo}${s.equipe ? ' · ' + s.equipe : ''}
-                <button class="sidebar-sair" type="button" onclick="EqSidebar.sair()">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
-                    </svg> Sair
+            <div class="sidebar-usuario">
+                ${foto
+                    ? `<img class="sidebar-avatar" src="${foto}" alt="">`
+                    : `<div class="sidebar-avatar">${iniciais(nome)}</div>`}
+                <div class="sidebar-dados">
+                    <b title="${nome}">${nome}</b>
+                    <span>${rotulo}${s.equipe ? ' · ' + s.equipe : ''}</span>
+                </div>
+                <button class="sidebar-bt" type="button" title="Sair" onclick="EqSidebar.sair()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                        <polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+                    </svg>
                 </button>
             </div>
         </nav>`;
 
         alvo.outerHTML = html;
+        window.__eqAtivo = ativo;
+    }
+
+    function recolher() {
+        const nova = !estaRecolhida();
+        try { localStorage.setItem(CHAVE_RECOLHIDA, nova ? '1' : '0'); } catch (e) {}
+        const nav = document.getElementById('eqSidebar');
+        if (nav) {
+            const casca = document.createElement('div');
+            casca.id = 'sidebar';
+            nav.replaceWith(casca);
+            render(window.__eqAtivo);
+        }
+    }
+
+    function avisos() {
+        // Sprint de tarefas liga isto às pendências reais (evoluções, faltas, PEIs).
+        if (window.EqConfirm) {
+            EqConfirm.mostrar({
+                titulo: 'Avisos',
+                texto: 'A central de avisos entra junto com as tarefas: evoluções pendentes, faltas seguidas e PEIs a vencer.',
+                confirmar: 'Fechar', cancelar: 'Fechar', tipo: 'padrao'
+            });
+        }
     }
 
     async function sair() {
+        if (window.EqConfirm) {
+            const ok = await EqConfirm.mostrar({
+                titulo: 'Sair do sistema?',
+                texto: 'Você precisará entrar de novo com e-mail e senha.',
+                confirmar: 'Sair', tipo: 'alerta'
+            });
+            if (!ok) return;
+        }
         try { if (window.eqClient) await eqClient.auth.signOut(); } catch (e) {}
         try { sessionStorage.removeItem('eqaba_ultima_atividade'); } catch (e) {}
         window.location.href = caminho('index.html');
     }
 
-    return { render, sair, ITENS };
+    // largura correta desde o primeiro pixel, antes de o guard responder
+    aplicarLargura(estaRecolhida());
+
+    return { render, recolher, avisos, sair, ITENS };
 })();

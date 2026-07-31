@@ -158,7 +158,10 @@ function pintarPerfil() {
     <div class="card">
         <div class="card-titulo"><h3>Sessão e acesso</h3></div>
         <p class="small muted">Sua sessão fica presa a esta aba do navegador: ao fechá-la, o acesso encerra.</p>
-        <button class="btn btn-secundario" style="margin-top:10px" onclick="EqSidebar.sair()">Sair do sistema</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+            <button class="btn btn-secundario" onclick="location.href='../trocar-senha.html'">Trocar minha senha</button>
+            <button class="btn btn-secundario" onclick="EqSidebar.sair()">Sair do sistema</button>
+        </div>
     </div>`;
 }
 

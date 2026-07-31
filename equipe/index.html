@@ -21,6 +21,8 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
 <link rel="stylesheet" href="../styles/base.css?v=4">
 <link rel="stylesheet" href="../styles/components.css?v=5">
 <style>
+.bt-link { border:none; background:transparent; color:var(--acao); font:inherit; font-size:10.5px;
+           font-weight:700; cursor:pointer; padding:2px 0; text-decoration:underline; }
 .foto-prof { width:34px; height:34px; border-radius:50%; flex:0 0 auto; color:#fff; overflow:hidden;
              display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:800;
              background:var(--acao); background-size:cover; background-position:center; }
@@ -45,6 +47,7 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
 <script src="../shared/tema.js?v=2"></script>
 <script src="../shared/confirm_modal.js?v=3"></script>
 <script src="../shared/fotos.js?v=7"></script>
+<script src="../shared/acesso.js?v=11"></script>
 <script src="../shared/audit.js?v=5"></script>
 <script src="../shared/config_sistema.js?v=10"></script>
 <script src="../shared/auth_guard.js?v=10"></script>
@@ -84,9 +87,9 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
         </div>
 
         <div class="aviso" style="margin-top:14px">
-            <b>Como liberar o acesso de alguém.</b> Cadastre a pessoa aqui com o e-mail dela.
-            Depois, no Supabase, em Authentication → Users → Add user, crie a conta com <b>o mesmo e-mail</b>.
-            O vínculo é feito sozinho — não precisa copiar UUID.
+            <b>Como liberar o acesso de alguém.</b> Cadastre a pessoa com o e-mail dela e marque
+            "criar o acesso agora" — ou use o botão <b>Criar acesso</b> na lista. O sistema gera uma
+            senha temporária para você repassar, e no primeiro acesso a pessoa troca.
         </div>
     </main>
 </div>
@@ -124,6 +127,16 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
             <div class="campo-2">
                 <div class="campo"><label for="pRegistro">Registro de conselho</label><input id="pRegistro"></div>
                 <div class="campo"><label for="pTelefone">Telefone</label><input id="pTelefone"></div>
+            </div>
+            <div class="campo" style="background:var(--surface-alt);border:1px solid var(--line);
+                                       border-radius:9px;padding:10px 12px">
+                <label style="display:flex;align-items:center;gap:8px;font-weight:600;font-size:12.5px;color:var(--ink)">
+                    <input type="checkbox" id="pCriarAcesso" checked style="width:auto">
+                    Criar o acesso agora
+                </label>
+                <div class="tiny soft" style="margin-top:4px">
+                    O sistema gera uma senha temporária e mostra na tela para você passar à pessoa.
+                </div>
             </div>
             <div class="aviso" id="erroProf" style="display:none; border-left-color:var(--st-bad); color:var(--st-bad); margin-bottom:10px"></div>
             <div class="grid-2" style="margin-top:6px">
@@ -218,8 +231,12 @@ async function carregarProfissionais() {
                 <td class="muted">${p.turno || '—'}</td>
                 <td class="muted">${nomeEquipe(p.equipe_id)}</td>
                 <td>${p.auth_user_id
-                        ? '<span class="chip chip-ok">com acesso</span>'
-                        : '<span class="sem-conta">sem conta</span>'}</td>
+                        ? `<span class="chip chip-ok">com acesso</span>
+                           ${SOU_ADMIN ? `<br><button class="bt-link" onclick="redefinirAcesso('${p.id}','${p.nome_completo.replace(/'/g,"\\'")}')">redefinir senha</button>` : ''}`
+                        : (SOU_ADMIN
+                           ? `<button class="btn btn-secundario" style="padding:5px 10px;font-size:11.5px"
+                                onclick="criarAcesso('${p.id}','${p.nome_completo.replace(/'/g,"\\'")}')">Criar acesso</button>`
+                           : '<span class="sem-conta">sem conta</span>')}</td>
                 <td style="text-align:right">${SOU_ADMIN ? `
                     <button class="bt-acao btn btn-secundario" style="padding:5px 10px;font-size:11.5px"
                             onclick="alternarAtivo('${p.id}', ${p.ativo}, '${p.nome_completo.replace(/'/g,'')}')">
@@ -290,6 +307,43 @@ async function enviarFotoProf(input) {
     } finally { PROF_FOTO = null; }
 }
 
+async function criarAcesso(id, nome) {
+    const ok = await EqConfirm.mostrar({
+        titulo: 'Criar acesso para ' + nome + '?',
+        texto: 'O sistema cria a conta e gera uma senha temporária, que aparece na tela para você repassar. No primeiro acesso a pessoa troca a senha.',
+        confirmar: 'Criar acesso', tipo: 'padrao'
+    });
+    if (!ok) return;
+    try {
+        const r = await EqAcesso.criar('profissional', id);
+        if (r.senha) EqAcesso.mostrarSenha(r.email, r.senha, 'Acesso criado para ' + nome);
+        else if (r.vinculado) await EqConfirm.mostrar({ titulo:'Conta vinculada',
+            texto: r.mensagem, confirmar:'Fechar', cancelar:'Fechar', tipo:'padrao' });
+        await carregarProfissionais();
+    } catch (e) {
+        console.error(e);
+        await EqConfirm.mostrar({ titulo:'Não foi possível criar o acesso',
+            texto: e.message, confirmar:'Entendi', cancelar:'Fechar', tipo:'alerta' });
+    }
+}
+
+async function redefinirAcesso(id, nome) {
+    const ok = await EqConfirm.mostrar({
+        titulo: 'Redefinir a senha de ' + nome + '?',
+        texto: 'A senha atual deixa de funcionar na hora. Uma nova senha temporária aparece para você repassar.',
+        confirmar: 'Redefinir', tipo: 'alerta'
+    });
+    if (!ok) return;
+    try {
+        const r = await EqAcesso.redefinir('profissional', id);
+        if (r.senha) EqAcesso.mostrarSenha(r.email, r.senha, 'Nova senha de ' + nome);
+    } catch (e) {
+        console.error(e);
+        await EqConfirm.mostrar({ titulo:'Não foi possível redefinir',
+            texto: e.message, confirmar:'Entendi', cancelar:'Fechar', tipo:'alerta' });
+    }
+}
+
 async function alternarAtivo(id, ativo, nome) {
     const ok = await EqConfirm.mostrar({
         titulo: ativo ? 'Desativar profissional?' : 'Reativar profissional?',
@@ -318,7 +372,7 @@ document.getElementById('formProf').addEventListener('submit', async function (e
     bt.disabled = true; bt.textContent = 'Salvando...'; erro.style.display = 'none';
     const jornada = document.getElementById('pJornada').value;
     try {
-        const { error } = await eqClient.from('profissionais').insert({
+        const { data: novo, error } = await eqClient.from('profissionais').insert({
             nome_completo: document.getElementById('pNome').value.trim(),
             email: document.getElementById('pEmail').value.trim().toLowerCase(),
             perfil: document.getElementById('pPerfil').value,
@@ -327,11 +381,30 @@ document.getElementById('formProf').addEventListener('submit', async function (e
             equipe_id: document.getElementById('pEquipe').value || null,
             registro_conselho: document.getElementById('pRegistro').value.trim() || null,
             telefone: document.getElementById('pTelefone').value.trim() || null
-        });
+        }).select('id').single();
         if (error) throw error;
         await EqAudit.registrar('criacao', 'profissionais', null, { email: document.getElementById('pEmail').value.trim() });
-        fechar('modalProf'); this.reset();
+
+        const querAcesso = document.getElementById('pCriarAcesso').checked;
+        fechar('modalProf');
+        const nome = document.getElementById('pNome').value.trim();
+        this.reset();
         await Promise.all([carregarProfissionais(), carregarEquipes()]);
+
+        if (querAcesso && novo && novo.id) {
+            try {
+                const r = await EqAcesso.criar('profissional', novo.id);
+                if (r.senha) EqAcesso.mostrarSenha(r.email, r.senha, 'Acesso criado para ' + nome);
+                else if (r.vinculado) await EqConfirm.mostrar({ titulo:'Conta vinculada',
+                    texto: r.mensagem, confirmar:'Fechar', cancelar:'Fechar', tipo:'padrao' });
+                await carregarProfissionais();
+            } catch (e) {
+                console.error(e);
+                await EqConfirm.mostrar({ titulo:'Cadastro salvo, acesso não criado',
+                    texto: e.message + ' Você pode criar o acesso depois, pelo botão na lista.',
+                    confirmar:'Entendi', cancelar:'Fechar', tipo:'alerta' });
+            }
+        }
     } catch (e) {
         console.error(e);
         erro.textContent = e.message && e.message.includes('duplicate')

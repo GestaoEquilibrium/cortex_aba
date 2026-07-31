@@ -21,6 +21,8 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
 <link rel="stylesheet" href="../styles/base.css?v=4">
 <link rel="stylesheet" href="../styles/components.css?v=5">
 <style>
+.bt-link { border:none; background:transparent; color:var(--acao); font:inherit; font-size:10.5px;
+           font-weight:700; cursor:pointer; padding:2px 0; text-decoration:underline; }
 .voltar { display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:600;
           color:var(--ink-muted); margin-bottom:12px; }
 .voltar:hover { color:var(--acao); }
@@ -81,6 +83,7 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
 <script src="../shared/tema.js?v=2"></script>
 <script src="../shared/confirm_modal.js?v=3"></script>
 <script src="../shared/fotos.js?v=7"></script>
+<script src="../shared/acesso.js?v=11"></script>
 <script src="../shared/audit.js?v=5"></script>
 <script src="../shared/config_sistema.js?v=10"></script>
 <script src="../shared/auth_guard.js?v=10"></script>
@@ -273,6 +276,16 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
             <div class="campo-2">
                 <div class="campo"><label for="rTelefone">Telefone</label><input id="rTelefone"></div>
                 <div class="campo"><label for="rParentesco">Parentesco</label><input id="rParentesco" placeholder="mãe, pai, avó..."></div>
+            </div>
+            <div class="campo" style="background:var(--surface-alt);border:1px solid var(--line);
+                                       border-radius:9px;padding:10px 12px">
+                <label style="display:flex;align-items:center;gap:8px;font-weight:600;font-size:12.5px;color:var(--ink)">
+                    <input type="checkbox" id="rCriarAcesso" checked style="width:auto">
+                    Criar o acesso ao portal agora
+                </label>
+                <div class="tiny soft" style="margin-top:4px">
+                    Gera a senha temporária para você passar à família.
+                </div>
             </div>
             <div class="aviso" id="erroResp" style="display:none;border-left-color:var(--st-bad);color:var(--st-bad);margin-bottom:10px"></div>
             <div class="grid-2">
@@ -843,12 +856,17 @@ function painelFamilia() {
                     <td class="muted">${r.email || '—'}</td>
                     <td class="muted">${r.telefone || '—'}</td>
                     <td class="muted">${v.parentesco || '—'}</td>
-                    <td>${r.auth_user_id ? '<span class="chip chip-ok">com acesso</span>'
-                                         : '<span class="chip chip-alerta">sem conta</span>'}</td>
+                    <td>${r.auth_user_id
+                        ? `<span class="chip chip-ok">com acesso</span>
+                           ${PODE_EDITAR ? `<br><button class="bt-link" onclick="redefinirAcessoResp('${r.id}','${(r.nome||'').replace(/'/g,"\\'")}')">redefinir senha</button>` : ''}`
+                        : (PODE_EDITAR
+                           ? `<button class="btn btn-secundario" style="padding:5px 10px;font-size:11.5px"
+                                onclick="criarAcessoResp('${r.id}','${(r.nome||'').replace(/'/g,"\\'")}')">Criar acesso</button>`
+                           : '<span class="chip chip-alerta">sem conta</span>')}</td>
                 </tr>`; }).join('')}</tbody></table>`
         : '<div class="vazio-msg">Nenhum responsável cadastrado para o portal.</div>'}
         <div class="card-legenda">
-            Depois de cadastrar, crie o usuário no Supabase com o <b>mesmo e-mail</b> — o vínculo é automático.
+            Depois de cadastrar, use <b>Criar acesso</b> para gerar a senha do portal. Nada de abrir o Supabase.
         </div>
     </div>
 
@@ -874,6 +892,43 @@ function painelFamilia() {
             Atividades marcadas como feitas pela família viram indicador de adesão ao treino parental.
         </div>
     </div>`;
+}
+
+async function criarAcessoResp(id, nome) {
+    const ok = await EqConfirm.mostrar({
+        titulo: 'Criar acesso ao portal para ' + nome + '?',
+        texto: 'O sistema cria a conta e gera uma senha temporária, que aparece na tela para você repassar à família.',
+        confirmar: 'Criar acesso', tipo: 'padrao'
+    });
+    if (!ok) return;
+    try {
+        const r = await EqAcesso.criar('responsavel', id);
+        if (r.senha) EqAcesso.mostrarSenha(r.email, r.senha, 'Acesso ao portal para ' + nome);
+        else if (r.vinculado) await EqConfirm.mostrar({ titulo:'Conta vinculada',
+            texto: r.mensagem, confirmar:'Fechar', cancelar:'Fechar', tipo:'padrao' });
+        await carregar(); aba('familia');
+    } catch (e) {
+        console.error(e);
+        await EqConfirm.mostrar({ titulo:'Não foi possível criar o acesso',
+            texto: e.message, confirmar:'Entendi', cancelar:'Fechar', tipo:'alerta' });
+    }
+}
+
+async function redefinirAcessoResp(id, nome) {
+    const ok = await EqConfirm.mostrar({
+        titulo: 'Redefinir a senha de ' + nome + '?',
+        texto: 'A senha atual deixa de funcionar na hora.',
+        confirmar: 'Redefinir', tipo: 'alerta'
+    });
+    if (!ok) return;
+    try {
+        const r = await EqAcesso.redefinir('responsavel', id);
+        if (r.senha) EqAcesso.mostrarSenha(r.email, r.senha, 'Nova senha de ' + nome);
+    } catch (e) {
+        console.error(e);
+        await EqConfirm.mostrar({ titulo:'Não foi possível redefinir',
+            texto: e.message, confirmar:'Entendi', cancelar:'Fechar', tipo:'alerta' });
+    }
 }
 
 function abrirResponsavel() {
@@ -912,8 +967,26 @@ document.getElementById('formResponsavel').addEventListener('submit', async func
 
         await EqAudit.registrar('criacao', 'responsaveis_pacientes', respId,
             { paciente: PAC.nome_completo, email: email });
+
+        const querAcesso = document.getElementById('rCriarAcesso').checked;
+        const nomeResp = document.getElementById('rNome').value.trim();
         fechar('modalResponsavel');
         await carregar(); aba('familia');
+
+        if (querAcesso && !existente) {
+            try {
+                const r = await EqAcesso.criar('responsavel', respId);
+                if (r.senha) EqAcesso.mostrarSenha(r.email, r.senha, 'Acesso ao portal para ' + nomeResp);
+                else if (r.vinculado) await EqConfirm.mostrar({ titulo:'Conta vinculada',
+                    texto: r.mensagem, confirmar:'Fechar', cancelar:'Fechar', tipo:'padrao' });
+                await carregar(); aba('familia');
+            } catch (e) {
+                console.error(e);
+                await EqConfirm.mostrar({ titulo:'Responsável salvo, acesso não criado',
+                    texto: e.message + ' Você pode criar o acesso depois, pelo botão na lista.',
+                    confirmar:'Entendi', cancelar:'Fechar', tipo:'alerta' });
+            }
+        }
     } catch (e) {
         console.error(e);
         erro.textContent = 'Não foi possível salvar: ' + (e.message || 'erro');

@@ -148,6 +148,10 @@ body { min-height:100vh; display:flex; align-items:center; justify-content:cente
                 const { data: resp } = await eqClient.from('responsaveis')
                     .select('id, ativo').eq('auth_user_id', data.user.id).maybeSingle();
                 if (resp && resp.ativo) {
+                    if (data.user.user_metadata && data.user.user_metadata.senha_temporaria) {
+                        location.href = 'trocar-senha.html';
+                        return;
+                    }
                     // sem auditoria aqui: a policy exige profissional_id do próprio usuário,
                     // e responsável não tem linha em profissionais
                     location.href = 'portal/index.html';
@@ -171,6 +175,10 @@ body { min-height:100vh; display:flex; align-items:center; justify-content:cente
                 });
             } catch (e) { console.warn('entrada não registrada', e); }
 
+            if (data.user.user_metadata && data.user.user_metadata.senha_temporaria) {
+                location.href = 'trocar-senha.html';
+                return;
+            }
             location.href = destinoDe(prof.perfil);
 
         } catch (e) {

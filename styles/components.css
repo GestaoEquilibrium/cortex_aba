@@ -128,13 +128,16 @@
 /* recolhida */
 .sidebar.recolhida { padding: 14px 7px; }
 .sidebar.recolhida .sidebar-marca,
-/* recolhido: sem rótulo de grupo, sem esmaecido, todos os itens visíveis */
-.sidebar.recolhida .sidebar-grupo-itens { max-height: none !important; opacity: 1 !important; }
-.sidebar.recolhida .sidebar-nav { -webkit-mask-image: none !important; mask-image: none !important; }
 .sidebar.recolhida .sidebar-grupo,
 .sidebar.recolhida .sidebar-dados,
 .sidebar.recolhida .sidebar-item span,
 .sidebar.recolhida #btSino { display: none; }
+
+/* Recolhido: os blocos de grupo não podem ficar fechados nem esmaecidos, senão
+   os ícones somem. Regras separadas — inserir isto no meio da lista de seletores
+   acima quebra o `display: none` da marca, e ela volta a escorregar sobre o sino. */
+.sidebar.recolhida .sidebar-grupo-itens { max-height: none !important; opacity: 1 !important; }
+.sidebar.recolhida .sidebar-nav { -webkit-mask-image: none !important; mask-image: none !important; }
 .sidebar.recolhida .sidebar-topo { flex-direction: column; gap: 7px; }
 .sidebar.recolhida .sidebar-item { justify-content: center; padding: 11px 0; }
 .sidebar.recolhida .sidebar-usuario {

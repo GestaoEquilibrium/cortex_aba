@@ -21,7 +21,7 @@
 //           como se fosse atual.
 // ============================================================================
 
-const VERSAO = 'cortex-aba-v7';
+const VERSAO = 'cortex-aba-v8';
 const CACHE_ESTATICO = VERSAO + '-estatico';
 const CACHE_PAGINAS  = VERSAO + '-paginas';
 
@@ -36,7 +36,7 @@ const ESSENCIAL = [
     'sessao/sessao.html',
     'agenda/agenda.html',
     'styles/base.css?v=4',
-    'styles/components.css?v=7',
+    'styles/components.css?v=8',
     'shared/supabase_client.js?v=2',
     'shared/erros.js?v=16',
     'shared/tema.js?v=2',

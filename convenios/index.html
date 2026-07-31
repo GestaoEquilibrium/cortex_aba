@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-tema="coordenacao">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CORTEX aba — Convênios</title>
+<script>
+(function(){try{var m=localStorage.getItem('eqaba_modo');
+if(m!=='claro'&&m!=='escuro'){m=(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches)?'escuro':'claro';}
+document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
+</script>
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<link rel="manifest" href="../site.webmanifest">
+<meta name="theme-color" content="#0F766E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../styles/base.css?v=4">
+<link rel="stylesheet" href="../styles/components.css?v=5">
+<style>
+.barra { display:flex; gap:9px; align-items:center; flex-wrap:wrap; margin-bottom:16px; }
+.barra select, .barra input { padding:9px 12px; font:inherit; font-size:13px; color:var(--ink);
+    border:1px solid var(--line-strong); border-radius:9px; background:var(--surface); }
+.abas { display:flex; gap:4px; border-bottom:1px solid var(--line); margin-bottom:16px; }
+.abas button { border:none; background:transparent; padding:10px 14px; font:inherit; font-size:13px;
+    font-weight:700; color:var(--ink-muted); cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px; }
+.abas button[aria-pressed="true"] { color:var(--acao); border-bottom-color:var(--acao); }
+.painel { display:none; } .painel.on { display:block; }
+.tabela-conv { width:100%; border-collapse:collapse; font-size:12.5px; }
+.tabela-conv th { text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:.05em;
+    color:var(--ink-soft); font-weight:700; padding:8px 9px; border-bottom:1px solid var(--line); }
+.tabela-conv td { padding:9px; border-bottom:1px solid var(--surface-alt); vertical-align:top; }
+.tabela-conv tr:hover td { background:var(--surface-alt); }
+.linha-risco td { background:rgba(220,38,38,.06); }
+.vazio-msg { padding:26px; text-align:center; color:var(--ink-muted); font-size:13px; }
+.nota-metodo { font-size:11px; color:var(--ink-soft); line-height:1.5; margin-top:10px;
+               padding-top:9px; border-top:1px dashed var(--line); }
+@media print {
+    .sidebar, .faixa-perfil, .app-topo, .barra, .abas, .nao-imprime { display:none !important; }
+    .app-main { padding:0 !important; max-width:100% !important; }
+    .card { box-shadow:none !important; border:none !important; padding:0 !important; }
+    body { background:#fff !important; }
+    .cabecalho-print { display:block !important; margin-bottom:14px; padding-bottom:10px;
+                       border-bottom:2px solid #333; }
+    .tabela-conv { font-size:9.5pt; }
+    .tabela-conv td, .tabela-conv th { padding:4px 6px; }
+}
+.cabecalho-print { display:none; }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../config.js?v=4"></script>
+<script src="../shared/supabase_client.js?v=2"></script>
+<script src="../shared/erros.js?v=16"></script>
+<script src="../shared/tema.js?v=2"></script>
+<script src="../shared/confirm_modal.js?v=3"></script>
+<script src="../shared/fotos.js?v=7"></script>
+<script src="../shared/config_sistema.js?v=10"></script>
+<script src="../shared/audit.js?v=5"></script>
+<script src="../shared/auth_guard.js?v=12"></script>
+</head>
+<body>
+
+<div class="app-shell">
+    <div id="sidebar"></div>
+    <div class="faixa-perfil"></div>
+
+    <main class="app-main">
+        <div class="app-topo">
+            <div>
+                <h1>Convênios</h1>
+                <div class="sub" id="subtitulo">carregando…</div>
+            </div>
+            <div style="display:flex;gap:8px">
+                <button class="btn btn-secundario" onclick="window.print()">Imprimir</button>
+                <button class="btn btn-secundario" onclick="exportar()">Exportar CSV</button>
+            </div>
+        </div>
+
+        <div class="barra">
+            <select id="selConvenio" onchange="carregar()"><option value="">Todos</option></select>
+            <input id="dtIni" type="date" onchange="carregar()">
+            <span class="tiny soft">a</span>
+            <input id="dtFim" type="date" onchange="carregar()">
+            <button class="btn btn-secundario" style="padding:8px 12px;font-size:12px" onclick="mesPassado()">Mês passado</button>
+        </div>
+
+        <div class="abas">
+            <button data-p="resumo" aria-pressed="true"  onclick="aba('resumo')">Resumo por paciente</button>
+            <button data-p="sessoes" aria-pressed="false" onclick="aba('sessoes')">Sessão a sessão</button>
+        </div>
+
+        <div class="cabecalho-print" id="cabecalhoPrint"></div>
+
+        <div class="painel on" id="p-resumo"><div class="card vazio-msg">carregando…</div></div>
+        <div class="painel" id="p-sessoes"><div class="card vazio-msg">carregando…</div></div>
+    </main>
+</div>
+
+<script src="../shared/avisos.js?v=14"></script>
+<script src="../shared/sidebar.js?v=14"></script>
+<script>
+'use strict';
+
+let RESUMO = [], SESSOES = [], EU = null;
+
+document.addEventListener('eq:pronto', async function (ev) {
+    EqSidebar.render('convenios');
+    EU = ev.detail;
+    if (!['admin_direcao','coordenador_aba','recepcao'].includes(EU.perfil)) {
+        document.getElementById('p-resumo').innerHTML =
+            '<div class="card vazio-msg">Tela restrita à direção, coordenação e recepção.</div>';
+        return;
+    }
+
+    try {
+        const { data } = await eqClient.from('pacientes')
+            .select('convenio').not('convenio','is',null);
+        const convs = [...new Set((data || []).map(p => p.convenio).filter(c => c && c !== 'particular'))].sort();
+        document.getElementById('selConvenio').innerHTML =
+            '<option value="">Todos os convênios</option>' +
+            convs.map(c => `<option value="${c}">${c}</option>`).join('');
+    } catch (e) { console.warn(e); }
+
+    mesPassado();
+});
+
+const p2 = n => String(n).padStart(2,'0');
+const iso = d => d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate());
+function brl(s) { return s ? s.slice(0,10).split('-').reverse().join('/') : '—'; }
+
+function aba(k) {
+    ['resumo','sessoes'].forEach(x => {
+        document.getElementById('p-' + x).classList.toggle('on', x === k);
+        document.querySelector('[data-p="' + x + '"]').setAttribute('aria-pressed', x === k);
+    });
+}
+
+function mesPassado() {
+    const hoje = new Date();
+    const ini = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
+    const fim = new Date(hoje.getFullYear(), hoje.getMonth(), 0);
+    document.getElementById('dtIni').value = iso(ini);
+    document.getElementById('dtFim').value = iso(fim);
+    carregar();
+}
+
+async function carregar() {
+    const conv = document.getElementById('selConvenio').value || null;
+    const ini = document.getElementById('dtIni').value || null;
+    const fim = document.getElementById('dtFim').value || null;
+
+    document.getElementById('p-resumo').innerHTML = '<div class="card vazio-msg">apurando…</div>';
+    try {
+        const [rr, rs] = await Promise.all([
+            eqClient.rpc('resumo_convenio',    { p_convenio: conv, p_ini: ini, p_fim: fim }),
+            eqClient.rpc('relatorio_convenio', { p_convenio: conv, p_ini: ini, p_fim: fim })
+        ]);
+        if (rr.error) throw rr.error;
+        if (rs.error) throw rs.error;
+        RESUMO = rr.data || [];
+        SESSOES = rs.data || [];
+        pintar();
+        await EqAudit.registrar('acesso', 'convenios', null,
+            { convenio: conv || 'todos', de: ini, ate: fim });
+    } catch (e) {
+        console.error(e);
+        if (window.EqErros) EqErros.anotar('relatório de convênio', e);
+        document.getElementById('p-resumo').innerHTML =
+            '<div class="card vazio-msg" style="color:var(--st-bad)">Erro ao apurar. Veja o console.</div>';
+    }
+}
+
+function pintar() {
+    const conv = document.getElementById('selConvenio').value;
+    const ini = document.getElementById('dtIni').value;
+    const fim = document.getElementById('dtFim').value;
+
+    const total = RESUMO.reduce((s,r) => s + r.realizadas, 0);
+    const risco = RESUMO.filter(r => r.com_guia_vencida > 0);
+    const sessoesRisco = RESUMO.reduce((s,r) => s + r.com_guia_vencida, 0);
+    const excedidos = RESUMO.filter(r => r.excedeu);
+
+    document.getElementById('subtitulo').textContent =
+        total + ' sessão(ões) realizada(s) · ' + RESUMO.length + ' paciente(s)';
+
+    const clinica = window.EqConfig ? EqConfig.get('clinica_nome','') : '';
+    document.getElementById('cabecalhoPrint').innerHTML = `
+        <div style="font-size:14pt;font-weight:800">${clinica || 'Equilibrium Med Center'}</div>
+        <div style="font-size:10pt;margin-top:3px">
+            Prestação de contas${conv ? ' — ' + conv : ''} ·
+            ${brl(ini)} a ${brl(fim)} · ${total} atendimento(s)
+        </div>`;
+
+    document.getElementById('p-resumo').innerHTML = `
+    ${sessoesRisco ? `<div class="card nao-imprime" style="border-left:3px solid var(--st-bad);margin-bottom:12px">
+        <div class="card-titulo"><h3>Risco de glosa</h3>
+            <span class="chip chip-erro">${sessoesRisco} sessão(ões)</span></div>
+        <p class="small muted">
+            ${risco.map(r => r.paciente.split(' ')[0] + ' (' + r.com_guia_vencida + ')').join(', ')}
+            — atendimentos feitos depois da guia vencer.
+        </p>
+        <div class="nota-metodo">
+            A conta usa a validade <b>na data do atendimento</b>, não a de hoje. É assim que
+            o convênio olha: sessão de 20/07 com guia válida até 15/07 não é paga, mesmo que
+            a guia já tenha sido renovada depois.
+        </div>
+    </div>` : ''}
+
+    ${excedidos.length ? `<div class="card nao-imprime" style="border-left:3px solid var(--st-warn);margin-bottom:12px">
+        <div class="card-titulo"><h3>Passou do autorizado</h3></div>
+        <p class="small muted">${excedidos.map(r =>
+            r.paciente + ': ' + r.realizadas + ' de ' + r.autorizadas).join(' · ')}</p>
+    </div>` : ''}
+
+    <div class="card">
+        <div class="card-titulo"><h3>Resumo por paciente</h3></div>
+        ${RESUMO.length ? `<table class="tabela-conv">
+            <thead><tr>
+                <th>Paciente</th><th>Convênio</th><th>Guia</th><th>Validade</th>
+                <th style="text-align:right">Autorizadas</th>
+                <th style="text-align:right">Realizadas</th>
+                <th style="text-align:right">Horas</th>
+            </tr></thead>
+            <tbody>${RESUMO.map(r => `
+                <tr class="${r.com_guia_vencida ? 'linha-risco' : ''}">
+                    <td><b>${r.paciente}</b>
+                        ${r.com_guia_vencida ? `<br><span class="tiny" style="color:var(--st-bad)">
+                            ${r.com_guia_vencida} com guia vencida</span>` : ''}</td>
+                    <td class="muted">${r.convenio || '—'}</td>
+                    <td class="muted">${r.guia_numero || '<span style="color:var(--st-warn)">sem número</span>'}</td>
+                    <td class="muted">${r.guia_validade ? brl(r.guia_validade) : '—'}</td>
+                    <td style="text-align:right" class="muted">${r.autorizadas || '—'}</td>
+                    <td style="text-align:right;font-weight:700;${r.excedeu ? 'color:var(--st-warn)' : ''}">${r.realizadas}</td>
+                    <td style="text-align:right" class="muted">${(r.minutos/60).toFixed(1)}</td>
+                </tr>`).join('')}
+            </tbody>
+            <tfoot><tr style="border-top:2px solid var(--line-strong)">
+                <td colspan="5" style="font-weight:700;padding-top:10px">Total</td>
+                <td style="text-align:right;font-weight:800;padding-top:10px">${total}</td>
+                <td style="text-align:right;font-weight:700;padding-top:10px">
+                    ${(RESUMO.reduce((s,r)=>s+r.minutos,0)/60).toFixed(1)}</td>
+            </tr></tfoot>
+        </table>`
+        : '<div class="vazio-msg">Nenhuma sessão realizada no período com esse filtro.</div>'}
+        <div class="nota-metodo">
+            Conta apenas sessões com status <b>realizada</b>. Faltas, cancelamentos e sessões
+            em aberto ficam de fora — é o que a clínica pode cobrar.
+        </div>
+    </div>`;
+
+    document.getElementById('p-sessoes').innerHTML = `
+    <div class="card">
+        <div class="card-titulo"><h3>Sessão a sessão</h3>
+            <span class="tiny soft">${SESSOES.length} linha(s)</span></div>
+        ${SESSOES.length ? `<table class="tabela-conv">
+            <thead><tr>
+                <th>Data</th><th>Hora</th><th>Paciente</th><th>Carteirinha</th>
+                <th>Guia</th><th>Profissional</th><th style="text-align:right">Min</th>
+            </tr></thead>
+            <tbody>${SESSOES.map(s => `
+                <tr class="${s.guia_vencida ? 'linha-risco' : ''}">
+                    <td>${brl(s.data)}</td>
+                    <td class="muted">${(s.hora||'').slice(0,5)}</td>
+                    <td>${s.paciente}</td>
+                    <td class="muted">${s.carteirinha || '—'}</td>
+                    <td class="muted">${s.guia_numero || '—'}
+                        ${s.guia_vencida ? '<br><span class="tiny" style="color:var(--st-bad)">vencida na data</span>' : ''}</td>
+                    <td class="muted">${s.profissional || '—'}${s.conselho ? '<br><span class="tiny soft">' + s.conselho + '</span>' : ''}</td>
+                    <td style="text-align:right" class="muted">${s.duracao_min}</td>
+                </tr>`).join('')}
+            </tbody>
+        </table>` : '<div class="vazio-msg">Nenhuma sessão no período.</div>'}
+    </div>`;
+}
+
+async function exportar() {
+    if (!SESSOES.length) return;
+    const ok = await EqConfirm.mostrar({
+        titulo: 'Exportar o período?',
+        texto: 'Gera um CSV com uma linha por atendimento, para conferência ou envio ao convênio.',
+        confirmar: 'Exportar', tipo: 'padrao'
+    });
+    if (!ok) return;
+
+    const linhas = [['data','hora','paciente','carteirinha','convenio','guia','validade_guia',
+                     'guia_vencida_na_data','profissional','conselho','duracao_min']]
+        .concat(SESSOES.map(s => [
+            brl(s.data), (s.hora||'').slice(0,5), s.paciente, s.carteirinha || '',
+            s.convenio || '', s.guia_numero || '', s.guia_validade ? brl(s.guia_validade) : '',
+            s.guia_vencida ? 'SIM' : 'nao', s.profissional || '', s.conselho || '', s.duracao_min
+        ]));
+
+    const csv = '\uFEFF' + linhas.map(l =>
+        l.map(c => '"' + String(c).replace(/"/g,'""') + '"').join(';')).join('\n');
+    const conv = document.getElementById('selConvenio').value || 'todos';
+    const url = URL.createObjectURL(new Blob([csv], { type:'text/csv;charset=utf-8' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'convenio_' + conv.toLowerCase().replace(/\s+/g,'-') + '_' +
+                 document.getElementById('dtIni').value + '.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+    await EqAudit.registrar('exportacao', 'convenios', null,
+        { convenio: conv, linhas: SESSOES.length });
+}
+</script>
+</body>
+</html>

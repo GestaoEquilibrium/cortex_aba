@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-tema="coordenacao">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CORTEX aba — Indicadores</title>
+<script>
+(function(){try{var m=localStorage.getItem('eqaba_modo');
+if(m!=='claro'&&m!=='escuro'){m=(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches)?'escuro':'claro';}
+document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
+</script>
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<link rel="manifest" href="../site.webmanifest">
+<meta name="theme-color" content="#0F766E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../styles/base.css?v=4">
+<link rel="stylesheet" href="../styles/components.css?v=5">
+<style>
+.barra { display:flex; gap:9px; align-items:center; flex-wrap:wrap; margin-bottom:16px; }
+.barra select { padding:10px 12px; font:inherit; font-size:13px; color:var(--ink);
+    border:1px solid var(--line-strong); border-radius:9px; background:var(--surface); }
+.grafico-caixa { position:relative; height:220px; margin-top:8px; }
+.linha-ind { display:flex; align-items:center; gap:10px; font-size:12.5px; margin-bottom:9px; }
+.linha-ind .nome { width:130px; flex:0 0 auto; color:var(--ink); font-weight:600;
+                   white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.linha-ind .trilho { flex:1; height:9px; background:var(--line); border-radius:5px; overflow:hidden; }
+.linha-ind .trilho i { display:block; height:9px; border-radius:5px; }
+.linha-ind .valor { width:70px; text-align:right; font-weight:700; }
+.legenda { display:flex; gap:16px; flex-wrap:wrap; font-size:11px; color:var(--ink-muted); margin-top:10px; }
+.legenda span { display:flex; align-items:center; gap:6px; }
+.legenda i { width:11px; height:11px; border-radius:3px; }
+.vazio-msg { padding:22px; text-align:center; color:var(--ink-muted); font-size:13px; }
+.nota-metodo { font-size:11px; color:var(--ink-soft); line-height:1.5; margin-top:9px;
+               padding-top:9px; border-top:1px dashed var(--line); }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="../config.js?v=4"></script>
+<script src="../shared/supabase_client.js?v=2"></script>
+<script src="../shared/tema.js?v=2"></script>
+<script src="../shared/confirm_modal.js?v=3"></script>
+<script src="../shared/fotos.js?v=7"></script>
+<script src="../shared/config_sistema.js?v=10"></script>
+<script src="../shared/audit.js?v=5"></script>
+<script src="../shared/auth_guard.js?v=12"></script>
+</head>
+<body>
+
+<div class="app-shell">
+    <div id="sidebar"></div>
+    <div class="faixa-perfil"></div>
+
+    <main class="app-main">
+        <div class="app-topo">
+            <div>
+                <h1>Indicadores</h1>
+                <div class="sub" id="subtitulo">carregando…</div>
+            </div>
+            <button class="btn btn-secundario" onclick="exportar()">Exportar CSV</button>
+        </div>
+
+        <div class="barra">
+            <select id="selPeriodo" onchange="carregar()">
+                <option value="30">Últimos 30 dias</option>
+                <option value="90" selected>Últimos 90 dias</option>
+                <option value="180">Últimos 6 meses</option>
+                <option value="365">Últimos 12 meses</option>
+            </select>
+            <span class="tiny soft" id="rotuloPeriodo"></span>
+        </div>
+
+        <div id="area"><div class="card vazio-msg">carregando…</div></div>
+    </main>
+</div>
+
+<script src="../shared/sidebar.js?v=9"></script>
+<script>
+'use strict';
+
+let CHARTS = [], DADOS = null;
+
+document.addEventListener('eq:pronto', async function (ev) {
+    EqSidebar.render('indicadores');
+    if (!['admin_direcao','supervisor_clinico','coordenador_aba'].includes(ev.detail.perfil)) {
+        document.getElementById('area').innerHTML =
+            '<div class="card vazio-msg">Tela restrita à coordenação, supervisão e direção.</div>';
+        return;
+    }
+    await carregar();
+});
+
+const p2 = n => String(n).padStart(2,'0');
+const iso = d => d.getFullYear() + '-' + p2(d.getMonth()+1) + '-' + p2(d.getDate());
+function brl(s) { return s ? s.slice(0,10).split('-').reverse().join('/') : '—'; }
+function limpar() { CHARTS.forEach(c => { try { c.destroy(); } catch (e) {} }); CHARTS = []; }
+
+// dias úteis do período, para calcular capacidade
+function diasUteis(ini, fim) {
+    let n = 0;
+    const d = new Date(ini);
+    const f = new Date(fim);
+    while (d <= f) {
+        const dow = d.getDay();
+        if (dow >= 1 && dow <= 5) n++;
+        d.setDate(d.getDate() + 1);
+    }
+    return n;
+}
+
+async function carregar() {
+    limpar();
+    document.getElementById('area').innerHTML = '<div class="card vazio-msg">apurando…</div>';
+
+    const dias = parseInt(document.getElementById('selPeriodo').value, 10);
+    const fim = new Date();
+    const ini = new Date(); ini.setDate(fim.getDate() - dias);
+    const iniISO = iso(ini), fimISO = iso(fim);
+    document.getElementById('rotuloPeriodo').textContent = brl(iniISO) + ' a ' + brl(fimISO);
+
+    try {
+        const [rs, rp, rprof, rpei, revol, rbloq] = await Promise.all([
+            eqClient.from('sessoes')
+                .select('id, data, hora_inicio, duracao_min, status, profissional_id, paciente_id')
+                .gte('data', iniISO).lte('data', fimISO),
+            eqClient.from('pacientes')
+                .select('id, nome_completo, status, convenio, sessoes_semana_prescritas, guia_validade, data_entrada'),
+            eqClient.from('profissionais')
+                .select('id, nome_completo, perfil, jornada_horas, ativo').eq('ativo', true),
+            eqClient.from('pei_programas')
+                .select('id, status, data_inicio, data_status, paciente_id'),
+            eqClient.from('evolucoes_diarias').select('sessao_id'),
+            eqClient.from('bloqueios_agenda').select('data').gte('data', iniISO).lte('data', fimISO)
+        ]);
+
+        DADOS = {
+            sessoes: rs.data || [], pacientes: rp.data || [], profissionais: rprof.data || [],
+            programas: rpei.data || [], evolucoes: new Set((revol.data || []).map(e => e.sessao_id)),
+            bloqueios: (rbloq.data || []).length,
+            iniISO, fimISO, dias
+        };
+        desenhar();
+        await EqAudit.registrar('acesso', 'indicadores', null, { periodo_dias: dias });
+
+    } catch (e) {
+        console.error(e);
+        document.getElementById('area').innerHTML =
+            '<div class="card vazio-msg" style="color:var(--st-bad)">Erro ao apurar. Veja o console.</div>';
+    }
+}
+
+function desenhar() {
+    const d = DADOS;
+    const uteis = diasUteis(d.iniISO, d.fimISO) - d.bloqueios;
+    const semanas = Math.max(1, Math.round(d.dias / 7));
+
+    const realizadas = d.sessoes.filter(s => s.status === 'realizada');
+    const faltas     = d.sessoes.filter(s => s.status && s.status.indexOf('falta') === 0);
+    const faltasSem  = d.sessoes.filter(s => s.status === 'falta_injustificada');
+    const previstas  = d.sessoes.length;
+    const taxaFalta  = previstas ? Math.round(faltas.length / previstas * 100) : 0;
+
+    const ativos = d.pacientes.filter(p => p.status === 'ativo');
+    const fila   = d.pacientes.filter(p => p.status === 'fila_espera');
+
+    document.getElementById('subtitulo').textContent =
+        previstas + ' sessões no período · ' + ativos.length + ' pacientes ativos';
+
+    // ── ocupação: horas atendidas × capacidade contratada ────────────────────
+    const aplicadores = d.profissionais.filter(p =>
+        ['aplicador','aplicador_itinerante','estagiario_aba'].includes(p.perfil));
+
+    const ocupacao = aplicadores.map(p => {
+        const minutos = realizadas.filter(s => s.profissional_id === p.id)
+                                  .reduce((s2, s) => s2 + (s.duracao_min || 60), 0);
+        const horas = minutos / 60;
+        const capacidade = (p.jornada_horas || 0) * uteis;
+        return {
+            nome: p.nome_completo, horas: horas, capacidade: capacidade,
+            pct: capacidade ? Math.round(horas / capacidade * 100) : null
+        };
+    }).sort((a, b) => (b.pct || 0) - (a.pct || 0));
+
+    const horasTotais = ocupacao.reduce((s, o) => s + o.horas, 0);
+    const capTotal    = ocupacao.reduce((s, o) => s + o.capacidade, 0);
+    const ocupGeral   = capTotal ? Math.round(horasTotais / capTotal * 100) : 0;
+
+    // ── sessões prescritas × realizadas ──────────────────────────────────────
+    const porPaciente = ativos.map(p => {
+        const minhas = d.sessoes.filter(s => s.paciente_id === p.id);
+        const feitas = minhas.filter(s => s.status === 'realizada').length;
+        const faltou = minhas.filter(s => s.status && s.status.indexOf('falta') === 0).length;
+        const prescritas = (p.sessoes_semana_prescritas || 0) * semanas;
+        return {
+            nome: p.nome_completo, prescritas, feitas, faltou,
+            convenio: p.convenio || 'particular',
+            guiaVencida: p.guia_validade && p.guia_validade < iso(new Date()),
+            guiaValidade: p.guia_validade,
+            aderencia: prescritas ? Math.round(feitas / prescritas * 100) : null
+        };
+    });
+
+    const semPrescricao = porPaciente.filter(p => !p.prescritas).length;
+    const guiasVencidas = porPaciente.filter(p => p.guiaVencida);
+    const abaixo = porPaciente.filter(p => p.aderencia !== null && p.aderencia < 75)
+                              .sort((a,b) => a.aderencia - b.aderencia);
+
+    // ── absenteísmo por dia da semana e por horário ──────────────────────────
+    const DIAS = ['dom','seg','ter','qua','qui','sex','sáb'];
+    const porDow = {}, porHora = {};
+    d.sessoes.forEach(s => {
+        const [a,m,dd] = s.data.split('-').map(Number);
+        const dow = new Date(a, m-1, dd).getDay();
+        const hora = (s.hora_inicio || '').slice(0,5);
+        if (!porDow[dow]) porDow[dow] = { total:0, falta:0 };
+        if (!porHora[hora]) porHora[hora] = { total:0, falta:0 };
+        porDow[dow].total++; porHora[hora].total++;
+        if (s.status && s.status.indexOf('falta') === 0) { porDow[dow].falta++; porHora[hora].falta++; }
+    });
+
+    const piorPaciente = porPaciente.filter(p => p.faltou > 0)
+        .sort((a,b) => b.faltou - a.faltou).slice(0, 6);
+
+    // ── resultado clínico ────────────────────────────────────────────────────
+    const dominadosPeriodo = d.programas.filter(p =>
+        p.status === 'dominado' && p.data_status &&
+        p.data_status >= d.iniISO && p.data_status <= d.fimISO);
+
+    const temposDominio = dominadosPeriodo.map(p => {
+        if (!p.data_inicio || !p.data_status) return null;
+        const [a1,m1,d1] = p.data_inicio.split('-').map(Number);
+        const [a2,m2,d2] = p.data_status.split('-').map(Number);
+        return Math.round((new Date(a2,m2-1,d2) - new Date(a1,m1-1,d1)) / 86400000);
+    }).filter(x => x !== null && x >= 0);
+
+    const tempoMedio = temposDominio.length
+        ? Math.round(temposDominio.reduce((s,x) => s+x, 0) / temposDominio.length) : null;
+
+    const emEnsino = d.programas.filter(p => p.status === 'em_ensino').length;
+
+    // ── compliance de evolução ───────────────────────────────────────────────
+    const semEvolucao = realizadas.filter(s => !d.evolucoes.has(s.id)).length;
+    const pctEvolucao = realizadas.length
+        ? Math.round((realizadas.length - semEvolucao) / realizadas.length * 100) : 100;
+
+    const cor = pct => pct >= 85 ? 'var(--st-ok)' : pct >= 65 ? 'var(--st-warn)' : 'var(--st-bad)';
+    const corInversa = pct => pct <= 10 ? 'var(--st-ok)' : pct <= 20 ? 'var(--st-warn)' : 'var(--st-bad)';
+
+    document.getElementById('area').innerHTML = `
+    <div class="grid-4" style="margin-bottom:12px">
+        <div class="kpi" style="--kpi-cor:${cor(ocupGeral)}">
+            <div class="kpi-numero">${ocupGeral}%</div>
+            <div class="kpi-texto">ocupação da equipe</div></div>
+        <div class="kpi" style="--kpi-cor:${corInversa(taxaFalta)}">
+            <div class="kpi-numero">${taxaFalta}%</div>
+            <div class="kpi-texto">de faltas (${faltasSem.length} sem aviso)</div></div>
+        <div class="kpi" style="--kpi-cor:${cor(pctEvolucao)}">
+            <div class="kpi-numero">${pctEvolucao}%</div>
+            <div class="kpi-texto">sessões com evolução escrita</div></div>
+        <div class="kpi" style="--kpi-cor:var(--st-ok)">
+            <div class="kpi-numero">${dominadosPeriodo.length}</div>
+            <div class="kpi-texto">objetivos dominados no período</div></div>
+    </div>
+
+    <div class="grid-2-1">
+        <div class="card">
+            <div class="card-titulo">
+                <h3>Ocupação por aplicador</h3>
+                <span class="tiny soft">${Math.round(horasTotais)}h de ${Math.round(capTotal)}h possíveis</span>
+            </div>
+            ${ocupacao.length ? ocupacao.map(o => `
+                <div class="linha-ind">
+                    <span class="nome" title="${o.nome}">${o.nome}</span>
+                    <span class="trilho"><i style="width:${Math.min(o.pct || 0, 100)}%;background:${o.pct === null ? 'var(--st-neutro)' : cor(o.pct)}"></i></span>
+                    <span class="valor" style="color:${o.pct === null ? 'var(--ink-soft)' : cor(o.pct)}">
+                        ${o.pct === null ? 'sem jornada' : o.pct + '%'}</span>
+                </div>`).join('')
+            : '<div class="vazio-msg">Nenhum aplicador cadastrado.</div>'}
+            <div class="nota-metodo">
+                Horas efetivamente atendidas divididas pela jornada contratada × ${uteis} dias úteis do período
+                ${d.bloqueios ? '(já descontados ' + d.bloqueios + ' dias bloqueados)' : ''}.
+                Quem aparece "sem jornada" não tem carga horária cadastrada em Equipe.
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-titulo"><h3>Capacidade</h3></div>
+            <div class="linha-ind"><span class="nome">Pacientes ativos</span>
+                <span class="valor" style="width:auto;font-size:15px">${ativos.length}</span></div>
+            <div class="linha-ind"><span class="nome">Fila de espera</span>
+                <span class="valor" style="width:auto;font-size:15px;color:${fila.length ? 'var(--st-warn)' : 'var(--ink-muted)'}">${fila.length}</span></div>
+            <div class="linha-ind"><span class="nome">Horas livres</span>
+                <span class="valor" style="width:auto;font-size:15px">${Math.max(0, Math.round(capTotal - horasTotais))}h</span></div>
+            <div class="linha-ind"><span class="nome">Objetivos em ensino</span>
+                <span class="valor" style="width:auto;font-size:15px">${emEnsino}</span></div>
+            ${tempoMedio !== null ? `<div class="linha-ind"><span class="nome">Tempo até dominar</span>
+                <span class="valor" style="width:auto;font-size:15px">${tempoMedio} dias</span></div>` : ''}
+            <div class="nota-metodo">
+                Horas livres é o que sobra da jornada contratada. É o número que responde
+                quanta demanda ainda cabe.
+            </div>
+        </div>
+    </div>
+
+    <div class="grid-2" style="margin-top:12px">
+        <div class="card">
+            <div class="card-titulo"><h3>Faltas por dia da semana</h3></div>
+            <div class="grafico-caixa"><canvas id="gDow"></canvas></div>
+            <div class="legenda"><span><i style="background:var(--st-bad)"></i>% de faltas</span></div>
+        </div>
+        <div class="card">
+            <div class="card-titulo"><h3>Faltas por horário</h3></div>
+            <div class="grafico-caixa"><canvas id="gHora"></canvas></div>
+            <div class="nota-metodo">Horário com falta crônica costuma ser problema de logística da família, não da criança.</div>
+        </div>
+    </div>
+
+    <div class="grid-2" style="margin-top:12px">
+        <div class="card">
+            <div class="card-titulo"><h3>Pacientes que mais faltaram</h3></div>
+            ${piorPaciente.length ? piorPaciente.map(p => `
+                <div class="linha-ind">
+                    <span class="nome" title="${p.nome}">${p.nome}</span>
+                    <span class="trilho"><i style="width:${Math.min(p.faltou * 12, 100)}%;background:var(--st-bad)"></i></span>
+                    <span class="valor" style="color:var(--st-bad)">${p.faltou}</span>
+                </div>`).join('')
+            : '<div class="vazio-msg">Nenhuma falta no período.</div>'}
+        </div>
+
+        <div class="card">
+            <div class="card-titulo">
+                <h3>Aderência à prescrição</h3>
+                <span class="tiny soft">realizadas ÷ prescritas</span>
+            </div>
+            ${abaixo.length ? abaixo.slice(0,6).map(p => `
+                <div class="linha-ind">
+                    <span class="nome" title="${p.nome}">${p.nome}</span>
+                    <span class="trilho"><i style="width:${Math.min(p.aderencia,100)}%;background:${cor(p.aderencia)}"></i></span>
+                    <span class="valor" style="color:${cor(p.aderencia)}">${p.aderencia}%</span>
+                </div>`).join('')
+            : '<div class="vazio-msg">Todos dentro do previsto.</div>'}
+            ${semPrescricao ? `<div class="nota-metodo">
+                ${semPrescricao} paciente(s) sem número de sessões prescritas no cadastro — ficam de fora deste cálculo.
+            </div>` : ''}
+        </div>
+    </div>
+
+    ${guiasVencidas.length ? `<div class="card" style="margin-top:12px;border-left:3px solid var(--st-bad)">
+        <div class="card-titulo"><h3>Guias vencidas</h3>
+            <span class="chip chip-erro">${guiasVencidas.length}</span></div>
+        <table class="tabela">
+            <thead><tr><th>Paciente</th><th>Convênio</th><th>Venceu em</th></tr></thead>
+            <tbody>${guiasVencidas.map(p => `<tr>
+                <td><b>${p.nome}</b></td>
+                <td class="muted">${p.convenio}</td>
+                <td style="color:var(--st-bad);font-weight:700">${brl(p.guiaValidade)}</td>
+            </tr>`).join('')}</tbody>
+        </table>
+        <div class="nota-metodo">Atendimento com guia vencida costuma virar glosa. Renove antes da próxima sessão.</div>
+    </div>` : ''}`;
+
+    montarGraficoFaltas('gDow', DIAS.slice(1,6).map((r,i) => {
+        const info = porDow[i+1] || { total:0, falta:0 };
+        return { rotulo: r, pct: info.total ? Math.round(info.falta / info.total * 100) : 0 };
+    }));
+
+    const horas = Object.keys(porHora).sort();
+    montarGraficoFaltas('gHora', horas.map(hh => {
+        const info = porHora[hh];
+        return { rotulo: hh, pct: info.total ? Math.round(info.falta / info.total * 100) : 0 };
+    }));
+}
+
+function montarGraficoFaltas(id, dados) {
+    const el = document.getElementById(id);
+    if (!el || typeof Chart === 'undefined' || !dados.length) return;
+    const escuro = document.documentElement.getAttribute('data-modo') === 'escuro';
+    const corTexto = escuro ? '#93A6B4' : '#5C7284';
+    const corGrade = escuro ? 'rgba(255,255,255,.07)' : 'rgba(12,27,42,.07)';
+
+    CHARTS.push(new Chart(el, {
+        type: 'bar',
+        data: {
+            labels: dados.map(d => d.rotulo),
+            datasets: [{
+                data: dados.map(d => d.pct),
+                backgroundColor: dados.map(d => d.pct > 20 ? '#DC2626' : d.pct > 10 ? '#D97706' : '#94A3B8'),
+                borderRadius: 5, maxBarThickness: 40
+            }]
+        },
+        options: {
+            responsive:true, maintainAspectRatio:false,
+            plugins:{ legend:{ display:false },
+                      tooltip:{ callbacks:{ label: c => c.parsed.y + '% de faltas' } } },
+            scales:{ y:{ beginAtZero:true, ticks:{ color:corTexto, callback:v => v + '%' }, grid:{ color:corGrade } },
+                     x:{ ticks:{ color:corTexto }, grid:{ display:false } } }
+        }
+    }));
+}
+
+async function exportar() {
+    if (!DADOS) return;
+    const ok = await EqConfirm.mostrar({
+        titulo: 'Exportar os indicadores?',
+        texto: 'Gera um CSV com sessão por sessão do período, para conferência ou uso em planilha.',
+        confirmar: 'Exportar', tipo: 'padrao'
+    });
+    if (!ok) return;
+
+    const nomePac = {}; DADOS.pacientes.forEach(p => nomePac[p.id] = p.nome_completo);
+    const nomeProf = {}; DADOS.profissionais.forEach(p => nomeProf[p.id] = p.nome_completo);
+
+    const linhas = [['data','hora','paciente','aplicador','duracao_min','status','tem_evolucao']]
+        .concat(DADOS.sessoes.map(s => [
+            s.data, (s.hora_inicio||'').slice(0,5),
+            nomePac[s.paciente_id] || '', nomeProf[s.profissional_id] || '',
+            s.duracao_min, s.status, DADOS.evolucoes.has(s.id) ? 'sim' : 'nao'
+        ]));
+
+    const csv = '\uFEFF' + linhas.map(l =>
+        l.map(c => '"' + String(c).replace(/"/g,'""') + '"').join(';')).join('\n');
+    const url = URL.createObjectURL(new Blob([csv], { type:'text/csv;charset=utf-8' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = 'indicadores_cortex_aba.csv'; a.click();
+    URL.revokeObjectURL(url);
+    await EqAudit.registrar('exportacao', 'indicadores', null, { linhas: DADOS.sessoes.length });
+}
+</script>
+</body>
+</html>

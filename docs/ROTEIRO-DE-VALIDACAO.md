@@ -1,200 +1,312 @@
 # Roteiro de validação — CORTEX aba
 
-Percurso completo do sistema, do zero ao relatório. Feito para ser executado de uma
-vez, marcando cada item. O que falhar, anote o número — é assim que a correção vira
-sprint em vez de virar conversa.
+Percurso completo do sistema. Substitui a versão do sprint 18, que cobria menos da metade
+do que existe hoje.
 
-**Antes de começar:** rode `database/99_seed_demo.sql`. Ele cria equipe, quatro
-pacientes, grade, três semanas de sessões, tentativas com evolução crescente,
-comportamento com linha de base e faltas plantadas para disparar a tarefa automática.
+**Como usar:** percorra marcando. O que falhar, anote o número do item — é assim que a
+correção vira sprint em vez de virar conversa.
+
+**Em que base rodar:** se ainda não importou a base real, use `database/99_seed_demo.sql`.
+Se já importou, rode direto sobre ela — os itens estão escritos para funcionar nos dois casos.
 
 ---
 
 ## 1. Entrada e identidade
 
-- [ ] 1.1 Abrir o sistema em janela anônima. O login mostra CORTEX com "aba" manuscrito ao lado, sem sobreposição.
-- [ ] 1.2 O fundo tem os pontos, e eles ficam **atrás** do cartão branco.
-- [ ] 1.3 Entrar com a conta de direção. Cai no Painel.
-- [ ] 1.4 O menu mostra: Dashboard, Pacientes, Agenda, Sessão de hoje, Programas, Avaliações, Gráficos, Comportamento, Tarefas, Relatórios, Equipe, Auditoria, Configurações.
-- [ ] 1.5 Clicar em cada item do menu. Nenhum leva a página em branco ou erro.
-- [ ] 1.6 Botão de recolher: barra encolhe, rótulos somem, avatar e sair continuam dentro da barra.
-- [ ] 1.7 Botão de lua/sol: alterna claro e escuro. Recarregar mantém a escolha.
-- [ ] 1.8 No escuro, verde continua sendo "independente" e vermelho "erro" — as cores de significado não mudaram.
+- [ ] 1.1 Login em janela anônima: CORTEX com "aba" manuscrito, sem sobreposição
+- [ ] 1.2 O fundo tem pontos, e eles ficam **atrás** do cartão
+- [ ] 1.3 Entrar como direção → cai no Painel
+- [ ] 1.4 Menu completo: Dashboard, Pacientes, Agenda, Sessão de hoje, Programas, Avaliações, Supervisão, Gráficos, Comportamento, Admissão, Tarefas, Indicadores, Relatórios, Auditoria, Equipe, Configurações
+- [ ] 1.5 Clicar em cada item: nenhum leva a página em branco
+- [ ] 1.6 Recolher o menu: rótulos somem, avatar e sair continuam dentro
+- [ ] 1.7 Alternar claro/escuro: a escolha persiste ao recarregar
+- [ ] 1.8 No escuro, verde continua sendo independente e vermelho erro
+- [ ] 1.9 O sino tem ponto âmbar quando há pendência; clicar abre a lista
+- [ ] 1.10 Cada linha do sino leva à tela que resolve
 
 ## 2. Painel
 
-- [ ] 2.1 Mostra sessões de hoje com paciente, aplicador e status.
-- [ ] 2.2 Sessões realizadas sem evolução aparecem com o selo "sem evolução".
-- [ ] 2.3 O indicador de evoluções pendentes traz número maior que zero (o seed deixa as últimas sem evolução).
-- [ ] 2.4 O compliance por aplicador lista os profissionais do pior para o melhor.
-- [ ] 2.5 O indicador de tarefas abertas traz pelo menos uma — a automática do Bento Demo.
+- [ ] 2.1 Sessões de hoje com paciente, aplicador e status
+- [ ] 2.2 Sessão realizada sem evolução ganha o selo "sem evolução"
+- [ ] 2.3 Indicador de evoluções pendentes com número real
+- [ ] 2.4 Compliance por aplicador, do pior para o melhor
+- [ ] 2.5 Bloco de supervisão com fidelidade média e ciências pendentes
+- [ ] 2.6 Tarefas abertas, destacando as atrasadas
 
-## 3. Pacientes
+## 3. Admissão e fila
 
-- [ ] 3.1 Cards mostram próxima sessão, frequência, dias desde a última evolução e faltas do mês.
-- [ ] 3.2 Bento Demo aparece com faltas em destaque.
-- [ ] 3.3 Théo Demo tem o aviso de cartão de segurança.
-- [ ] 3.4 Buscar "Théo" filtra. Buscar pelo nome do responsável também funciona.
-- [ ] 3.5 Filtros combinam: Ativos + Com faltas mostra só quem tem os dois.
-- [ ] 3.6 Alternar para Lista mostra as mesmas pessoas em tabela.
-- [ ] 3.7 Clicar num card abre a ficha.
+- [ ] 3.1 Novo contato: criança, responsável, origem, prioridade e **disponibilidade**
+- [ ] 3.2 A criança entra na fila, **não** na agenda
+- [ ] 3.3 Ela não aparece como paciente ativo nem conta nos indicadores
+- [ ] 3.4 Fila ordenada por prioridade e depois por tempo de espera
+- [ ] 3.5 Mapa de vagas desenha a grade de segunda a sexta com números
+- [ ] 3.6 Passar o mouse mostra quem está livre
+- [ ] 3.7 **Achar vaga**: as sugestões respeitam os dias e turnos marcados
+- [ ] 3.8 Marcar um horário cria o item na grade e o vínculo
+- [ ] 3.9 Ao completar as sessões previstas, pergunta se ativa
+- [ ] 3.10 Ativando, a criança sai da fila e passa a gerar sessões
 
-## 4. Ficha do paciente
+## 4. Pacientes
 
-- [ ] 4.1 Cabeçalho com idade em anos e meses, aplicador titular e situação.
-- [ ] 4.2 Cartão de segurança em destaque, quando houver.
-- [ ] 4.3 Clicar no avatar permite enviar foto. A foto aparece no card e na lista.
-- [ ] 4.4 Aba Grade: horários fixos listados por dia.
-- [ ] 4.5 **Teste do conflito:** adicionar horário no mesmo dia e hora de outro paciente com o mesmo aplicador. O sistema recusa e diz quem já ocupa.
-- [ ] 4.6 Adicionar horário válido: aparece na grade e o vínculo do aplicador é criado sozinho.
-- [ ] 4.7 Encerrar um horário: some da grade, mas as sessões antigas continuam na aba Sessões.
-- [ ] 4.8 Aba PEI: objetivos listados, com contagem de tentativas por sessão completa.
-- [ ] 4.9 Ajustar um objetivo para "dominado" sem marcar as três generalizações — o aviso aparece.
-- [ ] 4.10 Aba Família: cadastrar responsável com um e-mail seu.
-- [ ] 4.11 Aba Família: enviar uma orientação do tipo "atividade".
-- [ ] 4.12 Aba Linha do tempo: mostra entrada, vínculos e primeira sessão.
+- [ ] 4.1 Cards com próxima sessão, frequência, dias desde a evolução e faltas
+- [ ] 4.2 Buscar por nome da criança e do responsável
+- [ ] 4.3 Filtros combinam (Ativos + Com faltas)
+- [ ] 4.4 Filtro **Encerrados** mostra só os que saíram; sem ele, eles não aparecem
+- [ ] 4.5 Alternador cards/lista
+- [ ] 4.6 Clicar abre a ficha
 
-## 5. Agenda
+## 5. Ficha do paciente
 
-- [ ] 5.1 Visão Dia mostra as sessões de hoje.
-- [ ] 5.2 Marcar "Realizada" muda o chip na hora.
-- [ ] 5.3 Marcar "Falta sem aviso" pede confirmação antes.
-- [ ] 5.4 Ir para amanhã e usar "Gerar sessões do dia": cria a partir da grade.
-- [ ] 5.5 Gerar de novo no mesmo dia: avisa que não havia o que criar, sem duplicar.
-- [ ] 5.6 Visão Semana sem filtro: colunas são os profissionais.
-- [ ] 5.7 Escolher um profissional: colunas viram os cinco dias dele, e horários da grade ainda sem sessão aparecem tracejados.
-- [ ] 5.8 Visão Mês: dias com barra verde e vermelha conforme realizadas e faltas. Clicar num dia abre a visão de dia.
+- [ ] 5.1 Idade em anos e meses correta (**se aparecer 126 anos, falta corrigir a data de nascimento**)
+- [ ] 5.2 Cartão de segurança em destaque
+- [ ] 5.3 Enviar foto pelo avatar; ela aparece no card e na lista
+- [ ] 5.4 Botão **Falar com a família** abre o menu de mensagens
+- [ ] 5.5 A mensagem de confirmação traz a data e hora reais da próxima sessão
+- [ ] 5.6 Aba Grade: horários listados por dia
+- [ ] 5.7 **Conflito:** tentar horário já ocupado pelo mesmo aplicador → recusa dizendo quem ocupa
+- [ ] 5.8 Encerrar horário: some da grade, sessões antigas permanecem
+- [ ] 5.9 Aba PEI: objetivos, tentativas por sessão completa, generalização
+- [ ] 5.10 Marcar objetivo como dominado sem as três generalizações → aviso
+- [ ] 5.11 Ao marcar dominado, ele vira **em manutenção** e aparecem 3 sondagens agendadas
+- [ ] 5.12 Reforçadores: adicionar com tipo, preferência e restrição
+- [ ] 5.13 Registrar avaliação de preferência: os 3 primeiros viram preferência alta
+- [ ] 5.14 Aba Anamnese: gerar link, copiar, abrir WhatsApp
+- [ ] 5.15 Aba Documentos: enviar PDF com validade; vencido aparece em vermelho
+- [ ] 5.16 Abrir documento gera link temporário e registra na auditoria
+- [ ] 5.17 Aba Família: cadastrar responsável e criar acesso
+- [ ] 5.18 Enviar orientação do tipo atividade
+- [ ] 5.19 Aba Linha do tempo com entrada, vínculos e primeira sessão
 
-## 6. Sessão (coleta)
+## 6. Agenda
 
-- [ ] 6.1 Abrir Sessão de hoje. Aparece o seletor com as sessões do dia.
-- [ ] 6.2 Cartão de segurança do paciente aparece antes dos objetivos.
-- [ ] 6.3 Objetivos do PEI listados com os alvos.
-- [ ] 6.4 Tocar em "Independente": a trilha pinta de verde e o percentual sobe.
-- [ ] 6.5 Tocar em "Com ajuda" e escolher o nível de dica.
-- [ ] 6.6 Completar o número de tentativas: os botões travam.
-- [ ] 6.7 Encerrar sem escrever evolução: pede confirmação.
-- [ ] 6.8 Escrever a evolução, marcar um contexto e encerrar. A sessão vira "realizada".
-- [ ] 6.9 **Teste offline:** desligar o wi-fi, registrar 3 tentativas, ver o aviso de registros aguardando, religar e confirmar que suma.
+- [ ] 6.1 Visão Dia com as sessões
+- [ ] 6.2 Marcar Realizada muda o chip na hora
+- [ ] 6.3 Marcar Falta sem aviso pede confirmação
+- [ ] 6.4 Sessão com falta ganha botão **Avisar família**, com o texto pronto
+- [ ] 6.5 Gerar sessões do dia cria a partir da grade
+- [ ] 6.6 Gerar de novo não duplica
+- [ ] 6.7 **Encaixe**: sessão avulsa fora da grade
+- [ ] 6.8 **Cobertura**: lista só quem está livre naquele horário, itinerante primeiro
+- [ ] 6.9 Transferir marca a sessão como cobertura
+- [ ] 6.10 **Feriado**: cadastrar e conferir que a geração não cria nada naquele dia
+- [ ] 6.11 Visão Semana sem filtro: colunas são profissionais
+- [ ] 6.12 Com profissional escolhido: colunas viram os cinco dias, e o previsto pela grade aparece tracejado
+- [ ] 6.13 Visão Mês com barras de realizadas e faltas; clicar abre o dia
 
-## 7. Gráficos
+## 7. Equipe
 
-- [ ] 7.1 Escolher Théo Demo. Aparece um cartão por objetivo com registro.
-- [ ] 7.2 A curva verde (independente) sobe ao longo das semanas.
-- [ ] 7.3 A curva âmbar (com ajuda) desce no mesmo período.
-- [ ] 7.4 A linha pontilhada do critério aparece na altura configurada no PEI.
-- [ ] 7.5 Trocar o período para 30 dias muda o gráfico.
-- [ ] 7.6 Alternar para modo escuro: o gráfico continua legível.
+- [ ] 7.1 Cadastrar profissional com "criar acesso agora" marcado
+- [ ] 7.2 A senha temporária aparece uma vez, com botão de copiar
+- [ ] 7.3 Entrar com essa conta → o sistema exige trocar a senha
+- [ ] 7.4 Tentar ir direto para o painel pela URL → volta para a troca de senha
+- [ ] 7.5 Redefinir senha de quem já tem acesso
+- [ ] 7.6 Registrar **ausência** (férias ou atestado)
+- [ ] 7.7 Gerar sessões num dia de ausência: a pessoa é pulada
+- [ ] 7.8 Quem está ausente hoje aparece com etiqueta na lista
 
-## 8. Comportamento
+## 8. Sessão (coleta)
 
-- [ ] 8.1 Escolher Bento Demo. Aparece "Recusa com grito Demo".
-- [ ] 8.2 A definição observável aparece abaixo do nome.
-- [ ] 8.3 No gráfico, as barras antes da linha de base são cinzas e depois vermelhas.
-- [ ] 8.4 A frequência cai depois do início da intervenção.
-- [ ] 8.5 O plano de manejo aparece com prevenir, responder e ensinar no lugar.
-- [ ] 8.6 Registrar um episódio novo com A-B-C e intensidade. Aparece na lista.
+- [ ] 8.1 Abre com o seletor das sessões do dia
+- [ ] 8.2 Cartão de segurança antes de tudo
+- [ ] 8.3 **Reforçadores** aparecem logo abaixo, com aviso nos que têm restrição
+- [ ] 8.4 Objetivos do PEI em ordem de prioridade
+- [ ] 8.5 Alvos: aquisição + até 2 de manutenção, estes com contorno tracejado
+- [ ] 8.6 Tocar Independente pinta a trilha e sobe o percentual
+- [ ] 8.7 Com ajuda + nível de dica
+- [ ] 8.8 Ao completar as tentativas, os botões travam
+- [ ] 8.9 **Sondagem vencida** aparece no topo, com manteve/parcial/perdeu
+- [ ] 8.10 Marcar "perdeu" devolve o objetivo para ensino
+- [ ] 8.11 Botão Registrar comportamento abre no paciente certo
+- [ ] 8.12 Encerrar sem evolução pede confirmação
+- [ ] 8.13 Escrever evolução, marcar contexto e encerrar
+- [ ] 8.14 **Offline:** desligar o wi-fi, registrar 3 tentativas, ver o aviso, religar e conferir que sumiu
 
-## 9. Tarefas
+## 9. Promoção de alvo (a regra mais delicada)
 
-- [ ] 9.1 Existe a tarefa automática de contato por faltas seguidas, marcada como "automática".
-- [ ] 9.2 Criar tarefa manual com prazo para ontem: aparece como atrasada.
-- [ ] 9.3 Filtro "Atrasadas" mostra só ela.
-- [ ] 9.4 Concluir a tarefa: pede confirmação e some das abertas.
+- [ ] 9.1 Rodar uma sessão inteira com 100% de independência num alvo
+- [ ] 9.2 Ao final, o alvo **continua em aquisição** — não pode subir na primeira
+- [ ] 9.3 Repetir em três sessões perfeitas seguidas → aí sim vira manutenção
+- [ ] 9.4 Se uma das três tiver erro, não promove
 
-## 10. Avaliações
+## 10. Supervisão e IOA
 
-- [ ] 10.1 Criar protocolo próprio com dois domínios e três itens cada.
-- [ ] 10.2 Escolher origem "licenciado" sem preencher autorização: o aviso aparece.
-- [ ] 10.3 Criar avaliação AV1 para Théo Demo e responder os itens.
-- [ ] 10.4 A barra de progresso e o percentual por domínio atualizam enquanto responde.
-- [ ] 10.5 Concluir: a avaliação trava para edição.
-- [ ] 10.6 Criar AV2, responder com notas maiores e concluir.
-- [ ] 10.7 O gráfico comparativo mostra as duas ondas lado a lado por domínio.
+- [ ] 10.1 Nova supervisão: checklist com dez itens
+- [ ] 10.2 Marcar N-A: o item sai da conta, não vale zero
+- [ ] 10.3 Placar abaixo de 70% pede confirmação lembrando do plano de ação
+- [ ] 10.4 Na sessão, ativar **modo observador** e registrar em paralelo
+- [ ] 10.5 Criar supervisão vinculada àquela sessão → mostra a concordância
+- [ ] 10.6 A aplicadora entra e **dá ciência**
+- [ ] 10.7 Média por aplicador, do pior para o melhor
 
-## 11. Relatório mensal
+## 11. Comportamento
 
-- [ ] 11.1 Escolher Théo Demo e o mês atual. Gerar rascunho.
-- [ ] 11.2 Os números de frequência batem com a agenda.
-- [ ] 11.3 O texto de progressos cita os objetivos e as porcentagens reais.
-- [ ] 11.4 Onde depende de leitura clínica, aparece o marcador entre colchetes.
-- [ ] 11.5 Editar um trecho e salvar rascunho.
-- [ ] 11.6 Finalizar: o texto trava.
-- [ ] 11.7 Tentar editar finalizado: o campo não aceita.
-- [ ] 11.8 Reabrir para revisão: volta a aceitar.
-- [ ] 11.9 Imprimir: some o menu e sai só o documento com o cabeçalho da clínica.
-- [ ] 11.10 Finalizar de novo e liberar à família.
+- [ ] 11.1 Cadastrar com definição observável e linha de base
+- [ ] 11.2 Registrar episódio com A-B-C, intensidade e duração
+- [ ] 11.3 No gráfico, barras antes da linha de base em cinza; depois, vermelhas
+- [ ] 11.4 Criar plano de manejo com prevenir, responder e ensinar no lugar
+- [ ] 11.5 Alerta de escalada quando a frequência sobe mais de 30%
 
-## 12. Portal da família
+## 12. Avaliações
 
-- [ ] 12.1 Criar no Supabase o usuário com o mesmo e-mail do responsável cadastrado em 4.10.
-- [ ] 12.2 Em janela anônima, entrar com esse e-mail. Cai no portal, não no painel.
-- [ ] 12.3 Aparece a criança, com foto se houver.
-- [ ] 12.4 A atividade enviada em 4.11 aparece com botão de marcar como feito.
-- [ ] 12.5 Marcar como feito. Na ficha do paciente, aba Família, aparece "feito em".
-- [ ] 12.6 Os próximos atendimentos aparecem.
-- [ ] 12.7 O relatório liberado em 11.10 aparece e abre.
-- [ ] 12.8 **Teste de vazamento:** no console do navegador, rodar cada consulta abaixo. Todas devem voltar vazias ou com erro.
+- [ ] 12.1 Cadastrar protocolo com **área marcada** no domínio: `# Linguagem receptiva [receptiva]`
+- [ ] 12.2 Domínio sem área: a tela avisa que não gera sugestão
+- [ ] 12.3 Origem "licenciado" sem autorização → aviso
+- [ ] 12.4 Aplicar AV1 respondendo item a item
+- [ ] 12.5 Barra de progresso e percentual por domínio atualizam
+- [ ] 12.6 Concluir trava a avaliação
+- [ ] 12.7 **Sugestões** aparecem: domínios abaixo de 60% com programas daquela área
+- [ ] 12.8 Incluir um no PEI → aparece na ficha do paciente
+- [ ] 12.9 O programa incluído some da lista de sugestões
+- [ ] 12.10 Criar AV2 com notas maiores → gráfico comparativo mostra as duas ondas
 
+## 13. Gráficos
+
+- [ ] 13.1 Um cartão por objetivo com registro
+- [ ] 13.2 Curva verde (independente) sobe; âmbar (com ajuda) desce
+- [ ] 13.3 Linha pontilhada do critério na altura certa
+- [ ] 13.4 Trocar o período muda o gráfico
+- [ ] 13.5 No modo escuro, continua legível
+
+## 14. Tarefas automáticas
+
+- [ ] 14.1 Duas faltas **seguidas** geram tarefa de contato
+- [ ] 14.2 Falta, presença, falta → **não** gera (teste importante)
+- [ ] 14.3 Evolução atrasada além do prazo gera tarefa para o aplicador
+- [ ] 14.4 Sondagem vencida gera tarefa
+- [ ] 14.5 Reavaliação de preferência após 90 dias gera tarefa
+- [ ] 14.6 Nenhuma duplica ao abrir a tela de novo
+- [ ] 14.7 Tarefa de contato tem botão **Falar** com a mensagem pronta
+
+## 15. Indicadores
+
+- [ ] 15.1 Ocupação por aplicador; quem não tem jornada aparece como "sem jornada"
+- [ ] 15.2 Horas livres batem com o mapa de vagas
+- [ ] 15.3 Absenteísmo por dia da semana e por horário
+- [ ] 15.4 Aderência à prescrição por paciente
+- [ ] 15.5 Guias vencidas em bloco vermelho
+- [ ] 15.6 Exportar CSV
+
+## 16. Relatório mensal
+
+- [ ] 16.1 Gerar rascunho: os números batem com a agenda
+- [ ] 16.2 O texto cita os objetivos e as porcentagens reais
+- [ ] 16.3 Onde depende de leitura clínica, aparece o marcador entre colchetes
+- [ ] 16.4 Finalizar trava a edição
+- [ ] 16.5 Tentar editar finalizado: não aceita
+- [ ] 16.6 Reabrir volta a aceitar e fica na auditoria
+- [ ] 16.7 Imprimir: sai só o documento, com cabeçalho da clínica
+- [ ] 16.8 Liberar à família
+
+## 17. Portal da família
+
+- [ ] 17.1 Criar acesso do responsável pela ficha do paciente
+- [ ] 17.2 Entrar em janela anônima → cai no portal, não no painel
+- [ ] 17.3 Trocar a senha temporária
+- [ ] 17.4 A criança aparece, com foto
+- [ ] 17.5 A atividade enviada aparece com botão de marcar como feito
+- [ ] 17.6 Marcar como feito → a ficha mostra "feito em"
+- [ ] 17.7 Próximos atendimentos aparecem
+- [ ] 17.8 **Termo pendente** aparece com botão de ler e assinar
+- [ ] 17.9 Assinar: o botão só libera depois de marcar a caixa
+- [ ] 17.10 A ficha do paciente mostra o termo como assinado, com data
+- [ ] 17.11 O relatório liberado aparece e abre
+
+### 17.12 Teste de vazamento
+No console, logado como responsável — **todas devem voltar vazias ou com erro**:
 ```js
 await eqClient.from('registros_tentativa').select('*')
 await eqClient.from('evolucoes_diarias').select('*')
 await eqClient.from('comportamentos_alvo').select('*')
 await eqClient.from('pei_programas').select('*')
 await eqClient.from('profissionais').select('*')
+await eqClient.from('supervisoes').select('*')
+await eqClient.from('reforcadores').select('*')
 ```
 
-## 13. Permissões da equipe
+## 18. Anamnese
 
-Criar um usuário para cada perfil (Equipe → Novo profissional + usuário no Supabase
-com o mesmo e-mail) e conferir em janela anônima:
+- [ ] 18.1 Cadastrar modelo com seções, obrigatórias e tipos de campo
+- [ ] 18.2 Gerar link e abrir em janela anônima, sem login
+- [ ] 18.3 Preencher metade, fechar, abrir de novo: as respostas estão lá
+- [ ] 18.4 Deixar obrigatória em branco e tentar enviar: recusa
+- [ ] 18.5 Enviar → a ficha mostra "respondida"
+- [ ] 18.6 Ver respostas na ficha
+- [ ] 18.7 Marcar como revisada → o link para de funcionar
 
-### Aplicador
-- [ ] 13.1 Entra direto na Sessão de hoje.
-- [ ] 13.2 O menu **não** mostra Equipe, Auditoria, Configurações nem Avaliações.
-- [ ] 13.3 Em Pacientes, vê só os vinculados a ele.
-- [ ] 13.4 Na Agenda, o filtro já vem nele mesmo.
-- [ ] 13.5 Não consegue marcar presença em sessão de outro aplicador.
-- [ ] 13.6 Consegue registrar comportamento, mas não criar comportamento novo.
+## 19. Encerramento
+
+- [ ] 19.1 Encerrar um paciente de teste com alta
+- [ ] 19.2 Encerrar sem síntese pede confirmação
+- [ ] 19.3 Depois: grade desativada, sessões futuras canceladas, PEI encerrado
+- [ ] 19.4 Sessões realizadas, tentativas e gráficos **continuam existindo**
+- [ ] 19.5 O paciente some da lista, e aparece no filtro Encerrados
+- [ ] 19.6 A ficha mostra a faixa de encerrado com a data
+- [ ] 19.7 **Exportar dados**: baixa o arquivo com tudo
+- [ ] 19.8 Abrir o arquivo e conferir que traz sessões, objetivos e termos
+
+## 20. Auditoria
+
+- [ ] 20.1 Registros dos últimos 7 dias
+- [ ] 20.2 Cada linha é uma frase: quem, o que fez, em qual registro
+- [ ] 20.3 Existe registro de entrada para cada usuário testado
+- [ ] 20.4 Existe registro de criação de acesso e de exportação de dados
+- [ ] 20.5 Filtrar por pessoa e por tipo
+- [ ] 20.6 Exportar CSV — e a exportação aparece na própria auditoria
+- [ ] 20.7 Como coordenação, a tela abre; como aplicadora, o item nem aparece
+
+## 21. Permissões por perfil
+
+Com um usuário de cada, em janela anônima:
+
+### Aplicadora
+- [ ] 21.1 Entra direto na Sessão de hoje
+- [ ] 21.2 Menu **sem** Equipe, Auditoria, Configurações, Indicadores, Admissão, Avaliações
+- [ ] 21.3 Em Pacientes, vê só os vinculados
+- [ ] 21.4 Na Agenda, o filtro já vem nela
+- [ ] 21.5 Não marca presença em sessão de outra pessoa
+- [ ] 21.6 Registra comportamento, mas não cria comportamento novo
+- [ ] 21.7 Registra reforçador (isso é liberado de propósito)
+- [ ] 21.8 Vê as próprias supervisões e dá ciência
 
 ### Recepção
-- [ ] 13.7 Entra direto na Agenda.
-- [ ] 13.8 Consegue cadastrar paciente e remarcar sessão.
-- [ ] 13.9 O menu não mostra Programas, Avaliações, Comportamento nem Relatórios.
-- [ ] 13.10 No console: `await eqClient.from('evolucoes_diarias').select('*')` volta vazio.
+- [ ] 21.9 Entra direto na Agenda
+- [ ] 21.10 Cadastra paciente, faz encaixe, registra ausência
+- [ ] 21.11 Menu sem Programas, Comportamento, Relatórios, Supervisão
+- [ ] 21.12 No console: `await eqClient.from('evolucoes_diarias').select('*')` volta vazio
 
 ### Coordenação
-- [ ] 13.11 Vê os pacientes da própria equipe.
-- [ ] 13.12 Vê Auditoria, mas não Configurações.
-- [ ] 13.13 Consegue montar PEI, biblioteca e relatório.
+- [ ] 21.13 Vê os pacientes da própria equipe
+- [ ] 21.14 Tem Auditoria e Indicadores, **não** tem Configurações
+- [ ] 21.15 Monta PEI, biblioteca, relatório e supervisão
 
-### Estagiário
-- [ ] 13.14 Vê só os pacientes vinculados.
-- [ ] 13.15 Consegue coletar na sessão.
-- [ ] 13.16 Não consegue alterar PEI nem biblioteca.
+### Estagiária
+- [ ] 21.16 Vê só os pacientes vinculados
+- [ ] 21.17 Coleta na sessão
+- [ ] 21.18 Não altera PEI nem biblioteca
 
-## 14. Auditoria
+## 22. Configurações
 
-- [ ] 14.1 Abrir Auditoria como direção. Aparecem os registros dos últimos 7 dias.
-- [ ] 14.2 Cada linha é uma frase em português: quem, o que fez e em qual registro.
-- [ ] 14.3 Existe registro de entrada no sistema para cada usuário testado.
-- [ ] 14.4 "Ver detalhes" mostra o que mudou.
-- [ ] 14.5 Filtrar por pessoa e por tipo de ação funciona.
-- [ ] 14.6 Exportar CSV baixa o arquivo, e a exportação aparece na própria auditoria.
-- [ ] 14.7 Como coordenação, a tela abre. Como aplicador, o item nem aparece no menu.
+- [ ] 22.1 Trocar foto e telefone no próprio perfil
+- [ ] 22.2 Trocar a senha
+- [ ] 22.3 Como direção, mudar a janela do painel para 3 dias → o painel passa a dizer "(3 dias)"
+- [ ] 22.4 Mudar a duração padrão → o novo valor aparece ao criar horário na grade
+- [ ] 22.5 Mudar o horário de funcionamento → o mapa de vagas muda a faixa
+- [ ] 22.6 Como coordenação, os campos de Operação aparecem desabilitados
 
-## 15. Configurações
+---
 
-- [ ] 15.1 Meu perfil: trocar foto e telefone.
-- [ ] 15.2 Trocar o modo por ali: a tela recarrega no modo escolhido.
-- [ ] 15.3 Como direção, mudar "Janela do painel" para 3 dias. O painel passa a dizer "(3 dias)".
-- [ ] 15.4 Mudar a duração padrão da sessão. Ao criar horário na grade, já vem com o novo valor.
-- [ ] 15.5 Como coordenação, os campos de Operação aparecem desabilitados.
+## Testes do banco
+
+Independentes da tela, rodando `database/98_testes.sql` num banco de teste:
+
+- [ ] Os 9 testes passam
+
+Ele cobre: conflito de horário, sondagem ao dominar, promoção de alvo durante e depois
+da sessão, faltas consecutivas e encerramento.
 
 ---
 
 ## Depois de rodar
 
-Limpe a massa fictícia com o bloco comentado no fim de `99_seed_demo.sql`, **antes**
-de cadastrar qualquer paciente real. Nome com "Demo" no meio de prontuário verdadeiro
-vira confusão em três meses.
+Se usou o seed, limpe com o bloco no fim de `99_seed_demo.sql` **antes** de cadastrar
+paciente real. Nome com "Demo" no meio de prontuário verdadeiro vira confusão em três meses.

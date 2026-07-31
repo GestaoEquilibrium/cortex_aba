@@ -83,6 +83,7 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
 <script src="../shared/tema.js?v=2"></script>
 <script src="../shared/confirm_modal.js?v=3"></script>
 <script src="../shared/fotos.js?v=7"></script>
+<script src="../shared/documentos.js?v=13"></script>
 <script src="../shared/acesso.js?v=11"></script>
 <script src="../shared/audit.js?v=5"></script>
 <script src="../shared/config_sistema.js?v=10"></script>
@@ -324,6 +325,42 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
     </div>
 </div>
 
+
+<!-- ── enviar documento ────────────────────────────────────────────────────── -->
+<div class="modal-fundo" id="modalDocumento" onclick="if(event.target===this) fechar('modalDocumento')">
+    <div class="modal">
+        <h2 style="margin-bottom:4px">Enviar documento</h2>
+        <p class="tiny soft" style="margin-bottom:14px">PDF ou imagem, até 15 MB. Fica guardado em área privada.</p>
+        <form id="formDocumento">
+            <div class="campo"><label for="dArquivo">Arquivo *</label>
+                <input id="dArquivo" type="file" required accept="application/pdf,image/jpeg,image/png,image/webp"></div>
+            <div class="campo"><label for="dTitulo">Título *</label>
+                <input id="dTitulo" required placeholder="Laudo neuropediátrico — Dr. Fulano"></div>
+            <div class="campo-2">
+                <div class="campo"><label for="dTipo">Tipo</label>
+                    <select id="dTipo">
+                        <option value="laudo">Laudo</option>
+                        <option value="encaminhamento">Encaminhamento</option>
+                        <option value="guia">Guia / autorização</option>
+                        <option value="relatorio_escolar">Relatório escolar</option>
+                        <option value="exame">Exame</option>
+                        <option value="receita">Receita</option>
+                        <option value="outro" selected>Outro</option>
+                    </select></div>
+                <div class="campo"><label for="dValidade">Validade</label>
+                    <input id="dValidade" type="date">
+                    <div class="tiny soft" style="margin-top:3px">Guia e autorização costumam ter.</div></div>
+            </div>
+            <div class="campo"><label for="dObservacao">Observação</label><input id="dObservacao"></div>
+            <div class="aviso" id="erroDoc" style="display:none;border-left-color:var(--st-bad);color:var(--st-bad);margin-bottom:10px"></div>
+            <div class="grid-2">
+                <button type="button" class="btn btn-secundario btn-bloco" onclick="fechar('modalDocumento')">Cancelar</button>
+                <button type="submit" class="btn btn-bloco" id="btSalvarDoc">Enviar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script src="../shared/sidebar.js?v=8"></script>
 <script>
 'use strict';
@@ -341,7 +378,7 @@ const STATUS_SESSAO = {
 const ID = new URLSearchParams(location.search).get('id');
 let PAC = null, GRADE = [], SESSOES = [], VINCULOS = [], PROFS = [], PODE_EDITAR = false;
 let FOTO = null, PEI = null, PEI_PROGS = [], BIBLIOTECA = [];
-let RESPONSAVEIS = [], ORIENTACOES = [];
+let RESPONSAVEIS = [], ORIENTACOES = [], DOCUMENTOS = [], TERMOS = [], ASSINATURAS = [];
 
 document.addEventListener('eq:pronto', async function (ev) {
     EqSidebar.render('pacientes');
@@ -424,6 +461,15 @@ async function carregar() {
                     .eq('paciente_id', ID).order('created_at', { ascending:false }).limit(30)
             ]);
             RESPONSAVEIS = rr.data || []; ORIENTACOES = ro.data || [];
+
+            const [rd, rt, ra] = await Promise.all([
+                eqClient.from('documentos_paciente')
+                    .select('*, enviado:profissionais(nome_completo)')
+                    .eq('paciente_id', ID).order('created_at', { ascending:false }),
+                eqClient.from('termos_modelos').select('*').eq('ativo', true).order('tipo'),
+                eqClient.from('termos_assinaturas').select('*').eq('paciente_id', ID)
+            ]);
+            DOCUMENTOS = rd.data || []; TERMOS = rt.data || []; ASSINATURAS = ra.data || [];
         } catch (e) { console.warn('família não carregada', e); RESPONSAVEIS = []; ORIENTACOES = []; }
 
         FOTO = PAC.foto_url ? await EqFotos.link(PAC.foto_url) : null;
@@ -494,6 +540,7 @@ function desenhar() {
         <button data-p="resumo"  aria-pressed="true"  onclick="aba('resumo')">Resumo</button>
         <button data-p="pei"     aria-pressed="false" onclick="aba('pei')">PEI</button>
         <button data-p="grade"   aria-pressed="false" onclick="aba('grade')">Grade semanal</button>
+        <button data-p="documentos" aria-pressed="false" onclick="aba('documentos')">Documentos</button>
         <button data-p="familia" aria-pressed="false" onclick="aba('familia')">Família</button>
         <button data-p="sessoes" aria-pressed="false" onclick="aba('sessoes')">Sessões</button>
         <button data-p="tempo"   aria-pressed="false" onclick="aba('tempo')">Linha do tempo</button>
@@ -502,13 +549,14 @@ function desenhar() {
     <div class="painel on" id="p-resumo">${painelResumo()}</div>
     <div class="painel"    id="p-pei">${painelPei()}</div>
     <div class="painel"    id="p-grade">${painelGrade()}</div>
+    <div class="painel"    id="p-documentos">${painelDocumentos()}</div>
     <div class="painel"    id="p-familia">${painelFamilia()}</div>
     <div class="painel"    id="p-sessoes">${painelSessoes()}</div>
     <div class="painel"    id="p-tempo">${painelTempo()}</div>`;
 }
 
 function aba(k) {
-    ['resumo','pei','grade','familia','sessoes','tempo'].forEach(x => {
+    ['resumo','pei','grade','documentos','familia','sessoes','tempo'].forEach(x => {
         document.getElementById('p-' + x).classList.toggle('on', x === k);
         document.querySelector('[data-p="' + x + '"]').setAttribute('aria-pressed', x === k);
     });
@@ -836,6 +884,173 @@ document.getElementById('formAjuste').addEventListener('submit', async function 
     } finally { bt.disabled = false; bt.textContent = 'Salvar'; }
 });
 
+
+
+// ── documentos ──────────────────────────────────────────────────────────────
+function painelDocumentos() {
+    const podeEnviar = PODE_EDITAR ||
+        (window.EqSessao && ['recepcao','supervisor_clinico'].includes(EqSessao.perfil));
+    const hoje = hojeISO();
+
+    const vencidos = DOCUMENTOS.filter(d => d.validade && d.validade < hoje).length;
+    const aVencer  = DOCUMENTOS.filter(d => d.validade && d.validade >= hoje &&
+                     d.validade <= new Date(Date.now() + 30*86400000).toISOString().slice(0,10)).length;
+
+    return `<div class="card">
+        <div class="card-titulo">
+            <h3>Documentos</h3>
+            ${podeEnviar ? '<button class="btn btn-secundario" style="padding:7px 12px;font-size:12px" onclick="abrirDocumento()">Enviar documento</button>' : ''}
+        </div>
+
+        ${(vencidos || aVencer) ? `<div class="aviso" style="border-left-color:${vencidos ? 'var(--st-bad)' : 'var(--st-warn)'};margin-bottom:12px">
+            ${vencidos ? `<b>${vencidos} documento(s) vencido(s).</b> ` : ''}
+            ${aVencer ? `${aVencer} vence(m) nos próximos 30 dias.` : ''}
+        </div>` : ''}
+
+        ${DOCUMENTOS.length ? `<table class="tabela">
+            <thead><tr><th>Documento</th><th>Tipo</th><th>Validade</th><th>Enviado</th><th></th></tr></thead>
+            <tbody>${DOCUMENTOS.map(d => {
+                const vencido = d.validade && d.validade < hoje;
+                return `<tr>
+                    <td><b>${d.titulo}</b>${d.observacao ? `<br><span class="tiny soft">${d.observacao}</span>` : ''}</td>
+                    <td class="muted">${EqDocumentos.rotulo(d.tipo)}</td>
+                    <td style="${vencido ? 'color:var(--st-bad);font-weight:700' : 'color:var(--ink-muted)'}">
+                        ${d.validade ? brl(d.validade) + (vencido ? ' · vencido' : '') : '—'}</td>
+                    <td class="muted">${brl(d.created_at)}<br><span class="tiny soft">${d.enviado ? d.enviado.nome_completo : ''} · ${EqDocumentos.tamanhoLegivel(d.tamanho)}</span></td>
+                    <td style="text-align:right;white-space:nowrap">
+                        <button class="btn btn-secundario" style="padding:5px 10px;font-size:11.5px"
+                                onclick="abrirArquivo('${d.arquivo_path}')">Abrir</button>
+                        ${PODE_EDITAR ? `<button class="bt-link" style="margin-left:8px"
+                                onclick="excluirDocumento('${d.id}','${d.titulo.replace(/'/g,"\\'")}','${d.arquivo_path}')">excluir</button>` : ''}
+                    </td>
+                </tr>`; }).join('')}</tbody></table>`
+        : '<div class="vazio-msg">Nenhum documento anexado. Laudo, encaminhamento, guia e relatório escolar entram aqui.</div>'}
+    </div>
+
+    <div class="card">
+        <div class="card-titulo"><h3>Termos e consentimentos</h3></div>
+        ${TERMOS.length ? TERMOS.map(t => {
+            const a = ASSINATURAS.find(x => x.termo_id === t.id);
+            const desatualizado = a && a.versao_assinada < t.versao;
+            return `<div class="episodio" style="padding:11px 0;border-top:1px solid var(--line)">
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                    <b style="font-size:13px">${t.nome}</b>
+                    <span class="chip chip-neutro">v${t.versao}</span>
+                    ${a ? (desatualizado
+                            ? '<span class="chip chip-alerta">assinado numa versão anterior</span>'
+                            : `<span class="chip chip-ok">assinado em ${brl(a.assinado_em)}</span>`)
+                        : (t.obrigatorio ? '<span class="chip chip-erro">pendente</span>'
+                                         : '<span class="chip chip-neutro">não assinado</span>')}
+                </div>
+                ${a ? `<div class="tiny soft" style="margin-top:3px">
+                        por ${a.nome_assinante} · ${a.origem === 'portal' ? 'pelo portal' : 'presencial'}</div>` : ''}
+                ${!a && PODE_EDITAR ? `<button class="btn btn-secundario" style="padding:5px 10px;font-size:11.5px;margin-top:6px"
+                        onclick="registrarPresencial('${t.id}','${t.nome.replace(/'/g,"\\'")}')">Registrar assinatura presencial</button>` : ''}
+            </div>`; }).join('')
+        : '<div class="vazio-msg">Nenhum termo cadastrado. A direção cadastra em Configurações → Termos.</div>'}
+        <div class="card-legenda">
+            A família assina pelo portal. O texto aceito fica guardado junto com a assinatura —
+            se o termo mudar depois, a assinatura antiga continua provando o que foi lido.
+        </div>
+    </div>`;
+}
+
+async function abrirArquivo(caminho) {
+    try {
+        const url = await EqDocumentos.abrir(caminho);
+        window.open(url, '_blank');
+        await EqAudit.registrar('acesso', 'documentos_paciente', ID, { arquivo: caminho });
+    } catch (e) {
+        console.error(e);
+        await EqConfirm.mostrar({ titulo:'Não foi possível abrir', texto: e.message || 'Erro.',
+            confirmar:'Entendi', cancelar:'Fechar', tipo:'alerta' });
+    }
+}
+
+function abrirDocumento() {
+    document.getElementById('formDocumento').reset();
+    document.getElementById('modalDocumento').classList.add('aberto');
+}
+
+document.getElementById('formDocumento').addEventListener('submit', async function (ev) {
+    ev.preventDefault();
+    const bt = document.getElementById('btSalvarDoc'), erro = document.getElementById('erroDoc');
+    const arquivo = document.getElementById('dArquivo').files[0];
+    bt.disabled = true; bt.textContent = 'Enviando...'; erro.style.display = 'none';
+    try {
+        const r = await EqDocumentos.enviar(arquivo, ID);
+        const { data, error } = await eqClient.from('documentos_paciente').insert({
+            paciente_id: ID,
+            tipo: document.getElementById('dTipo').value,
+            titulo: document.getElementById('dTitulo').value.trim(),
+            arquivo_path: r.caminho, mime: r.mime, tamanho: r.tamanho,
+            validade: document.getElementById('dValidade').value || null,
+            observacao: document.getElementById('dObservacao').value.trim() || null,
+            enviado_por: (window.EqSessao && EqSessao.profissional.id) || null
+        }).select('id').single();
+        if (error) throw error;
+        await EqAudit.registrar('criacao', 'documentos_paciente', data.id,
+            { paciente: PAC.nome_completo, titulo: document.getElementById('dTitulo').value.trim() });
+        fechar('modalDocumento'); this.reset();
+        await carregar(); aba('documentos');
+    } catch (e) {
+        console.error(e);
+        erro.textContent = e.message || 'Não foi possível enviar.';
+        erro.style.display = 'block';
+    } finally { bt.disabled = false; bt.textContent = 'Enviar'; }
+});
+
+async function excluirDocumento(id, titulo, caminho) {
+    const ok = await EqConfirm.mostrar({
+        titulo: 'Excluir este documento?',
+        texto: titulo + ' será apagado definitivamente. A exclusão fica registrada na auditoria.',
+        confirmar: 'Excluir', tipo: 'perigo'
+    });
+    if (!ok) return;
+    try {
+        const { error } = await eqClient.from('documentos_paciente').delete().eq('id', id);
+        if (error) throw error;
+        try { await EqDocumentos.remover(caminho); } catch (e) { console.warn('arquivo não removido', e); }
+        await EqAudit.registrar('exclusao', 'documentos_paciente', id,
+            { paciente: PAC.nome_completo, titulo: titulo });
+        await carregar(); aba('documentos');
+    } catch (e) {
+        console.error(e);
+        await EqConfirm.mostrar({ titulo:'Não foi possível excluir', texto: e.message || 'Erro.',
+            confirmar:'Entendi', cancelar:'Fechar', tipo:'alerta' });
+    }
+}
+
+async function registrarPresencial(termoId, nome) {
+    const termo = TERMOS.find(t => t.id === termoId);
+    if (!termo) return;
+    const resp = RESPONSAVEIS[0] && RESPONSAVEIS[0].responsavel;
+    const ok = await EqConfirm.mostrar({
+        titulo: 'Registrar assinatura presencial?',
+        texto: 'Confirma que ' + (resp ? resp.nome : 'o responsável') + ' leu e assinou "' + nome +
+               '" presencialmente? O texto da versão atual fica guardado junto com o registro.',
+        confirmar: 'Registrar', tipo: 'alerta'
+    });
+    if (!ok) return;
+    try {
+        const { error } = await eqClient.from('termos_assinaturas').insert({
+            termo_id: termoId, paciente_id: ID,
+            responsavel_id: resp ? resp.id : null,
+            nome_assinante: resp ? resp.nome : (PAC.responsavel_nome || 'Responsável'),
+            texto_assinado: termo.texto, versao_assinada: termo.versao,
+            origem: 'presencial',
+            registrado_por: (window.EqSessao && EqSessao.profissional.id) || null
+        });
+        if (error) throw error;
+        await EqAudit.registrar('criacao', 'termos_assinaturas', termoId,
+            { paciente: PAC.nome_completo, termo: nome, origem: 'presencial' });
+        await carregar(); aba('documentos');
+    } catch (e) {
+        console.error(e);
+        await EqConfirm.mostrar({ titulo:'Não foi possível registrar', texto: e.message || 'Erro.',
+            confirmar:'Entendi', cancelar:'Fechar', tipo:'alerta' });
+    }
+}
 
 // ── família ─────────────────────────────────────────────────────────────────
 function painelFamilia() {

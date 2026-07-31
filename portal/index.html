@@ -99,7 +99,7 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
 'use strict';
 
 const MESES = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
-let FAMILIA = null, FILHO = null;
+let FAMILIA = null, FILHO = null, TERMOS = [], ASSINATURAS = [];
 
 document.addEventListener('eq:familia-pronto', async function (ev) {
     FAMILIA = ev.detail;
@@ -152,7 +152,7 @@ async function carregarFilho() {
 
     try {
         const hoje = hojeISO();
-        const [rOr, rSes, rRel] = await Promise.all([
+        const [rOr, rSes, rRel, rTermos, rAssin] = await Promise.all([
             eqClient.from('orientacoes_responsavel').select('*')
                 .eq('paciente_id', FILHO.id).eq('ativo', true)
                 .order('created_at', { ascending:false }).limit(20),
@@ -160,8 +160,13 @@ async function carregarFilho() {
                 .eq('paciente_id', FILHO.id).gte('data', hoje)
                 .order('data').order('hora_inicio').limit(6),
             eqClient.from('relatorios_mensais').select('id, mes_referencia, status')
-                .eq('paciente_id', FILHO.id).order('mes_referencia', { ascending:false }).limit(6)
+                .eq('paciente_id', FILHO.id).order('mes_referencia', { ascending:false }).limit(6),
+            eqClient.from('termos_modelos').select('*').eq('ativo', true).order('tipo'),
+            eqClient.from('termos_assinaturas').select('termo_id, assinado_em, versao_assinada')
+                .eq('paciente_id', FILHO.id)
         ]);
+        TERMOS = rTermos.data || [];
+        ASSINATURAS = rAssin.data || [];
         desenhar(rOr.data || [], rSes.data || [], rRel.data || []);
     } catch (e) {
         console.error(e);
@@ -207,7 +212,38 @@ function desenhar(orientacoes, sessoes, relatorios) {
         </div>`; }).join('')
         : '<div class="vazio-msg">Nenhum relatório liberado ainda.</div>';
 
+    const pendentesTermo = TERMOS.filter(t => {
+        const a = ASSINATURAS.find(x => x.termo_id === t.id);
+        return !a || a.versao_assinada < t.versao;
+    });
+
+    const blocoTermos = TERMOS.length ? `
+        <div class="card">
+            <div class="item-titulo">
+                <h3>Termos e autorizações</h3>
+                ${pendentesTermo.length ? `<span class="chip chip-alerta">${pendentesTermo.length} pendente${pendentesTermo.length>1?'s':''}</span>`
+                                        : '<span class="chip chip-ok">tudo assinado</span>'}
+            </div>
+            ${TERMOS.map(t => {
+                const a = ASSINATURAS.find(x => x.termo_id === t.id);
+                const ok = a && a.versao_assinada >= t.versao;
+                return `<div style="padding:9px 0;border-top:1px solid var(--line);display:flex;
+                                    justify-content:space-between;align-items:center;gap:10px">
+                    <div style="flex:1;min-width:0">
+                        <b style="font-size:13px">${t.nome}</b>
+                        ${ok ? `<div class="tiny soft">assinado em ${brl(a.assinado_em)}</div>` : ''}
+                    </div>
+                    ${ok ? '<span class="chip chip-ok">assinado</span>'
+                         : `<button class="btn" style="padding:7px 13px;font-size:12px"
+                              onclick="abrirTermo('${t.id}')">Ler e assinar</button>`}
+                </div>`; }).join('')}
+        </div>` : '';
+
     document.getElementById('area').innerHTML = `
+        ${pendentesTermo.length ? `<div class="aviso" style="margin-bottom:12px;border-left-color:var(--st-bad)">
+            <b>${pendentesTermo.length} termo${pendentesTermo.length>1?'s':''} aguardando sua leitura.</b>
+            São autorizações necessárias para o acompanhamento.
+        </div>` : ''}
         ${pendentes.length ? `<div class="aviso" style="margin-bottom:12px;border-left-color:var(--st-warn)">
             <b>${pendentes.length} atividade${pendentes.length>1?'s':''} para fazer em casa.</b>
             Quando terminar, é só marcar aqui — assim a equipe sabe como está indo.
@@ -227,7 +263,73 @@ function desenhar(orientacoes, sessoes, relatorios) {
             <div class="item-titulo"><h3>Relatórios</h3></div>
             ${blocoRelatorios}
             <div class="card-legenda">Aparecem aqui os relatórios que a coordenação liberou.</div>
+        </div>
+
+        ${blocoTermos}`;
+}
+
+async function abrirTermo(id) {
+    const t = TERMOS.find(x => x.id === id);
+    if (!t) return;
+
+    const fundo = document.createElement('div');
+    fundo.style.cssText = 'position:fixed;inset:0;z-index:200;background:rgba(27,19,64,.55);' +
+        'backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:16px';
+    fundo.innerHTML = `
+        <div style="background:var(--surface);border-radius:18px;padding:22px;max-width:520px;width:100%;
+                    max-height:88vh;display:flex;flex-direction:column;box-shadow:var(--shadow-lg)">
+            <h3 style="font-size:16px;font-weight:800;margin-bottom:3px">${t.nome}</h3>
+            <div class="tiny soft" style="margin-bottom:12px">versão ${t.versao}</div>
+            <div id="textoTermo" style="flex:1;overflow:auto;font-size:13px;line-height:1.6;
+                        color:var(--ink);background:var(--surface-alt);border:1px solid var(--line);
+                        border-radius:12px;padding:14px;white-space:pre-wrap">${t.texto}</div>
+            <label style="display:flex;gap:9px;align-items:flex-start;margin-top:14px;font-size:12.5px;
+                          color:var(--ink);cursor:pointer">
+                <input type="checkbox" id="aceiteTermo" style="width:auto;margin-top:2px">
+                <span>Li o texto acima e concordo, na qualidade de responsável por ${FILHO.nome_completo}.</span>
+            </label>
+            <div style="display:flex;gap:8px;margin-top:14px">
+                <button id="btCancelaTermo" class="btn btn-secundario btn-bloco">Depois</button>
+                <button id="btAceitaTermo" class="btn btn-bloco" disabled style="opacity:.5">Assinar</button>
+            </div>
         </div>`;
+    document.body.appendChild(fundo);
+
+    const check = fundo.querySelector('#aceiteTermo');
+    const btOk = fundo.querySelector('#btAceitaTermo');
+    check.addEventListener('change', () => {
+        btOk.disabled = !check.checked;
+        btOk.style.opacity = check.checked ? '1' : '.5';
+    });
+    fundo.querySelector('#btCancelaTermo').addEventListener('click', () => fundo.remove());
+
+    btOk.addEventListener('click', async function () {
+        this.disabled = true; this.textContent = 'Assinando...';
+        try {
+            const { error } = await eqClient.from('termos_assinaturas').insert({
+                termo_id: t.id,
+                paciente_id: FILHO.id,
+                responsavel_id: FAMILIA.responsavel.id,
+                nome_assinante: FAMILIA.responsavel.nome,
+                texto_assinado: t.texto,
+                versao_assinada: t.versao,
+                origem: 'portal'
+            });
+            if (error) throw error;
+            fundo.remove();
+            await carregarFilho();
+            await EqConfirm.mostrar({
+                titulo: 'Termo assinado',
+                texto: 'Obrigado. O registro fica guardado com a data e o texto que você leu.',
+                confirmar: 'Fechar', cancelar: 'Fechar', tipo: 'padrao'
+            });
+        } catch (e) {
+            console.error(e);
+            this.disabled = false; this.textContent = 'Assinar';
+            await EqConfirm.mostrar({ titulo:'Não foi possível assinar',
+                texto:'Tente novamente em instantes.', confirmar:'Fechar', cancelar:'Fechar', tipo:'alerta' });
+        }
+    });
 }
 
 async function marcarFeito(id) {

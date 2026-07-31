@@ -71,6 +71,7 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
             <button data-p="perfil" aria-pressed="true"  onclick="aba('perfil')">Meu perfil</button>
             <button data-p="clinica" aria-pressed="false" onclick="aba('clinica')">Clínica</button>
             <button data-p="operacao" aria-pressed="false" onclick="aba('operacao')">Operação</button>
+            <button data-p="termos" aria-pressed="false" onclick="aba('termos')">Termos</button>
         </div>
 
         <input type="file" id="inputFoto" accept="image/jpeg,image/png,image/webp"
@@ -79,7 +80,46 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
         <div class="painel on" id="p-perfil"><div class="card vazio-msg">carregando…</div></div>
         <div class="painel" id="p-clinica"><div class="card vazio-msg">carregando…</div></div>
         <div class="painel" id="p-operacao"><div class="card vazio-msg">carregando…</div></div>
+        <div class="painel" id="p-termos"><div class="card vazio-msg">carregando…</div></div>
     </main>
+</div>
+
+
+<div class="modal-fundo" id="modalTermo" onclick="if(event.target===this) fechar('modalTermo')"
+     style="position:fixed;inset:0;background:rgba(12,27,42,.5);backdrop-filter:blur(3px);
+            display:none;align-items:center;justify-content:center;padding:20px;z-index:80">
+    <div style="background:var(--surface);border-radius:var(--radius-card);padding:22px;width:100%;
+                max-width:620px;box-shadow:var(--shadow-lg);max-height:92vh;overflow:auto">
+        <h2 id="tituloTermo" style="margin-bottom:4px">Novo termo</h2>
+        <p class="tiny soft" style="margin-bottom:14px">O texto aparece no portal para a família ler e aceitar.</p>
+        <form id="formTermo">
+            <div class="campo-2">
+                <div class="campo"><label for="tmNome">Nome *</label>
+                    <input id="tmNome" required placeholder="Autorização de uso de imagem"></div>
+                <div class="campo"><label for="tmTipo">Tipo *</label>
+                    <select id="tmTipo">
+                        <option value="lgpd">Proteção de dados (LGPD)</option>
+                        <option value="imagem">Uso de imagem</option>
+                        <option value="intervencao">Consentimento de intervenção</option>
+                        <option value="financeiro">Financeiro</option>
+                        <option value="outro">Outro</option>
+                    </select></div>
+            </div>
+            <div class="campo"><label for="tmTexto">Texto do termo *</label>
+                <textarea id="tmTexto" rows="11" required style="font-size:12.5px;line-height:1.55"></textarea></div>
+            <div class="campo">
+                <label style="display:flex;align-items:center;gap:8px;font-weight:600;font-size:12.5px;color:var(--ink)">
+                    <input type="checkbox" id="tmObrigatorio" checked style="width:auto">
+                    Obrigatório — aparece como pendência enquanto não for assinado
+                </label>
+            </div>
+            <div class="aviso" id="erroTermo" style="display:none;border-left-color:var(--st-bad);color:var(--st-bad);margin-bottom:10px"></div>
+            <div class="grid-2">
+                <button type="button" class="btn btn-secundario btn-bloco" onclick="fechar('modalTermo')">Cancelar</button>
+                <button type="submit" class="btn btn-bloco" id="btSalvarTermo">Salvar</button>
+            </div>
+        </form>
+    </div>
 </div>
 
 <script src="../shared/sidebar.js?v=8"></script>
@@ -105,14 +145,135 @@ document.addEventListener('eq:pronto', async function (ev) {
         try { FOTO = await EqFotos.link(EU.profissional.foto_url); } catch (e) {}
     }
     pintarPerfil(); pintarClinica(); pintarOperacao();
+    await carregarTermos();
 });
 
 function aba(k) {
-    ['perfil','clinica','operacao'].forEach(x => {
+    ['perfil','clinica','operacao','termos'].forEach(x => {
         document.getElementById('p-' + x).classList.toggle('on', x === k);
         document.querySelector('[data-p="' + x + '"]').setAttribute('aria-pressed', x === k);
     });
 }
+
+
+// ── termos ──────────────────────────────────────────────────────────────────
+const TIPOS_TERMO = { lgpd:'Proteção de dados (LGPD)', imagem:'Uso de imagem',
+                      intervencao:'Consentimento de intervenção', financeiro:'Financeiro', outro:'Outro' };
+let TERMOS = [];
+
+async function carregarTermos() {
+    try {
+        const { data, error } = await eqClient.from('termos_modelos')
+            .select('*').order('tipo').order('versao', { ascending:false });
+        if (error) throw error;
+        TERMOS = data || [];
+    } catch (e) { console.warn(e); TERMOS = []; }
+    pintarTermos();
+}
+
+function pintarTermos() {
+    const ativos = TERMOS.filter(t => t.ativo);
+    document.getElementById('p-termos').innerHTML = `
+    <div class="card">
+        <div class="card-titulo">
+            <h3>Termos e consentimentos</h3>
+            ${SOU_ADMIN ? '<button class="btn btn-secundario" style="padding:7px 12px;font-size:12px" onclick="abrirTermo()">Novo termo</button>' : ''}
+        </div>
+        ${ativos.length ? ativos.map(t => `
+            <div style="padding:12px 0;border-top:1px solid var(--line)">
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                    <b style="font-size:13.5px">${t.nome}</b>
+                    <span class="chip chip-neutro">${TIPOS_TERMO[t.tipo] || t.tipo}</span>
+                    <span class="chip chip-neutro">versão ${t.versao}</span>
+                    ${t.obrigatorio ? '<span class="chip chip-alerta">obrigatório</span>' : ''}
+                </div>
+                <p class="small muted" style="margin-top:6px;max-height:64px;overflow:hidden">${t.texto}</p>
+                ${SOU_ADMIN ? `<div style="margin-top:8px;display:flex;gap:8px">
+                    <button class="btn btn-secundario" style="padding:5px 10px;font-size:11.5px"
+                            onclick="novaVersao('${t.id}')">Publicar nova versão</button>
+                    <button class="btn btn-secundario" style="padding:5px 10px;font-size:11.5px"
+                            onclick="desativarTermo('${t.id}','${t.nome.replace(/'/g,"\\'")}')">Desativar</button>
+                </div>` : ''}
+            </div>`).join('')
+        : `<div class="vazio-msg">Nenhum termo cadastrado.
+           ${SOU_ADMIN ? '<br><span class="tiny soft">Sem termo, a família não tem o que assinar no portal.</span>' : ''}</div>`}
+        <div class="card-legenda">
+            Publicar nova versão não apaga as assinaturas antigas: cada assinatura guarda o texto
+            que foi aceito. As famílias passam a ver a pendência da versão nova.
+        </div>
+    </div>`;
+}
+
+let TERMO_BASE = null;
+
+function abrirTermo(base) {
+    TERMO_BASE = base || null;
+    document.getElementById('formTermo').reset();
+    if (base) {
+        document.getElementById('tmNome').value = base.nome;
+        document.getElementById('tmTipo').value = base.tipo;
+        document.getElementById('tmTexto').value = base.texto;
+        document.getElementById('tmObrigatorio').checked = base.obrigatorio;
+        document.getElementById('tituloTermo').textContent = 'Nova versão de "' + base.nome + '"';
+    } else {
+        document.getElementById('tituloTermo').textContent = 'Novo termo';
+    }
+    document.getElementById('modalTermo').classList.add('aberto');
+}
+
+function novaVersao(id) { abrirTermo(TERMOS.find(t => t.id === id)); }
+
+document.getElementById('formTermo').addEventListener('submit', async function (ev) {
+    ev.preventDefault();
+    const bt = document.getElementById('btSalvarTermo'), erro = document.getElementById('erroTermo');
+    bt.disabled = true; bt.textContent = 'Salvando...'; erro.style.display = 'none';
+    const tipo = document.getElementById('tmTipo').value;
+    const maior = TERMOS.filter(t => t.tipo === tipo)
+                        .reduce((m,t) => Math.max(m, t.versao), 0);
+    try {
+        // versão nova do mesmo tipo desativa a anterior
+        if (maior > 0) {
+            await eqClient.from('termos_modelos').update({ ativo: false })
+                .eq('tipo', tipo).eq('ativo', true);
+        }
+        const { data, error } = await eqClient.from('termos_modelos').insert({
+            nome: document.getElementById('tmNome').value.trim(),
+            tipo: tipo,
+            versao: maior + 1,
+            texto: document.getElementById('tmTexto').value.trim(),
+            obrigatorio: document.getElementById('tmObrigatorio').checked,
+            criado_por: EU.profissional.id
+        }).select('id').single();
+        if (error) throw error;
+        await EqAudit.registrar('criacao', 'termos_modelos', data.id,
+            { nome: document.getElementById('tmNome').value.trim(), versao: maior + 1 });
+        fechar('modalTermo');
+        await carregarTermos();
+        aba('termos');
+    } catch (e) {
+        console.error(e);
+        erro.textContent = 'Não foi possível salvar: ' + (e.message || 'erro');
+        erro.style.display = 'block';
+    } finally { bt.disabled = false; bt.textContent = 'Salvar'; }
+});
+
+async function desativarTermo(id, nome) {
+    const ok = await EqConfirm.mostrar({
+        titulo: 'Desativar "' + nome + '"?',
+        texto: 'Ele deixa de ser pedido às famílias. As assinaturas já feitas continuam guardadas.',
+        confirmar: 'Desativar', tipo: 'alerta'
+    });
+    if (!ok) return;
+    try {
+        const { error } = await eqClient.from('termos_modelos').update({ ativo: false }).eq('id', id);
+        if (error) throw error;
+        await EqAudit.registrar('status', 'termos_modelos', id, { nome: nome, ativo: false });
+        await carregarTermos(); aba('termos');
+    } catch (e) { console.error(e); }
+}
+
+function fechar(id) { document.getElementById(id).classList.remove('aberto');
+                      document.querySelectorAll('.aviso[id^=erro]').forEach(e => e.style.display='none'); }
 
 // ── meu perfil ──────────────────────────────────────────────────────────────
 function pintarPerfil() {

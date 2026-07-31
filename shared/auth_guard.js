@@ -81,6 +81,16 @@ window.EqSessao = null;
         const { data: { session } } = await window.eqClient.auth.getSession();
         if (!session) { paraLogin('sem sessão'); return; }
 
+        // Senha temporária é portão, não sugestão: vale em qualquer página, não só
+        // na volta do login. Sem isto, quem salvar o painel nos favoritos nunca troca.
+        if (session.user.user_metadata && session.user.user_metadata.senha_temporaria) {
+            const jaEstaLa = window.location.pathname.indexOf('trocar-senha.html') !== -1;
+            if (!jaEstaLa) {
+                window.location.href = raiz + 'trocar-senha.html';
+                return;
+            }
+        }
+
         // Sem embed aqui de propósito. Existem duas FKs entre `profissionais` e
         // `equipes_aba` (profissionais.equipe_id e equipes_aba.coordenador_id), e o
         // PostgREST devolve PGRST201 se o embed não disser qual usar. Como esta é a

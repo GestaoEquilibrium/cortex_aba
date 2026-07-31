@@ -26,6 +26,12 @@ window.EqFamilia = null;
         const { data: { session } } = await window.eqClient.auth.getSession();
         if (!session) { paraLogin('sem sessão'); return; }
 
+        // mesma trava da equipe: família também troca a senha antes de usar
+        if (session.user.user_metadata && session.user.user_metadata.senha_temporaria) {
+            window.location.href = '../trocar-senha.html';
+            return;
+        }
+
         const { data: resp, error } = await window.eqClient
             .from('responsaveis')
             .select('id, nome, email, telefone, ativo')

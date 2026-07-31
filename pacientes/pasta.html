@@ -84,6 +84,7 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
 <script src="../shared/confirm_modal.js?v=3"></script>
 <script src="../shared/fotos.js?v=7"></script>
 <script src="../shared/documentos.js?v=13"></script>
+<script src="../shared/whatsapp.js?v=14"></script>
 <script src="../shared/acesso.js?v=11"></script>
 <script src="../shared/audit.js?v=5"></script>
 <script src="../shared/config_sistema.js?v=10"></script>
@@ -381,7 +382,8 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
     </div>
 </div>
 
-<script src="../shared/sidebar.js?v=10"></script>
+<script src="../shared/avisos.js?v=14"></script>
+<script src="../shared/sidebar.js?v=11"></script>
 <script>
 'use strict';
 
@@ -554,7 +556,11 @@ function desenhar() {
                     ${faltas ? `<span class="chip ${faltas>=3?'chip-erro':'chip-alerta'}">${faltas} falta${faltas>1?'s':''} no mês</span>` : ''}
                 </div>
             </div>
-            ${PODE_EDITAR ? '<button class="btn btn-secundario" onclick="abrirEditar()">Editar cadastro</button>' : ''}
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start">
+                ${EqWhats.temNumero(PAC.responsavel_telefone)
+                  ? `<button class="btn btn-secundario" onclick="abrirWhats()">Falar com a família</button>` : ''}
+                ${PODE_EDITAR ? '<button class="btn btn-secundario" onclick="abrirEditar()">Editar cadastro</button>' : ''}
+            </div>
         </div>
 
         ${PAC.cartao_seguranca ? `<div class="seguranca"><b>Cartão de segurança</b>${PAC.cartao_seguranca}</div>` : ''}
@@ -606,7 +612,11 @@ function painelResumo() {
         <div class="card-titulo"><h3>Cadastro</h3></div>
         <div class="dl">
             <div><span>Responsável legal</span><b>${PAC.responsavel_nome || '—'}</b></div>
-            <div><span>Telefone</span><b>${PAC.responsavel_telefone || '—'}</b></div>
+            <div><span>Telefone</span><b>${PAC.responsavel_telefone
+                ? EqWhats.botao(PAC.responsavel_telefone,
+                    EqWhats.textos.livre({ clinica: nomeClinica() }),
+                    PAC.responsavel_telefone, 'padding:4px 10px;font-size:12px')
+                : '—'}</b></div>
             <div><span>Convênio</span><b>${PAC.convenio || 'particular'}</b></div>
             <div><span>Validade da guia</span><b style="${PAC.guia_validade && PAC.guia_validade < hojeISO() ? 'color:var(--st-bad)' : ''}">${brl(PAC.guia_validade)}</b></div>
             <div><span>Sessões prescritas</span><b>${PAC.sessoes_semana_prescritas ? PAC.sessoes_semana_prescritas + 'x por semana' : '—'}</b></div>
@@ -955,6 +965,75 @@ document.getElementById('formAjuste').addEventListener('submit', async function 
 
 
 
+
+// ── WhatsApp ────────────────────────────────────────────────────────────────
+function nomeClinica() {
+    return (window.EqConfig ? EqConfig.get('clinica_nome', 'clínica') : 'clínica');
+}
+
+function abrirWhats() {
+    const tel = PAC.responsavel_telefone;
+    const dados = { crianca: PAC.nome_completo, clinica: nomeClinica() };
+
+    // próxima sessão e última falta, para as mensagens ficarem específicas
+    const hoje = hojeISO();
+    const prox = SESSOES.filter(s => s.data >= hoje && s.status === 'agendada')
+                        .sort((a,b) => (a.data + a.hora_inicio) > (b.data + b.hora_inicio) ? 1 : -1)[0];
+    const ultimaFalta = SESSOES.filter(s => s.status && s.status.indexOf('falta') === 0)
+                               .sort((a,b) => a.data < b.data ? 1 : -1)[0];
+    const guia = PAC.guia_validade && PAC.guia_validade < hoje ? PAC.guia_validade : null;
+
+    const opcoes = [];
+    if (prox) opcoes.push({ r:'Confirmar próximo atendimento',
+        d: brl(prox.data) + ' às ' + prox.hora_inicio.slice(0,5),
+        t: EqWhats.textos.confirmacao(Object.assign({}, dados, { data: prox.data, hora: prox.hora_inicio })) });
+    if (ultimaFalta) opcoes.push({ r:'Perguntar sobre a falta',
+        d: 'faltou em ' + brl(ultimaFalta.data),
+        t: EqWhats.textos.falta(Object.assign({}, dados, { data: ultimaFalta.data })) });
+    if (guia) opcoes.push({ r:'Cobrar renovação da guia', d:'venceu em ' + brl(guia),
+        t: EqWhats.textos.guia(Object.assign({}, dados, { validade: guia })) });
+    opcoes.push({ r:'Avisar sobre atividade em casa', d:'enviada pelo portal',
+        t: EqWhats.textos.atividade(dados) });
+    opcoes.push({ r:'Avisar sobre relatório', d:'liberado no portal',
+        t: EqWhats.textos.relatorio(dados) });
+    opcoes.push({ r:'Pedir documento', d:'laudo, guia ou relatório escolar',
+        t: EqWhats.textos.documento(dados) });
+    opcoes.push({ r:'Escrever do zero', d:'só abre a conversa',
+        t: EqWhats.textos.livre(dados) });
+
+    const fundo = document.createElement('div');
+    fundo.style.cssText = 'position:fixed;inset:0;z-index:210;background:rgba(12,27,42,.55);' +
+        'backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:20px';
+    fundo.innerHTML = `
+        <div style="background:var(--surface);border-radius:14px;padding:22px;max-width:470px;width:100%;
+                    max-height:86vh;overflow:auto;box-shadow:var(--shadow-lg)">
+            <h3 style="font-size:16px;font-weight:800;margin-bottom:3px">Falar com a família</h3>
+            <div class="tiny soft" style="margin-bottom:14px">
+                ${PAC.responsavel_nome || 'Responsável'} · ${PAC.responsavel_telefone}</div>
+            ${opcoes.map((o, i) => `
+                <button class="opcao-whats" data-i="${i}" style="width:100%;text-align:left;border:1px solid var(--line);
+                        background:var(--surface-alt);border-radius:10px;padding:11px 13px;margin-bottom:7px;
+                        font:inherit;cursor:pointer;color:var(--ink)">
+                    <b style="font-size:13px;display:block">${o.r}</b>
+                    <span style="font-size:11.5px;color:var(--ink-muted)">${o.d}</span>
+                </button>`).join('')}
+            <div class="tiny soft" style="margin-top:8px;line-height:1.5">
+                A mensagem abre pronta no WhatsApp para você revisar antes de enviar.
+                Nada é enviado pelo sistema.
+            </div>
+            <button class="btn btn-secundario btn-bloco" style="margin-top:12px" id="btFechaWhats">Fechar</button>
+        </div>`;
+    document.body.appendChild(fundo);
+
+    fundo.querySelectorAll('.opcao-whats').forEach(b => b.addEventListener('click', function () {
+        const o = opcoes[parseInt(this.dataset.i, 10)];
+        EqWhats.abrir(tel, o.t);
+        EqAudit.registrar('acesso', 'pacientes', ID, { evento: 'contato whatsapp', assunto: o.r });
+        fundo.remove();
+    }));
+    fundo.querySelector('#btFechaWhats').addEventListener('click', () => fundo.remove());
+}
+
 // ── anamnese ────────────────────────────────────────────────────────────────
 const ST_ANAM = {
     enviada:{r:'link enviado', c:'chip-neutro'},
@@ -1039,7 +1118,7 @@ function mostrarLink(token) {
     const fundo = document.createElement('div');
     fundo.style.cssText = 'position:fixed;inset:0;z-index:210;background:rgba(12,27,42,.55);' +
         'backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:20px';
-    const texto = 'Ola! Segue o link da anamnese de ' + PAC.nome_completo.split(' ')[0] + ': ' + url;
+    const texto = EqWhats.textos.anamnese({ crianca: PAC.nome_completo, link: url });
     fundo.innerHTML = `
         <div style="background:var(--surface);border-radius:14px;padding:24px;max-width:460px;width:100%;
                     box-shadow:var(--shadow-lg)">

@@ -219,6 +219,7 @@ window.EqSidebar = (function () {
 
         alvo.outerHTML = html;
         window.__eqAtivo = ativo;
+        setTimeout(marcarSino, 400);
     }
 
     function recolher() {
@@ -234,14 +235,32 @@ window.EqSidebar = (function () {
     }
 
     function avisos() {
-        // Sprint de tarefas liga isto às pendências reais (evoluções, faltas, PEIs).
+        if (window.EqAvisos) { EqAvisos.mostrar(); return; }
         if (window.EqConfirm) {
-            EqConfirm.mostrar({
-                titulo: 'Avisos',
-                texto: 'A central de avisos entra junto com as tarefas: evoluções pendentes, faltas seguidas e PEIs a vencer.',
-                confirmar: 'Fechar', cancelar: 'Fechar', tipo: 'padrao'
-            });
+            EqConfirm.mostrar({ titulo:'Avisos indisponíveis',
+                texto:'O módulo de avisos não foi carregado nesta página.',
+                confirmar:'Fechar', cancelar:'Fechar', tipo:'padrao' });
         }
+    }
+
+    // marca o sino quando há algo esperando
+    async function marcarSino() {
+        if (!window.EqAvisos) return;
+        try {
+            const n = await EqAvisos.contar();
+            const bt = document.getElementById('btSino');
+            if (!bt) return;
+            const antigo = bt.querySelector('.ponto');
+            if (antigo) antigo.remove();
+            if (n > 0) {
+                const ponto = document.createElement('span');
+                ponto.className = 'ponto';
+                bt.appendChild(ponto);
+                bt.title = n + (n === 1 ? ' aviso' : ' avisos');
+            } else {
+                bt.title = 'Sem avisos';
+            }
+        } catch (e) { console.warn('sino', e); }
     }
 
     async function sair() {
@@ -263,5 +282,5 @@ window.EqSidebar = (function () {
     aplicarLargura(estaRecolhida());
     aplicarModo(modoAtual());
 
-    return { render, recolher, avisos, sair, alternarModo, modoAtual, ITENS };
+    return { render, recolher, avisos, sair, alternarModo, modoAtual, marcarSino, ITENS };
 })();

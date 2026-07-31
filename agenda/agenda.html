@@ -106,6 +106,7 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
 <script src="../shared/supabase_client.js?v=2"></script>
 <script src="../shared/tema.js?v=2"></script>
 <script src="../shared/confirm_modal.js?v=3"></script>
+<script src="../shared/whatsapp.js?v=14"></script>
 <script src="../shared/audit.js?v=5"></script>
 <script src="../shared/fotos.js?v=7"></script>
 <script src="../shared/config_sistema.js?v=10"></script>
@@ -215,7 +216,8 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
     </div>
 </div>
 
-<script src="../shared/sidebar.js?v=10"></script>
+<script src="../shared/avisos.js?v=14"></script>
+<script src="../shared/sidebar.js?v=11"></script>
 <script>
 'use strict';
 
@@ -318,7 +320,7 @@ async function carregar() {
     try {
         let q = eqClient.from('sessoes')
             .select(`id, data, hora_inicio, duracao_min, status,
-                     paciente:pacientes!sessoes_paciente_id_fkey(id, nome_completo, cartao_seguranca),
+                     paciente:pacientes!sessoes_paciente_id_fkey(id, nome_completo, cartao_seguranca, responsavel_telefone, responsavel_nome),
                      profissional:profissionais!sessoes_profissional_id_fkey(id, nome_completo)`)
             .gte('data', ini).lte('data', fim)
             .order('data').order('hora_inicio');
@@ -398,6 +400,11 @@ function desenharDia(ss) {
                 ${['admin_direcao','coordenador_aba','recepcao'].includes(PERFIL)
                   ? `<button class="bt-presenca" style="border-style:dashed"
                        onclick="abrirCobertura('${s.id}','${nome.replace(/'/g,'')}','${s.hora_inicio}',${s.duracao_min})">Cobertura</button>`
+                  : ''}
+                ${(s.status && s.status.indexOf('falta') === 0 && s.paciente
+                   && EqWhats.temNumero(s.paciente.responsavel_telefone))
+                  ? `<button class="bt-presenca" style="border-color:var(--st-ok);color:var(--st-ok)"
+                       onclick="avisarFalta('${s.paciente.responsavel_telefone}','${nome.replace(/'/g,'')}','${s.data}')">Avisar família</button>`
                   : ''}
             </div>
         </div>`;
@@ -719,6 +726,12 @@ async function removerBloqueio(id, descricao) {
         await EqAudit.registrar('exclusao', 'bloqueios_agenda', id, { descricao: descricao });
         await carregar();
     } catch (e) { console.error(e); }
+}
+
+function avisarFalta(telefone, crianca, data) {
+    const clinica = window.EqConfig ? EqConfig.get('clinica_nome', 'clínica') : 'clínica';
+    EqWhats.abrir(telefone, EqWhats.textos.falta({ crianca, data, clinica }));
+    EqAudit.registrar('acesso', 'sessoes', null, { evento: 'contato whatsapp', motivo: 'falta', data: data });
 }
 
 // ── presença ────────────────────────────────────────────────────────────────

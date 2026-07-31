@@ -57,6 +57,7 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
 <script src="../shared/tema.js?v=2"></script>
 <script src="../shared/confirm_modal.js?v=3"></script>
 <script src="../shared/fotos.js?v=7"></script>
+<script src="../shared/whatsapp.js?v=14"></script>
 <script src="../shared/audit.js?v=5"></script>
 <script src="../shared/config_sistema.js?v=10"></script>
 <script src="../shared/auth_guard.js?v=12"></script>
@@ -136,7 +137,8 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
     </div>
 </div>
 
-<script src="../shared/sidebar.js?v=10"></script>
+<script src="../shared/avisos.js?v=14"></script>
+<script src="../shared/sidebar.js?v=11"></script>
 <script>
 'use strict';
 
@@ -187,7 +189,7 @@ async function carregar() {
         }
 
         const { data, error } = await eqClient.from('tarefas')
-            .select('*, paciente:pacientes(nome_completo), responsavel:profissionais!tarefas_responsavel_id_fkey(nome_completo)')
+            .select('*, paciente:pacientes(nome_completo, responsavel_telefone), responsavel:profissionais!tarefas_responsavel_id_fkey(nome_completo)')
             .order('status').order('prazo', { nullsFirst:false }).limit(300);
         if (error) throw error;
         TAREFAS = data || [];
@@ -240,8 +242,17 @@ function pintar() {
                     ${feita ? `<span class="chip chip-ok">concluída ${t.concluida_em ? 'em ' + brl(t.concluida_em) : ''}</span>` : ''}
                 </div>
             </div>
-            ${!feita ? `<button class="btn btn-secundario" style="padding:7px 12px;font-size:12px"
-                onclick="concluir('${t.id}','${t.titulo.replace(/'/g,"\\'")}')">Concluir</button>` : ''}
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+                ${(!feita && t.tipo === 'contato_familia' && t.paciente
+                   && EqWhats.temNumero(t.paciente.responsavel_telefone))
+                  ? EqWhats.botao(t.paciente.responsavel_telefone,
+                        EqWhats.textos.faltasSeguidas({ crianca: t.paciente.nome_completo,
+                            clinica: window.EqConfig ? EqConfig.get('clinica_nome','clínica') : 'clínica' }),
+                        'Falar', 'padding:7px 12px;font-size:12px')
+                  : ''}
+                ${!feita ? `<button class="btn btn-secundario" style="padding:7px 12px;font-size:12px"
+                    onclick="concluir('${t.id}','${t.titulo.replace(/'/g,"\\'")}')">Concluir</button>` : ''}
+            </div>
         </div>`;
     }).join('')
     : '<div class="vazio-msg">Nenhuma tarefa com esses filtros.</div>';

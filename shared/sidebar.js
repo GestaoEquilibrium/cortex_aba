@@ -78,6 +78,10 @@ window.EqSidebar = (function () {
           perfis:['coordenador_aba','supervisor_clinico','admin_direcao'],
           icon:'<path d="M12 3l8 4v6c0 4-3.5 7-8 8-4.5-1-8-4-8-8V7z"/><path d="M9 12l2 2 4-4"/>' },
 
+        { id:'diagnostico', label:'Diagnóstico', href:'diagnostico/index.html',
+          perfis:['admin_direcao','coordenador_aba','supervisor_clinico'],
+          icon:'<path d="M12 2a9 9 0 1 0 9 9"/><path d="M12 7v5l3 2"/><path d="M17 3l4 4-4 4"/>' },
+
         { id:'config',    label:'Configurações', href:'configuracoes/index.html', perfis:['admin_direcao'],
           icon:'<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/>' }
     ];
@@ -94,7 +98,7 @@ window.EqSidebar = (function () {
         </g></svg>`;
 
     const PASTAS = ['pacientes','sessao','portal','agenda','programas','avaliacoes',
-                    'graficos','comportamento','tarefas','relatorios','equipe','configuracoes','auditoria','indicadores','supervisao','admissao','convenios'];
+                    'graficos','comportamento','tarefas','relatorios','equipe','configuracoes','auditoria','indicadores','supervisao','admissao','convenios','diagnostico'];
 
     function caminho(href) {
         const partes = window.location.pathname.split('/').filter(Boolean);

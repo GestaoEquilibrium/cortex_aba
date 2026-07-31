@@ -21,7 +21,7 @@
 //           como se fosse atual.
 // ============================================================================
 
-const VERSAO = 'cortex-aba-v5';
+const VERSAO = 'cortex-aba-v6';
 const CACHE_ESTATICO = VERSAO + '-estatico';
 const CACHE_PAGINAS  = VERSAO + '-paginas';
 
@@ -42,7 +42,7 @@ const ESSENCIAL = [
     'shared/tema.js?v=2',
     'shared/confirm_modal.js?v=3',
     'shared/fila_offline.js?v=8',
-    'shared/sidebar.js?v=15',
+    'shared/sidebar.js?v=16',
     'shared/auth_guard.js?v=12',
     'shared/pwa.js?v=15',
     'favicon.svg'

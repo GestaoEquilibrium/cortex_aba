@@ -171,6 +171,33 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
     </div>
 </div>
 
+
+<div class="modal-fundo" id="modalAusencia" onclick="if(event.target===this) fechar('modalAusencia')">
+    <div class="modal">
+        <h2 id="tituloAusencia" style="margin-bottom:4px">Ausência</h2>
+        <p class="tiny soft" style="margin-bottom:14px">Férias, atestado ou folga. Nos dias marcados, a geração de sessões pula esta pessoa.</p>
+        <form id="formAusencia">
+            <div class="campo-2">
+                <div class="campo"><label for="auInicio">De *</label><input id="auInicio" type="date" required></div>
+                <div class="campo"><label for="auFim">Até *</label><input id="auFim" type="date" required></div>
+            </div>
+            <div class="campo"><label for="auMotivo">Motivo</label>
+                <select id="auMotivo">
+                    <option value="ferias">Férias</option><option value="atestado">Atestado</option>
+                    <option value="folga">Folga</option><option value="licenca">Licença</option>
+                    <option value="outro">Outro</option>
+                </select></div>
+            <div class="campo"><label for="auObs">Observação</label><input id="auObs"></div>
+            <div id="listaAusencias" style="margin-bottom:10px"></div>
+            <div class="aviso" id="erroAusencia" style="display:none;border-left-color:var(--st-bad);color:var(--st-bad);margin-bottom:10px"></div>
+            <div class="grid-2">
+                <button type="button" class="btn btn-secundario btn-bloco" onclick="fechar('modalAusencia')">Cancelar</button>
+                <button type="submit" class="btn btn-bloco" id="btSalvarAusencia">Registrar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <input type="file" id="inputFotoProf" accept="image/jpeg,image/png,image/webp"
        style="display:none" onchange="enviarFotoProf(this)">
 <script src="../shared/sidebar.js?v=8"></script>
@@ -187,6 +214,7 @@ let SOU_ADMIN = false;
 document.addEventListener('eq:pronto', async function (ev) {
     EqSidebar.render('equipe');
     SOU_ADMIN = ['admin_direcao','supervisor_clinico'].includes(ev.detail.perfil);
+    PODE_AUSENCIA = ['admin_direcao','coordenador_aba','recepcao'].includes(ev.detail.perfil);
     if (SOU_ADMIN) {
         document.getElementById('btProf').style.display = '';
         document.getElementById('btEquipe').style.display = '';
@@ -212,6 +240,12 @@ async function carregarProfissionais() {
 
         const ps = data || [];
         try {
+            const hoje = new Date().toISOString().slice(0,10);
+            const ra = await eqClient.from('ausencias_profissional')
+                .select('*').gte('data_fim', hoje).order('data_inicio');
+            AUSENCIAS = ra.data || [];
+        } catch (e) { AUSENCIAS = []; }
+        try {
             const mapa = await EqFotos.links(ps.map(p => p.foto_url));
             ps.forEach(p => { p.foto = p.foto_url ? mapa[p.foto_url] : null; });
         } catch (e) { console.warn('fotos não carregadas', e); }
@@ -228,7 +262,13 @@ async function carregarProfissionais() {
                     <div><b>${p.nome_completo}</b><br><span class="tiny soft">${p.email}</span></div>
                 </div></td>
                 <td>${ROTULO_PERFIL[p.perfil] || p.perfil}</td>
-                <td class="muted">${p.turno || '—'}</td>
+                <td class="muted">${p.turno || '—'}
+                    ${(() => {
+                        const hoje = new Date().toISOString().slice(0,10);
+                        const a = AUSENCIAS.find(x => x.profissional_id === p.id
+                                 && x.data_inicio <= hoje && x.data_fim >= hoje);
+                        return a ? `<br><span class="chip chip-alerta">${a.motivo} até ${a.data_fim.split('-').reverse().join('/')}</span>` : '';
+                    })()}</td>
                 <td class="muted">${nomeEquipe(p.equipe_id)}</td>
                 <td>${p.auth_user_id
                         ? `<span class="chip chip-ok">com acesso</span>
@@ -237,8 +277,10 @@ async function carregarProfissionais() {
                            ? `<button class="btn btn-secundario" style="padding:5px 10px;font-size:11.5px"
                                 onclick="criarAcesso('${p.id}','${p.nome_completo.replace(/'/g,"\\'")}')">Criar acesso</button>`
                            : '<span class="sem-conta">sem conta</span>')}</td>
-                <td style="text-align:right">${SOU_ADMIN ? `
-                    <button class="bt-acao btn btn-secundario" style="padding:5px 10px;font-size:11.5px"
+                <td style="text-align:right;white-space:nowrap">
+                    ${PODE_AUSENCIA ? `<button class="btn btn-secundario" style="padding:5px 10px;font-size:11.5px"
+                            onclick="abrirAusencia('${p.id}','${p.nome_completo.replace(/'/g,'')}')">Ausência</button>` : ''}
+                    ${SOU_ADMIN ? `<button class="bt-acao btn btn-secundario" style="padding:5px 10px;font-size:11.5px;margin-left:6px"
                             onclick="alternarAtivo('${p.id}', ${p.ativo}, '${p.nome_completo.replace(/'/g,'')}')">
                         ${p.ativo ? 'Desativar' : 'Reativar'}</button>` : ''}</td>
             </tr>`).join('')
@@ -286,7 +328,7 @@ async function carregarEquipes() {
     }
 }
 
-let PROF_FOTO = null;
+let PROF_FOTO = null, PODE_AUSENCIA = false, AUSENCIAS = [];
 function escolherFoto(id) { PROF_FOTO = id; document.getElementById('inputFotoProf').click(); }
 
 async function enviarFotoProf(input) {
@@ -343,6 +385,59 @@ async function redefinirAcesso(id, nome) {
             texto: e.message, confirmar:'Entendi', cancelar:'Fechar', tipo:'alerta' });
     }
 }
+
+
+let AUSENCIA_PROF = null;
+
+function abrirAusencia(id, nome) {
+    AUSENCIA_PROF = { id: id, nome: nome };
+    document.getElementById('tituloAusencia').textContent = 'Ausência de ' + nome;
+    document.getElementById('formAusencia').reset();
+    const hoje = new Date().toISOString().slice(0,10);
+    document.getElementById('auInicio').value = hoje;
+    document.getElementById('auFim').value = hoje;
+
+    const dele = AUSENCIAS.filter(a => a.profissional_id === id);
+    document.getElementById('listaAusencias').innerHTML = dele.length
+        ? '<div class="tiny soft" style="margin-bottom:6px">Ausências registradas</div>' + dele.map(a =>
+            `<div style="font-size:12px;color:var(--ink-muted);padding:4px 0">
+                ${a.data_inicio.split('-').reverse().join('/')} a ${a.data_fim.split('-').reverse().join('/')} · ${a.motivo}
+             </div>`).join('')
+        : '';
+    document.getElementById('modalAusencia').classList.add('aberto');
+}
+
+document.getElementById('formAusencia').addEventListener('submit', async function (ev) {
+    ev.preventDefault();
+    const bt = document.getElementById('btSalvarAusencia'), erro = document.getElementById('erroAusencia');
+    bt.disabled = true; bt.textContent = 'Salvando...'; erro.style.display = 'none';
+    try {
+        const { data, error } = await eqClient.from('ausencias_profissional').insert({
+            profissional_id: AUSENCIA_PROF.id,
+            data_inicio: document.getElementById('auInicio').value,
+            data_fim: document.getElementById('auFim').value,
+            motivo: document.getElementById('auMotivo').value,
+            observacao: document.getElementById('auObs').value.trim() || null,
+            registrado_por: (window.EqSessao && EqSessao.profissional.id) || null
+        }).select('id').single();
+        if (error) throw error;
+        await EqAudit.registrar('criacao', 'ausencias_profissional', data.id,
+            { profissional: AUSENCIA_PROF.nome, de: document.getElementById('auInicio').value,
+              ate: document.getElementById('auFim').value });
+        fechar('modalAusencia');
+        await EqConfirm.mostrar({
+            titulo: 'Ausência registrada',
+            texto: 'Nos dias marcados, a geração de sessões pula ' + AUSENCIA_PROF.nome +
+                   '. As sessões já criadas continuam — use "Cobertura" na agenda para transferir.',
+            confirmar: 'Entendi', cancelar: 'Fechar', tipo: 'padrao'
+        });
+        await carregarProfissionais();
+    } catch (e) {
+        console.error(e);
+        erro.textContent = 'Não foi possível salvar: ' + (e.message || 'erro');
+        erro.style.display = 'block';
+    } finally { bt.disabled = false; bt.textContent = 'Registrar'; }
+});
 
 async function alternarAtivo(id, ativo, nome) {
     const ok = await EqConfirm.mostrar({

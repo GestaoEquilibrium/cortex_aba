@@ -84,6 +84,21 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
 .legenda { display:flex; gap:16px; flex-wrap:wrap; font-size:11px; color:var(--ink-muted); margin-top:12px; }
 .legenda span { display:flex; align-items:center; gap:6px; }
 .legenda i { width:11px; height:11px; border-radius:3px; }
+.bt-remove { border:none; background:transparent; color:var(--st-bad); font:inherit; font-size:11.5px;
+             font-weight:700; cursor:pointer; text-decoration:underline; margin-left:8px; }
+.campo { margin-bottom:11px; }
+.campo label { display:block; font-size:11.5px; font-weight:700; color:var(--ink-muted); margin-bottom:4px; }
+.campo input, .campo select, .campo textarea { width:100%; padding:9px 11px; font-size:13px; font-family:inherit;
+    border:1px solid var(--line-strong); border-radius:8px; background:var(--surface-alt); color:var(--ink); }
+.campo-2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.modal-fundo { position:fixed; inset:0; background:rgba(12,27,42,.5); backdrop-filter:blur(3px);
+               display:none; align-items:center; justify-content:center; padding:20px; z-index:80; }
+.modal-fundo.aberto { display:flex; }
+.modal { background:var(--surface); border-radius:var(--radius-card); padding:22px; width:100%;
+         max-width:520px; box-shadow:var(--shadow-lg); max-height:92vh; overflow:auto; }
+.livre { display:flex; align-items:center; justify-content:space-between; gap:10px;
+         padding:10px 0; border-top:1px solid var(--line); }
+.livre:first-child { border-top:none; }
 .vazio-msg { padding:24px; text-align:center; color:var(--ink-muted); font-size:13px; }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -108,7 +123,11 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
                 <h1>Agenda</h1>
                 <div class="sub" id="resumo">carregando…</div>
             </div>
-            <button class="btn" id="btGerar" style="display:none" onclick="gerarSessoes()">Gerar sessões do dia</button>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button class="btn btn-secundario" id="btBloqueio" style="display:none" onclick="abrirBloqueio()">Feriado / bloqueio</button>
+                <button class="btn btn-secundario" id="btEncaixe" style="display:none" onclick="abrirEncaixe()">Encaixe</button>
+                <button class="btn" id="btGerar" style="display:none" onclick="gerarSessoes()">Gerar sessões do dia</button>
+            </div>
         </div>
 
         <div class="barra">
@@ -129,6 +148,71 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
 
         <div class="card"><div id="area"><div class="muted small">carregando…</div></div></div>
     </main>
+</div>
+
+
+<!-- ── encaixe avulso ──────────────────────────────────────────────────────── -->
+<div class="modal-fundo" id="modalEncaixe" onclick="if(event.target===this) fecharModal('modalEncaixe')">
+    <div class="modal">
+        <h2 style="margin-bottom:4px">Encaixe</h2>
+        <p class="tiny soft" style="margin-bottom:14px">Sessão avulsa, fora da grade fixa. Serve para reposição e atendimento extra.</p>
+        <form id="formEncaixe">
+            <div class="campo"><label for="ePaciente">Paciente *</label><select id="ePaciente" required></select></div>
+            <div class="campo"><label for="eProfissional">Aplicador *</label><select id="eProfissional" required></select></div>
+            <div class="campo-2">
+                <div class="campo"><label for="eData">Data *</label><input id="eData" type="date" required></div>
+                <div class="campo"><label for="eHora">Horário *</label><input id="eHora" type="time" required value="14:00"></div>
+            </div>
+            <div class="campo-2">
+                <div class="campo"><label for="eDuracao">Duração (min)</label><input id="eDuracao" type="number" min="15" max="240" step="15" value="60"></div>
+                <div class="campo"><label for="eOrigem">Tipo</label>
+                    <select id="eOrigem"><option value="encaixe">Encaixe</option><option value="reposicao">Reposição de falta</option></select></div>
+            </div>
+            <div class="campo"><label for="eObs">Observação</label><input id="eObs" placeholder="motivo do encaixe"></div>
+            <div class="aviso" id="erroEncaixe" style="display:none;border-left-color:var(--st-bad);color:var(--st-bad);margin-bottom:10px"></div>
+            <div class="grid-2">
+                <button type="button" class="btn btn-secundario btn-bloco" onclick="fecharModal('modalEncaixe')">Cancelar</button>
+                <button type="submit" class="btn btn-bloco" id="btSalvarEncaixe">Agendar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ── cobertura ───────────────────────────────────────────────────────────── -->
+<div class="modal-fundo" id="modalCobertura" onclick="if(event.target===this) fecharModal('modalCobertura')">
+    <div class="modal">
+        <h2 id="tituloCobertura" style="margin-bottom:4px">Cobertura</h2>
+        <p class="tiny soft" style="margin-bottom:14px">Quem está livre neste horário, sem sessão sobreposta e sem ausência registrada.</p>
+        <div id="listaLivres"><div class="vazio-msg">carregando…</div></div>
+        <button class="btn btn-secundario btn-bloco" style="margin-top:12px" onclick="fecharModal('modalCobertura')">Fechar</button>
+    </div>
+</div>
+
+<!-- ── feriado / bloqueio ──────────────────────────────────────────────────── -->
+<div class="modal-fundo" id="modalBloqueio" onclick="if(event.target===this) fecharModal('modalBloqueio')">
+    <div class="modal">
+        <h2 style="margin-bottom:4px">Feriado ou bloqueio</h2>
+        <p class="tiny soft" style="margin-bottom:14px">Nos dias bloqueados o sistema não gera sessões a partir da grade.</p>
+        <form id="formBloqueio">
+            <div class="campo-2">
+                <div class="campo"><label for="bData">Data *</label><input id="bData" type="date" required></div>
+                <div class="campo"><label for="bTipo">Tipo</label>
+                    <select id="bTipo">
+                        <option value="feriado">Feriado</option><option value="recesso">Recesso</option>
+                        <option value="evento">Evento da clínica</option><option value="outro">Outro</option>
+                    </select></div>
+            </div>
+            <div class="campo"><label for="bDescricao">Descrição *</label>
+                <input id="bDescricao" required placeholder="Feriado municipal"></div>
+            <div class="campo"><label for="bEquipe">Alcance</label>
+                <select id="bEquipe"><option value="">Clínica toda</option></select></div>
+            <div class="aviso" id="erroBloqueio" style="display:none;border-left-color:var(--st-bad);color:var(--st-bad);margin-bottom:10px"></div>
+            <div class="grid-2">
+                <button type="button" class="btn btn-secundario btn-bloco" onclick="fecharModal('modalBloqueio')">Cancelar</button>
+                <button type="submit" class="btn btn-bloco" id="btSalvarBloqueio">Bloquear</button>
+            </div>
+        </form>
+    </div>
 </div>
 
 <script src="../shared/sidebar.js?v=8"></script>
@@ -153,14 +237,18 @@ const STATUS = {
 const RAPIDOS = ['realizada','falta_justificada','falta_injustificada'];
 
 let VISAO = 'dia';
+let BLOQUEIOS = [], EU_ID = null;
 let PERFIL = null;
 let PROFS = [];
 
 document.addEventListener('eq:pronto', async function (ev) {
     EqSidebar.render('agenda');
     PERFIL = ev.detail.perfil;
+    EU_ID = ev.detail.profissional.id;
     if (['admin_direcao','coordenador_aba','recepcao'].includes(PERFIL)) {
         document.getElementById('btGerar').style.display = '';
+        document.getElementById('btEncaixe').style.display = '';
+        document.getElementById('btBloqueio').style.display = '';
     }
     document.getElementById('dataSel').value = hojeISO();
 
@@ -240,6 +328,12 @@ async function carregar() {
         if (error) throw error;
         const sessoes = data || [];
 
+        try {
+            const rb = await eqClient.from('bloqueios_agenda')
+                .select('*').gte('data', ini).lte('data', fim);
+            BLOQUEIOS = rb.data || [];
+        } catch (e) { BLOQUEIOS = []; }
+
         let grade = [];
         if (VISAO === 'semana' && profId) {
             const r = await eqClient.from('cronograma_terapeutico')
@@ -261,6 +355,7 @@ async function carregar() {
 // ── visão dia ───────────────────────────────────────────────────────────────
 function desenharDia(ss) {
     const d = comoData(dataSel());
+    const bloqueio = BLOQUEIOS.find(b => b.data === dataSel());
     document.getElementById('rotuloPeriodo').textContent = DIAS_EXT[d.getDay()];
     const feitas = ss.filter(s => s.status === 'realizada').length;
     const faltas = ss.filter(s => s.status.indexOf('falta') === 0).length;
@@ -268,14 +363,22 @@ function desenharDia(ss) {
         ? ss.length + ' sessões · ' + feitas + ' realizadas · ' + faltas + ' faltas'
         : 'Nenhuma sessão neste dia';
 
+    const avisoBloqueio = bloqueio
+        ? `<div class="aviso" style="border-left-color:var(--st-warn);margin-bottom:12px">
+             <b>${bloqueio.descricao}</b> — ${bloqueio.tipo}${bloqueio.equipe_id ? ' (apenas uma equipe)' : ' (clínica toda)'}.
+             A geração de sessões está bloqueada neste dia.
+             ${['admin_direcao','coordenador_aba','recepcao'].includes(PERFIL)
+               ? `<button class="bt-remove" onclick="removerBloqueio('${bloqueio.id}','${bloqueio.descricao.replace(/'/g,"")}')">remover bloqueio</button>` : ''}
+           </div>` : '';
+
     if (!ss.length) {
-        document.getElementById('area').innerHTML = '<div class="vazio-msg">Nenhuma sessão lançada. ' +
+        document.getElementById('area').innerHTML = avisoBloqueio + '<div class="vazio-msg">Nenhuma sessão lançada. ' +
             (['admin_direcao','coordenador_aba','recepcao'].includes(PERFIL)
-             ? 'Use “Gerar sessões do dia” para criar a partir da grade.' : '') + '</div>';
+             ? 'Use “Gerar sessões do dia” para criar a partir da grade, ou “Encaixe” para uma sessão avulsa.' : '') + '</div>';
         return;
     }
 
-    document.getElementById('area').innerHTML = ss.map(s => {
+    document.getElementById('area').innerHTML = avisoBloqueio + ss.map(s => {
         const st = STATUS[s.status] || STATUS.agendada;
         const nome = s.paciente ? s.paciente.nome_completo : '—';
         const bts = RAPIDOS.map(k => `
@@ -291,7 +394,12 @@ function desenharDia(ss) {
                 <span>${s.profissional ? s.profissional.nome_completo : '—'} · ${s.duracao_min} min</span>
             </div>
             <span class="chip" style="background:transparent;border:1px solid ${st.c};color:${st.c}">${st.r}</span>
-            <div style="display:flex;gap:5px;flex-wrap:wrap">${bts}</div>
+            <div style="display:flex;gap:5px;flex-wrap:wrap">${bts}
+                ${['admin_direcao','coordenador_aba','recepcao'].includes(PERFIL)
+                  ? `<button class="bt-presenca" style="border-style:dashed"
+                       onclick="abrirCobertura('${s.id}','${nome.replace(/'/g,'')}','${s.hora_inicio}',${s.duracao_min})">Cobertura</button>`
+                  : ''}
+            </div>
         </div>`;
     }).join('');
 }
@@ -430,6 +538,187 @@ function desenharMes(ss, iniISO) {
             '<span><i style="background:var(--st-neutro)"></i>agendadas ou outros</span>' +
             '<span>clique no dia para abrir a visão de dia</span>' +
         '</div>';
+}
+
+
+// ── encaixe, cobertura e bloqueios ──────────────────────────────────────────
+let PACIENTES_LISTA = [];
+
+function fecharModal(id) {
+    document.getElementById(id).classList.remove('aberto');
+    document.querySelectorAll('.aviso[id^=erro]').forEach(e => e.style.display = 'none');
+}
+
+async function abrirEncaixe() {
+    try {
+        if (!PACIENTES_LISTA.length) {
+            const { data } = await eqClient.from('pacientes')
+                .select('id, nome_completo').eq('status','ativo').order('nome_completo');
+            PACIENTES_LISTA = data || [];
+        }
+        document.getElementById('ePaciente').innerHTML =
+            PACIENTES_LISTA.map(p => `<option value="${p.id}">${p.nome_completo}</option>`).join('');
+        document.getElementById('eProfissional').innerHTML =
+            PROFS.map(p => `<option value="${p.id}">${p.nome_completo}</option>`).join('');
+        document.getElementById('eData').value = dataSel();
+        document.getElementById('modalEncaixe').classList.add('aberto');
+    } catch (e) {
+        console.error(e);
+        await EqConfirm.mostrar({ titulo:'Não foi possível abrir', texto: e.message || 'Erro.',
+            confirmar:'Entendi', cancelar:'Fechar', tipo:'alerta' });
+    }
+}
+
+document.getElementById('formEncaixe').addEventListener('submit', async function (ev) {
+    ev.preventDefault();
+    const bt = document.getElementById('btSalvarEncaixe'), erro = document.getElementById('erroEncaixe');
+    bt.disabled = true; bt.textContent = 'Agendando...'; erro.style.display = 'none';
+    try {
+        const { data, error } = await eqClient.from('sessoes').insert({
+            paciente_id: document.getElementById('ePaciente').value,
+            profissional_id: document.getElementById('eProfissional').value,
+            data: document.getElementById('eData').value,
+            hora_inicio: document.getElementById('eHora').value,
+            duracao_min: parseInt(document.getElementById('eDuracao').value || '60', 10),
+            status: 'agendada',
+            origem: document.getElementById('eOrigem').value,
+            observacao: document.getElementById('eObs').value.trim() || null,
+            registrado_por: EU_ID
+        }).select('id').single();
+        if (error) throw error;
+        await EqAudit.registrar('criacao', 'sessoes', data.id,
+            { origem: document.getElementById('eOrigem').value, data: document.getElementById('eData').value });
+        fecharModal('modalEncaixe'); this.reset();
+        document.getElementById('dataSel').value = document.getElementById('eData').value || dataSel();
+        await carregar();
+    } catch (e) {
+        console.error(e);
+        erro.textContent = e.message && e.message.indexOf('duplicate') !== -1
+            ? 'Já existe sessão deste paciente neste dia e horário.'
+            : 'Não foi possível agendar: ' + (e.message || 'erro');
+        erro.style.display = 'block';
+    } finally { bt.disabled = false; bt.textContent = 'Agendar'; }
+});
+
+let COBERTURA = null;
+
+async function abrirCobertura(sessaoId, paciente, hora, duracao) {
+    COBERTURA = { sessaoId, paciente, hora, duracao };
+    document.getElementById('tituloCobertura').textContent = 'Cobertura · ' + paciente + ' às ' + hora.slice(0,5);
+    document.getElementById('listaLivres').innerHTML = '<div class="vazio-msg">carregando…</div>';
+    document.getElementById('modalCobertura').classList.add('aberto');
+
+    try {
+        const { data, error } = await eqClient.rpc('sugerir_cobertura', {
+            p_data: dataSel(), p_hora: hora, p_duracao: duracao
+        });
+        if (error) throw error;
+        const livres = data || [];
+        document.getElementById('listaLivres').innerHTML = livres.length
+            ? livres.map(p => `
+                <div class="livre">
+                    <div>
+                        <b style="font-size:13px">${p.nome}</b>
+                        <div class="tiny soft">${p.perfil === 'aplicador_itinerante' ? 'itinerante — perfil de cobertura' : p.perfil.replace('_aba','')}</div>
+                    </div>
+                    <button class="btn" style="padding:6px 12px;font-size:12px"
+                            onclick="transferir('${p.id}','${p.nome.replace(/'/g,'')}')">Transferir</button>
+                </div>`).join('')
+            : '<div class="vazio-msg">Ninguém livre neste horário. Considere remarcar a sessão.</div>';
+    } catch (e) {
+        console.error(e);
+        document.getElementById('listaLivres').innerHTML =
+            '<div class="vazio-msg" style="color:var(--st-bad)">Erro ao buscar. Veja o console.</div>';
+    }
+}
+
+async function transferir(profId, nome) {
+    const ok = await EqConfirm.mostrar({
+        titulo: 'Transferir para ' + nome + '?',
+        texto: 'A sessão de ' + COBERTURA.paciente + ' passa a ser de ' + nome +
+               ' e fica marcada como cobertura. O cartão de segurança e o PEI do paciente continuam disponíveis para quem assumir.',
+        confirmar: 'Transferir', tipo: 'alerta'
+    });
+    if (!ok) return;
+    try {
+        const { error } = await eqClient.from('sessoes').update({
+            profissional_id: profId, status: 'substituicao'
+        }).eq('id', COBERTURA.sessaoId);
+        if (error) throw error;
+        await EqAudit.registrar('status', 'sessoes', COBERTURA.sessaoId,
+            { evento: 'cobertura', paciente: COBERTURA.paciente, novo_aplicador: nome });
+        fecharModal('modalCobertura');
+        await carregar();
+    } catch (e) {
+        console.error(e);
+        await EqConfirm.mostrar({ titulo:'Não foi possível transferir', texto: e.message || 'Erro.',
+            confirmar:'Entendi', cancelar:'Fechar', tipo:'alerta' });
+    }
+}
+
+async function abrirBloqueio() {
+    document.getElementById('bData').value = dataSel();
+    try {
+        const { data } = await eqClient.from('equipes_aba').select('id, nome').eq('ativo', true);
+        document.getElementById('bEquipe').innerHTML = '<option value="">Clínica toda</option>' +
+            (data || []).map(e => `<option value="${e.id}">Apenas ${e.nome}</option>`).join('');
+    } catch (e) {}
+    document.getElementById('modalBloqueio').classList.add('aberto');
+}
+
+document.getElementById('formBloqueio').addEventListener('submit', async function (ev) {
+    ev.preventDefault();
+    const bt = document.getElementById('btSalvarBloqueio'), erro = document.getElementById('erroBloqueio');
+    bt.disabled = true; bt.textContent = 'Bloqueando...'; erro.style.display = 'none';
+    const dataBloq = document.getElementById('bData').value;
+    try {
+        // avisa se já existe sessão criada naquele dia
+        const { data: jaTem } = await eqClient.from('sessoes')
+            .select('id', { count:'exact', head:false }).eq('data', dataBloq).limit(1);
+        if (jaTem && jaTem.length) {
+            const segue = await EqConfirm.mostrar({
+                titulo: 'Já existem sessões neste dia',
+                texto: 'O bloqueio impede novas gerações, mas não apaga o que já foi criado. Cancele ou remarque as sessões existentes pela agenda.',
+                confirmar: 'Bloquear mesmo assim', tipo: 'alerta'
+            });
+            if (!segue) { bt.disabled = false; bt.textContent = 'Bloquear'; return; }
+        }
+
+        const { data, error } = await eqClient.from('bloqueios_agenda').insert({
+            data: dataBloq,
+            descricao: document.getElementById('bDescricao').value.trim(),
+            tipo: document.getElementById('bTipo').value,
+            equipe_id: document.getElementById('bEquipe').value || null,
+            criado_por: EU_ID
+        }).select('id').single();
+        if (error) throw error;
+        await EqAudit.registrar('criacao', 'bloqueios_agenda', data.id,
+            { data: dataBloq, descricao: document.getElementById('bDescricao').value.trim() });
+        fecharModal('modalBloqueio'); this.reset();
+        document.getElementById('dataSel').value = dataBloq;
+        await carregar();
+    } catch (e) {
+        console.error(e);
+        erro.textContent = e.message && e.message.indexOf('duplicate') !== -1
+            ? 'Este dia já está bloqueado.'
+            : 'Não foi possível bloquear: ' + (e.message || 'erro');
+        erro.style.display = 'block';
+    } finally { bt.disabled = false; bt.textContent = 'Bloquear'; }
+});
+
+async function removerBloqueio(id, descricao) {
+    const ok = await EqConfirm.mostrar({
+        titulo: 'Remover o bloqueio?',
+        texto: descricao + ' deixa de bloquear a geração de sessões neste dia.',
+        confirmar: 'Remover', tipo: 'alerta'
+    });
+    if (!ok) return;
+    try {
+        const { error } = await eqClient.from('bloqueios_agenda').delete().eq('id', id);
+        if (error) throw error;
+        await EqAudit.registrar('exclusao', 'bloqueios_agenda', id, { descricao: descricao });
+        await carregar();
+    } catch (e) { console.error(e); }
 }
 
 // ── presença ────────────────────────────────────────────────────────────────

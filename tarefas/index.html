@@ -181,7 +181,8 @@ async function carregar() {
     try {
         // gera as automáticas antes de listar (idempotente no banco)
         if (['admin_direcao','coordenador_aba','supervisor_clinico','recepcao'].includes(EU.perfil)) {
-            try { await eqClient.rpc('gerar_tarefas_faltas'); } catch (e) { console.warn('geração automática', e); }
+            try { await eqClient.rpc('gerar_tarefas_faltas'); } catch (e) { console.warn('tarefas de falta', e); }
+            try { await eqClient.rpc('gerar_tarefas_evolucao'); } catch (e) { console.warn('tarefas de evolução', e); }
         }
 
         const { data, error } = await eqClient.from('tarefas')

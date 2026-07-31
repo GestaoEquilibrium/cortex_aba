@@ -43,10 +43,26 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
 .bt-det { border:none; background:transparent; color:var(--acao); font:inherit; font-size:11.5px;
           font-weight:700; cursor:pointer; padding:0; }
 .vazio-msg { padding:26px; text-align:center; color:var(--ink-muted); font-size:13px; }
+.abas-aud { display:flex; gap:4px; border-bottom:1px solid var(--line); margin-bottom:16px; }
+.abas-aud button { border:none; background:transparent; padding:10px 14px; font:inherit; font-size:13px;
+    font-weight:700; color:var(--ink-muted); cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px; }
+.abas-aud button[aria-pressed="true"] { color:var(--acao); border-bottom-color:var(--acao); }
+.painel-aud { display:none; } .painel-aud.on { display:block; }
+.erro-linha { padding:12px 0; border-top:1px solid var(--line); }
+.erro-linha:first-child { border-top:none; }
+.erro-msg { font-size:13px; font-weight:600; color:var(--ink); word-break:break-word; }
+.erro-meta { display:flex; gap:9px; flex-wrap:wrap; align-items:center; margin-top:5px;
+             font-size:11.5px; color:var(--ink-muted); }
+.erro-tec { margin-top:6px; background:var(--surface-alt); border:1px solid var(--line);
+            border-radius:8px; padding:8px 10px; font-size:11px; color:var(--ink-muted);
+            font-family:ui-monospace,Menlo,monospace; white-space:pre-wrap; word-break:break-word; display:none; }
+.erro-tec.on { display:block; }
+.erro-linha.feito { opacity:.5; }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../config.js?v=4"></script>
 <script src="../shared/supabase_client.js?v=2"></script>
+<script src="../shared/erros.js?v=16"></script>
 <script src="../shared/tema.js?v=2"></script>
 <script src="../shared/confirm_modal.js?v=3"></script>
 <script src="../shared/fotos.js?v=7"></script>
@@ -69,6 +85,12 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
             <button class="btn btn-secundario" onclick="exportar()">Exportar CSV</button>
         </div>
 
+        <div class="abas-aud">
+            <button data-p="trilha" aria-pressed="true"  onclick="abaAud('trilha')">Trilha de auditoria</button>
+            <button data-p="erros"  aria-pressed="false" onclick="abaAud('erros')">Erros do sistema</button>
+        </div>
+
+        <div class="painel-aud on" id="p-trilha">
         <div class="filtros">
             <input type="date" id="fIni" onchange="carregar()" title="De">
             <input type="date" id="fFim" onchange="carregar()" title="Até">
@@ -99,6 +121,11 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
 
         <div style="text-align:center; margin-top:12px">
             <button class="btn btn-secundario" id="btMais" style="display:none" onclick="carregarMais()">Carregar mais</button>
+        </div>
+        </div>
+
+        <div class="painel-aud" id="p-erros">
+            <div id="areaErros"><div class="card vazio-msg">carregando…</div></div>
         </div>
     </main>
 </div>
@@ -176,6 +203,109 @@ function montarConsulta() {
     if (tab)  q = q.eq('tabela', tab);
 
     return q;
+}
+
+
+// ── erros do sistema ────────────────────────────────────────────────────────
+let ERROS = [], SO_ABERTOS = true;
+
+function abaAud(k) {
+    ['trilha','erros'].forEach(x => {
+        document.getElementById('p-' + x).classList.toggle('on', x === k);
+        document.querySelector('[data-p="' + x + '"]').setAttribute('aria-pressed', x === k);
+    });
+    if (k === 'erros' && !ERROS.length) carregarErros();
+}
+
+async function carregarErros() {
+    const alvo = document.getElementById('areaErros');
+    alvo.innerHTML = '<div class="card vazio-msg">carregando…</div>';
+    try {
+        const { data, error } = await eqClient.from('erros_sistema')
+            .select('*, profissional:profissionais(nome_completo)')
+            .order('criado_em', { ascending:false }).limit(200);
+        if (error) throw error;
+        ERROS = data || [];
+        pintarErros();
+    } catch (e) {
+        console.error(e);
+        alvo.innerHTML = '<div class="card vazio-msg" style="color:var(--st-bad)">Erro ao carregar. Veja o console.</div>';
+    }
+}
+
+function pintarErros() {
+    const lista = SO_ABERTOS ? ERROS.filter(e => !e.resolvido) : ERROS;
+    const abertos = ERROS.filter(e => !e.resolvido).length;
+
+    // agrupa mensagens iguais: o mesmo erro em 5 pessoas é um problema, não cinco
+    const grupos = {};
+    lista.forEach(e => {
+        const k = e.mensagem.slice(0, 100) + '|' + (e.pagina || '');
+        if (!grupos[k]) grupos[k] = { itens: [], pessoas: new Set() };
+        grupos[k].itens.push(e);
+        if (e.profissional) grupos[k].pessoas.add(e.profissional.nome_completo);
+    });
+    const chaves = Object.keys(grupos).sort((a,b) =>
+        grupos[b].itens.length - grupos[a].itens.length);
+
+    document.getElementById('areaErros').innerHTML = `
+    <div class="filtros">
+        <button class="filtro" aria-pressed="${SO_ABERTOS}" onclick="alternarAbertos()">Só os não resolvidos</button>
+        <span class="tiny soft">${abertos} aberto(s) de ${ERROS.length} registrados</span>
+    </div>
+
+    <div class="card">
+        ${chaves.length ? chaves.map(k => {
+            const g = grupos[k];
+            const e = g.itens[0];
+            const pessoas = Array.from(g.pessoas);
+            return `<div class="erro-linha ${e.resolvido ? 'feito' : ''}">
+                <div class="erro-msg">${e.mensagem}</div>
+                <div class="erro-meta">
+                    ${g.itens.length > 1 ? `<span class="chip chip-erro">${g.itens.length}x</span>` : ''}
+                    <span class="chip chip-neutro">${e.pagina || 'página desconhecida'}</span>
+                    <span>${brl(e.criado_em)} ${e.criado_em.slice(11,16)}</span>
+                    ${pessoas.length ? `<span>${pessoas.slice(0,3).join(', ')}${pessoas.length>3 ? ' e outros' : ''}</span>` : ''}
+                    ${e.navegador ? `<span class="soft">${e.navegador}</span>` : ''}
+                    ${(e.origem || e.pilha) ? `<button class="bt-det" onclick="verTecnico('${e.id}')">detalhes técnicos</button>` : ''}
+                    ${!e.resolvido ? `<button class="bt-det" style="color:var(--st-ok)"
+                        onclick="marcarResolvido([${g.itens.map(x => x.id).join(',')}])">marcar resolvido</button>` : ''}
+                </div>
+                ${(e.origem || e.pilha) ? `<div class="erro-tec" id="tec-${e.id}">${
+                    (e.origem ? 'em: ' + e.origem + '\n' : '') + (e.pilha || '')}</div>` : ''}
+            </div>`;
+        }).join('')
+        : `<div class="vazio-msg">
+             ${SO_ABERTOS ? 'Nenhum erro em aberto. Bom sinal.' : 'Nenhum erro registrado.'}
+           </div>`}
+        <div class="card-legenda">
+            Erros iguais aparecem agrupados: o mesmo problema em cinco pessoas é um problema,
+            não cinco. Endereços, e-mails e trechos de dado são removidos antes de gravar.
+        </div>
+    </div>`;
+}
+
+function alternarAbertos() { SO_ABERTOS = !SO_ABERTOS; pintarErros(); }
+function verTecnico(id) { document.getElementById('tec-' + id).classList.toggle('on'); }
+
+async function marcarResolvido(ids) {
+    const ok = await EqConfirm.mostrar({
+        titulo: ids.length > 1 ? 'Marcar as ' + ids.length + ' ocorrências como resolvidas?'
+                               : 'Marcar como resolvido?',
+        texto: 'Sai da lista de abertos. Use quando o problema já tiver sido corrigido.',
+        confirmar: 'Marcar', tipo: 'padrao'
+    });
+    if (!ok) return;
+    try {
+        const { error } = await eqClient.from('erros_sistema')
+            .update({ resolvido: true }).in('id', ids);
+        if (error) throw error;
+        await carregarErros();
+    } catch (e) {
+        console.error(e);
+        await EqConfirm.mostrar({ titulo:'Não foi possível marcar', texto: e.message || 'Erro.',
+            confirmar:'Entendi', cancelar:'Fechar', tipo:'alerta' });
+    }
 }
 
 async function carregar() {

@@ -25,9 +25,10 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
 <script src="shared/supabase_client.js?v=2"></script>
 <script src="shared/tema.js?v=2"></script>
 <script src="shared/confirm_modal.js?v=3"></script>
+<script src="shared/config_sistema.js?v=10"></script>
 <script src="shared/audit.js?v=5"></script>
 <script src="shared/fotos.js?v=7"></script>
-<script src="shared/auth_guard.js?v=7"></script>
+<script src="shared/auth_guard.js?v=10"></script>
 </head>
 <body>
 
@@ -66,7 +67,7 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
 
                 <div class="card">
                     <div class="card-titulo">
-                        <h3>Evoluções lançadas · 7 dias</h3>
+                        <h3>Evoluções lançadas</h3>
                         <a class="tiny" href="tarefas/index.html">tarefas</a>
                     </div>
                     <div id="compliance"><div class="muted small">carregando…</div></div>
@@ -102,7 +103,8 @@ document.addEventListener('eq:pronto', async function (ev) {
     const hojeISO = iso(agora);
     const seg = new Date(agora); seg.setDate(agora.getDate() - ((agora.getDay()+6) % 7));
     const segISO = iso(seg);
-    const sete = new Date(agora); sete.setDate(agora.getDate() - 7);
+    const janela = parseInt((window.EqConfig ? EqConfig.get('janela_evolucao_dias', 7) : 7), 10) || 7;
+    const sete = new Date(agora); sete.setDate(agora.getDate() - janela);
     const seteISO = iso(sete);
 
     const coordena = ['admin_direcao','coordenador_aba','supervisor_clinico','recepcao'].includes(s.perfil);
@@ -142,7 +144,7 @@ document.addEventListener('eq:pronto', async function (ev) {
             ' · ' + doDia.length + (doDia.length === 1 ? ' sessão prevista' : ' sessões previstas');
 
         const kpis = [
-            { n: semEvolucao.length, t: 'evoluções pendentes (7 dias)',
+            { n: semEvolucao.length, t: 'evoluções pendentes (' + janela + ' dias)',
               cor: semEvolucao.length ? 'var(--st-bad)' : 'var(--st-ok)' },
             { n: faltasSemana.length, t: 'faltas nesta semana',
               cor: faltasSemana.length ? 'var(--st-warn)' : 'var(--st-neutro)' },

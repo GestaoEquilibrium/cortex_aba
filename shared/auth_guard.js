@@ -39,11 +39,17 @@ window.EqSessao = null;
         setTimeout(() => { window.location.href = raiz + 'index.html' + (query || ''); }, 50);
     }
 
-    // ── inatividade (desligada por padrão — ver config.js) ──────────────────
+    // ── inatividade ────────────────────────────────────────────────────────
+    // O valor vem de Configurações → Operação (tabela `configuracoes`).
+    // Se o módulo não estiver carregado, cai no config.js. Zero desliga.
     function monitorarInatividade() {
-        const minutos = (typeof SUPABASE_CONFIG !== 'undefined' &&
-                         typeof SUPABASE_CONFIG.inatividadeMinutos === 'number')
-                        ? SUPABASE_CONFIG.inatividadeMinutos : 0;
+        let minutos = 0;
+        if (window.EqConfig && typeof EqConfig.get === 'function') {
+            minutos = parseInt(EqConfig.get('inatividade_minutos', 0), 10) || 0;
+        } else if (typeof SUPABASE_CONFIG !== 'undefined' &&
+                   typeof SUPABASE_CONFIG.inatividadeMinutos === 'number') {
+            minutos = SUPABASE_CONFIG.inatividadeMinutos;
+        }
         if (!minutos || minutos <= 0) return;   // 0 = não derruba ninguém
 
         const LIMITE = minutos * 60 * 1000;
@@ -120,6 +126,9 @@ window.EqSessao = null;
         }
 
         if (window.EqTema) EqTema.aplicar(prof.perfil);
+
+        // configurações do sistema antes de as telas desenharem
+        if (window.EqConfig) { try { await EqConfig.carregar(); } catch (e) { console.warn(e); } }
 
         monitorarInatividade();
         document.dispatchEvent(new CustomEvent('eq:pronto', { detail: window.EqSessao }));

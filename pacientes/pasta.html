@@ -82,7 +82,8 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
 <script src="../shared/confirm_modal.js?v=3"></script>
 <script src="../shared/fotos.js?v=7"></script>
 <script src="../shared/audit.js?v=5"></script>
-<script src="../shared/auth_guard.js?v=7"></script>
+<script src="../shared/config_sistema.js?v=10"></script>
+<script src="../shared/auth_guard.js?v=10"></script>
 </head>
 <body>
 
@@ -1028,6 +1029,8 @@ function abrirGrade() {
     const titular = VINCULOS.find(v => v.tipo === 'titular');
     if (titular && titular.profissional) sel.value = titular.profissional.id;
     document.getElementById('gInicio').value = hojeISO();
+    // duração padrão vem de Configurações → Operação
+    if (window.EqConfig) document.getElementById('gDur').value = EqConfig.get('sessao_duracao_padrao', 60);
     document.getElementById('avisoSala').style.display = 'none';
     document.getElementById('modalGrade').classList.add('aberto');
 }

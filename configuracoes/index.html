@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-tema="coordenacao">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CORTEX aba — Configurações</title>
+<script>
+(function(){try{var m=localStorage.getItem('eqaba_modo');
+if(m!=='claro'&&m!=='escuro'){m=(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches)?'escuro':'claro';}
+document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
+</script>
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<link rel="manifest" href="../site.webmanifest">
+<meta name="theme-color" content="#0F766E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../styles/base.css?v=4">
+<link rel="stylesheet" href="../styles/components.css?v=5">
+<style>
+.abas { display:flex; gap:4px; border-bottom:1px solid var(--line); margin-bottom:16px; flex-wrap:wrap; }
+.abas button { border:none; background:transparent; padding:10px 14px; font:inherit; font-size:13px;
+    font-weight:700; color:var(--ink-muted); cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px; }
+.abas button[aria-pressed="true"] { color:var(--acao); border-bottom-color:var(--acao); }
+.painel { display:none; } .painel.on { display:block; }
+.campo { margin-bottom:13px; }
+.campo label { display:block; font-size:11.5px; font-weight:700; color:var(--ink-muted); margin-bottom:4px; }
+.campo input, .campo select { width:100%; padding:9px 11px; font-size:13px; font-family:inherit;
+    border:1px solid var(--line-strong); border-radius:8px; background:var(--surface-alt); color:var(--ink); }
+.campo .ajuda { font-size:11px; color:var(--ink-soft); margin-top:3px; }
+.campo-2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.perfil-topo { display:flex; gap:16px; align-items:center; flex-wrap:wrap; margin-bottom:16px; }
+.avatar-grande { width:72px; height:72px; border-radius:22px; flex:0 0 auto; color:#fff; position:relative;
+    display:flex; align-items:center; justify-content:center; font-size:26px; font-weight:800;
+    background:var(--acao); background-size:cover; background-position:center; cursor:pointer; overflow:hidden; }
+.avatar-grande .troca { position:absolute; inset:0; background:rgba(12,27,42,.55); color:#fff;
+    display:none; align-items:center; justify-content:center; font-size:11px; font-weight:700; }
+.avatar-grande:hover .troca { display:flex; }
+.opcao-modo { display:flex; gap:8px; }
+.opcao-modo button { flex:1; border:1px solid var(--line-strong); background:var(--surface); color:var(--ink-muted);
+    border-radius:10px; padding:12px; font:inherit; font-size:12.5px; font-weight:700; cursor:pointer; }
+.opcao-modo button[aria-pressed="true"] { background:var(--acao); color:#fff; border-color:transparent; }
+.vazio-msg { padding:22px; text-align:center; color:var(--ink-muted); font-size:13px; }
+.numero-sistema { display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:10px; }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../config.js?v=4"></script>
+<script src="../shared/supabase_client.js?v=2"></script>
+<script src="../shared/tema.js?v=2"></script>
+<script src="../shared/confirm_modal.js?v=3"></script>
+<script src="../shared/fotos.js?v=7"></script>
+<script src="../shared/config_sistema.js?v=10"></script>
+<script src="../shared/audit.js?v=5"></script>
+<script src="../shared/auth_guard.js?v=10"></script>
+</head>
+<body>
+
+<div class="app-shell">
+    <div id="sidebar"></div>
+    <div class="faixa-perfil"></div>
+
+    <main class="app-main" style="max-width:760px">
+        <div class="app-topo">
+            <div>
+                <h1>Configurações</h1>
+                <div class="sub" id="subtitulo">carregando…</div>
+            </div>
+        </div>
+
+        <div class="abas">
+            <button data-p="perfil" aria-pressed="true"  onclick="aba('perfil')">Meu perfil</button>
+            <button data-p="clinica" aria-pressed="false" onclick="aba('clinica')">Clínica</button>
+            <button data-p="operacao" aria-pressed="false" onclick="aba('operacao')">Operação</button>
+        </div>
+
+        <input type="file" id="inputFoto" accept="image/jpeg,image/png,image/webp"
+               style="display:none" onchange="enviarFoto(this)">
+
+        <div class="painel on" id="p-perfil"><div class="card vazio-msg">carregando…</div></div>
+        <div class="painel" id="p-clinica"><div class="card vazio-msg">carregando…</div></div>
+        <div class="painel" id="p-operacao"><div class="card vazio-msg">carregando…</div></div>
+    </main>
+</div>
+
+<script src="../shared/sidebar.js?v=8"></script>
+<script>
+'use strict';
+
+const ROTULO_PERFIL = {
+    admin_direcao:'Direção', coordenador_aba:'Coordenação', supervisor_clinico:'Supervisão',
+    aplicador:'Aplicador', aplicador_itinerante:'Itinerante', estagiario_aba:'Estagiário',
+    recepcao:'Recepção'
+};
+let EU = null, SOU_ADMIN = false, FOTO = null;
+
+document.addEventListener('eq:pronto', async function (ev) {
+    EqSidebar.render('config');
+    EU = ev.detail;
+    SOU_ADMIN = EU.perfil === 'admin_direcao';
+    document.getElementById('subtitulo').textContent =
+        SOU_ADMIN ? 'você pode alterar os ajustes do sistema' : 'ajustes do sistema são alterados pela direção';
+
+    await EqConfig.carregar();
+    if (EU.profissional.foto_url) {
+        try { FOTO = await EqFotos.link(EU.profissional.foto_url); } catch (e) {}
+    }
+    pintarPerfil(); pintarClinica(); pintarOperacao();
+});
+
+function aba(k) {
+    ['perfil','clinica','operacao'].forEach(x => {
+        document.getElementById('p-' + x).classList.toggle('on', x === k);
+        document.querySelector('[data-p="' + x + '"]').setAttribute('aria-pressed', x === k);
+    });
+}
+
+// ── meu perfil ──────────────────────────────────────────────────────────────
+function pintarPerfil() {
+    const p = EU.profissional;
+    const modo = document.documentElement.getAttribute('data-modo');
+    document.getElementById('p-perfil').innerHTML = `
+    <div class="card">
+        <div class="perfil-topo">
+            <div class="avatar-grande" style="${FOTO ? 'background-image:url(' + FOTO + ')' : ''}"
+                 onclick="document.getElementById('inputFoto').click()" title="Trocar foto">
+                ${FOTO ? '' : EqFotos.iniciais(p.nome_completo)}
+                <span class="troca">trocar</span>
+            </div>
+            <div>
+                <h2 style="font-size:18px">${p.nome_completo}</h2>
+                <div class="small muted">${ROTULO_PERFIL[p.perfil] || p.perfil}${EU.equipe ? ' · ' + EU.equipe : ''}</div>
+                <div class="tiny soft">${p.email}</div>
+            </div>
+        </div>
+
+        <div class="campo-2">
+            <div class="campo"><label for="meuTelefone">Telefone</label>
+                <input id="meuTelefone" value="${p.telefone || ''}"></div>
+            <div class="campo"><label>Turno</label>
+                <input value="${p.turno || '—'}" disabled>
+                <div class="ajuda">Turno, perfil e equipe são alterados pela direção.</div></div>
+        </div>
+        <button class="btn" onclick="salvarPerfil()">Salvar meus dados</button>
+    </div>
+
+    <div class="card">
+        <div class="card-titulo"><h3>Aparência</h3></div>
+        <div class="campo">
+            <label>Modo de exibição</label>
+            <div class="opcao-modo">
+                <button aria-pressed="${modo === 'claro'}"  onclick="trocarModo('claro')">Claro</button>
+                <button aria-pressed="${modo === 'escuro'}" onclick="trocarModo('escuro')">Escuro</button>
+            </div>
+            <div class="ajuda">Vale só neste aparelho. Também dá para trocar pelo botão no topo do menu.</div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-titulo"><h3>Sessão e acesso</h3></div>
+        <p class="small muted">Sua sessão fica presa a esta aba do navegador: ao fechá-la, o acesso encerra.</p>
+        <button class="btn btn-secundario" style="margin-top:10px" onclick="EqSidebar.sair()">Sair do sistema</button>
+    </div>`;
+}
+
+function trocarModo(m) {
+    try { localStorage.setItem('eqaba_modo', m); } catch (e) {}
+    location.reload();
+}
+
+async function salvarPerfil() {
+    try {
+        const tel = document.getElementById('meuTelefone').value.trim() || null;
+        const { error } = await eqClient.from('profissionais')
+            .update({ telefone: tel }).eq('id', EU.profissional.id);
+        if (error) throw error;
+        await EqAudit.registrar('edicao', 'profissionais', EU.profissional.id, { campos: { telefone: tel } });
+        await EqConfirm.mostrar({ titulo:'Salvo', texto:'Seus dados foram atualizados.',
+            confirmar:'Fechar', cancelar:'Fechar', tipo:'padrao' });
+    } catch (e) {
+        console.error(e);
+        await EqConfirm.mostrar({ titulo:'Não foi possível salvar', texto: e.message || 'Erro.',
+            confirmar:'Entendi', cancelar:'Fechar', tipo:'alerta' });
+    }
+}
+
+async function enviarFoto(input) {
+    const arquivo = input.files && input.files[0];
+    input.value = '';
+    if (!arquivo) return;
+    try {
+        const caminho = await EqFotos.enviar(arquivo, 'profissionais', EU.profissional.id);
+        const { error } = await eqClient.from('profissionais')
+            .update({ foto_url: caminho }).eq('id', EU.profissional.id);
+        if (error) throw error;
+        await EqAudit.registrar('edicao', 'profissionais', EU.profissional.id, { campos: { foto: 'atualizada' } });
+        location.reload();
+    } catch (e) {
+        console.error(e);
+        await EqConfirm.mostrar({ titulo:'Não foi possível enviar a foto',
+            texto: e.message || 'Tente uma imagem JPG ou PNG.', confirmar:'Entendi', cancelar:'Fechar', tipo:'alerta' });
+    }
+}
+
+// ── clínica ─────────────────────────────────────────────────────────────────
+function campoTexto(chave, rotulo, ajuda) {
+    return `<div class="campo">
+        <label for="c_${chave}">${rotulo}</label>
+        <input id="c_${chave}" value="${String(EqConfig.get(chave, '')).replace(/"/g,'&quot;')}"
+               ${SOU_ADMIN ? '' : 'disabled'}>
+        ${ajuda ? `<div class="ajuda">${ajuda}</div>` : ''}
+    </div>`;
+}
+function campoNumero(chave, rotulo, ajuda, min, max) {
+    return `<div class="campo">
+        <label for="c_${chave}">${rotulo}</label>
+        <input id="c_${chave}" type="number" min="${min}" max="${max}" value="${EqConfig.get(chave, 0)}"
+               ${SOU_ADMIN ? '' : 'disabled'}>
+        ${ajuda ? `<div class="ajuda">${ajuda}</div>` : ''}
+    </div>`;
+}
+
+function pintarClinica() {
+    document.getElementById('p-clinica').innerHTML = `
+    <div class="card">
+        <div class="card-titulo"><h3>Identificação</h3></div>
+        ${campoTexto('clinica_nome', 'Nome da clínica', 'Aparece no cabeçalho dos relatórios impressos.')}
+        <div class="campo-2">
+            ${campoTexto('clinica_setor', 'Setor')}
+            ${campoTexto('clinica_telefone', 'Telefone de contato')}
+        </div>
+        ${SOU_ADMIN ? `<button class="btn" onclick="salvarGrupo(['clinica_nome','clinica_setor','clinica_telefone'])">Salvar</button>`
+                    : '<div class="ajuda">Somente a direção altera estes campos.</div>'}
+    </div>`;
+}
+
+function pintarOperacao() {
+    document.getElementById('p-operacao').innerHTML = `
+    <div class="card">
+        <div class="card-titulo"><h3>Atendimento</h3></div>
+        <div class="campo-2">
+            ${campoNumero('sessao_duracao_padrao', 'Duração padrão da sessão (min)',
+                'Usada ao criar horários na grade.', 15, 240)}
+            ${campoNumero('faltas_para_tarefa', 'Faltas seguidas que geram tarefa',
+                'Contato automático com a família.', 1, 10)}
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-titulo"><h3>Evoluções</h3></div>
+        <div class="campo-2">
+            ${campoNumero('prazo_evolucao_dias', 'Prazo para lançar a evolução (dias)',
+                'Depois disso a evolução conta como atrasada.', 0, 30)}
+            ${campoNumero('janela_evolucao_dias', 'Janela do painel (dias)',
+                'Período considerado ao contar evoluções pendentes no painel.', 1, 60)}
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-titulo"><h3>Segurança</h3></div>
+        ${campoNumero('inatividade_minutos', 'Encerrar sessão inativa após (min)',
+            'Zero desliga a derrubada automática. Vale rever quando a equipe usar tablet compartilhado na sala.', 0, 240)}
+    </div>
+
+    ${SOU_ADMIN ? `<button class="btn" onclick="salvarGrupo(['sessao_duracao_padrao','faltas_para_tarefa','prazo_evolucao_dias','janela_evolucao_dias','inatividade_minutos'])">Salvar ajustes</button>`
+                : '<div class="card vazio-msg">Somente a direção altera os ajustes do sistema.</div>'}`;
+}
+
+async function salvarGrupo(chaves) {
+    const ok = await EqConfirm.mostrar({
+        titulo: 'Salvar as configurações?',
+        texto: 'Os ajustes valem para toda a equipe e passam a fazer efeito no próximo carregamento das telas.',
+        confirmar: 'Salvar', tipo: 'padrao'
+    });
+    if (!ok) return;
+    try {
+        for (const chave of chaves) {
+            const el = document.getElementById('c_' + chave);
+            if (!el) continue;
+            const valor = el.type === 'number' ? parseInt(el.value || '0', 10) : el.value.trim();
+            await EqConfig.salvar(chave, valor, EU.profissional.id);
+        }
+        await EqAudit.registrar('edicao', 'configuracoes', null, { chaves: chaves });
+        await EqConfirm.mostrar({ titulo:'Configurações salvas',
+            texto:'As telas passam a usar os novos valores ao recarregar.',
+            confirmar:'Fechar', cancelar:'Fechar', tipo:'padrao' });
+    } catch (e) {
+        console.error(e);
+        await EqConfirm.mostrar({ titulo:'Não foi possível salvar', texto: e.message || 'Erro.',
+            confirmar:'Entendi', cancelar:'Fechar', tipo:'alerta' });
+    }
+}
+</script>
+</body>
+</html>

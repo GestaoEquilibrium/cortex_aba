@@ -569,6 +569,19 @@ function pintarOperacao() {
     </div>
 
     <div class="card">
+        <div class="card-titulo"><h3>Salas de atendimento</h3></div>
+        <div class="campo">
+            <label for="c_salas_texto">Uma sala por linha</label>
+            <textarea id="c_salas_texto" rows="4" ${SOU_ADMIN ? '' : 'disabled'}
+                placeholder="Sala 1&#10;Sala 2&#10;Sala Sensorial">${(EqConfig.get('salas', []) || []).join('\n')}</textarea>
+        </div>
+        <div class="ajuda">
+            Com salas cadastradas, o sistema recusa dois atendimentos na mesma sala e horário.
+            <b>Deixe vazio se a clínica não controla sala</b> — aí nada é travado.
+        </div>
+    </div>
+
+    <div class="card">
         <div class="card-titulo"><h3>Horário de funcionamento</h3></div>
         <div class="campo-2">
             <div class="campo">
@@ -601,11 +614,33 @@ function pintarOperacao() {
             'Zero desliga a derrubada automática. Vale rever quando a equipe usar tablet compartilhado na sala.', 0, 240)}
     </div>
 
-    ${SOU_ADMIN ? `<button class="btn" onclick="salvarGrupo(['sessao_duracao_padrao','faltas_para_tarefa','clinica_abre','clinica_fecha','prazo_evolucao_dias','janela_evolucao_dias','inatividade_minutos'])">Salvar ajustes</button>`
+    ${SOU_ADMIN ? `<button class="btn" onclick="salvarGrupo(['salas','sessao_duracao_padrao','faltas_para_tarefa','clinica_abre','clinica_fecha','prazo_evolucao_dias','janela_evolucao_dias','inatividade_minutos'])">Salvar ajustes</button>`
                 : '<div class="card vazio-msg">Somente a direção altera os ajustes do sistema.</div>'}`;
 }
 
 async function salvarGrupo(chaves) {
+    // as salas são um caso à parte: textarea vira lista
+    if (chaves.indexOf('salas') !== -1) {
+        const el = document.getElementById('c_salas_texto');
+        if (el) {
+            const lista = el.value.split('\n').map(l => l.trim()).filter(Boolean);
+            try {
+                const { error } = await eqClient.from('configuracoes')
+                    .update({ valor: lista }).eq('chave', 'salas');
+                if (error) throw error;
+                await EqAudit.registrar('edicao', 'configuracoes', null,
+                    { chave: 'salas', quantidade: lista.length });
+            } catch (e) { console.error(e); }
+        }
+        chaves = chaves.filter(c => c !== 'salas');
+        if (!chaves.length) {
+            await EqConfig.recarregar();
+            await EqConfirm.mostrar({ titulo:'Salvo', texto:'As salas foram atualizadas.',
+                confirmar:'Fechar', cancelar:'Fechar', tipo:'padrao' });
+            return;
+        }
+    }
+
     const ok = await EqConfirm.mostrar({
         titulo: 'Salvar as configurações?',
         texto: 'Os ajustes valem para toda a equipe e passam a fazer efeito no próximo carregamento das telas.',

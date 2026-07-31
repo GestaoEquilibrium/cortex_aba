@@ -2143,8 +2143,15 @@ function abrirGrade() {
     document.getElementById('modalGrade').classList.add('aberto');
 }
 
+// Com salas cadastradas em Configurações, o campo vira seleção e as ocupadas
+// aparecem desabilitadas. O banco também recusa — mas é melhor a pessoa não
+// conseguir escolher do que descobrir no erro depois de preencher tudo.
 async function checarSala() {
     const aviso = document.getElementById('avisoSala');
+    const campo = document.getElementById('gSala');
+    const salas = (window.EqConfig ? EqConfig.get('salas', []) : []) || [];
+
+    let ocupadas = [], porQuem = {};
     try {
         const { data, error } = await eqClient.rpc('salas_ocupadas', {
             p_dia: parseInt(document.getElementById('gDia').value, 10),
@@ -2152,14 +2159,58 @@ async function checarSala() {
             p_duracao: parseInt(document.getElementById('gDur').value || '60', 10)
         });
         if (error) throw error;
-        const ocupadas = (data || []).map(x => x.sala).filter(Boolean);
-        if (ocupadas.length) {
-            aviso.textContent = 'Neste horário já estão em uso: ' + [...new Set(ocupadas)].join(', ') + '.';
-            aviso.style.display = 'block';
-        } else {
-            aviso.style.display = 'none';
-        }
+        (data || []).forEach(x => {
+            if (!x.sala) return;
+            ocupadas.push(x.sala.trim().toLowerCase());
+            porQuem[x.sala.trim().toLowerCase()] = x.nome_completo || '';
+        });
     } catch (e) { console.warn('checagem de sala falhou', e); }
+
+    // sem salas cadastradas, mantém o campo livre como sempre foi
+    if (!salas.length) {
+        if (campo && campo.tagName === 'SELECT') trocarPorTexto();
+        aviso.style.display = ocupadas.length ? 'block' : 'none';
+        if (ocupadas.length) {
+            aviso.textContent = 'Neste horário já estão em uso: ' +
+                [...new Set(ocupadas)].join(', ') + '.';
+        }
+        return;
+    }
+
+    const atual = campo ? campo.value : '';
+    const opcoes = '<option value="">— sem sala —</option>' + salas.map(s => {
+        const ocupada = ocupadas.indexOf(s.trim().toLowerCase()) !== -1;
+        const quem = porQuem[s.trim().toLowerCase()];
+        return `<option value="${s}" ${ocupada ? 'disabled' : ''} ${s === atual && !ocupada ? 'selected' : ''}>
+            ${s}${ocupada ? ' — ocupada' + (quem ? ' (' + quem.split(' ')[0] + ')' : '') : ''}
+        </option>`;
+    }).join('');
+
+    if (campo && campo.tagName === 'SELECT') {
+        campo.innerHTML = opcoes;
+    } else if (campo) {
+        const sel = document.createElement('select');
+        sel.id = 'gSala';
+        sel.innerHTML = opcoes;
+        campo.replaceWith(sel);
+    }
+
+    const livres = salas.length - new Set(ocupadas.filter(o =>
+        salas.some(s => s.trim().toLowerCase() === o))).size;
+    if (livres === 0) {
+        aviso.textContent = 'Todas as salas estão ocupadas neste horário.';
+        aviso.style.display = 'block';
+    } else {
+        aviso.style.display = 'none';
+    }
+}
+
+function trocarPorTexto() {
+    const campo = document.getElementById('gSala');
+    if (!campo || campo.tagName !== 'SELECT') return;
+    const inp = document.createElement('input');
+    inp.id = 'gSala'; inp.value = campo.value;
+    campo.replaceWith(inp);
 }
 
 document.getElementById('formGrade').addEventListener('submit', async function (ev) {

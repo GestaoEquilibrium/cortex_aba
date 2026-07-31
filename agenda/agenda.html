@@ -205,6 +205,9 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
                 <div class="campo"><label for="eOrigem">Tipo</label>
                     <select id="eOrigem"><option value="encaixe">Encaixe</option><option value="reposicao">Reposição de falta</option></select></div>
             </div>
+            <div class="campo"><label for="eSala">Sala</label>
+                <select id="eSala"><option value="">— sem sala —</option></select>
+                <div class="tiny soft" id="avisoSalaEncaixe" style="margin-top:3px"></div></div>
             <div class="campo"><label for="eObs">Observação</label><input id="eObs" placeholder="motivo do encaixe"></div>
             <div class="aviso" id="erroEncaixe" style="display:none;border-left-color:var(--st-bad);color:var(--st-bad);margin-bottom:10px"></div>
             <div class="grid-2">
@@ -356,6 +359,7 @@ async function carregar() {
     try {
         let q = eqClient.from('sessoes')
             .select(`id, data, hora_inicio, duracao_min, status,
+                     sala,
                      paciente:pacientes!sessoes_paciente_id_fkey(id, nome_completo, cartao_seguranca, responsavel_telefone, responsavel_nome),
                      profissional:profissionais!sessoes_profissional_id_fkey(id, nome_completo)`)
             .gte('data', ini).lte('data', fim)
@@ -432,7 +436,8 @@ function desenharDia(ss) {
             <div class="quem">
                 <b>${nome} ${s.paciente && s.paciente.cartao_seguranca
                     ? '<span style="color:var(--st-warn)" title="Cartão de segurança">⚠</span>' : ''}</b>
-                <span>${s.profissional ? s.profissional.nome_completo : '—'} · ${s.duracao_min} min</span>
+                <span>${s.profissional ? s.profissional.nome_completo : '—'} · ${s.duracao_min} min${
+                    s.sala ? ' · <b style="color:var(--acao)">' + s.sala + '</b>' : ''}</span>
             </div>
 
             ${aberta ? '' : `<span class="chip" style="background:transparent;border:1px solid ${st.c};color:${st.c}">${st.r}</span>`}
@@ -669,12 +674,68 @@ async function abrirEncaixe() {
         document.getElementById('eProfissional').innerHTML =
             PROFS.map(p => `<option value="${p.id}">${p.nome_completo}</option>`).join('');
         document.getElementById('eData').value = dataSel();
+        await montarSalasEncaixe();
+        ['eData','eHora','eDuracao'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el && !el.dataset.ligado) {
+                el.dataset.ligado = '1';
+                el.addEventListener('change', montarSalasEncaixe);
+            }
+        });
         document.getElementById('modalEncaixe').classList.add('aberto');
     } catch (e) {
         console.error(e);
         await EqConfirm.mostrar({ titulo:'Não foi possível abrir', texto: e.message || 'Erro.',
             confirmar:'Entendi', cancelar:'Fechar', tipo:'alerta' });
     }
+}
+
+// as salas ocupadas ficam desabilitadas: melhor não deixar escolher do que
+// mostrar erro depois de preencher o formulário inteiro
+async function montarSalasEncaixe() {
+    const sel = document.getElementById('eSala');
+    const aviso = document.getElementById('avisoSalaEncaixe');
+    if (!sel) return;
+    const salas = (window.EqConfig ? EqConfig.get('salas', []) : []) || [];
+
+    if (!salas.length) {
+        sel.parentElement.style.display = 'none';
+        return;
+    }
+    sel.parentElement.style.display = '';
+
+    const data = document.getElementById('eData').value;
+    const hora = document.getElementById('eHora').value;
+    const dur = parseInt(document.getElementById('eDuracao').value || '60', 10);
+    if (!data || !hora) { sel.innerHTML = '<option value="">— sem sala —</option>'; return; }
+
+    let ocupadas = [];
+    try {
+        const fim = new Date('2000-01-01T' + hora + ':00');
+        fim.setMinutes(fim.getMinutes() + dur);
+        const horaFim = String(fim.getHours()).padStart(2,'0') + ':' + String(fim.getMinutes()).padStart(2,'0');
+        const { data: ss } = await eqClient.from('sessoes')
+            .select('sala, hora_inicio, duracao_min, paciente:pacientes(nome_completo)')
+            .eq('data', data).not('sala','is',null)
+            .not('status','in','(cancelada_clinica,remarcada,feriado)');
+        (ss || []).forEach(s => {
+            const ini = s.hora_inicio.slice(0,5);
+            const f = new Date('2000-01-01T' + ini + ':00');
+            f.setMinutes(f.getMinutes() + (s.duracao_min || 60));
+            const fimS = String(f.getHours()).padStart(2,'0') + ':' + String(f.getMinutes()).padStart(2,'0');
+            if (ini < horaFim && hora < fimS) ocupadas.push(s.sala.trim().toLowerCase());
+        });
+    } catch (e) { console.warn('salas do encaixe', e); }
+
+    sel.innerHTML = '<option value="">— sem sala —</option>' + salas.map(s => {
+        const ocupada = ocupadas.indexOf(s.trim().toLowerCase()) !== -1;
+        return `<option value="${s}" ${ocupada ? 'disabled' : ''}>${s}${ocupada ? ' — ocupada' : ''}</option>`;
+    }).join('');
+
+    const livres = salas.filter(s => ocupadas.indexOf(s.trim().toLowerCase()) === -1).length;
+    aviso.textContent = livres ? livres + ' de ' + salas.length + ' livre(s) neste horário'
+                               : 'Nenhuma sala livre neste horário.';
+    aviso.style.color = livres ? 'var(--ink-soft)' : 'var(--st-bad)';
 }
 
 document.getElementById('formEncaixe').addEventListener('submit', async function (ev) {
@@ -690,6 +751,7 @@ document.getElementById('formEncaixe').addEventListener('submit', async function
             duracao_min: parseInt(document.getElementById('eDuracao').value || '60', 10),
             status: 'agendada',
             origem: document.getElementById('eOrigem').value,
+            sala: document.getElementById('eSala').value || null,
             observacao: document.getElementById('eObs').value.trim() || null,
             registrado_por: EU_ID
         }).select('id').single();

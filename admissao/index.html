@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-tema="coordenacao">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CORTEX aba — Admissão</title>
+<script>
+(function(){try{var m=localStorage.getItem('eqaba_modo');
+if(m!=='claro'&&m!=='escuro'){m=(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches)?'escuro':'claro';}
+document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
+</script>
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<link rel="manifest" href="../site.webmanifest">
+<meta name="theme-color" content="#0F766E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../styles/base.css?v=4">
+<link rel="stylesheet" href="../styles/components.css?v=5">
+<style>
+.abas { display:flex; gap:4px; border-bottom:1px solid var(--line); margin-bottom:16px; flex-wrap:wrap; }
+.abas button { border:none; background:transparent; padding:10px 14px; font:inherit; font-size:13px;
+    font-weight:700; color:var(--ink-muted); cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px; }
+.abas button[aria-pressed="true"] { color:var(--acao); border-bottom-color:var(--acao); }
+.painel { display:none; } .painel.on { display:block; }
+
+.fila-item { display:flex; gap:13px; align-items:flex-start; padding:14px 0; border-top:1px solid var(--line); }
+.fila-item:first-child { border-top:none; }
+.marca-prio { width:4px; align-self:stretch; border-radius:3px; flex:0 0 auto; }
+.fila-corpo { flex:1; min-width:0; }
+.fila-corpo b { font-size:14px; }
+.fila-meta { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:5px; font-size:11.5px; color:var(--ink-muted); }
+.espera-longa { color:var(--st-bad); font-weight:700; }
+
+.mapa { width:100%; border-collapse:separate; border-spacing:3px; font-size:11px; }
+.mapa th { font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft);
+           font-weight:700; padding-bottom:4px; }
+.mapa .hcol { width:46px; color:var(--ink-soft); font-weight:700; font-size:10.5px; text-align:right; padding-right:6px; }
+.vaga-cel { border-radius:7px; padding:6px 4px; text-align:center; font-weight:700; cursor:default; }
+.v0 { background:var(--surface-alt); color:var(--ink-soft); }
+.v1 { background:rgba(217,119,6,.16); color:var(--st-warn); }
+.v2 { background:rgba(22,163,74,.16); color:var(--st-ok); }
+.v3 { background:rgba(22,163,74,.28); color:var(--st-ok); }
+
+.campo { margin-bottom:12px; }
+.campo label { display:block; font-size:11.5px; font-weight:700; color:var(--ink-muted); margin-bottom:5px; }
+.campo input, .campo select, .campo textarea { width:100%; padding:9px 11px; font-size:13px;
+    font-family:inherit; border:1px solid var(--line-strong); border-radius:8px;
+    background:var(--surface-alt); color:var(--ink); }
+.campo-2 { display:grid; grid-template-columns:1fr 1fr; gap:11px; }
+.campo-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:11px; }
+.chips-dias { display:flex; gap:5px; flex-wrap:wrap; }
+.chips-dias button { border:1px solid var(--line-strong); background:var(--surface); color:var(--ink-muted);
+    border-radius:999px; padding:7px 13px; font:inherit; font-size:11.5px; font-weight:700; cursor:pointer; }
+.chips-dias button[aria-pressed="true"] { background:var(--acao); color:#fff; border-color:transparent; }
+.modal-fundo { position:fixed; inset:0; background:rgba(12,27,42,.5); backdrop-filter:blur(3px);
+               display:none; align-items:center; justify-content:center; padding:20px; z-index:80; }
+.modal-fundo.aberto { display:flex; }
+.modal { background:var(--surface); border-radius:var(--radius-card); padding:22px; width:100%;
+         max-width:560px; box-shadow:var(--shadow-lg); max-height:92vh; overflow:auto; }
+.sugestao { display:flex; justify-content:space-between; align-items:center; gap:10px;
+            padding:11px 0; border-top:1px solid var(--line); }
+.sugestao:first-child { border-top:none; }
+.vazio-msg { padding:24px; text-align:center; color:var(--ink-muted); font-size:13px; }
+.nota-metodo { font-size:11px; color:var(--ink-soft); line-height:1.5; margin-top:10px;
+               padding-top:9px; border-top:1px dashed var(--line); }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../config.js?v=4"></script>
+<script src="../shared/supabase_client.js?v=2"></script>
+<script src="../shared/tema.js?v=2"></script>
+<script src="../shared/confirm_modal.js?v=3"></script>
+<script src="../shared/fotos.js?v=7"></script>
+<script src="../shared/whatsapp.js?v=14"></script>
+<script src="../shared/config_sistema.js?v=10"></script>
+<script src="../shared/audit.js?v=5"></script>
+<script src="../shared/auth_guard.js?v=12"></script>
+</head>
+<body>
+
+<div class="app-shell">
+    <div id="sidebar"></div>
+    <div class="faixa-perfil"></div>
+
+    <main class="app-main">
+        <div class="app-topo">
+            <div>
+                <h1>Admissão</h1>
+                <div class="sub" id="subtitulo">carregando…</div>
+            </div>
+            <button class="btn" id="btNovo" style="display:none" onclick="abrirNovo()">Novo contato</button>
+        </div>
+
+        <div class="abas">
+            <button data-p="fila" aria-pressed="true"  onclick="aba('fila')">Fila de espera</button>
+            <button data-p="mapa" aria-pressed="false" onclick="aba('mapa')">Mapa de vagas</button>
+        </div>
+
+        <div class="painel on" id="p-fila"><div class="card vazio-msg">carregando…</div></div>
+        <div class="painel" id="p-mapa"><div class="card vazio-msg">carregando…</div></div>
+    </main>
+</div>
+
+<!-- ── novo contato ────────────────────────────────────────────────────────── -->
+<div class="modal-fundo" id="modalNovo" onclick="if(event.target===this) fechar('modalNovo')">
+    <div class="modal">
+        <h2 style="margin-bottom:4px">Novo contato</h2>
+        <p class="tiny soft" style="margin-bottom:15px">Registra a criança e o pedido. Ela entra na fila, não na agenda.</p>
+        <form id="formNovo">
+            <div class="campo"><label for="nNome">Nome da criança *</label><input id="nNome" required></div>
+            <div class="campo-2">
+                <div class="campo"><label for="nNasc">Nascimento *</label><input id="nNasc" type="date" required></div>
+                <div class="campo"><label for="nOrigem">Como chegou</label>
+                    <select id="nOrigem">
+                        <option value="indicacao">Indicação</option>
+                        <option value="medico">Médico</option>
+                        <option value="convenio">Convênio</option>
+                        <option value="escola">Escola</option>
+                        <option value="busca_espontanea">Busca espontânea</option>
+                        <option value="outro" selected>Outro</option>
+                    </select></div>
+            </div>
+            <div class="campo-2">
+                <div class="campo"><label for="nResponsavel">Responsável</label><input id="nResponsavel"></div>
+                <div class="campo"><label for="nTelefone">Telefone</label><input id="nTelefone" placeholder="(34) 99999-0000"></div>
+            </div>
+            <div class="campo-2">
+                <div class="campo"><label for="nEncaminhado">Encaminhado por</label>
+                    <input id="nEncaminhado" placeholder="nome do médico ou da pessoa"></div>
+                <div class="campo"><label for="nConvenio">Convênio</label><input id="nConvenio" placeholder="particular"></div>
+            </div>
+            <div class="campo-3">
+                <div class="campo"><label for="nPrioridade">Prioridade</label>
+                    <select id="nPrioridade">
+                        <option value="1">1 — urgente</option><option value="2">2 — alta</option>
+                        <option value="3" selected>3 — normal</option><option value="4">4 — baixa</option>
+                        <option value="5">5 — sem pressa</option>
+                    </select></div>
+                <div class="campo"><label for="nSessoes">Sessões/semana</label>
+                    <input id="nSessoes" type="number" min="1" max="20" value="3"></div>
+                <div class="campo"><label for="nContato">Data do contato</label><input id="nContato" type="date"></div>
+            </div>
+            <div class="campo">
+                <label>Disponibilidade da família</label>
+                <div class="chips-dias" id="diasDisp"></div>
+                <div class="chips-dias" id="turnosDisp" style="margin-top:6px"></div>
+                <div class="tiny soft" style="margin-top:5px">
+                    É o que permite cruzar com os horários livres depois.
+                </div>
+            </div>
+            <div class="campo"><label for="nObs">Observação</label><textarea id="nObs" rows="2"></textarea></div>
+            <div class="aviso" id="erroNovo" style="display:none;border-left-color:var(--st-bad);color:var(--st-bad);margin-bottom:10px"></div>
+            <div class="grid-2">
+                <button type="button" class="btn btn-secundario btn-bloco" onclick="fechar('modalNovo')">Cancelar</button>
+                <button type="submit" class="btn btn-bloco" id="btSalvarNovo">Registrar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ── alocar: sugestão de vaga ────────────────────────────────────────────── -->
+<div class="modal-fundo" id="modalAlocar" onclick="if(event.target===this) fechar('modalAlocar')">
+    <div class="modal">
+        <h2 id="tituloAlocar" style="margin-bottom:4px">Alocar na agenda</h2>
+        <p class="tiny soft" style="margin-bottom:14px" id="subAlocar"></p>
+        <div id="listaSugestoes"><div class="vazio-msg">buscando horários…</div></div>
+        <button class="btn btn-secundario btn-bloco" style="margin-top:12px" onclick="fechar('modalAlocar')">Fechar</button>
+    </div>
+</div>
+
+<script src="../shared/avisos.js?v=14"></script>
+<script src="../shared/sidebar.js?v=12"></script>
+<script>
+'use strict';
+
+const DIAS = ['dom','seg','ter','qua','qui','sex','sáb'];
+const DIAS_LONGO = ['domingo','segunda','terça','quarta','quinta','sexta','sábado'];
+const ORIGENS = { indicacao:'indicação', medico:'médico', convenio:'convênio',
+                  escola:'escola', busca_espontanea:'busca espontânea', outro:'outro' };
+const ST = { contato:{r:'primeiro contato',c:'chip-neutro'},
+             triagem:{r:'em triagem',c:'chip-alerta'},
+             aguardando_vaga:{r:'aguardando vaga',c:'chip-alerta'},
+             alocado:{r:'alocado',c:'chip-ok'},
+             desistiu:{r:'desistiu',c:'chip-neutro'},
+             recusado:{r:'recusado',c:'chip-neutro'} };
+const PRIO_COR = { 1:'var(--st-bad)', 2:'var(--st-warn)', 3:'var(--st-neutro)',
+                   4:'var(--st-neutro)', 5:'var(--line-strong)' };
+
+let EU = null, PODE_EDITAR = false, FILA = [], MAPA = [], PROFS = [], ALOCANDO = null;
+let DIAS_SEL = [], TURNOS_SEL = [];
+
+document.addEventListener('eq:pronto', async function (ev) {
+    EqSidebar.render('admissao');
+    EU = ev.detail;
+    if (!['admin_direcao','supervisor_clinico','coordenador_aba','recepcao'].includes(EU.perfil)) {
+        document.getElementById('p-fila').innerHTML =
+            '<div class="card vazio-msg">Tela restrita à coordenação, recepção e direção.</div>';
+        return;
+    }
+    PODE_EDITAR = ['admin_direcao','coordenador_aba','recepcao'].includes(EU.perfil);
+    if (PODE_EDITAR) document.getElementById('btNovo').style.display = '';
+
+    document.getElementById('diasDisp').innerHTML = [1,2,3,4,5].map(d =>
+        `<button type="button" aria-pressed="false" onclick="alternarDia(${d})">${DIAS_LONGO[d]}</button>`).join('');
+    document.getElementById('turnosDisp').innerHTML = ['manhã','tarde'].map(t =>
+        `<button type="button" aria-pressed="false" onclick="alternarTurno('${t}')">${t}</button>`).join('');
+
+    try {
+        const { data } = await eqClient.from('profissionais').select('id, nome_completo')
+            .eq('ativo', true).in('perfil', ['aplicador','aplicador_itinerante','estagiario_aba'])
+            .order('nome_completo');
+        PROFS = data || [];
+    } catch (e) { console.warn(e); }
+
+    await carregar();
+});
+
+const p2 = n => String(n).padStart(2,'0');
+function hojeISO() { const d=new Date(); return d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate()); }
+function brl(iso) { return iso ? iso.slice(0,10).split('-').reverse().join('/') : '—'; }
+function fechar(id) { document.getElementById(id).classList.remove('aberto');
+                      document.querySelectorAll('.aviso[id^=erro]').forEach(e => e.style.display='none'); }
+function aba(k) {
+    ['fila','mapa'].forEach(x => {
+        document.getElementById('p-' + x).classList.toggle('on', x === k);
+        document.querySelector('[data-p="' + x + '"]').setAttribute('aria-pressed', x === k);
+    });
+    if (k === 'mapa' && !MAPA.length) carregarMapa();
+}
+
+function alternarDia(d) {
+    const i = DIAS_SEL.indexOf(d);
+    if (i >= 0) DIAS_SEL.splice(i,1); else DIAS_SEL.push(d);
+    document.querySelectorAll('#diasDisp button').forEach((b, idx) =>
+        b.setAttribute('aria-pressed', DIAS_SEL.includes(idx + 1)));
+}
+function alternarTurno(t) {
+    const i = TURNOS_SEL.indexOf(t);
+    if (i >= 0) TURNOS_SEL.splice(i,1); else TURNOS_SEL.push(t);
+    document.querySelectorAll('#turnosDisp button').forEach(b =>
+        b.setAttribute('aria-pressed', TURNOS_SEL.includes(b.textContent)));
+}
+
+// ── fila ────────────────────────────────────────────────────────────────────
+async function carregar() {
+    try {
+        const { data, error } = await eqClient.rpc('fila_espera');
+        if (error) throw error;
+        FILA = data || [];
+        pintarFila();
+    } catch (e) {
+        console.error(e);
+        document.getElementById('p-fila').innerHTML =
+            '<div class="card vazio-msg" style="color:var(--st-bad)">Erro ao carregar. Veja o console.</div>';
+    }
+}
+
+function pintarFila() {
+    document.getElementById('subtitulo').textContent = FILA.length
+        ? FILA.length + (FILA.length === 1 ? ' criança na fila' : ' crianças na fila')
+        : 'nenhuma criança aguardando';
+
+    const esperaMedia = FILA.length
+        ? Math.round(FILA.reduce((s,f) => s + f.dias_esperando, 0) / FILA.length) : 0;
+    const urgentes = FILA.filter(f => f.prioridade <= 2).length;
+    const antigas = FILA.filter(f => f.dias_esperando > 60).length;
+
+    document.getElementById('p-fila').innerHTML = `
+    <div class="grid-4" style="margin-bottom:12px">
+        <div class="kpi" style="--kpi-cor:var(--acao)">
+            <div class="kpi-numero">${FILA.length}</div><div class="kpi-texto">na fila</div></div>
+        <div class="kpi" style="--kpi-cor:${urgentes ? 'var(--st-bad)' : 'var(--st-neutro)'}">
+            <div class="kpi-numero">${urgentes}</div><div class="kpi-texto">prioridade alta ou urgente</div></div>
+        <div class="kpi" style="--kpi-cor:${esperaMedia > 45 ? 'var(--st-warn)' : 'var(--st-neutro)'}">
+            <div class="kpi-numero">${esperaMedia}</div><div class="kpi-texto">dias de espera em média</div></div>
+        <div class="kpi" style="--kpi-cor:${antigas ? 'var(--st-bad)' : 'var(--st-ok)'}">
+            <div class="kpi-numero">${antigas}</div><div class="kpi-texto">esperando há mais de 60 dias</div></div>
+    </div>
+
+    <div class="card">
+        <div class="card-titulo"><h3>Fila</h3>
+            <span class="tiny soft">ordenada por prioridade e depois por tempo de espera</span></div>
+        ${FILA.length ? FILA.map(f => `
+            <div class="fila-item">
+                <span class="marca-prio" style="background:${PRIO_COR[f.prioridade]}"></span>
+                <div class="fila-corpo">
+                    <b>${f.nome}</b>
+                    <span class="tiny soft"> · ${f.idade_anos} anos</span>
+                    <div class="fila-meta">
+                        <span class="chip ${(ST[f.status]||ST.contato).c}">${(ST[f.status]||ST.contato).r}</span>
+                        <span class="${f.dias_esperando > 60 ? 'espera-longa' : ''}">
+                            ${f.dias_esperando} dia${f.dias_esperando === 1 ? '' : 's'} esperando</span>
+                        ${f.sessoes_desejadas ? `<span>${f.sessoes_desejadas}x/semana</span>` : ''}
+                        <span>via ${ORIGENS[f.origem] || f.origem}</span>
+                        ${disponibilidadeTexto(f.disponibilidade)}
+                    </div>
+                </div>
+                ${PODE_EDITAR ? `<div style="display:flex;gap:6px;flex-wrap:wrap">
+                    <button class="btn" style="padding:6px 12px;font-size:12px"
+                            onclick="abrirAlocar('${f.admissao_id}','${f.paciente_id}','${f.nome.replace(/'/g,"\\'")}',${f.sessoes_desejadas || 2})">
+                        Achar vaga</button>
+                    <button class="btn btn-secundario" style="padding:6px 12px;font-size:12px"
+                            onclick="mudarStatus('${f.admissao_id}','${f.nome.replace(/'/g,"\\'")}')">Situação</button>
+                </div>` : ''}
+            </div>`).join('')
+        : `<div class="vazio-msg">Ninguém na fila.
+           ${PODE_EDITAR ? '<br><span class="tiny soft">Use "Novo contato" quando alguém procurar a clínica.</span>' : ''}</div>`}
+        <div class="nota-metodo">
+            A criança entra aqui e só vira paciente ativo quando tiver horário na grade.
+            Antes disso ela não aparece na agenda nem conta como ativa nos indicadores.
+        </div>
+    </div>`;
+}
+
+function disponibilidadeTexto(d) {
+    if (!d) return '';
+    const dias = (d.dias || []).map(n => DIAS[n]).join(', ');
+    const turnos = (d.turnos || []).join(' e ');
+    if (!dias && !turnos) return '';
+    return `<span>disponível ${dias}${dias && turnos ? ' · ' : ''}${turnos}</span>`;
+}
+
+// ── novo contato ────────────────────────────────────────────────────────────
+function abrirNovo() {
+    document.getElementById('formNovo').reset();
+    DIAS_SEL = []; TURNOS_SEL = [];
+    document.querySelectorAll('#diasDisp button, #turnosDisp button')
+            .forEach(b => b.setAttribute('aria-pressed','false'));
+    document.getElementById('nContato').value = hojeISO();
+    document.getElementById('modalNovo').classList.add('aberto');
+}
+
+document.getElementById('formNovo').addEventListener('submit', async function (ev) {
+    ev.preventDefault();
+    const bt = document.getElementById('btSalvarNovo'), erro = document.getElementById('erroNovo');
+    bt.disabled = true; bt.textContent = 'Registrando...'; erro.style.display = 'none';
+    try {
+        const { data: pac, error } = await eqClient.from('pacientes').insert({
+            nome_completo: document.getElementById('nNome').value.trim(),
+            data_nascimento: document.getElementById('nNasc').value,
+            responsavel_nome: document.getElementById('nResponsavel').value.trim() || null,
+            responsavel_telefone: document.getElementById('nTelefone').value.trim() || null,
+            convenio: document.getElementById('nConvenio').value.trim() || null,
+            sessoes_semana_prescritas: parseInt(document.getElementById('nSessoes').value || '0', 10) || null,
+            medico_encaminhador: document.getElementById('nEncaminhado').value.trim() || null,
+            status: 'fila_espera'
+        }).select('id').single();
+        if (error) throw error;
+
+        const { error: e2 } = await eqClient.from('admissoes').insert({
+            paciente_id: pac.id,
+            origem: document.getElementById('nOrigem').value,
+            encaminhado_por: document.getElementById('nEncaminhado').value.trim() || null,
+            data_contato: document.getElementById('nContato').value || hojeISO(),
+            prioridade: parseInt(document.getElementById('nPrioridade').value, 10),
+            sessoes_desejadas: parseInt(document.getElementById('nSessoes').value || '0', 10) || null,
+            disponibilidade: (DIAS_SEL.length || TURNOS_SEL.length)
+                ? { dias: DIAS_SEL.slice().sort(), turnos: TURNOS_SEL.slice() } : null,
+            observacao: document.getElementById('nObs').value.trim() || null,
+            status: 'contato',
+            responsavel_id: EU.profissional.id
+        });
+        if (e2) throw e2;
+
+        await EqAudit.registrar('criacao', 'admissoes', pac.id,
+            { nome: document.getElementById('nNome').value.trim() });
+        fechar('modalNovo'); this.reset();
+        await carregar();
+    } catch (e) {
+        console.error(e);
+        erro.textContent = 'Não foi possível registrar: ' + (e.message || 'erro');
+        erro.style.display = 'block';
+    } finally { bt.disabled = false; bt.textContent = 'Registrar'; }
+});
+
+async function mudarStatus(admissaoId, nome) {
+    const opcoes = [
+        ['triagem','Em triagem — avaliação inicial marcada'],
+        ['aguardando_vaga','Aguardando vaga — triagem feita, sem horário'],
+        ['desistiu','Desistiu — família não seguiu'],
+        ['recusado','Não é caso para a clínica']
+    ];
+    const fundo = document.createElement('div');
+    fundo.className = 'modal-fundo aberto';
+    fundo.innerHTML = `
+        <div class="modal" style="max-width:400px">
+            <h3 style="font-size:15px;font-weight:800;margin-bottom:12px">Situação de ${nome}</h3>
+            ${opcoes.map(o => `
+                <button class="btn btn-secundario btn-bloco" style="margin-bottom:7px;text-align:left"
+                        data-s="${o[0]}">${o[1]}</button>`).join('')}
+            <button class="btn btn-secundario btn-bloco" style="margin-top:8px" id="btCancelaSt">Cancelar</button>
+        </div>`;
+    document.body.appendChild(fundo);
+    fundo.querySelector('#btCancelaSt').addEventListener('click', () => fundo.remove());
+    fundo.addEventListener('click', e => { if (e.target === fundo) fundo.remove(); });
+
+    fundo.querySelectorAll('[data-s]').forEach(b => b.addEventListener('click', async function () {
+        const novo = this.dataset.s;
+        fundo.remove();
+        try {
+            const { error } = await eqClient.from('admissoes')
+                .update({ status: novo }).eq('id', admissaoId);
+            if (error) throw error;
+            await EqAudit.registrar('status', 'admissoes', admissaoId, { nome: nome, novo_status: novo });
+            await carregar();
+        } catch (e) {
+            console.error(e);
+            await EqConfirm.mostrar({ titulo:'Não foi possível mudar', texto: e.message || 'Erro.',
+                confirmar:'Entendi', cancelar:'Fechar', tipo:'alerta' });
+        }
+    }));
+}
+
+// ── alocação: cruza disponibilidade da família com horários livres ──────────
+async function abrirAlocar(admissaoId, pacienteId, nome, sessoes) {
+    ALOCANDO = { admissaoId, pacienteId, nome, sessoes };
+    document.getElementById('tituloAlocar').textContent = 'Achar vaga para ' + nome;
+    document.getElementById('subAlocar').textContent =
+        'Precisa de ' + sessoes + ' sessão(ões) por semana. Mostrando os horários com aplicador livre.';
+    document.getElementById('listaSugestoes').innerHTML = '<div class="vazio-msg">buscando horários…</div>';
+    document.getElementById('modalAlocar').classList.add('aberto');
+
+    const f = FILA.find(x => x.admissao_id === admissaoId);
+    const disp = f ? f.disponibilidade : null;
+
+    try {
+        if (!MAPA.length) await carregarMapa(true);
+
+        let livres = MAPA.filter(m => m.livres > 0);
+        if (disp && disp.dias && disp.dias.length) {
+            livres = livres.filter(m => disp.dias.includes(m.dia_semana));
+        }
+        if (disp && disp.turnos && disp.turnos.length) {
+            livres = livres.filter(m => {
+                const h = parseInt(m.hora.slice(0,2), 10);
+                const turno = h < 12 ? 'manhã' : 'tarde';
+                return disp.turnos.includes(turno);
+            });
+        }
+        // mais gente livre primeiro: dá margem para trocar depois
+        livres.sort((a,b) => b.livres - a.livres);
+
+        document.getElementById('listaSugestoes').innerHTML = livres.length
+            ? livres.slice(0, 12).map(m => `
+                <div class="sugestao">
+                    <div>
+                        <b style="font-size:13px">${DIAS_LONGO[m.dia_semana]} às ${m.hora.slice(0,5)}</b>
+                        <div class="tiny soft">${m.livres} livre(s): ${m.profissionais.slice(0,3).join(', ')}${m.profissionais.length > 3 ? '…' : ''}</div>
+                    </div>
+                    <select class="sel-alocar" data-dia="${m.dia_semana}" data-hora="${m.hora}"
+                            style="padding:7px 9px;font-size:12px;border:1px solid var(--line-strong);
+                                   border-radius:8px;background:var(--surface);color:var(--ink);max-width:150px">
+                        ${m.profissionais.map(n => {
+                            const p = PROFS.find(x => x.nome_completo === n);
+                            return p ? `<option value="${p.id}">${n.split(' ')[0]}</option>` : '';
+                        }).join('')}
+                    </select>
+                    <button class="btn" style="padding:6px 11px;font-size:12px"
+                            onclick="alocar(this)">Marcar</button>
+                </div>`).join('') + `
+                <div class="nota-metodo">
+                    Marcar cria o horário fixo na grade. Ao completar as ${sessoes} sessões previstas,
+                    a criança vira paciente ativo.
+                </div>`
+            : `<div class="vazio-msg">Nenhum horário livre bate com a disponibilidade da família.
+               <br><span class="tiny soft">Veja o mapa de vagas para negociar outro horário, ou considere ampliar a equipe.</span></div>`;
+    } catch (e) {
+        console.error(e);
+        document.getElementById('listaSugestoes').innerHTML =
+            '<div class="vazio-msg" style="color:var(--st-bad)">Erro ao buscar. Veja o console.</div>';
+    }
+}
+
+async function alocar(botao) {
+    const linha = botao.closest('.sugestao');
+    const sel = linha.querySelector('.sel-alocar');
+    const dia = parseInt(sel.dataset.dia, 10);
+    const hora = sel.dataset.hora;
+    const profId = sel.value;
+    const nomeProf = sel.selectedOptions[0] ? sel.selectedOptions[0].textContent : '';
+
+    const ok = await EqConfirm.mostrar({
+        titulo: 'Marcar ' + DIAS_LONGO[dia] + ' às ' + hora.slice(0,5) + '?',
+        texto: 'Cria o horário fixo de ' + ALOCANDO.nome + ' com ' + nomeProf +
+               '. As sessões passam a ser geradas a partir daí.',
+        confirmar: 'Marcar', tipo: 'padrao'
+    });
+    if (!ok) return;
+
+    botao.disabled = true; botao.textContent = '...';
+    try {
+        const duracao = window.EqConfig ? parseInt(EqConfig.get('sessao_duracao_padrao', 60), 10) : 60;
+        const { data, error } = await eqClient.from('cronograma_terapeutico').insert({
+            paciente_id: ALOCANDO.pacienteId,
+            profissional_id: profId,
+            dia_semana: dia,
+            hora_inicio: hora,
+            duracao_min: duracao,
+            vigencia_inicio: hojeISO()
+        }).select('id').single();
+        if (error) throw error;
+
+        // primeiro horário cria o vínculo do aplicador
+        const { data: vinc } = await eqClient.from('vinculos_paciente_aplicador')
+            .select('id').eq('paciente_id', ALOCANDO.pacienteId).eq('ativo', true);
+        if (!vinc || !vinc.length) {
+            await eqClient.from('vinculos_paciente_aplicador').insert({
+                paciente_id: ALOCANDO.pacienteId, profissional_id: profId, tipo: 'titular'
+            });
+        }
+
+        await EqAudit.registrar('criacao', 'cronograma_terapeutico', data.id,
+            { paciente: ALOCANDO.nome, origem: 'admissão', dia: DIAS_LONGO[dia], hora: hora });
+
+        // conta quantos horários já tem e decide se vira ativo
+        const { data: grade } = await eqClient.from('cronograma_terapeutico')
+            .select('id').eq('paciente_id', ALOCANDO.pacienteId).eq('ativo', true);
+        const quantos = (grade || []).length;
+
+        if (quantos >= ALOCANDO.sessoes) {
+            const virar = await EqConfirm.mostrar({
+                titulo: 'Ativar o paciente?',
+                texto: ALOCANDO.nome + ' já tem ' + quantos + ' horário(s) na grade, o previsto para o caso. ' +
+                       'Ativar faz as sessões passarem a ser geradas e a criança sair da fila.',
+                confirmar: 'Ativar', tipo: 'padrao'
+            });
+            if (virar) {
+                await eqClient.from('pacientes')
+                    .update({ status: 'ativo', data_entrada: hojeISO() })
+                    .eq('id', ALOCANDO.pacienteId);
+                await eqClient.from('admissoes')
+                    .update({ status: 'alocado', alocado_em: hojeISO() })
+                    .eq('id', ALOCANDO.admissaoId);
+                await EqAudit.registrar('status', 'pacientes', ALOCANDO.pacienteId,
+                    { novo_status: 'ativo', origem: 'admissão' });
+                fechar('modalAlocar');
+                MAPA = [];
+                await carregar();
+                return;
+            }
+        }
+
+        MAPA = [];
+        await abrirAlocar(ALOCANDO.admissaoId, ALOCANDO.pacienteId, ALOCANDO.nome, ALOCANDO.sessoes);
+
+    } catch (e) {
+        console.error(e);
+        botao.disabled = false; botao.textContent = 'Marcar';
+        await EqConfirm.mostrar({
+            titulo: 'Não foi possível marcar',
+            texto: e.message || 'Erro ao criar o horário.',
+            confirmar: 'Entendi', cancelar: 'Fechar', tipo: 'alerta'
+        });
+    }
+}
+
+// ── mapa de vagas ───────────────────────────────────────────────────────────
+async function carregarMapa(silencioso) {
+    try {
+        const duracao = window.EqConfig ? parseInt(EqConfig.get('sessao_duracao_padrao', 60), 10) : 60;
+        const { data, error } = await eqClient.rpc('mapa_vagas', { p_duracao: duracao });
+        if (error) throw error;
+        MAPA = data || [];
+        if (!silencioso) pintarMapa();
+    } catch (e) {
+        console.error(e);
+        if (!silencioso) document.getElementById('p-mapa').innerHTML =
+            '<div class="card vazio-msg" style="color:var(--st-bad)">Erro ao montar o mapa. Veja o console.</div>';
+    }
+}
+
+function pintarMapa() {
+    if (!MAPA.length) {
+        document.getElementById('p-mapa').innerHTML =
+            '<div class="card vazio-msg">Nenhum horário livre. A agenda da equipe está cheia.</div>';
+        return;
+    }
+    const horas = [...new Set(MAPA.map(m => m.hora.slice(0,5)))].sort();
+    const total = MAPA.reduce((s,m) => s + m.livres, 0);
+
+    const corpo = horas.map(h => {
+        const celulas = [1,2,3,4,5].map(d => {
+            const m = MAPA.find(x => x.dia_semana === d && x.hora.slice(0,5) === h);
+            const n = m ? m.livres : 0;
+            const classe = n === 0 ? 'v0' : n === 1 ? 'v1' : n === 2 ? 'v2' : 'v3';
+            const titulo = m ? m.profissionais.join(', ') : 'ninguém livre';
+            return `<td><div class="vaga-cel ${classe}" title="${titulo}">${n || '·'}</div></td>`;
+        }).join('');
+        return `<tr><td class="hcol">${h}</td>${celulas}</tr>`;
+    }).join('');
+
+    document.getElementById('p-mapa').innerHTML = `
+    <div class="card">
+        <div class="card-titulo"><h3>Onde ainda cabe paciente</h3>
+            <span class="tiny soft">${total} espaços livres na semana</span></div>
+        <div style="overflow-x:auto">
+            <table class="mapa">
+                <thead><tr><th></th>${[1,2,3,4,5].map(d => `<th>${DIAS[d]}</th>`).join('')}</tr></thead>
+                <tbody>${corpo}</tbody>
+            </table>
+        </div>
+        <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--ink-muted);margin-top:12px">
+            <span style="display:flex;align-items:center;gap:6px"><i class="vaga-cel v0" style="width:20px;padding:2px"></i>cheio</span>
+            <span style="display:flex;align-items:center;gap:6px"><i class="vaga-cel v1" style="width:20px;padding:2px"></i>1 livre</span>
+            <span style="display:flex;align-items:center;gap:6px"><i class="vaga-cel v2" style="width:20px;padding:2px"></i>2 livres</span>
+            <span style="display:flex;align-items:center;gap:6px"><i class="vaga-cel v3" style="width:20px;padding:2px"></i>3 ou mais</span>
+        </div>
+        <div class="nota-metodo">
+            Conta a grade fixa, não as sessões do dia: vaga é espaço recorrente, não buraco pontual.
+            Passe o mouse para ver quem está livre. O horário de funcionamento vem de Configurações.
+        </div>
+    </div>`;
+}
+</script>
+</body>
+</html>

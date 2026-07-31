@@ -169,7 +169,7 @@ Tem restrição alimentar? [sim/não]"></textarea>
 </div>
 
 <script src="../shared/avisos.js?v=14"></script>
-<script src="../shared/sidebar.js?v=11"></script>
+<script src="../shared/sidebar.js?v=12"></script>
 <script>
 'use strict';
 
@@ -568,6 +568,23 @@ function pintarOperacao() {
     </div>
 
     <div class="card">
+        <div class="card-titulo"><h3>Horário de funcionamento</h3></div>
+        <div class="campo-2">
+            <div class="campo">
+                <label for="c_clinica_abre">Abre às</label>
+                <input id="c_clinica_abre" type="time" value="${EqConfig.get('clinica_abre','08:00')}"
+                       ${SOU_ADMIN ? '' : 'disabled'}>
+            </div>
+            <div class="campo">
+                <label for="c_clinica_fecha">Fecha às</label>
+                <input id="c_clinica_fecha" type="time" value="${EqConfig.get('clinica_fecha','18:00')}"
+                       ${SOU_ADMIN ? '' : 'disabled'}>
+            </div>
+        </div>
+        <div class="ajuda">Define a faixa do mapa de vagas, na tela de Admissão.</div>
+    </div>
+
+    <div class="card">
         <div class="card-titulo"><h3>Evoluções</h3></div>
         <div class="campo-2">
             ${campoNumero('prazo_evolucao_dias', 'Prazo para lançar a evolução (dias)',
@@ -583,7 +600,7 @@ function pintarOperacao() {
             'Zero desliga a derrubada automática. Vale rever quando a equipe usar tablet compartilhado na sala.', 0, 240)}
     </div>
 
-    ${SOU_ADMIN ? `<button class="btn" onclick="salvarGrupo(['sessao_duracao_padrao','faltas_para_tarefa','prazo_evolucao_dias','janela_evolucao_dias','inatividade_minutos'])">Salvar ajustes</button>`
+    ${SOU_ADMIN ? `<button class="btn" onclick="salvarGrupo(['sessao_duracao_padrao','faltas_para_tarefa','clinica_abre','clinica_fecha','prazo_evolucao_dias','janela_evolucao_dias','inatividade_minutos'])">Salvar ajustes</button>`
                 : '<div class="card vazio-msg">Somente a direção altera os ajustes do sistema.</div>'}`;
 }
 
@@ -599,6 +616,7 @@ async function salvarGrupo(chaves) {
             const el = document.getElementById('c_' + chave);
             if (!el) continue;
             const valor = el.type === 'number' ? parseInt(el.value || '0', 10) : el.value.trim();
+            if (el.type === 'time' && !valor) continue;
             await EqConfig.salvar(chave, valor, EU.profissional.id);
         }
         await EqAudit.registrar('edicao', 'configuracoes', null, { chaves: chaves });

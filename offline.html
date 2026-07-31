@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-tema="coordenacao">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CORTEX aba — sem internet</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<meta name="theme-color" content="#0F766E">
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles/base.css?v=4">
+<link rel="stylesheet" href="styles/components.css?v=5">
+<style>
+body { min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; }
+.caixa { position:relative; z-index:1; max-width:420px; text-align:center; }
+.icone { width:72px; height:72px; border-radius:24px; background:var(--st-warn-bg); color:var(--st-warn);
+         display:flex; align-items:center; justify-content:center; margin:0 auto 18px; }
+h1 { font-size:20px; margin-bottom:8px; }
+p { font-size:13.5px; color:var(--ink-muted); line-height:1.6; margin-bottom:10px; }
+.aba-manuscrito { font-family:'Caveat', cursive; font-size:1.25em; font-weight:700;
+                  display:inline-block; transform:rotate(-6deg); color:var(--acao); }
+</style>
+</head>
+<body>
+<div class="caixa">
+    <div class="icone">
+        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M1 1l22 22"/><path d="M16.7 13.7A5 5 0 0 0 12 11"/>
+            <path d="M5 12.6a10 10 0 0 1 5.2-2.5"/><path d="M2 8.8a15 15 0 0 1 4.2-2.6"/>
+            <path d="M22 8.8a15 15 0 0 0-8.6-3.7"/><line x1="12" y1="20" x2="12.01" y2="20"/>
+        </svg>
+    </div>
+    <h1>Sem internet</h1>
+    <p>Esta página ainda não estava guardada no aparelho, então não dá para abri-la agora.</p>
+    <p><b>O que você já registrou não se perdeu.</b> As tentativas ficam guardadas aqui e sobem
+       sozinhas quando a conexão voltar.</p>
+    <button class="btn btn-bloco" style="margin-top:14px" onclick="location.reload()">Tentar de novo</button>
+    <p style="margin-top:18px;font-size:11.5px;color:var(--ink-soft)">
+        CORTEX <span class="aba-manuscrito">aba</span> · Equilibrium Med Center
+    </p>
+</div>
+</body>
+</html>

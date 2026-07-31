@@ -1,5 +1,5 @@
 // ============================================================================
-// CORTEX aba — Fila offline
+// EQ ABA — Fila offline
 // ----------------------------------------------------------------------------
 // Sala de atendimento raramente tem wi-fi bom e o aplicador está de mãos ocupadas.
 // Se a gravação falhar, o registro fica guardado no aparelho e sobe sozinho quando
@@ -36,7 +36,7 @@ window.EqFila = (function () {
             if (error) throw error;
             return { ok: true, offline: false };
         } catch (e) {
-            console.warn('CORTEX aba: gravação adiada para a fila', e);
+            console.warn('EQ ABA: gravação adiada para a fila', e);
             const fila = ler();
             fila.push({ tabela: tabela, linha: linha, quando: Date.now() });
             escrever(fila);

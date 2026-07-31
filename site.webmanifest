@@ -20,7 +20,27 @@
         }
     ],
     "theme_color": "#0F766E",
-    "background_color": "#F1F6F4",
+    "background_color": "#0B1A29",
     "display": "standalone",
-    "start_url": "./index.html"
+    "start_url": "./index.html",
+    "orientation": "any",
+    "scope": "./",
+    "shortcuts": [
+        {
+            "name": "Sessão de hoje",
+            "short_name": "Sessão",
+            "description": "Abrir direto na tela de coleta",
+            "url": "./sessao/sessao.html"
+        },
+        {
+            "name": "Agenda",
+            "short_name": "Agenda",
+            "url": "./agenda/agenda.html"
+        },
+        {
+            "name": "Tarefas",
+            "short_name": "Tarefas",
+            "url": "./tarefas/index.html"
+        }
+    ]
 }

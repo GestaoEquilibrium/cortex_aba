@@ -420,6 +420,85 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
     </div>
 </div>
 
+
+<!-- ── reforçador ──────────────────────────────────────────────────────────── -->
+<div class="modal-fundo" id="modalReforcador" onclick="if(event.target===this) fechar('modalReforcador')">
+    <div class="modal">
+        <h2 style="margin-bottom:4px">Adicionar reforçador</h2>
+        <p class="tiny soft" style="margin-bottom:14px">O que funciona com esta criança. Fica visível na tela de sessão.</p>
+        <form id="formReforcador">
+            <div class="campo"><label for="refNome">Nome *</label>
+                <input id="refNome" required placeholder="bolha de sabão"></div>
+            <div class="campo-2">
+                <div class="campo"><label for="refTipo">Tipo</label>
+                    <select id="refTipo">
+                        <option value="atividade">Atividade</option>
+                        <option value="comestivel">Comestível</option>
+                        <option value="social">Social (elogio, cócegas)</option>
+                        <option value="sensorial">Sensorial</option>
+                        <option value="tangivel">Item</option>
+                        <option value="outro">Outro</option>
+                    </select></div>
+                <div class="campo"><label for="refPreferencia">Preferência</label>
+                    <select id="refPreferencia">
+                        <option value="alta">Alta</option>
+                        <option value="media" selected>Média</option>
+                        <option value="baixa">Baixa</option>
+                    </select></div>
+            </div>
+            <div class="campo"><label for="refRestricao">Restrição</label>
+                <input id="refRestricao" placeholder="alergia, limite de tempo, só no fim da sessão">
+                <div class="tiny soft" style="margin-top:3px">Aparece com aviso na tela do aplicador.</div>
+            </div>
+            <div class="campo"><label for="refObs">Observação</label><input id="refObs"></div>
+            <div class="aviso" id="erroRef" style="display:none;border-left-color:var(--st-bad);color:var(--st-bad);margin-bottom:10px"></div>
+            <div class="grid-2">
+                <button type="button" class="btn btn-secundario btn-bloco" onclick="fechar('modalReforcador')">Cancelar</button>
+                <button type="submit" class="btn btn-bloco" id="btSalvarRef">Adicionar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ── avaliação de preferência ────────────────────────────────────────────── -->
+<div class="modal-fundo" id="modalPreferencia" onclick="if(event.target===this) fechar('modalPreferencia')">
+    <div class="modal">
+        <h2 style="margin-bottom:4px">Avaliação de preferência</h2>
+        <p class="tiny soft" style="margin-bottom:14px">Os três primeiros viram reforçadores de preferência alta automaticamente.</p>
+        <form id="formPreferencia">
+            <div class="campo-2">
+                <div class="campo"><label for="prefData">Data</label><input id="prefData" type="date"></div>
+                <div class="campo"><label for="prefMetodo">Método</label>
+                    <select id="prefMetodo">
+                        <option value="multiplo">Múltiplos estímulos</option>
+                        <option value="pareado">Pareado (dois a dois)</option>
+                        <option value="livre">Operante livre (observação)</option>
+                        <option value="entrevista_familia">Entrevista com a família</option>
+                    </select></div>
+            </div>
+            <div class="campo">
+                <label for="prefResultado">Resultado, em ordem de preferência</label>
+                <textarea id="prefResultado" rows="7" style="font-family:ui-monospace,Menlo,monospace;font-size:12px"
+placeholder="bolha de sabão: 8
+massinha: 6
+tablet: 5
+biscoito: 3
+carrinho: 1"></textarea>
+                <div class="tiny soft" style="margin-top:4px">
+                    Um item por linha. O número depois dos dois-pontos é quantas vezes foi escolhido —
+                    opcional, mas ajuda a comparar na próxima avaliação.
+                </div>
+            </div>
+            <div class="campo"><label for="prefObs">Observação</label><input id="prefObs"></div>
+            <div class="aviso" id="erroPref" style="display:none;border-left-color:var(--st-bad);color:var(--st-bad);margin-bottom:10px"></div>
+            <div class="grid-2">
+                <button type="button" class="btn btn-secundario btn-bloco" onclick="fechar('modalPreferencia')">Cancelar</button>
+                <button type="submit" class="btn btn-bloco" id="btSalvarPref">Salvar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script src="../shared/avisos.js?v=14"></script>
 <script src="../shared/sidebar.js?v=12"></script>
 <script>
@@ -440,6 +519,7 @@ let PAC = null, GRADE = [], SESSOES = [], VINCULOS = [], PROFS = [], PODE_EDITAR
 let FOTO = null, PEI = null, PEI_PROGS = [], BIBLIOTECA = [];
 let RESPONSAVEIS = [], ORIENTACOES = [], DOCUMENTOS = [], TERMOS = [], ASSINATURAS = [];
 let ANAMNESES = [], MODELOS_ANAMNESE = [], SONDAGENS = [], ENCERRAMENTO = null;
+let REFORCADORES = [], PREFERENCIAS = [];
 
 document.addEventListener('eq:pronto', async function (ev) {
     EqSidebar.render('pacientes');
@@ -553,6 +633,17 @@ async function carregar() {
                     .eq('paciente_id', ID).order('data', { ascending:false }).limit(1).maybeSingle();
                 ENCERRAMENTO = renc.data || null;
             } catch (e) { ENCERRAMENTO = null; }
+
+            try {
+                const [rr, rp] = await Promise.all([
+                    eqClient.from('reforcadores').select('*').eq('paciente_id', ID)
+                        .eq('ativo', true).order('preferencia').order('nome'),
+                    eqClient.from('avaliacoes_preferencia')
+                        .select('*, aplicado:profissionais(nome_completo)')
+                        .eq('paciente_id', ID).order('data', { ascending:false }).limit(5)
+                ]);
+                REFORCADORES = rr.data || []; PREFERENCIAS = rp.data || [];
+            } catch (e) { REFORCADORES = []; PREFERENCIAS = []; }
         } catch (e) { console.warn('família não carregada', e); RESPONSAVEIS = []; ORIENTACOES = []; }
 
         FOTO = PAC.foto_url ? await EqFotos.link(PAC.foto_url) : null;
@@ -856,6 +947,7 @@ function painelPei() {
                 </div>
             </div>`;
         })()}
+        ${blocoReforcadores()}
         <div class="card-legenda">"Gen." é a generalização: com outra pessoa, em outro ambiente e com outro material. Só com as três o objetivo deveria ser dado como dominado.</div>
     </div>`;
 }
@@ -1019,6 +1111,168 @@ document.getElementById('formAjuste').addEventListener('submit', async function 
 
 
 
+
+
+// ── reforçadores ────────────────────────────────────────────────────────────
+const TIPOS_REF = { comestivel:'comestível', atividade:'atividade', social:'social',
+                    sensorial:'sensorial', tangivel:'item', outro:'outro' };
+const COR_PREF = { alta:'var(--st-ok)', media:'var(--st-warn)', baixa:'var(--st-neutro)' };
+
+function blocoReforcadores() {
+    const ultima = PREFERENCIAS[0];
+    const prazo = window.EqConfig ? parseInt(EqConfig.get('preferencia_reavaliar_dias', 90), 10) : 90;
+    let vencida = true, diasDesde = null;
+    if (ultima) {
+        const [a,m,d] = ultima.data.split('-').map(Number);
+        diasDesde = Math.round((new Date() - new Date(a,m-1,d)) / 86400000);
+        vencida = diasDesde > prazo;
+    }
+
+    const podeEditar = PODE_EDITAR ||
+        (window.EqSessao && ['aplicador','aplicador_itinerante','estagiario_aba','supervisor_clinico'].includes(EqSessao.perfil));
+
+    return `<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                <b style="font-size:13px">Reforçadores</b>
+                ${ultima
+                  ? `<span class="chip ${vencida ? 'chip-alerta' : 'chip-ok'}">
+                       avaliado há ${diasDesde} dias</span>`
+                  : '<span class="chip chip-erro">nunca avaliado</span>'}
+            </div>
+            ${podeEditar ? `<div style="display:flex;gap:6px">
+                <button class="btn btn-secundario" style="padding:5px 10px;font-size:11.5px"
+                        onclick="abrirReforcador()">Adicionar</button>
+                <button class="btn btn-secundario" style="padding:5px 10px;font-size:11.5px"
+                        onclick="abrirPreferencia()">Registrar avaliação</button>
+            </div>` : ''}
+        </div>
+
+        ${REFORCADORES.length ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+            ${REFORCADORES.map(r => `
+                <span style="display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line-strong);
+                             border-left:3px solid ${COR_PREF[r.preferencia]};border-radius:8px;
+                             padding:6px 10px;font-size:12px;background:var(--surface)">
+                    <b>${r.nome}</b>
+                    <span class="tiny soft">${TIPOS_REF[r.tipo] || r.tipo}</span>
+                    ${r.restricao ? `<span class="tiny" style="color:var(--st-bad)" title="${r.restricao}">⚠</span>` : ''}
+                    ${podeEditar ? `<button class="bt-link" style="font-size:14px;line-height:1"
+                        onclick="removerReforcador('${r.id}','${r.nome.replace(/'/g,"\\'")}')"
+                        title="remover">×</button>` : ''}
+                </span>`).join('')}
+        </div>` : `<div class="tiny soft" style="margin-bottom:8px">
+            Nenhum reforçador registrado. Sem isso, quem cobrir a sessão não sabe o que funciona com a criança.
+        </div>`}
+
+        ${vencida && REFORCADORES.length ? `<div class="aviso" style="border-left-color:var(--st-warn);font-size:12px">
+            Preferências não são reavaliadas há mais de ${prazo} dias. Reforçador saturado é a causa
+            mais comum de programa que para de andar sem explicação.
+        </div>` : ''}
+
+        ${PREFERENCIAS.length ? `<div class="tiny soft" style="margin-top:6px">
+            Última avaliação: ${brl(PREFERENCIAS[0].data)} · ${PREFERENCIAS[0].metodo}
+            ${PREFERENCIAS[0].aplicado ? ' · por ' + PREFERENCIAS[0].aplicado.nome_completo : ''}
+        </div>` : ''}
+    </div>`;
+}
+
+function abrirReforcador() {
+    document.getElementById('formReforcador').reset();
+    document.getElementById('modalReforcador').classList.add('aberto');
+}
+
+document.getElementById('formReforcador').addEventListener('submit', async function (ev) {
+    ev.preventDefault();
+    const bt = document.getElementById('btSalvarRef'), erro = document.getElementById('erroRef');
+    bt.disabled = true; bt.textContent = 'Salvando...'; erro.style.display = 'none';
+    try {
+        const { data, error } = await eqClient.from('reforcadores').insert({
+            paciente_id: ID,
+            nome: document.getElementById('refNome').value.trim(),
+            tipo: document.getElementById('refTipo').value,
+            preferencia: document.getElementById('refPreferencia').value,
+            restricao: document.getElementById('refRestricao').value.trim() || null,
+            observacao: document.getElementById('refObs').value.trim() || null,
+            ultima_avaliacao: PREFERENCIAS[0] ? PREFERENCIAS[0].data : null
+        }).select('id').single();
+        if (error) throw error;
+        await EqAudit.registrar('criacao', 'reforcadores', data.id,
+            { paciente: PAC.nome_completo, nome: document.getElementById('refNome').value.trim() });
+        fechar('modalReforcador'); this.reset();
+        await carregar(); aba('pei');
+    } catch (e) {
+        console.error(e);
+        erro.textContent = e.message && e.message.indexOf('duplicate') !== -1
+            ? 'Este reforçador já está na lista.'
+            : 'Não foi possível salvar: ' + (e.message || 'erro');
+        erro.style.display = 'block';
+    } finally { bt.disabled = false; bt.textContent = 'Adicionar'; }
+});
+
+async function removerReforcador(id, nome) {
+    const ok = await EqConfirm.mostrar({
+        titulo: 'Remover ' + nome + '?',
+        texto: 'Sai da lista de reforçadores desta criança. O histórico de avaliações continua.',
+        confirmar: 'Remover', tipo: 'alerta'
+    });
+    if (!ok) return;
+    try {
+        const { error } = await eqClient.from('reforcadores').update({ ativo: false }).eq('id', id);
+        if (error) throw error;
+        await EqAudit.registrar('status', 'reforcadores', id, { paciente: PAC.nome_completo, removido: nome });
+        await carregar(); aba('pei');
+    } catch (e) { console.error(e); }
+}
+
+function abrirPreferencia() {
+    document.getElementById('formPreferencia').reset();
+    document.getElementById('prefData').value = hojeISO();
+    document.getElementById('modalPreferencia').classList.add('aberto');
+}
+
+document.getElementById('formPreferencia').addEventListener('submit', async function (ev) {
+    ev.preventDefault();
+    const bt = document.getElementById('btSalvarPref'), erro = document.getElementById('erroPref');
+    bt.disabled = true; bt.textContent = 'Salvando...'; erro.style.display = 'none';
+
+    // "item: 8" por linha, na ordem de preferência
+    const linhas = (document.getElementById('prefResultado').value || '')
+        .split('\n').map(l => l.trim()).filter(Boolean);
+    const resultado = linhas.map((l, i) => {
+        const m = l.match(/^(.+?)[:\-]\s*(\d+)\s*$/);
+        return m ? { item: m[1].trim(), escolhas: parseInt(m[2],10), ordem: i }
+                 : { item: l, escolhas: null, ordem: i };
+    });
+
+    try {
+        const { data, error } = await eqClient.from('avaliacoes_preferencia').insert({
+            paciente_id: ID,
+            data: document.getElementById('prefData').value || hojeISO(),
+            metodo: document.getElementById('prefMetodo').value,
+            resultado: resultado.length ? resultado : null,
+            observacao: document.getElementById('prefObs').value.trim() || null,
+            aplicado_por: (window.EqSessao && EqSessao.profissional.id) || null
+        }).select('id').single();
+        if (error) throw error;
+
+        // os três primeiros viram reforçadores de preferência alta
+        for (let i = 0; i < Math.min(3, resultado.length); i++) {
+            await eqClient.from('reforcadores').upsert({
+                paciente_id: ID, nome: resultado[i].item, preferencia: 'alta',
+                ultima_avaliacao: document.getElementById('prefData').value || hojeISO()
+            }, { onConflict: 'paciente_id,nome' });
+        }
+
+        await EqAudit.registrar('criacao', 'avaliacoes_preferencia', data.id,
+            { paciente: PAC.nome_completo, itens: resultado.length });
+        fechar('modalPreferencia'); this.reset();
+        await carregar(); aba('pei');
+    } catch (e) {
+        console.error(e);
+        erro.textContent = 'Não foi possível salvar: ' + (e.message || 'erro');
+        erro.style.display = 'block';
+    } finally { bt.disabled = false; bt.textContent = 'Salvar'; }
+});
 
 // ── mais ações: encerrar e exportar ─────────────────────────────────────────
 function abrirMais() {

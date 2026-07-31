@@ -37,6 +37,12 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
 .cartao-seg { border:1px solid var(--st-warn); background:var(--st-warn-bg); color:#7C4A05;
               border-radius:var(--radius-card); padding:12px 14px; font-size:12.5px; margin-bottom:12px; }
 .cartao-seg b { display:block; margin-bottom:3px; }
+.faixa-reforcadores { background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-card);
+                      padding:11px 13px; margin-bottom:12px; }
+.faixa-reforcadores > b { font-size:11.5px; color:var(--ink-muted); display:block; margin-bottom:7px; }
+.lista-ref { display:flex; gap:6px; flex-wrap:wrap; }
+.lista-ref .ref { border:1px solid var(--line); border-left:3px solid var(--st-neutro);
+                  border-radius:7px; padding:5px 10px; font-size:12px; font-weight:600; }
 
 .prog { border:1px solid var(--line); border-radius:var(--radius-card); padding:14px;
         margin-bottom:12px; background:var(--surface); border-left:4px solid var(--cor,var(--acao)); }
@@ -172,7 +178,7 @@ const CONTEXTOS = ['dormiu mal','não almoçou','medicação alterada','doente',
                    'intercorrência em casa','mudança de rotina'];
 
 let EU = null, SESSOES = [], SESSAO = null, PROGRAMAS = [], TENTATIVAS = [], SONDAGENS = [];
-let OBSERVADOR = false;
+let OBSERVADOR = false, REFORCADORES = [];
 let ALVO_SEL = {}, DICA_SEL = {};
 
 document.addEventListener('eq:pronto', async function (ev) {
@@ -310,6 +316,14 @@ async function abrirSessao() {
             }));
         } catch (e) { console.warn('sondagens', e); SONDAGENS = []; }
 
+        try {
+            const { data } = await eqClient.from('reforcadores')
+                .select('nome, tipo, preferencia, restricao')
+                .eq('paciente_id', SESSAO.paciente_id).eq('ativo', true)
+                .order('preferencia');
+            REFORCADORES = data || [];
+        } catch (e) { REFORCADORES = []; }
+
         desenhar();
 
     } catch (e) {
@@ -330,6 +344,18 @@ function desenhar() {
              A concordância entre os dois registros aparece na tela de Supervisão.
            </div>` : '';
     html += seg ? `<div class="cartao-seg"><b>Cartão de segurança</b>${seg}</div>` : '';
+
+    if (REFORCADORES.length) {
+        const cor = { alta:'var(--st-ok)', media:'var(--st-warn)', baixa:'var(--st-neutro)' };
+        html += `<div class="faixa-reforcadores">
+            <b>O que funciona com ${(SESSAO.paciente ? SESSAO.paciente.nome_completo : '').split(' ')[0]}</b>
+            <div class="lista-ref">${REFORCADORES.map(r => `
+                <span class="ref" style="border-left-color:${cor[r.preferencia]}"
+                      ${r.restricao ? 'title="' + r.restricao + '"' : ''}>
+                    ${r.nome}${r.restricao ? ' <span style="color:var(--st-bad)">⚠</span>' : ''}
+                </span>`).join('')}</div>
+        </div>`;
+    }
 
     if (SONDAGENS.length) {
         html += `<div class="card" style="border-left:3px solid var(--st-ok);margin-bottom:12px">

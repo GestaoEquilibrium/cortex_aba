@@ -67,6 +67,15 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
 
                 <div class="card">
                     <div class="card-titulo">
+                        <h3>Supervisão</h3>
+                        <a class="tiny" href="supervisao/index.html">ver todas</a>
+                    </div>
+                    <div id="blocoSupervisao" class="muted small">carregando…</div>
+                    <div class="card-legenda">Fidelidade de aplicação nos últimos dias.</div>
+                </div>
+
+                <div class="card">
+                    <div class="card-titulo">
                         <h3>Evoluções lançadas</h3>
                         <a class="tiny" href="tarefas/index.html">tarefas</a>
                     </div>
@@ -114,7 +123,7 @@ document.addEventListener('eq:pronto', async function (ev) {
         // gera tarefas automáticas de falta antes de contar
         if (coordena) { try { await eqClient.rpc('gerar_tarefas_faltas'); } catch (e) { console.warn(e); } }
 
-        const [rHoje, rSemana, rEvol, rTarefas, rAtivos, rFila] = await Promise.all([
+        const [rHoje, rSemana, rEvol, rTarefas, rAtivos, rFila, rSup] = await Promise.all([
             eqClient.from('sessoes')
                 .select(`id, hora_inicio, status,
                          paciente:pacientes!sessoes_paciente_id_fkey(nome_completo),
@@ -126,7 +135,9 @@ document.addEventListener('eq:pronto', async function (ev) {
             eqClient.from('evolucoes_diarias').select('sessao_id'),
             eqClient.from('tarefas').select('id, status, prazo').eq('status','aberta'),
             eqClient.from('pacientes').select('id', { count:'exact', head:true }).eq('status','ativo'),
-            eqClient.from('pacientes').select('id', { count:'exact', head:true }).eq('status','fila_espera')
+            eqClient.from('pacientes').select('id', { count:'exact', head:true }).eq('status','fila_espera'),
+            eqClient.from('supervisoes').select('id, data, percentual, ciente_em, profissional_id')
+                .gte('data', seteISO).order('data', { ascending:false })
         ]);
         if (rHoje.error) throw rHoje.error;
 
@@ -203,6 +214,36 @@ document.addEventListener('eq:pronto', async function (ev) {
                 <span class="barra-valor" style="color:${corPct(a.pct)}">${a.pct}%</span>
             </div>`).join('')
             : '<div class="muted small">Nenhuma sessão realizada nos últimos 7 dias.</div>';
+
+        // ── supervisão ──────────────────────────────────────────────────
+        try {
+            const sups = (rSup && rSup.data) || [];
+            const semCiencia = sups.filter(s => !s.ciente_em).length;
+            const comNota = sups.filter(s => s.percentual !== null);
+            const media = comNota.length
+                ? Math.round(comNota.reduce((a,s) => a + s.percentual, 0) / comNota.length) : null;
+            const corSup = m => m >= 85 ? 'var(--st-ok)' : m >= 70 ? 'var(--st-warn)' : 'var(--st-bad)';
+
+            const el = document.getElementById('blocoSupervisao');
+            if (el) {
+                el.innerHTML = sups.length ? `
+                    <div class="barra-linha">
+                        <span class="rotulo">Fidelidade média</span>
+                        <span class="barra-trilho"><span class="barra-preenche"
+                              style="width:${media || 0}%;background:${corSup(media || 0)}"></span></span>
+                        <span class="barra-valor" style="color:${corSup(media || 0)}">${media !== null ? media + '%' : '—'}</span>
+                    </div>
+                    <div class="barra-linha">
+                        <span class="rotulo">Supervisões</span>
+                        <span class="barra-valor" style="width:auto">${sups.length} no período</span>
+                    </div>
+                    ${semCiencia ? `<div class="aviso" style="border-left-color:var(--st-warn);margin-top:8px;font-size:12px">
+                        ${semCiencia} supervisão(ões) aguardando ciência do aplicador.
+                        A devolutiva só fecha o ciclo quando a pessoa lê.
+                    </div>` : ''}`
+                : '<div class="muted small">Nenhuma supervisão registrada no período.</div>';
+            }
+        } catch (e) { console.warn('supervisão', e); }
 
         document.getElementById('statusPacientes').innerHTML = `
             <div class="barra-linha"><span class="rotulo">Ativos</span>

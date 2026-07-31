@@ -72,6 +72,7 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
             <button data-p="clinica" aria-pressed="false" onclick="aba('clinica')">Clínica</button>
             <button data-p="operacao" aria-pressed="false" onclick="aba('operacao')">Operação</button>
             <button data-p="termos" aria-pressed="false" onclick="aba('termos')">Termos</button>
+            <button data-p="anamnese" aria-pressed="false" onclick="aba('anamnese')">Anamnese</button>
         </div>
 
         <input type="file" id="inputFoto" accept="image/jpeg,image/png,image/webp"
@@ -81,6 +82,7 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
         <div class="painel" id="p-clinica"><div class="card vazio-msg">carregando…</div></div>
         <div class="painel" id="p-operacao"><div class="card vazio-msg">carregando…</div></div>
         <div class="painel" id="p-termos"><div class="card vazio-msg">carregando…</div></div>
+        <div class="painel" id="p-anamnese"><div class="card vazio-msg">carregando…</div></div>
     </main>
 </div>
 
@@ -122,6 +124,50 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
     </div>
 </div>
 
+
+<div class="modal-fundo" id="modalModelo" onclick="if(event.target===this) fechar('modalModelo')"
+     style="position:fixed;inset:0;background:rgba(12,27,42,.5);backdrop-filter:blur(3px);
+            display:none;align-items:center;justify-content:center;padding:20px;z-index:80">
+    <div style="background:var(--surface);border-radius:var(--radius-card);padding:22px;width:100%;
+                max-width:640px;box-shadow:var(--shadow-lg);max-height:92vh;overflow:auto">
+        <h2 style="margin-bottom:4px">Novo modelo de anamnese</h2>
+        <p class="tiny soft" style="margin-bottom:14px">É este questionário que a família recebe pelo link.</p>
+        <form id="formModelo">
+            <div class="campo"><label for="mNome">Nome *</label>
+                <input id="mNome" required placeholder="Anamnese inicial — ABA"></div>
+            <div class="campo"><label for="mDescricao">Texto de abertura</label>
+                <input id="mDescricao" placeholder="Estas informações ajudam a equipe a conhecer a criança."></div>
+            <div class="campo">
+                <label for="mEstrutura">Seções e perguntas *</label>
+                <textarea id="mEstrutura" rows="14" required style="font-family:ui-monospace,Menlo,monospace;font-size:12px"
+placeholder="# Gestação e nascimento
+* Como foi a gestação? [longo]
+Houve intercorrências no parto? [sim/não]
+Peso ao nascer [número]
+
+# Desenvolvimento
+Com que idade sentou sozinho?
+Com que idade falou as primeiras palavras?
+* Descreva como a criança se comunica hoje [longo]
+
+# Rotina e alimentação
+Como é o sono? [longo]
+Tem restrição alimentar? [sim/não]"></textarea>
+                <div class="tiny soft" style="margin-top:5px;line-height:1.6">
+                    Linha com <b>#</b> vira seção · comece com <b>*</b> para tornar obrigatória ·
+                    use <b>[longo]</b>, <b>[sim/não]</b>, <b>[data]</b> ou <b>[número]</b> no fim para mudar o tipo.
+                    Sem marcação, vira campo de texto curto.
+                </div>
+            </div>
+            <div class="aviso" id="erroModelo" style="display:none;border-left-color:var(--st-bad);color:var(--st-bad);margin-bottom:10px"></div>
+            <div class="grid-2">
+                <button type="button" class="btn btn-secundario btn-bloco" onclick="fechar('modalModelo')">Cancelar</button>
+                <button type="submit" class="btn btn-bloco" id="btSalvarModelo">Salvar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script src="../shared/sidebar.js?v=8"></script>
 <script>
 'use strict';
@@ -146,15 +192,124 @@ document.addEventListener('eq:pronto', async function (ev) {
     }
     pintarPerfil(); pintarClinica(); pintarOperacao();
     await carregarTermos();
+    await carregarModelos();
 });
 
 function aba(k) {
-    ['perfil','clinica','operacao','termos'].forEach(x => {
+    ['perfil','clinica','operacao','termos','anamnese'].forEach(x => {
         document.getElementById('p-' + x).classList.toggle('on', x === k);
         document.querySelector('[data-p="' + x + '"]').setAttribute('aria-pressed', x === k);
     });
 }
 
+
+
+// ── modelos de anamnese ─────────────────────────────────────────────────────
+let MODELOS = [];
+
+async function carregarModelos() {
+    try {
+        const { data, error } = await eqClient.from('anamnese_modelos').select('*').order('nome');
+        if (error) throw error;
+        MODELOS = data || [];
+    } catch (e) { console.warn(e); MODELOS = []; }
+    pintarModelos();
+}
+
+function contarPerguntas(estrutura) {
+    return (estrutura || []).reduce((s, sec) => s + (sec.perguntas || []).length, 0);
+}
+
+function pintarModelos() {
+    const podeEditar = ['admin_direcao','supervisor_clinico','coordenador_aba'].includes(EU.perfil);
+    document.getElementById('p-anamnese').innerHTML = `
+    <div class="card">
+        <div class="card-titulo">
+            <h3>Modelos de anamnese</h3>
+            ${podeEditar ? '<button class="btn btn-secundario" style="padding:7px 12px;font-size:12px" onclick="abrirModelo()">Novo modelo</button>' : ''}
+        </div>
+        ${MODELOS.length ? MODELOS.map(m => `
+            <div style="padding:12px 0;border-top:1px solid var(--line)">
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                    <b style="font-size:13.5px">${m.nome}</b>
+                    <span class="chip chip-neutro">${(m.estrutura||[]).length} seções</span>
+                    <span class="chip chip-neutro">${contarPerguntas(m.estrutura)} perguntas</span>
+                    ${m.ativo ? '<span class="chip chip-ok">ativo</span>' : '<span class="chip chip-neutro">inativo</span>'}
+                </div>
+                ${m.descricao ? `<p class="small muted" style="margin-top:5px">${m.descricao}</p>` : ''}
+                <div class="tiny soft" style="margin-top:5px">
+                    ${(m.estrutura||[]).map(s => s.secao).join(' · ')}
+                </div>
+            </div>`).join('')
+        : `<div class="vazio-msg">Nenhum modelo cadastrado.
+           <br><span class="tiny soft">Sem modelo, não há como gerar link de anamnese.</span></div>`}
+    </div>`;
+}
+
+function abrirModelo() {
+    document.getElementById('formModelo').reset();
+    document.getElementById('modalModelo').classList.add('aberto');
+}
+
+// Interpreta o texto: "# seção" abre bloco; "* pergunta" é obrigatória;
+// sufixos [longo] [sim/não] [data] [número] definem o tipo.
+function interpretarModelo(texto) {
+    const linhas = texto.split('\n').map(l => l.trim()).filter(Boolean);
+    const estrutura = [];
+    let contador = 0;
+    linhas.forEach(l => {
+        if (l.startsWith('#')) {
+            estrutura.push({ secao: l.replace(/^#+\s*/, ''), perguntas: [] });
+            return;
+        }
+        if (!estrutura.length) estrutura.push({ secao: 'Geral', perguntas: [] });
+
+        let obrigatoria = false;
+        if (l.startsWith('*')) { obrigatoria = true; l = l.replace(/^\*\s*/, ''); }
+
+        let tipo = 'texto';
+        const m = l.match(/\[(longo|sim\/n[aã]o|data|n[uú]mero)\]\s*$/i);
+        if (m) {
+            const t = m[1].toLowerCase();
+            tipo = t === 'longo' ? 'longo'
+                 : t.startsWith('sim') ? 'simnao'
+                 : t === 'data' ? 'data' : 'numero';
+            l = l.replace(/\s*\[[^\]]+\]\s*$/, '');
+        }
+        contador++;
+        estrutura[estrutura.length - 1].perguntas.push({
+            id: 'p' + contador, texto: l, tipo: tipo, obrigatoria: obrigatoria
+        });
+    });
+    return estrutura;
+}
+
+document.getElementById('formModelo').addEventListener('submit', async function (ev) {
+    ev.preventDefault();
+    const bt = document.getElementById('btSalvarModelo'), erro = document.getElementById('erroModelo');
+    bt.disabled = true; bt.textContent = 'Salvando...'; erro.style.display = 'none';
+    try {
+        const estrutura = interpretarModelo(document.getElementById('mEstrutura').value);
+        if (!estrutura.length || !contarPerguntas(estrutura)) {
+            throw new Error('Informe ao menos uma seção (linha com #) e uma pergunta.');
+        }
+        const { data, error } = await eqClient.from('anamnese_modelos').insert({
+            nome: document.getElementById('mNome').value.trim(),
+            descricao: document.getElementById('mDescricao').value.trim() || null,
+            estrutura: estrutura,
+            criado_por: EU.profissional.id
+        }).select('id').single();
+        if (error) throw error;
+        await EqAudit.registrar('criacao', 'anamnese_modelos', data.id,
+            { nome: document.getElementById('mNome').value.trim(), perguntas: contarPerguntas(estrutura) });
+        fechar('modalModelo');
+        await carregarModelos(); aba('anamnese');
+    } catch (e) {
+        console.error(e);
+        erro.textContent = e.message || 'Não foi possível salvar.';
+        erro.style.display = 'block';
+    } finally { bt.disabled = false; bt.textContent = 'Salvar'; }
+});
 
 // ── termos ──────────────────────────────────────────────────────────────────
 const TIPOS_TERMO = { lgpd:'Proteção de dados (LGPD)', imagem:'Uso de imagem',
@@ -249,6 +404,7 @@ document.getElementById('formTermo').addEventListener('submit', async function (
             { nome: document.getElementById('tmNome').value.trim(), versao: maior + 1 });
         fechar('modalTermo');
         await carregarTermos();
+    await carregarModelos();
         aba('termos');
     } catch (e) {
         console.error(e);
@@ -268,7 +424,8 @@ async function desativarTermo(id, nome) {
         const { error } = await eqClient.from('termos_modelos').update({ ativo: false }).eq('id', id);
         if (error) throw error;
         await EqAudit.registrar('status', 'termos_modelos', id, { nome: nome, ativo: false });
-        await carregarTermos(); aba('termos');
+        await carregarTermos();
+    await carregarModelos(); aba('termos');
     } catch (e) { console.error(e); }
 }
 

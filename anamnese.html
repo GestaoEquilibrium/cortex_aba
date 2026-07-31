@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-tema="familia">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Anamnese — CORTEX aba</title>
+<script>
+(function(){try{var m=localStorage.getItem('eqaba_modo');
+if(m!=='claro'&&m!=='escuro'){m=(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches)?'escuro':'claro';}
+document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
+</script>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<meta name="theme-color" content="#7C3AED">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles/base.css?v=4">
+<link rel="stylesheet" href="styles/components.css?v=5">
+<style>
+.aba-manuscrito { font-family:'Caveat', cursive; font-size:1.3em; font-weight:700;
+                  display:inline-block; transform:rotate(-6deg); }
+.pagina { max-width:620px; margin:0 auto; padding:0 16px 60px; position:relative; z-index:1; }
+.topo { background:var(--side-bg); color:#fff; border-radius:0 0 26px 26px;
+        padding:22px 20px 26px; margin:0 -16px 20px; }
+.topo .marca { display:flex; align-items:center; gap:8px; font-weight:800; font-size:14px; opacity:.92; }
+.topo h1 { font-size:20px; margin-top:14px; }
+.topo p { font-size:13px; color:rgba(255,255,255,.85); margin-top:5px; line-height:1.5; }
+.secao { margin-bottom:18px; }
+.secao h2 { font-size:15px; font-weight:800; margin-bottom:3px; }
+.secao .sub { font-size:12px; color:var(--ink-muted); margin-bottom:12px; }
+.pergunta { margin-bottom:15px; }
+.pergunta label { display:block; font-size:13.5px; font-weight:600; color:var(--ink); margin-bottom:6px; line-height:1.4; }
+.pergunta .obr { color:var(--st-bad); }
+.pergunta input, .pergunta textarea, .pergunta select {
+    width:100%; padding:11px 12px; font-size:13.5px; font-family:inherit; line-height:1.5;
+    border:1px solid var(--line-strong); border-radius:10px; background:var(--surface); color:var(--ink); }
+.pergunta input:focus, .pergunta textarea:focus, .pergunta select:focus {
+    outline:2px solid var(--acao); border-color:transparent; }
+.simnao { display:flex; gap:8px; }
+.simnao button { flex:1; border:1px solid var(--line-strong); background:var(--surface); color:var(--ink-muted);
+    border-radius:10px; padding:11px; font:inherit; font-size:13px; font-weight:700; cursor:pointer; }
+.simnao button[aria-pressed="true"] { background:var(--acao); color:#fff; border-color:transparent; }
+.barra-salvo { position:sticky; bottom:0; background:var(--bg); border-top:1px solid var(--line);
+               padding:12px 0 8px; margin-top:10px; }
+.aviso-salvo { font-size:11.5px; color:var(--ink-soft); text-align:center; margin-top:7px; min-height:16px; }
+.vazio-msg { padding:40px 20px; text-align:center; color:var(--ink-muted); font-size:14px; line-height:1.6; }
+.concluida { text-align:center; padding:40px 20px; }
+.concluida .icone { width:64px; height:64px; border-radius:50%; background:var(--st-ok-bg); color:var(--st-ok);
+    display:flex; align-items:center; justify-content:center; margin:0 auto 16px; }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js?v=4"></script>
+<script src="shared/supabase_client.js?v=2"></script>
+<script src="shared/tema.js?v=2"></script>
+</head>
+<body>
+
+<div class="pagina">
+    <div class="topo">
+        <div class="marca">
+            <svg width="16" height="16" viewBox="0 0 32 32"><g stroke="currentColor" stroke-width="1.5" fill="currentColor" stroke-linecap="round">
+                <line x1="16" y1="16" x2="9" y2="9"/><line x1="16" y1="16" x2="23" y2="9"/>
+                <line x1="16" y1="16" x2="9" y2="23"/><line x1="16" y1="16" x2="23" y2="23"/>
+                <line x1="16" y1="16" x2="16" y2="7"/><line x1="16" y1="16" x2="16" y2="25"/>
+                <circle cx="16" cy="16" r="2.8" stroke="none"/><circle cx="9" cy="9" r="1.6" stroke="none"/>
+                <circle cx="23" cy="9" r="1.6" stroke="none"/><circle cx="9" cy="23" r="1.6" stroke="none"/>
+                <circle cx="23" cy="23" r="1.6" stroke="none"/><circle cx="16" cy="7" r="1.4" stroke="none"/>
+                <circle cx="16" cy="25" r="1.4" stroke="none"/></g></svg>
+            CORTEX <span class="aba-manuscrito">aba</span>
+        </div>
+        <h1 id="titulo">Anamnese</h1>
+        <p id="subtitulo">carregando…</p>
+    </div>
+
+    <div id="area"><div class="card vazio-msg">carregando…</div></div>
+</div>
+
+<script>
+'use strict';
+
+const TOKEN = new URLSearchParams(location.search).get('t');
+let DADOS = null, RESPOSTAS = {}, salvando = false, timerSalvar = null;
+
+(async function () {
+    if (!TOKEN) { erroTela('Link incompleto', 'Confira se o endereço foi copiado inteiro.'); return; }
+    try {
+        const { data, error } = await eqClient.rpc('anamnese_abrir', { p_token: TOKEN });
+        if (error) throw error;
+        if (data.erro) {
+            const textos = {
+                link_invalido: ['Link não encontrado', 'Confira o endereço com a clínica.'],
+                link_expirado: ['Link expirado', 'Peça um novo link à clínica.'],
+                ja_revisada:   ['Anamnese já concluída', 'A equipe já recebeu e revisou suas respostas. Obrigado!']
+            };
+            const t = textos[data.erro] || ['Não foi possível abrir', 'Fale com a clínica.'];
+            erroTela(t[0], t[1]);
+            return;
+        }
+        DADOS = data;
+        RESPOSTAS = data.respostas || {};
+        if (data.status === 'respondida') { telaConcluida(true); return; }
+        desenhar();
+    } catch (e) {
+        console.error(e);
+        erroTela('Não foi possível abrir', 'Verifique sua conexão e tente novamente.');
+    }
+})();
+
+function erroTela(titulo, texto) {
+    document.getElementById('titulo').textContent = titulo;
+    document.getElementById('subtitulo').textContent = '';
+    document.getElementById('area').innerHTML =
+        '<div class="card vazio-msg"><b>' + titulo + '</b><br>' + texto + '</div>';
+}
+
+function desenhar() {
+    document.getElementById('titulo').textContent = DADOS.modelo_nome || 'Anamnese';
+    document.getElementById('subtitulo').textContent =
+        (DADOS.descricao || 'Estas informações ajudam a equipe a conhecer a criança antes de começar.') +
+        (DADOS.crianca ? ' Sobre ' + DADOS.crianca + '.' : '');
+
+    const secoes = DADOS.estrutura || [];
+    document.getElementById('area').innerHTML = secoes.map((s, si) => `
+        <div class="card secao">
+            <h2>${s.secao}</h2>
+            ${s.ajuda ? `<div class="sub">${s.ajuda}</div>` : ''}
+            ${(s.perguntas || []).map(p => campo(p)).join('')}
+        </div>`).join('') + `
+        <div class="barra-salvo">
+            <button class="btn btn-bloco" onclick="finalizar()">Enviar respostas</button>
+            <div class="aviso-salvo" id="avisoSalvo">Suas respostas são guardadas automaticamente.</div>
+        </div>`;
+}
+
+function campo(p) {
+    const v = RESPOSTAS[p.id] !== undefined ? RESPOSTAS[p.id] : '';
+    const rot = `<label for="q_${p.id}">${p.texto}${p.obrigatoria ? ' <span class="obr">*</span>' : ''}</label>`;
+
+    if (p.tipo === 'longo') {
+        return `<div class="pergunta">${rot}
+            <textarea id="q_${p.id}" rows="4" oninput="responder('${p.id}', this.value)">${v}</textarea></div>`;
+    }
+    if (p.tipo === 'simnao') {
+        return `<div class="pergunta">${rot}
+            <div class="simnao">
+                <button type="button" aria-pressed="${v === 'sim'}" onclick="responder('${p.id}','sim', true)">Sim</button>
+                <button type="button" aria-pressed="${v === 'nao'}" onclick="responder('${p.id}','nao', true)">Não</button>
+                <button type="button" aria-pressed="${v === 'nao_sei'}" onclick="responder('${p.id}','nao_sei', true)">Não sei</button>
+            </div></div>`;
+    }
+    if (p.tipo === 'data') {
+        return `<div class="pergunta">${rot}
+            <input id="q_${p.id}" type="date" value="${v}" onchange="responder('${p.id}', this.value)"></div>`;
+    }
+    if (p.tipo === 'numero') {
+        return `<div class="pergunta">${rot}
+            <input id="q_${p.id}" type="number" value="${v}" oninput="responder('${p.id}', this.value)"></div>`;
+    }
+    return `<div class="pergunta">${rot}
+        <input id="q_${p.id}" type="text" value="${String(v).replace(/"/g,'&quot;')}"
+               oninput="responder('${p.id}', this.value)"></div>`;
+}
+
+function responder(id, valor, redesenhar) {
+    RESPOSTAS[id] = valor;
+    if (redesenhar) desenhar();
+    agendarSalvar();
+}
+
+// salva sozinho, sem a família precisar clicar em nada
+function agendarSalvar() {
+    clearTimeout(timerSalvar);
+    document.getElementById('avisoSalvo').textContent = 'salvando…';
+    timerSalvar = setTimeout(salvar, 1200);
+}
+
+async function salvar(finalizar) {
+    if (salvando) return;
+    salvando = true;
+    try {
+        const { data, error } = await eqClient.rpc('anamnese_salvar', {
+            p_token: TOKEN, p_respostas: RESPOSTAS, p_finalizar: !!finalizar
+        });
+        if (error) throw error;
+        if (data.erro) throw new Error(data.erro);
+        const aviso = document.getElementById('avisoSalvo');
+        if (aviso) aviso.textContent = 'Respostas guardadas.';
+        return true;
+    } catch (e) {
+        console.error(e);
+        const aviso = document.getElementById('avisoSalvo');
+        if (aviso) aviso.textContent = 'Não foi possível guardar agora — tentaremos de novo.';
+        return false;
+    } finally { salvando = false; }
+}
+
+async function finalizar() {
+    // confere as obrigatórias antes de enviar
+    const faltando = [];
+    (DADOS.estrutura || []).forEach(s => (s.perguntas || []).forEach(p => {
+        if (p.obrigatoria && (RESPOSTAS[p.id] === undefined || String(RESPOSTAS[p.id]).trim() === '')) {
+            faltando.push(p.texto);
+        }
+    }));
+
+    if (faltando.length) {
+        alert('Faltam respostas obrigatórias:\n\n• ' + faltando.slice(0,5).join('\n• ') +
+              (faltando.length > 5 ? '\n\ne mais ' + (faltando.length - 5) + '.' : ''));
+        return;
+    }
+    if (!confirm('Enviar as respostas para a clínica?\n\nDepois de enviar, para mudar algo você precisará falar com a equipe.')) return;
+
+    clearTimeout(timerSalvar);
+    const ok = await salvar(true);
+    if (ok) telaConcluida(false);
+}
+
+function telaConcluida(jaEstava) {
+    document.getElementById('titulo').textContent = 'Anamnese enviada';
+    document.getElementById('subtitulo').textContent = '';
+    document.getElementById('area').innerHTML = `
+        <div class="card concluida">
+            <div class="icone">
+                <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+                    <path d="M5 13l4 4L19 7"/></svg>
+            </div>
+            <h2 style="font-size:17px;margin-bottom:6px">${jaEstava ? 'Já recebemos suas respostas' : 'Obrigado!'}</h2>
+            <p style="font-size:13.5px;color:var(--ink-muted);line-height:1.6">
+                As informações foram enviadas à equipe e serão lidas antes do início do acompanhamento.
+                Se precisar corrigir alguma coisa, fale com a clínica.
+            </p>
+        </div>`;
+}
+</script>
+</body>
+</html>

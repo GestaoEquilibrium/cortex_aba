@@ -361,6 +361,26 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
     </div>
 </div>
 
+
+<!-- ── gerar link de anamnese ──────────────────────────────────────────────── -->
+<div class="modal-fundo" id="modalAnamnese" onclick="if(event.target===this) fechar('modalAnamnese')">
+    <div class="modal">
+        <h2 style="margin-bottom:4px">Gerar link da anamnese</h2>
+        <p class="tiny soft" style="margin-bottom:14px">A família preenche pelo celular, sem login.</p>
+        <form id="formAnamnese">
+            <div class="campo"><label for="anModelo">Modelo *</label><select id="anModelo" required></select></div>
+            <div class="campo"><label for="anExpira">Link válido até</label>
+                <input id="anExpira" type="date">
+                <div class="tiny soft" style="margin-top:3px">Depois dessa data o link para de funcionar.</div></div>
+            <div class="aviso" id="erroAnam" style="display:none;border-left-color:var(--st-bad);color:var(--st-bad);margin-bottom:10px"></div>
+            <div class="grid-2">
+                <button type="button" class="btn btn-secundario btn-bloco" onclick="fechar('modalAnamnese')">Cancelar</button>
+                <button type="submit" class="btn btn-bloco" id="btSalvarAnam">Gerar link</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script src="../shared/sidebar.js?v=8"></script>
 <script>
 'use strict';
@@ -379,6 +399,7 @@ const ID = new URLSearchParams(location.search).get('id');
 let PAC = null, GRADE = [], SESSOES = [], VINCULOS = [], PROFS = [], PODE_EDITAR = false;
 let FOTO = null, PEI = null, PEI_PROGS = [], BIBLIOTECA = [];
 let RESPONSAVEIS = [], ORIENTACOES = [], DOCUMENTOS = [], TERMOS = [], ASSINATURAS = [];
+let ANAMNESES = [], MODELOS_ANAMNESE = [];
 
 document.addEventListener('eq:pronto', async function (ev) {
     EqSidebar.render('pacientes');
@@ -470,6 +491,14 @@ async function carregar() {
                 eqClient.from('termos_assinaturas').select('*').eq('paciente_id', ID)
             ]);
             DOCUMENTOS = rd.data || []; TERMOS = rt.data || []; ASSINATURAS = ra.data || [];
+
+            const [ran, rmo] = await Promise.all([
+                eqClient.from('anamneses')
+                    .select('*, enviado:profissionais!anamneses_enviado_por_fkey(nome_completo)')
+                    .eq('paciente_id', ID).order('created_at', { ascending:false }),
+                eqClient.from('anamnese_modelos').select('id, nome, estrutura').eq('ativo', true).order('nome')
+            ]);
+            ANAMNESES = ran.data || []; MODELOS_ANAMNESE = rmo.data || [];
         } catch (e) { console.warn('família não carregada', e); RESPONSAVEIS = []; ORIENTACOES = []; }
 
         FOTO = PAC.foto_url ? await EqFotos.link(PAC.foto_url) : null;
@@ -540,6 +569,7 @@ function desenhar() {
         <button data-p="resumo"  aria-pressed="true"  onclick="aba('resumo')">Resumo</button>
         <button data-p="pei"     aria-pressed="false" onclick="aba('pei')">PEI</button>
         <button data-p="grade"   aria-pressed="false" onclick="aba('grade')">Grade semanal</button>
+        <button data-p="anamnese" aria-pressed="false" onclick="aba('anamnese')">Anamnese</button>
         <button data-p="documentos" aria-pressed="false" onclick="aba('documentos')">Documentos</button>
         <button data-p="familia" aria-pressed="false" onclick="aba('familia')">Família</button>
         <button data-p="sessoes" aria-pressed="false" onclick="aba('sessoes')">Sessões</button>
@@ -549,6 +579,7 @@ function desenhar() {
     <div class="painel on" id="p-resumo">${painelResumo()}</div>
     <div class="painel"    id="p-pei">${painelPei()}</div>
     <div class="painel"    id="p-grade">${painelGrade()}</div>
+    <div class="painel"    id="p-anamnese">${painelAnamnese()}</div>
     <div class="painel"    id="p-documentos">${painelDocumentos()}</div>
     <div class="painel"    id="p-familia">${painelFamilia()}</div>
     <div class="painel"    id="p-sessoes">${painelSessoes()}</div>
@@ -556,7 +587,7 @@ function desenhar() {
 }
 
 function aba(k) {
-    ['resumo','pei','grade','documentos','familia','sessoes','tempo'].forEach(x => {
+    ['resumo','pei','grade','anamnese','documentos','familia','sessoes','tempo'].forEach(x => {
         document.getElementById('p-' + x).classList.toggle('on', x === k);
         document.querySelector('[data-p="' + x + '"]').setAttribute('aria-pressed', x === k);
     });
@@ -886,6 +917,183 @@ document.getElementById('formAjuste').addEventListener('submit', async function 
 
 
 
+
+// ── anamnese ────────────────────────────────────────────────────────────────
+const ST_ANAM = {
+    enviada:{r:'link enviado', c:'chip-neutro'},
+    em_preenchimento:{r:'sendo preenchida', c:'chip-alerta'},
+    respondida:{r:'respondida', c:'chip-ok'},
+    revisada:{r:'revisada', c:'chip-ok'}
+};
+
+function enderecoAnamnese(token) {
+    const base = window.location.origin +
+        window.location.pathname.replace(/pacientes\/pasta\.html$/, '');
+    return base + 'anamnese.html?t=' + token;
+}
+
+function painelAnamnese() {
+    const podeEnviar = PODE_EDITAR || (window.EqSessao && EqSessao.perfil === 'recepcao');
+
+    return `<div class="card">
+        <div class="card-titulo">
+            <h3>Anamnese</h3>
+            ${podeEnviar ? '<button class="btn btn-secundario" style="padding:7px 12px;font-size:12px" onclick="abrirEnvioAnamnese()">Gerar link</button>' : ''}
+        </div>
+
+        ${ANAMNESES.length ? ANAMNESES.map(a => {
+            const st = ST_ANAM[a.status] || ST_ANAM.enviada;
+            const expirada = a.expira_em && a.expira_em < hojeISO();
+            return `<div style="padding:13px 0;border-top:1px solid var(--line)">
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                    <b style="font-size:13.5px">Enviada em ${brl(a.enviado_em)}</b>
+                    <span class="chip ${st.c}">${st.r}</span>
+                    ${expirada && a.status !== 'revisada' ? '<span class="chip chip-erro">link expirado</span>' : ''}
+                </div>
+                <div class="tiny soft" style="margin-top:3px">
+                    ${a.enviado ? 'por ' + a.enviado.nome_completo : ''}
+                    ${a.aberto_em ? ' · aberta em ' + brl(a.aberto_em) : ' · ainda nao aberta'}
+                    ${a.respondido_em ? ' · respondida em ' + brl(a.respondido_em) : ''}
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:9px">
+                    ${a.status !== 'revisada' ? `<button class="btn btn-secundario" style="padding:5px 11px;font-size:11.5px"
+                        onclick="copiarLink('${a.token}')">Copiar link</button>` : ''}
+                    ${(a.status === 'respondida' || a.status === 'revisada' || Object.keys(a.respostas||{}).length)
+                      ? `<button class="btn btn-secundario" style="padding:5px 11px;font-size:11.5px"
+                           onclick="verRespostas('${a.id}')">Ver respostas</button>` : ''}
+                    ${a.status === 'respondida' && PODE_EDITAR ? `<button class="btn" style="padding:5px 11px;font-size:11.5px"
+                        onclick="marcarRevisada('${a.id}')">Marcar como revisada</button>` : ''}
+                </div>
+            </div>`; }).join('')
+        : `<div class="vazio-msg">Nenhuma anamnese enviada.
+           ${podeEnviar ? '<br><span class="tiny soft">Gere o link e mande à família. Ela preenche pelo celular, sem precisar de senha.</span>' : ''}</div>`}
+        <div class="card-legenda">
+            O link não exige login e mostra apenas o primeiro nome da criança — ele costuma circular
+            por WhatsApp. As respostas são guardadas sozinhas enquanto a família digita.
+        </div>
+    </div>`;
+}
+
+function abrirEnvioAnamnese() {
+    if (!MODELOS_ANAMNESE.length) {
+        EqConfirm.mostrar({ titulo:'Nenhum modelo cadastrado',
+            texto:'A coordenação cadastra o modelo em Configurações → Anamnese.',
+            confirmar:'Fechar', cancelar:'Fechar', tipo:'padrao' });
+        return;
+    }
+    document.getElementById('anModelo').innerHTML = MODELOS_ANAMNESE.map(m =>
+        `<option value="${m.id}">${m.nome}</option>`).join('');
+    const d = new Date(); d.setDate(d.getDate() + 30);
+    document.getElementById('anExpira').value = isoLocal(d);
+    document.getElementById('modalAnamnese').classList.add('aberto');
+}
+
+function gerarToken() {
+    const letras = 'abcdefghijkmnpqrstuvwxyz23456789';
+    let t = '';
+    const arr = new Uint32Array(28);
+    window.crypto.getRandomValues(arr);
+    for (let i = 0; i < 28; i++) t += letras[arr[i] % letras.length];
+    return t;
+}
+
+function mostrarLink(token) {
+    const url = enderecoAnamnese(token);
+    const fundo = document.createElement('div');
+    fundo.style.cssText = 'position:fixed;inset:0;z-index:210;background:rgba(12,27,42,.55);' +
+        'backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:20px';
+    const texto = 'Ola! Segue o link da anamnese de ' + PAC.nome_completo.split(' ')[0] + ': ' + url;
+    fundo.innerHTML = `
+        <div style="background:var(--surface);border-radius:14px;padding:24px;max-width:460px;width:100%;
+                    box-shadow:var(--shadow-lg)">
+            <h3 style="font-size:16px;font-weight:800;margin-bottom:6px">Link da anamnese</h3>
+            <p style="font-size:12.5px;color:var(--ink-muted);line-height:1.5;margin-bottom:14px">
+                Mande para a família por WhatsApp. Ela preenche pelo celular, sem senha, e pode
+                parar no meio — as respostas ficam guardadas.
+            </p>
+            <div style="background:var(--surface-alt);border:1px solid var(--line);border-radius:10px;
+                        padding:12px;font-size:12px;word-break:break-all;margin-bottom:14px">${url}</div>
+            <div style="display:flex;gap:8px">
+                <button class="btn btn-secundario btn-bloco" id="btCopiaLink">Copiar link</button>
+                <a class="btn btn-bloco" style="text-decoration:none;text-align:center"
+                   href="https://wa.me/?text=${encodeURIComponent(texto)}"
+                   target="_blank" rel="noopener">Abrir WhatsApp</a>
+            </div>
+            <button class="bt-link" style="display:block;margin:14px auto 0" id="btFechaLink">Fechar</button>
+        </div>`;
+    document.body.appendChild(fundo);
+    fundo.querySelector('#btCopiaLink').addEventListener('click', function () {
+        navigator.clipboard.writeText(url).then(() => { this.textContent = 'Copiado'; })
+            .catch(() => { this.textContent = 'Copie o texto acima'; });
+    });
+    fundo.querySelector('#btFechaLink').addEventListener('click', () => fundo.remove());
+}
+
+function copiarLink(token) { mostrarLink(token); }
+
+function verRespostas(id) {
+    const a = ANAMNESES.find(x => x.id === id);
+    if (!a) return;
+    const modelo = MODELOS_ANAMNESE.find(m => m.id === a.modelo_id);
+    const estrutura = modelo ? modelo.estrutura : [];
+    const r = a.respostas || {};
+
+    const conteudo = (estrutura || []).map(s => `
+        <div style="margin-bottom:16px">
+            <h4 style="font-size:13px;font-weight:800;margin-bottom:7px">${s.secao}</h4>
+            ${(s.perguntas || []).map(p => {
+                let v = r[p.id];
+                if (v === 'nao_sei') v = 'não sei';
+                else if (v === 'nao') v = 'não';
+                const vazio = v === undefined || String(v).trim() === '';
+                return `<div style="margin-bottom:9px">
+                    <div style="font-size:11.5px;color:var(--ink-soft);font-weight:700">${p.texto}</div>
+                    <div style="font-size:13px;color:var(--ink);white-space:pre-wrap">${
+                        vazio ? '<span style="color:var(--ink-soft)">— sem resposta</span>' : v}</div>
+                </div>`; }).join('')}
+        </div>`).join('');
+
+    const fundo = document.createElement('div');
+    fundo.style.cssText = 'position:fixed;inset:0;z-index:210;background:rgba(12,27,42,.55);' +
+        'backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:20px';
+    fundo.innerHTML = `
+        <div style="background:var(--surface);border-radius:14px;padding:24px;max-width:640px;width:100%;
+                    max-height:88vh;overflow:auto;box-shadow:var(--shadow-lg)">
+            <h3 style="font-size:16px;font-weight:800;margin-bottom:3px">Anamnese de ${PAC.nome_completo}</h3>
+            <div class="tiny soft" style="margin-bottom:16px">
+                enviada em ${brl(a.enviado_em)}${a.respondido_em ? ' · respondida em ' + brl(a.respondido_em) : ''}</div>
+            ${conteudo || '<div class="vazio-msg">Sem respostas ainda.</div>'}
+            <button class="btn btn-bloco" style="margin-top:10px" id="btFechaResp">Fechar</button>
+        </div>`;
+    document.body.appendChild(fundo);
+    fundo.querySelector('#btFechaResp').addEventListener('click', () => fundo.remove());
+    EqAudit.registrar('acesso', 'anamneses', id, { paciente: PAC.nome_completo });
+}
+
+async function marcarRevisada(id) {
+    const ok = await EqConfirm.mostrar({
+        titulo: 'Marcar a anamnese como revisada?',
+        texto: 'O link deixa de funcionar para a família. Use quando a equipe já tiver lido e conferido as respostas.',
+        confirmar: 'Marcar como revisada', tipo: 'alerta'
+    });
+    if (!ok) return;
+    try {
+        const { error } = await eqClient.from('anamneses').update({
+            status: 'revisada',
+            revisado_por: (window.EqSessao && EqSessao.profissional.id) || null,
+            revisado_em: new Date().toISOString()
+        }).eq('id', id);
+        if (error) throw error;
+        await EqAudit.registrar('status', 'anamneses', id,
+            { paciente: PAC.nome_completo, novo_status: 'revisada' });
+        await carregar(); aba('anamnese');
+    } catch (e) {
+        console.error(e);
+        await EqConfirm.mostrar({ titulo:'Não foi possível marcar', texto: e.message || 'Erro.',
+            confirmar:'Entendi', cancelar:'Fechar', tipo:'alerta' });
+    }
+}
+
 // ── documentos ──────────────────────────────────────────────────────────────
 function painelDocumentos() {
     const podeEnviar = PODE_EDITAR ||
@@ -971,6 +1179,32 @@ function abrirDocumento() {
     document.getElementById('formDocumento').reset();
     document.getElementById('modalDocumento').classList.add('aberto');
 }
+
+
+document.getElementById('formAnamnese').addEventListener('submit', async function (ev) {
+    ev.preventDefault();
+    const bt = document.getElementById('btSalvarAnam'), erro = document.getElementById('erroAnam');
+    bt.disabled = true; bt.textContent = 'Gerando...'; erro.style.display = 'none';
+    try {
+        const token = gerarToken();
+        const { data, error } = await eqClient.from('anamneses').insert({
+            paciente_id: ID,
+            modelo_id: document.getElementById('anModelo').value,
+            token: token,
+            expira_em: document.getElementById('anExpira').value || null,
+            enviado_por: (window.EqSessao && EqSessao.profissional.id) || null
+        }).select('id').single();
+        if (error) throw error;
+        await EqAudit.registrar('criacao', 'anamneses', data.id, { paciente: PAC.nome_completo });
+        fechar('modalAnamnese');
+        await carregar(); aba('anamnese');
+        mostrarLink(token);
+    } catch (e) {
+        console.error(e);
+        erro.textContent = 'Não foi possível gerar: ' + (e.message || 'erro');
+        erro.style.display = 'block';
+    } finally { bt.disabled = false; bt.textContent = 'Gerar link'; }
+});
 
 document.getElementById('formDocumento').addEventListener('submit', async function (ev) {
     ev.preventDefault();

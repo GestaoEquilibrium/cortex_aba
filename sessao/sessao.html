@@ -28,6 +28,11 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
 .status-fila { font-size:11.5px; font-weight:700; padding:5px 10px; border-radius:999px;
                background:var(--st-warn-bg); color:var(--st-warn); display:none; }
 .status-fila.on { display:inline-block; }
+.bt-observador { border:1px dashed var(--acao); background:transparent; color:var(--acao);
+    border-radius:999px; padding:6px 13px; font:inherit; font-size:11.5px; font-weight:700; cursor:pointer; }
+.bt-observador[aria-pressed="true"] { background:var(--acao); color:#fff; border-style:solid; }
+.faixa-observador { background:var(--acao-soft); border:1px solid var(--acao); color:var(--acao);
+    border-radius:10px; padding:10px 13px; font-size:12.5px; margin-bottom:12px; font-weight:600; }
 
 .cartao-seg { border:1px solid var(--st-warn); background:var(--st-warn-bg); color:#7C4A05;
               border-radius:var(--radius-card); padding:12px 14px; font-size:12.5px; margin-bottom:12px; }
@@ -107,7 +112,11 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
                 <h1 id="titulo">Sessão de hoje</h1>
                 <div class="sub" id="subtitulo">carregando…</div>
             </div>
-            <span class="status-fila" id="statusFila"></span>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                <span class="status-fila" id="statusFila"></span>
+                <button class="bt-observador" id="btObservador" style="display:none"
+                        onclick="alternarObservador()">Registrar como observador</button>
+            </div>
         </div>
 
         <div class="topo-sessao">
@@ -145,7 +154,7 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
     </div>
 </div>
 
-<script src="../shared/sidebar.js?v=9"></script>
+<script src="../shared/sidebar.js?v=10"></script>
 <script>
 'use strict';
 
@@ -162,11 +171,17 @@ const CONTEXTOS = ['dormiu mal','não almoçou','medicação alterada','doente',
                    'intercorrência em casa','mudança de rotina'];
 
 let EU = null, SESSOES = [], SESSAO = null, PROGRAMAS = [], TENTATIVAS = [], SONDAGENS = [];
+let OBSERVADOR = false;
 let ALVO_SEL = {}, DICA_SEL = {};
 
 document.addEventListener('eq:pronto', async function (ev) {
     EqSidebar.render('sessao');
     EU = ev.detail;
+
+    // supervisão registra em paralelo para calcular a concordância
+    if (['admin_direcao','supervisor_clinico','coordenador_aba'].includes(EU.perfil)) {
+        document.getElementById('btObservador').style.display = '';
+    }
 
     EqFila.aoMudar(atualizarFila);
     atualizarFila(EqFila.pendentes());
@@ -186,6 +201,15 @@ function atualizarFila(n) {
 
 const p2 = n => String(n).padStart(2,'0');
 function hojeISO() { const d = new Date(); return d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate()); }
+
+function alternarObservador() {
+    OBSERVADOR = !OBSERVADOR;
+    const bt = document.getElementById('btObservador');
+    bt.setAttribute('aria-pressed', OBSERVADOR);
+    bt.textContent = OBSERVADOR ? 'Saindo do modo observador' : 'Registrar como observador';
+    TENTATIVAS = TENTATIVAS.filter(t => !!t.observador === OBSERVADOR);
+    abrirSessao();
+}
 
 // ── sessões do dia ──────────────────────────────────────────────────────────
 async function carregarSessoes() {
@@ -253,7 +277,8 @@ async function abrirSessao() {
                     .select('*, programa:biblioteca_programas(nome, area, sd, resposta_esperada, dicas), alvos:pei_alvos(id, nome, status, ordem)')
                     .eq('pei_id', rpei.data.id).in('status', ['em_ensino','em_manutencao'])
                     .order('prioridade'),
-                eqClient.from('registros_tentativa').select('*').eq('sessao_id', SESSAO.id)
+                eqClient.from('registros_tentativa').select('*')
+                    .eq('sessao_id', SESSAO.id).eq('observador', OBSERVADOR)
             ]);
             PROGRAMAS = rprog.data || [];
             TENTATIVAS = rtent.data || [];
@@ -298,7 +323,12 @@ function feitasDe(progId) { return TENTATIVAS.filter(t => t.pei_programa_id === 
 
 function desenhar() {
     const seg = SESSAO.paciente && SESSAO.paciente.cartao_seguranca;
-    let html = seg ? `<div class="cartao-seg"><b>Cartão de segurança</b>${seg}</div>` : '';
+    let html = OBSERVADOR
+        ? `<div class="faixa-observador">
+             Modo observador. Você está registrando em paralelo, sem alterar o que o aplicador lançou.
+             A concordância entre os dois registros aparece na tela de Supervisão.
+           </div>` : '';
+    html += seg ? `<div class="cartao-seg"><b>Cartão de segurança</b>${seg}</div>` : '';
 
     if (SONDAGENS.length) {
         html += `<div class="card" style="border-left:3px solid var(--st-ok);margin-bottom:12px">
@@ -392,6 +422,12 @@ function desenhar() {
 }
 
 function rodape() {
+    if (OBSERVADOR) {
+        return `<div class="rodape">
+            <div class="tiny soft" style="text-align:center;padding:8px">
+                Modo observador: quem encerra a sessão e escreve a evolução é o aplicador.
+            </div></div>`;
+    }
     const jaEncerrada = SESSAO.status === 'realizada';
     return `<div class="rodape">
         <div class="grid-2">
@@ -432,7 +468,8 @@ async function registrar(progId, resultado) {
         numero: feitas.length + 1,
         resultado: resultado,
         nivel_dica: dica,
-        aplicador_id: EU.profissional.id
+        aplicador_id: EU.profissional.id,
+        observador: OBSERVADOR
     };
 
     // desenha antes de gravar: o toque não espera o servidor
@@ -443,7 +480,7 @@ async function registrar(progId, resultado) {
     if (r.offline) atualizarFila(EqFila.pendentes());
 
     // primeira tentativa marca a sessão como em atendimento
-    if (feitas.length === 0 && SESSAO.status === 'agendada') {
+    if (!OBSERVADOR && feitas.length === 0 && SESSAO.status === 'agendada') {
         try {
             await eqClient.from('sessoes').update({ status: 'em_andamento' }).eq('id', SESSAO.id);
             SESSAO.status = 'em_andamento';

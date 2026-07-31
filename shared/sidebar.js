@@ -36,6 +36,10 @@ window.EqSidebar = (function () {
           perfis:['coordenador_aba','supervisor_clinico','admin_direcao'],
           icon:'<path d="M5 4h14v17H5z"/><path d="M9 9h6M9 13h6M9 17h4"/>' },
 
+        { id:'supervisao', label:'Supervisão', href:'supervisao/index.html',
+          perfis:['admin_direcao','supervisor_clinico','coordenador_aba','aplicador','aplicador_itinerante','estagiario_aba'],
+          icon:'<path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z"/><circle cx="12" cy="12" r="2.6"/>' },
+
         { id:'graficos',  label:'Gráficos',   href:'graficos/index.html',   perfis:'*',
           icon:'<path d="M4 19V5M4 19h16"/><path d="M8 15l4-5 3 3 5-7"/>' },
 
@@ -80,7 +84,7 @@ window.EqSidebar = (function () {
         </g></svg>`;
 
     const PASTAS = ['pacientes','sessao','portal','agenda','programas','avaliacoes',
-                    'graficos','comportamento','tarefas','relatorios','equipe','configuracoes','auditoria','indicadores'];
+                    'graficos','comportamento','tarefas','relatorios','equipe','configuracoes','auditoria','indicadores','supervisao'];
 
     function caminho(href) {
         const partes = window.location.pathname.split('/').filter(Boolean);

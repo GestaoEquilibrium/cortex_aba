@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-tema="coordenacao">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CORTEX aba — Supervisão</title>
+<script>
+(function(){try{var m=localStorage.getItem('eqaba_modo');
+if(m!=='claro'&&m!=='escuro'){m=(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches)?'escuro':'claro';}
+document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
+</script>
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<link rel="manifest" href="../site.webmanifest">
+<meta name="theme-color" content="#0F766E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../styles/base.css?v=4">
+<link rel="stylesheet" href="../styles/components.css?v=5">
+<style>
+.barra { display:flex; gap:9px; align-items:center; flex-wrap:wrap; margin-bottom:16px; }
+.barra select { padding:10px 12px; font:inherit; font-size:13px; color:var(--ink);
+    border:1px solid var(--line-strong); border-radius:9px; background:var(--surface); min-width:200px; }
+.item-check { display:flex; gap:12px; align-items:flex-start; padding:11px 0; border-top:1px solid var(--line); }
+.item-check:first-child { border-top:none; }
+.item-texto { flex:1; min-width:0; font-size:13px; line-height:1.45; }
+.notas { display:flex; gap:5px; flex:0 0 auto; }
+.notas button { min-width:44px; border:1px solid var(--line-strong); background:var(--surface);
+    color:var(--ink-muted); border-radius:8px; padding:8px 6px; font:inherit; font-size:11.5px;
+    font-weight:700; cursor:pointer; }
+.notas button.sim[aria-pressed="true"]  { background:var(--st-ok); color:#fff; border-color:transparent; }
+.notas button.parc[aria-pressed="true"] { background:var(--st-warn); color:#fff; border-color:transparent; }
+.notas button.nao[aria-pressed="true"]  { background:var(--st-bad); color:#fff; border-color:transparent; }
+.notas button.na[aria-pressed="true"]   { background:var(--st-neutro); color:#fff; border-color:transparent; }
+.campo { margin-bottom:12px; }
+.campo label { display:block; font-size:11.5px; font-weight:700; color:var(--ink-muted); margin-bottom:5px; }
+.campo textarea, .campo input, .campo select { width:100%; padding:10px 11px; font-size:13px;
+    font-family:inherit; line-height:1.5; border:1px solid var(--line-strong); border-radius:9px;
+    background:var(--surface-alt); color:var(--ink); }
+.campo-2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.placar { display:flex; align-items:center; gap:14px; padding:14px; border-radius:12px;
+          background:var(--surface-alt); border:1px solid var(--line); margin-bottom:14px; }
+.placar .num { font-size:30px; font-weight:800; line-height:1; }
+.placar .txt { font-size:12px; color:var(--ink-muted); line-height:1.45; }
+.linha-hist { display:flex; align-items:center; gap:10px; font-size:12.5px; padding:10px 0;
+              border-top:1px solid var(--line); }
+.linha-hist .nome { width:150px; flex:0 0 auto; font-weight:600;
+                    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.linha-hist .trilho { flex:1; height:8px; background:var(--line); border-radius:5px; overflow:hidden; }
+.linha-hist .trilho i { display:block; height:8px; border-radius:5px; }
+.linha-hist .valor { width:56px; text-align:right; font-weight:700; }
+.vazio-msg { padding:24px; text-align:center; color:var(--ink-muted); font-size:13px; }
+.nota-metodo { font-size:11px; color:var(--ink-soft); line-height:1.5; margin-top:10px;
+               padding-top:9px; border-top:1px dashed var(--line); }
+.modal-fundo { position:fixed; inset:0; background:rgba(12,27,42,.5); backdrop-filter:blur(3px);
+               display:none; align-items:center; justify-content:center; padding:20px; z-index:80; }
+.modal-fundo.aberto { display:flex; }
+.modal { background:var(--surface); border-radius:var(--radius-card); padding:22px; width:100%;
+         max-width:660px; box-shadow:var(--shadow-lg); max-height:92vh; overflow:auto; }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../config.js?v=4"></script>
+<script src="../shared/supabase_client.js?v=2"></script>
+<script src="../shared/tema.js?v=2"></script>
+<script src="../shared/confirm_modal.js?v=3"></script>
+<script src="../shared/fotos.js?v=7"></script>
+<script src="../shared/config_sistema.js?v=10"></script>
+<script src="../shared/audit.js?v=5"></script>
+<script src="../shared/auth_guard.js?v=12"></script>
+</head>
+<body>
+
+<div class="app-shell">
+    <div id="sidebar"></div>
+    <div class="faixa-perfil"></div>
+
+    <main class="app-main" style="max-width:900px">
+        <div class="app-topo">
+            <div>
+                <h1>Supervisão</h1>
+                <div class="sub" id="subtitulo">carregando…</div>
+            </div>
+            <button class="btn" id="btNova" style="display:none" onclick="abrirNova()">Nova supervisão</button>
+        </div>
+
+        <div class="barra">
+            <select id="selProfissional" onchange="pintar()">
+                <option value="">Toda a equipe</option>
+            </select>
+        </div>
+
+        <div id="area"><div class="card vazio-msg">carregando…</div></div>
+    </main>
+</div>
+
+<!-- ── nova supervisão ─────────────────────────────────────────────────────── -->
+<div class="modal-fundo" id="modalNova" onclick="if(event.target===this) fechar('modalNova')">
+    <div class="modal">
+        <h2 style="margin-bottom:4px">Supervisão de fidelidade</h2>
+        <p class="tiny soft" style="margin-bottom:16px">Observe a sessão e marque item a item. O placar aparece no fim.</p>
+
+        <div class="campo-2">
+            <div class="campo"><label for="nProfissional">Aplicador observado *</label>
+                <select id="nProfissional" onchange="carregarSessoes()"></select></div>
+            <div class="campo"><label for="nData">Data</label><input id="nData" type="date"></div>
+        </div>
+        <div class="campo"><label for="nSessao">Sessão observada</label>
+            <select id="nSessao" onchange="verificarIOA()">
+                <option value="">— não vinculada a uma sessão —</option>
+            </select>
+            <div class="tiny soft" style="margin-top:4px" id="avisoIOA"></div>
+        </div>
+
+        <div class="placar" id="placar">
+            <div><div class="num" id="placarNum" style="color:var(--ink-soft)">—</div></div>
+            <div class="txt" id="placarTxt">Marque os itens abaixo para ver o resultado.</div>
+        </div>
+
+        <div id="listaItens"></div>
+
+        <div class="campo" style="margin-top:16px"><label for="nFortes">Pontos fortes</label>
+            <textarea id="nFortes" rows="2" placeholder="O que a pessoa faz bem e deve manter"></textarea></div>
+        <div class="campo"><label for="nAjustar">Pontos a ajustar</label>
+            <textarea id="nAjustar" rows="2"></textarea></div>
+        <div class="campo"><label for="nPlano">Plano de ação</label>
+            <textarea id="nPlano" rows="2" placeholder="O que será feito até a próxima supervisão"></textarea></div>
+
+        <div class="aviso" id="erroNova" style="display:none;border-left-color:var(--st-bad);color:var(--st-bad);margin-bottom:10px"></div>
+        <div class="grid-2">
+            <button type="button" class="btn btn-secundario btn-bloco" onclick="fechar('modalNova')">Cancelar</button>
+            <button type="button" class="btn btn-bloco" id="btSalvarNova" onclick="salvarSupervisao()">Salvar supervisão</button>
+        </div>
+    </div>
+</div>
+
+<!-- ── ver supervisão ──────────────────────────────────────────────────────── -->
+<div class="modal-fundo" id="modalVer" onclick="if(event.target===this) fechar('modalVer')">
+    <div class="modal" id="conteudoVer"></div>
+</div>
+
+<script src="../shared/sidebar.js?v=10"></script>
+<script>
+'use strict';
+
+const ROTULOS = { sim:'Sim', parcial:'Parcial', nao:'Não', na:'N-A' };
+const PESO    = { sim:1, parcial:0.5, nao:0, na:null };
+
+let EU = null, SOU_SUPERVISOR = false, SUPERVISOES = [], PROFS = [], ITENS = [], RESPOSTAS = {};
+
+document.addEventListener('eq:pronto', async function (ev) {
+    EqSidebar.render('supervisao');
+    EU = ev.detail;
+    SOU_SUPERVISOR = ['admin_direcao','supervisor_clinico','coordenador_aba'].includes(EU.perfil);
+    if (SOU_SUPERVISOR) document.getElementById('btNova').style.display = '';
+
+    ITENS = EqConfig.get('checklist_fidelidade', []) || [];
+
+    try {
+        const { data } = await eqClient.from('profissionais')
+            .select('id, nome_completo, perfil').eq('ativo', true)
+            .in('perfil', ['aplicador','aplicador_itinerante','estagiario_aba'])
+            .order('nome_completo');
+        PROFS = data || [];
+        document.getElementById('selProfissional').innerHTML = '<option value="">Toda a equipe</option>' +
+            PROFS.map(p => `<option value="${p.id}">${p.nome_completo}</option>`).join('');
+        document.getElementById('nProfissional').innerHTML =
+            PROFS.map(p => `<option value="${p.id}">${p.nome_completo}</option>`).join('');
+    } catch (e) { console.warn(e); }
+
+    await carregar();
+});
+
+const p2 = n => String(n).padStart(2,'0');
+function hojeISO() { const d=new Date(); return d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate()); }
+function brl(iso) { return iso ? iso.slice(0,10).split('-').reverse().join('/') : '—'; }
+function fechar(id) { document.getElementById(id).classList.remove('aberto');
+                      const e = document.getElementById('erroNova'); if (e) e.style.display='none'; }
+const cor = p => p >= 85 ? 'var(--st-ok)' : p >= 70 ? 'var(--st-warn)' : 'var(--st-bad)';
+
+async function carregar() {
+    try {
+        const { data, error } = await eqClient.from('supervisoes')
+            .select(`*, profissional:profissionais!supervisoes_profissional_id_fkey(nome_completo),
+                     supervisor:profissionais!supervisoes_supervisor_id_fkey(nome_completo),
+                     paciente:pacientes(nome_completo)`)
+            .order('data', { ascending:false }).limit(120);
+        if (error) throw error;
+        SUPERVISOES = data || [];
+        pintar();
+    } catch (e) {
+        console.error(e);
+        document.getElementById('area').innerHTML =
+            '<div class="card vazio-msg" style="color:var(--st-bad)">Erro ao carregar. Veja o console.</div>';
+    }
+}
+
+function pintar() {
+    const filtro = document.getElementById('selProfissional').value;
+    const lista = filtro ? SUPERVISOES.filter(s => s.profissional_id === filtro) : SUPERVISOES;
+
+    document.getElementById('subtitulo').textContent = SUPERVISOES.length
+        ? SUPERVISOES.length + ' supervisão(ões) registrada(s)'
+        : (SOU_SUPERVISOR ? 'nenhuma supervisão registrada ainda' : 'você ainda não foi supervisionado');
+
+    // média por aplicador, considerando as 3 últimas de cada um
+    const porProf = {};
+    SUPERVISOES.forEach(s => {
+        if (!porProf[s.profissional_id]) porProf[s.profissional_id] =
+            { nome: s.profissional ? s.profissional.nome_completo : '—', notas: [], ultima: s.data };
+        if (porProf[s.profissional_id].notas.length < 3 && s.percentual !== null) {
+            porProf[s.profissional_id].notas.push(s.percentual);
+        }
+    });
+    const resumo = Object.keys(porProf).map(id => {
+        const p = porProf[id];
+        const media = p.notas.length
+            ? Math.round(p.notas.reduce((a,b) => a+b, 0) / p.notas.length) : null;
+        return { nome: p.nome, media: media, ultima: p.ultima, n: p.notas.length };
+    }).sort((a,b) => (a.media || 0) - (b.media || 0));
+
+    const semSupervisao = PROFS.filter(p => !porProf[p.id]);
+
+    const bloco = SOU_SUPERVISOR ? `
+        <div class="card" style="margin-bottom:12px">
+            <div class="card-titulo"><h3>Fidelidade por aplicador</h3>
+                <span class="tiny soft">média das 3 últimas</span></div>
+            ${resumo.length ? resumo.map(r => `
+                <div class="linha-hist">
+                    <span class="nome" title="${r.nome}">${r.nome}</span>
+                    <span class="trilho"><i style="width:${r.media || 0}%;background:${cor(r.media || 0)}"></i></span>
+                    <span class="valor" style="color:${cor(r.media || 0)}">${r.media !== null ? r.media + '%' : '—'}</span>
+                </div>`).join('') : '<div class="vazio-msg">Nenhuma supervisão registrada.</div>'}
+            ${semSupervisao.length ? `<div class="nota-metodo">
+                Ainda sem supervisão: ${semSupervisao.map(p => p.nome_completo.split(' ')[0]).join(', ')}.
+            </div>` : ''}
+            <div class="nota-metodo">
+                Sim vale 1 ponto, parcial 0,5 e não 0. Itens marcados como N-A saem da conta.
+                Abaixo de 70% o ideal é retreino antes da próxima supervisão.
+            </div>
+        </div>` : '';
+
+    document.getElementById('area').innerHTML = bloco + `
+        <div class="card">
+            <div class="card-titulo"><h3>Histórico</h3></div>
+            ${lista.length ? `<table class="tabela">
+                <thead><tr><th>Data</th><th>Aplicador</th><th>Supervisor</th><th>Fidelidade</th><th>IOA</th><th></th></tr></thead>
+                <tbody>${lista.map(s => `<tr>
+                    <td style="font-weight:700">${brl(s.data)}</td>
+                    <td>${s.profissional ? s.profissional.nome_completo : '—'}
+                        ${s.paciente ? `<br><span class="tiny soft">com ${s.paciente.nome_completo}</span>` : ''}</td>
+                    <td class="muted">${s.supervisor ? s.supervisor.nome_completo : '—'}</td>
+                    <td><span style="font-weight:800;color:${cor(s.percentual || 0)}">${s.percentual !== null ? s.percentual + '%' : '—'}</span></td>
+                    <td>${s.ioa_percentual !== null && s.ioa_percentual !== undefined
+                          ? `<span style="font-weight:700;color:${s.ioa_percentual >= 80 ? 'var(--st-ok)' : 'var(--st-bad)'}">${s.ioa_percentual}%</span>`
+                          : '<span class="tiny soft">—</span>'}</td>
+                    <td style="text-align:right;white-space:nowrap">
+                        <button class="btn btn-secundario" style="padding:5px 10px;font-size:11.5px"
+                                onclick="ver('${s.id}')">Ver</button>
+                        ${(!s.ciente_em && s.profissional_id === EU.profissional.id)
+                          ? `<button class="btn" style="padding:5px 10px;font-size:11.5px;margin-left:6px"
+                               onclick="marcarCiente('${s.id}')">Dar ciência</button>` : ''}
+                        ${s.ciente_em ? '<span class="chip chip-ok" style="margin-left:6px">ciente</span>' : ''}
+                    </td>
+                </tr>`).join('')}</tbody></table>`
+            : '<div class="vazio-msg">Nenhuma supervisão com esse filtro.</div>'}
+        </div>`;
+}
+
+// ── nova supervisão ─────────────────────────────────────────────────────────
+function abrirNova() {
+    if (!ITENS.length) {
+        EqConfirm.mostrar({ titulo:'Checklist não configurado',
+            texto:'Os itens vêm da configuração `checklist_fidelidade`. Rode o SQL do sprint 25.',
+            confirmar:'Fechar', cancelar:'Fechar', tipo:'alerta' });
+        return;
+    }
+    RESPOSTAS = {};
+    document.getElementById('nData').value = hojeISO();
+    document.getElementById('nFortes').value = '';
+    document.getElementById('nAjustar').value = '';
+    document.getElementById('nPlano').value = '';
+    document.getElementById('avisoIOA').textContent = '';
+    desenharItens();
+    carregarSessoes();
+    document.getElementById('modalNova').classList.add('aberto');
+}
+
+function desenharItens() {
+    document.getElementById('listaItens').innerHTML = ITENS.map((texto, i) => `
+        <div class="item-check">
+            <div class="item-texto">${texto}</div>
+            <div class="notas">
+                ${['sim','parcial','nao','na'].map(k => `
+                    <button type="button" class="${k === 'parcial' ? 'parc' : k}"
+                            aria-pressed="${RESPOSTAS[i] === k}"
+                            onclick="marcar(${i},'${k}')">${ROTULOS[k]}</button>`).join('')}
+            </div>
+        </div>`).join('');
+    atualizarPlacar();
+}
+
+function marcar(i, valor) {
+    RESPOSTAS[i] = RESPOSTAS[i] === valor ? undefined : valor;
+    desenharItens();
+}
+
+function calcularPercentual() {
+    let soma = 0, contados = 0;
+    ITENS.forEach((_, i) => {
+        const v = RESPOSTAS[i];
+        if (v === undefined || v === 'na') return;
+        soma += PESO[v]; contados++;
+    });
+    return contados ? { pct: Math.round(soma / contados * 100), contados } : null;
+}
+
+function atualizarPlacar() {
+    const r = calcularPercentual();
+    const num = document.getElementById('placarNum');
+    const txt = document.getElementById('placarTxt');
+    if (!r) {
+        num.textContent = '—'; num.style.color = 'var(--ink-soft)';
+        txt.textContent = 'Marque os itens abaixo para ver o resultado.';
+        return;
+    }
+    num.textContent = r.pct + '%';
+    num.style.color = cor(r.pct);
+    txt.innerHTML = r.contados + ' de ' + ITENS.length + ' itens contados. ' +
+        (r.pct >= 85 ? 'Aplicação fiel ao programa.'
+         : r.pct >= 70 ? 'Aceitável, com pontos a ajustar.'
+         : '<b>Abaixo do esperado — vale retreino antes da próxima sessão.</b>');
+}
+
+async function carregarSessoes() {
+    const prof = document.getElementById('nProfissional').value;
+    const data = document.getElementById('nData').value || hojeISO();
+    const sel = document.getElementById('nSessao');
+    sel.innerHTML = '<option value="">— não vinculada a uma sessão —</option>';
+    if (!prof) return;
+    try {
+        const { data: ss } = await eqClient.from('sessoes')
+            .select('id, hora_inicio, paciente:pacientes!sessoes_paciente_id_fkey(id, nome_completo)')
+            .eq('profissional_id', prof).eq('data', data).order('hora_inicio');
+        (ss || []).forEach(s => {
+            const o = document.createElement('option');
+            o.value = s.id;
+            o.dataset.paciente = s.paciente ? s.paciente.id : '';
+            o.textContent = s.hora_inicio.slice(0,5) + ' · ' + (s.paciente ? s.paciente.nome_completo : '—');
+            sel.appendChild(o);
+        });
+    } catch (e) { console.warn(e); }
+}
+
+// ── IOA: só existe se alguém registrou em paralelo ──────────────────────────
+let IOA_ATUAL = null;
+
+async function verificarIOA() {
+    const sessao = document.getElementById('nSessao').value;
+    const aviso = document.getElementById('avisoIOA');
+    IOA_ATUAL = null;
+    if (!sessao) { aviso.textContent = ''; return; }
+
+    try {
+        const { data, error } = await eqClient.rpc('calcular_ioa', { p_sessao: sessao });
+        if (error) throw error;
+        const linhas = data || [];
+        if (!linhas.length) {
+            aviso.innerHTML = 'Sem registro paralelo nesta sessão — a concordância entre observadores ' +
+                'só é calculada quando duas pessoas registram as mesmas tentativas.';
+            aviso.style.color = 'var(--ink-soft)';
+            return;
+        }
+        const comparadas = linhas.reduce((s,l) => s + l.comparadas, 0);
+        const concordantes = linhas.reduce((s,l) => s + l.concordantes, 0);
+        IOA_ATUAL = comparadas ? Math.round(concordantes / comparadas * 100) : null;
+        aviso.innerHTML = '<b>Concordância entre observadores: ' + IOA_ATUAL + '%</b> · ' +
+            comparadas + ' tentativas comparadas' +
+            (IOA_ATUAL < 80 ? ' — <span style="color:var(--st-bad)">abaixo de 80%, o dado desta sessão não é confiável</span>' : '');
+        aviso.style.color = IOA_ATUAL >= 80 ? 'var(--st-ok)' : 'var(--st-bad)';
+    } catch (e) {
+        console.warn('IOA', e);
+        aviso.textContent = '';
+    }
+}
+
+async function salvarSupervisao() {
+    const bt = document.getElementById('btSalvarNova'), erro = document.getElementById('erroNova');
+    const r = calcularPercentual();
+    if (!r) { erro.textContent = 'Marque ao menos um item.'; erro.style.display = 'block'; return; }
+
+    if (r.pct < 70) {
+        const segue = await EqConfirm.mostrar({
+            titulo: 'Fidelidade abaixo de 70%',
+            texto: 'Registre um plano de ação concreto antes de salvar. Nota baixa sem plano vira cobrança, não formação.',
+            confirmar: 'Salvar assim mesmo', tipo: 'alerta'
+        });
+        if (!segue) return;
+    }
+
+    bt.disabled = true; bt.textContent = 'Salvando...'; erro.style.display = 'none';
+    const sel = document.getElementById('nSessao');
+    const opt = sel.selectedOptions[0];
+
+    try {
+        const itens = ITENS.map((texto, i) => ({ item: texto, nota: RESPOSTAS[i] || null }));
+        const { data, error } = await eqClient.from('supervisoes').insert({
+            profissional_id: document.getElementById('nProfissional').value,
+            supervisor_id: EU.profissional.id,
+            sessao_id: sel.value || null,
+            paciente_id: (opt && opt.dataset.paciente) || null,
+            data: document.getElementById('nData').value || hojeISO(),
+            itens: itens,
+            percentual: r.pct,
+            ioa_percentual: IOA_ATUAL,
+            pontos_fortes: document.getElementById('nFortes').value.trim() || null,
+            pontos_ajustar: document.getElementById('nAjustar').value.trim() || null,
+            plano_acao: document.getElementById('nPlano').value.trim() || null
+        }).select('id').single();
+        if (error) throw error;
+
+        await EqAudit.registrar('criacao', 'supervisoes', data.id,
+            { percentual: r.pct, ioa: IOA_ATUAL });
+        fechar('modalNova');
+        await carregar();
+    } catch (e) {
+        console.error(e);
+        erro.textContent = 'Não foi possível salvar: ' + (e.message || 'erro');
+        erro.style.display = 'block';
+    } finally { bt.disabled = false; bt.textContent = 'Salvar supervisão'; }
+}
+
+function ver(id) {
+    const s = SUPERVISOES.find(x => x.id === id);
+    if (!s) return;
+    const itens = s.itens || [];
+    document.getElementById('conteudoVer').innerHTML = `
+        <h2 style="font-size:17px;margin-bottom:3px">Supervisão de ${s.profissional ? s.profissional.nome_completo : '—'}</h2>
+        <div class="tiny soft" style="margin-bottom:14px">
+            ${brl(s.data)} · por ${s.supervisor ? s.supervisor.nome_completo : '—'}
+            ${s.paciente ? ' · sessão com ' + s.paciente.nome_completo : ''}</div>
+
+        <div class="placar">
+            <div><div class="num" style="color:${cor(s.percentual || 0)}">${s.percentual !== null ? s.percentual + '%' : '—'}</div></div>
+            <div class="txt">fidelidade de aplicação
+                ${s.ioa_percentual !== null && s.ioa_percentual !== undefined
+                  ? `<br>concordância entre observadores: <b style="color:${s.ioa_percentual >= 80 ? 'var(--st-ok)' : 'var(--st-bad)'}">${s.ioa_percentual}%</b>` : ''}</div>
+        </div>
+
+        ${itens.map(i => `
+            <div class="item-check">
+                <div class="item-texto">${i.item}</div>
+                <span class="chip ${i.nota === 'sim' ? 'chip-ok' : i.nota === 'parcial' ? 'chip-alerta'
+                                   : i.nota === 'nao' ? 'chip-erro' : 'chip-neutro'}">
+                    ${ROTULOS[i.nota] || '—'}</span>
+            </div>`).join('')}
+
+        ${s.pontos_fortes ? `<div style="margin-top:14px"><b style="font-size:12px">Pontos fortes</b>
+            <p class="small muted">${s.pontos_fortes}</p></div>` : ''}
+        ${s.pontos_ajustar ? `<div style="margin-top:10px"><b style="font-size:12px">A ajustar</b>
+            <p class="small muted">${s.pontos_ajustar}</p></div>` : ''}
+        ${s.plano_acao ? `<div style="margin-top:10px"><b style="font-size:12px">Plano de ação</b>
+            <p class="small muted">${s.plano_acao}</p></div>` : ''}
+
+        <button class="btn btn-bloco" style="margin-top:16px" onclick="fechar('modalVer')">Fechar</button>`;
+    document.getElementById('modalVer').classList.add('aberto');
+}
+
+async function marcarCiente(id) {
+    const ok = await EqConfirm.mostrar({
+        titulo: 'Dar ciência?',
+        texto: 'Confirma que você leu esta supervisão e o plano de ação combinado.',
+        confirmar: 'Dei ciência', tipo: 'padrao'
+    });
+    if (!ok) return;
+    try {
+        const { error } = await eqClient.from('supervisoes')
+            .update({ ciente_em: new Date().toISOString() }).eq('id', id);
+        if (error) throw error;
+        await EqAudit.registrar('status', 'supervisoes', id, { evento: 'ciencia' });
+        await carregar();
+    } catch (e) {
+        console.error(e);
+        await EqConfirm.mostrar({ titulo:'Não foi possível registrar', texto: e.message || 'Erro.',
+            confirmar:'Entendi', cancelar:'Fechar', tipo:'alerta' });
+    }
+}
+</script>
+</body>
+</html>

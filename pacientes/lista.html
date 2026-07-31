@@ -103,6 +103,7 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
             <button class="filtro" data-f="meus"   aria-pressed="false" onclick="alternarFiltro(this)">Meus pacientes</button>
             <button class="filtro" data-f="faltas" aria-pressed="false" onclick="alternarFiltro(this)">Com faltas</button>
             <button class="filtro" data-f="fila"   aria-pressed="false" onclick="alternarFiltro(this)">Fila de espera</button>
+            <button class="filtro" data-f="encerrados" aria-pressed="false" onclick="alternarFiltro(this)">Encerrados</button>
             <div class="alternar">
                 <button id="vCards" aria-pressed="true"  onclick="trocarVisao('cards')">Cards</button>
                 <button id="vLista" aria-pressed="false" onclick="trocarVisao('lista')">Lista</button>
@@ -278,6 +279,10 @@ function ligado(f) { return document.querySelector('[data-f="'+f+'"]').getAttrib
 function filtrados() {
     const termo = (document.getElementById('busca').value || '').trim().toLowerCase();
     return PACIENTES.filter(p => {
+        // encerrados ficam fora por padrão: prontuário guardado não polui a lista do dia
+        const encerrado = ['alta','desligado'].includes(p.status);
+        if (ligado('encerrados')) { if (!encerrado) return false; }
+        else if (encerrado) return false;
         if (ligado('ativo')  && p.status !== 'ativo') return false;
         if (ligado('fila')   && p.status !== 'fila_espera') return false;
         if (ligado('meus')   && !p.meu) return false;

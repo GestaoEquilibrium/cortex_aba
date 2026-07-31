@@ -382,6 +382,44 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
     </div>
 </div>
 
+
+<!-- ── encerramento ────────────────────────────────────────────────────────── -->
+<div class="modal-fundo" id="modalEncerrar" onclick="if(event.target===this) fechar('modalEncerrar')">
+    <div class="modal">
+        <h2 style="margin-bottom:4px">Encerrar acompanhamento</h2>
+        <p class="tiny soft" style="margin-bottom:14px">O prontuário continua guardado. Nada é apagado.</p>
+        <div id="encResumo"></div>
+        <form id="formEncerrar">
+            <input type="hidden" id="encResumoDados">
+            <div class="campo-2">
+                <div class="campo"><label for="encTipo">Tipo *</label>
+                    <select id="encTipo">
+                        <option value="alta">Alta — objetivos alcançados</option>
+                        <option value="desligamento">Desligamento</option>
+                        <option value="transferencia">Transferência para outro serviço</option>
+                        <option value="desistencia">Desistência da família</option>
+                        <option value="obito">Óbito</option>
+                    </select></div>
+                <div class="campo"><label for="encData">Data</label><input id="encData" type="date"></div>
+            </div>
+            <div class="campo"><label for="encMotivo">Motivo</label><input id="encMotivo"></div>
+            <div class="campo"><label for="encSintese">Síntese do acompanhamento</label>
+                <textarea id="encSintese" rows="5" placeholder="O que a criança conquistou, o que ainda precisa de atenção, o que funcionou com ela."></textarea>
+                <div class="tiny soft" style="margin-top:4px">
+                    É o que fica para a próxima equipe que atender esta criança — e para a família.
+                </div>
+            </div>
+            <div class="campo"><label for="encEncaminhamento">Encaminhamento</label>
+                <input id="encEncaminhamento" placeholder="para onde vai, se for o caso"></div>
+            <div class="aviso" id="erroEncerrar" style="display:none;border-left-color:var(--st-bad);color:var(--st-bad);margin-bottom:10px"></div>
+            <div class="grid-2">
+                <button type="button" class="btn btn-secundario btn-bloco" onclick="fechar('modalEncerrar')">Cancelar</button>
+                <button type="submit" class="btn btn-bloco" id="btEncerrar">Encerrar acompanhamento</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script src="../shared/avisos.js?v=14"></script>
 <script src="../shared/sidebar.js?v=12"></script>
 <script>
@@ -401,7 +439,7 @@ const ID = new URLSearchParams(location.search).get('id');
 let PAC = null, GRADE = [], SESSOES = [], VINCULOS = [], PROFS = [], PODE_EDITAR = false;
 let FOTO = null, PEI = null, PEI_PROGS = [], BIBLIOTECA = [];
 let RESPONSAVEIS = [], ORIENTACOES = [], DOCUMENTOS = [], TERMOS = [], ASSINATURAS = [];
-let ANAMNESES = [], MODELOS_ANAMNESE = [], SONDAGENS = [];
+let ANAMNESES = [], MODELOS_ANAMNESE = [], SONDAGENS = [], ENCERRAMENTO = null;
 
 document.addEventListener('eq:pronto', async function (ev) {
     EqSidebar.render('pacientes');
@@ -508,6 +546,13 @@ async function carregar() {
                     .eq('paciente_id', ID).order('data_prevista');
                 SONDAGENS = rsd.data || [];
             } catch (e) { SONDAGENS = []; }
+
+            try {
+                const renc = await eqClient.from('encerramentos')
+                    .select('*, registrado:profissionais(nome_completo)')
+                    .eq('paciente_id', ID).order('data', { ascending:false }).limit(1).maybeSingle();
+                ENCERRAMENTO = renc.data || null;
+            } catch (e) { ENCERRAMENTO = null; }
         } catch (e) { console.warn('família não carregada', e); RESPONSAVEIS = []; ORIENTACOES = []; }
 
         FOTO = PAC.foto_url ? await EqFotos.link(PAC.foto_url) : null;
@@ -560,8 +605,16 @@ function desenhar() {
                 ${EqWhats.temNumero(PAC.responsavel_telefone)
                   ? `<button class="btn btn-secundario" onclick="abrirWhats()">Falar com a família</button>` : ''}
                 ${PODE_EDITAR ? '<button class="btn btn-secundario" onclick="abrirEditar()">Editar cadastro</button>' : ''}
+                ${PODE_EDITAR ? `<button class="btn btn-secundario" onclick="abrirMais()" title="Mais ações">⋯</button>` : ''}
             </div>
         </div>
+
+        ${ENCERRAMENTO ? `<div class="aviso" style="border-left-color:var(--st-neutro);margin-top:14px">
+            <b>Acompanhamento encerrado em ${brl(ENCERRAMENTO.data)} — ${ENCERRAMENTO.tipo}.</b>
+            ${ENCERRAMENTO.motivo ? ' ' + ENCERRAMENTO.motivo : ''}
+            ${ENCERRAMENTO.registrado ? '<br><span class="tiny soft">registrado por ' + ENCERRAMENTO.registrado.nome_completo + '</span>' : ''}
+            <br><span class="tiny soft">O prontuário permanece guardado. Nada foi apagado.</span>
+        </div>` : ''}
 
         ${PAC.cartao_seguranca ? `<div class="seguranca"><b>Cartão de segurança</b>${PAC.cartao_seguranca}</div>` : ''}
     </div>
@@ -965,6 +1018,168 @@ document.getElementById('formAjuste').addEventListener('submit', async function 
 
 
 
+
+
+// ── mais ações: encerrar e exportar ─────────────────────────────────────────
+function abrirMais() {
+    const encerrado = ['alta','desligado'].includes(PAC.status);
+    const fundo = document.createElement('div');
+    fundo.className = 'modal-fundo aberto';
+    fundo.innerHTML = `
+        <div class="modal" style="max-width:420px">
+            <h3 style="font-size:15px;font-weight:800;margin-bottom:12px">${PAC.nome_completo}</h3>
+            <button class="btn btn-secundario btn-bloco" style="margin-bottom:7px;text-align:left"
+                    id="acExportar">
+                <b style="display:block;font-size:13px">Exportar dados</b>
+                <span style="font-size:11.5px;color:var(--ink-muted)">tudo que o sistema guarda, para entregar à família</span>
+            </button>
+            ${!encerrado ? `
+            <button class="btn btn-secundario btn-bloco" style="margin-bottom:7px;text-align:left"
+                    id="acEncerrar">
+                <b style="display:block;font-size:13px">Encerrar acompanhamento</b>
+                <span style="font-size:11.5px;color:var(--ink-muted)">alta, desligamento ou transferência</span>
+            </button>` : ''}
+            <button class="btn btn-secundario btn-bloco" style="margin-top:8px" id="acFechar">Fechar</button>
+        </div>`;
+    document.body.appendChild(fundo);
+    fundo.querySelector('#acFechar').addEventListener('click', () => fundo.remove());
+    fundo.addEventListener('click', e => { if (e.target === fundo) fundo.remove(); });
+    fundo.querySelector('#acExportar').addEventListener('click', () => { fundo.remove(); exportarDados(); });
+    const be = fundo.querySelector('#acEncerrar');
+    if (be) be.addEventListener('click', () => { fundo.remove(); abrirEncerramento(); });
+}
+
+async function exportarDados() {
+    const ok = await EqConfirm.mostrar({
+        titulo: 'Exportar os dados de ' + PAC.nome_completo + '?',
+        texto: 'Gera um arquivo com tudo que o sistema guarda sobre a criança: cadastro, sessões, ' +
+               'evoluções, objetivos, comportamentos, avaliações, relatórios e termos assinados. ' +
+               'A exportação fica registrada na auditoria.',
+        confirmar: 'Exportar', tipo: 'alerta'
+    });
+    if (!ok) return;
+
+    try {
+        const { data, error } = await eqClient.rpc('exportar_paciente', { p_paciente: ID });
+        if (error) throw error;
+
+        const nome = (PAC.nome_completo || 'paciente').toLowerCase()
+            .normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'-');
+        const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)],
+            { type: 'application/json' }));
+        const a = document.createElement('a');
+        a.href = url; a.download = 'dados-' + nome + '.json'; a.click();
+        URL.revokeObjectURL(url);
+
+        await EqAudit.registrar('exportacao', 'pacientes', ID,
+            { paciente: PAC.nome_completo, motivo: 'portabilidade de dados' });
+
+        await EqConfirm.mostrar({
+            titulo: 'Arquivo gerado',
+            texto: 'Entregue à família junto com os relatórios em PDF, que são a parte legível. ' +
+                   'O arquivo traz os dados brutos, para quem pedir tudo.',
+            confirmar: 'Fechar', cancelar: 'Fechar', tipo: 'padrao'
+        });
+    } catch (e) {
+        console.error(e);
+        await EqConfirm.mostrar({ titulo:'Não foi possível exportar', texto: e.message || 'Erro.',
+            confirmar:'Entendi', cancelar:'Fechar', tipo:'alerta' });
+    }
+}
+
+async function abrirEncerramento() {
+    let resumo = {};
+    try {
+        const { data } = await eqClient.rpc('resumo_acompanhamento', { p_paciente: ID });
+        resumo = data || {};
+    } catch (e) { console.warn(e); }
+
+    document.getElementById('encResumo').innerHTML = `
+        <div class="grid-4" style="margin-bottom:6px">
+            <div class="kpi" style="--kpi-cor:var(--acao)"><div class="kpi-numero">${resumo.meses || '—'}</div>
+                <div class="kpi-texto">meses de acompanhamento</div></div>
+            <div class="kpi" style="--kpi-cor:var(--st-ok)"><div class="kpi-numero">${resumo.sessoes_realizadas || 0}</div>
+                <div class="kpi-texto">sessões realizadas</div></div>
+            <div class="kpi" style="--kpi-cor:var(--st-ok)"><div class="kpi-numero">${resumo.objetivos_dominados || 0}</div>
+                <div class="kpi-texto">de ${resumo.objetivos_total || 0} objetivos dominados</div></div>
+            <div class="kpi" style="--kpi-cor:var(--st-neutro)"><div class="kpi-numero">${resumo.relatorios || 0}</div>
+                <div class="kpi-texto">relatórios finalizados</div></div>
+        </div>`;
+    document.getElementById('formEncerrar').reset();
+    document.getElementById('encData').value = hojeISO();
+    document.getElementById('encResumoDados').value = JSON.stringify(resumo);
+    document.getElementById('modalEncerrar').classList.add('aberto');
+}
+
+document.getElementById('formEncerrar').addEventListener('submit', async function (ev) {
+    ev.preventDefault();
+    const bt = document.getElementById('btEncerrar'), erro = document.getElementById('erroEncerrar');
+    const tipo = document.getElementById('encTipo').value;
+    const sintese = document.getElementById('encSintese').value.trim();
+
+    if (!sintese) {
+        const segue = await EqConfirm.mostrar({
+            titulo: 'Encerrar sem escrever a síntese?',
+            texto: 'A síntese é o que fica para a próxima equipe que atender esta criança, e para a família. ' +
+                   'Sem ela, o prontuário termina com números e nenhuma leitura clínica.',
+            confirmar: 'Encerrar assim mesmo', tipo: 'alerta'
+        });
+        if (!segue) return;
+    }
+
+    const confirma = await EqConfirm.mostrar({
+        titulo: 'Encerrar o acompanhamento de ' + PAC.nome_completo + '?',
+        texto: 'A grade sai do ar, as sessões futuras são canceladas, os vínculos e o PEI são encerrados ' +
+               'e as tarefas abertas são canceladas. Nada é apagado — o prontuário continua guardado e ' +
+               'pode ser consultado a qualquer momento.',
+        confirmar: 'Encerrar', tipo: 'perigo'
+    });
+    if (!confirma) return;
+
+    bt.disabled = true; bt.textContent = 'Encerrando...'; erro.style.display = 'none';
+    let resumo = {};
+    try { resumo = JSON.parse(document.getElementById('encResumoDados').value || '{}'); } catch (e) {}
+
+    try {
+        const { data, error } = await eqClient.from('encerramentos').insert({
+            paciente_id: ID,
+            tipo: tipo,
+            data: document.getElementById('encData').value || hojeISO(),
+            motivo: document.getElementById('encMotivo').value.trim() || null,
+            sintese: sintese || null,
+            encaminhamento: document.getElementById('encEncaminhamento').value.trim() || null,
+            objetivos_dominados: resumo.objetivos_dominados || null,
+            sessoes_realizadas: resumo.sessoes_realizadas || null,
+            meses_acompanhado: resumo.meses || null,
+            registrado_por: (window.EqSessao && EqSessao.profissional.id) || null,
+            // prontuário de menor: guarda longa. 20 anos é a referência usual.
+            retencao_ate: (new Date(new Date().getFullYear() + 20, 0, 1)).toISOString().slice(0,10)
+        }).select('id').single();
+        if (error) throw error;
+
+        // o gatilho no banco cuida da grade, sessões, vínculos, PEI e tarefas
+        const novoStatus = tipo === 'alta' ? 'alta' : 'desligado';
+        const { error: e2 } = await eqClient.from('pacientes')
+            .update({ status: novoStatus }).eq('id', ID);
+        if (e2) throw e2;
+
+        await EqAudit.registrar('status', 'pacientes', ID,
+            { paciente: PAC.nome_completo, evento: 'encerramento', tipo: tipo, novo_status: novoStatus });
+
+        fechar('modalEncerrar');
+        await carregar();
+        await EqConfirm.mostrar({
+            titulo: 'Acompanhamento encerrado',
+            texto: 'A agenda foi liberada. Vale conferir a fila de espera em Admissão — ' +
+                   'os horários que vagaram podem atender quem está aguardando.',
+            confirmar: 'Fechar', cancelar: 'Fechar', tipo: 'padrao'
+        });
+    } catch (e) {
+        console.error(e);
+        erro.textContent = 'Não foi possível encerrar: ' + (e.message || 'erro');
+        erro.style.display = 'block';
+    } finally { bt.disabled = false; bt.textContent = 'Encerrar acompanhamento'; }
+});
 
 // ── WhatsApp ────────────────────────────────────────────────────────────────
 function nomeClinica() {

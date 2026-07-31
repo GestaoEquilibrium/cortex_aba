@@ -192,22 +192,43 @@ window.EqSidebar = (function () {
                     </svg>
                 </button>
             </div>
-            <div class="sidebar-nav">`;
+            <div class="sidebar-nav" id="eqNav">`;
 
-        // grupo só aparece se algum item dele passar pelo perfil — rótulo solto é ruído
-        let grupoPendente = null;
+        // Monta em blocos: o rótulo do grupo vira botão que recolhe. Com 16 itens,
+        // deixar a pessoa esconder o que não usa vale mais que ajustar espaçamento.
+        // Grupo cujos itens estão todos fora do perfil não aparece.
+        const blocos = [];
+        let atual = { grupo: null, itens: [] };
         ITENS.forEach(item => {
-            if (item.grupo) { grupoPendente = item.grupo; return; }
+            if (item.grupo) { blocos.push(atual); atual = { grupo: item.grupo, itens: [] }; return; }
             if (!podeVer(item, perfil)) return;
-            if (grupoPendente) {
-                html += `<div class="sidebar-grupo">${grupoPendente}</div>`;
-                grupoPendente = null;
-            }
-            html += `<a class="sidebar-item ${item.id === ativo ? 'ativo' : ''}"
-                        href="${caminho(item.href)}" title="${item.label}">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1"
-                     stroke-linecap="round" stroke-linejoin="round">${item.icon}</svg>
-                <span>${item.label}</span></a>`;
+            atual.itens.push(item);
+        });
+        blocos.push(atual);
+
+        const linha = item => `<a class="sidebar-item ${item.id === ativo ? 'ativo' : ''}"
+                href="${caminho(item.href)}" title="${item.label}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1"
+                 stroke-linecap="round" stroke-linejoin="round">${item.icon}</svg>
+            <span>${item.label}</span></a>`;
+
+        blocos.forEach(b => {
+            if (!b.itens.length) return;
+            if (!b.grupo) { html += b.itens.map(linha).join(''); return; }
+
+            // grupo com a página aberta dentro nunca começa recolhido
+            const temAtivo = b.itens.some(i => i.id === ativo);
+            const fechado = !temAtivo && grupoFechado(b.grupo);
+
+            html += `<button type="button" class="sidebar-grupo ${fechado ? 'fechado' : ''}"
+                        data-grupo="${b.grupo}" onclick="EqSidebar.alternarGrupo('${b.grupo}')">
+                <span>${b.grupo}</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"
+                     stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+            </button>
+            <div class="sidebar-grupo-itens ${fechado ? 'fechado' : ''}" data-itens="${b.grupo}">
+                ${b.itens.map(linha).join('')}
+            </div>`;
         });
 
         html += `</div>
@@ -231,6 +252,18 @@ window.EqSidebar = (function () {
         alvo.outerHTML = html;
         window.__eqAtivo = ativo;
         setTimeout(marcarSino, 400);
+
+        const nav = document.getElementById('eqNav');
+        if (nav) {
+            nav.addEventListener('scroll', marcarSombras, { passive: true });
+            window.addEventListener('resize', marcarSombras);
+            setTimeout(marcarSombras, 60);
+            // se o item aberto estiver fora da área visível, traz para o meio
+            const it = nav.querySelector('.sidebar-item.ativo');
+            if (it && it.offsetTop > nav.clientHeight - 60) {
+                nav.scrollTop = it.offsetTop - nav.clientHeight / 2;
+            }
+        }
     }
 
     function recolher() {
@@ -243,6 +276,39 @@ window.EqSidebar = (function () {
             nav.replaceWith(casca);
             render(window.__eqAtivo);
         }
+    }
+
+    // ── grupos recolhidos ───────────────────────────────────────────────────
+    const CHAVE_GRUPOS = 'eqaba_grupos_fechados';
+
+    function gruposFechados() {
+        try { return JSON.parse(localStorage.getItem(CHAVE_GRUPOS) || '[]'); }
+        catch (e) { return []; }
+    }
+    function grupoFechado(nome) { return gruposFechados().indexOf(nome) !== -1; }
+
+    function alternarGrupo(nome) {
+        const lista = gruposFechados();
+        const i = lista.indexOf(nome);
+        if (i >= 0) lista.splice(i, 1); else lista.push(nome);
+        try { localStorage.setItem(CHAVE_GRUPOS, JSON.stringify(lista)); } catch (e) {}
+
+        const bt = document.querySelector('.sidebar-grupo[data-grupo="' + nome + '"]');
+        const itens = document.querySelector('.sidebar-grupo-itens[data-itens="' + nome + '"]');
+        if (bt) bt.classList.toggle('fechado', i < 0);
+        if (itens) itens.classList.toggle('fechado', i < 0);
+        setTimeout(marcarSombras, 260);
+    }
+
+    // ── esmaecido em vez de barra de rolagem ────────────────────────────────
+    // A barra fica escondida. O que indica que há mais conteúdo é um esmaecido
+    // suave na borda, e ele só aparece do lado onde ainda existe item.
+    function marcarSombras() {
+        const nav = document.getElementById('eqNav');
+        if (!nav) return;
+        nav.classList.toggle('borda-topo', nav.scrollTop > 4);
+        nav.classList.toggle('borda-base',
+            nav.scrollHeight - nav.scrollTop - nav.clientHeight > 4);
     }
 
     function avisos() {
@@ -293,5 +359,6 @@ window.EqSidebar = (function () {
     aplicarLargura(estaRecolhida());
     aplicarModo(modoAtual());
 
-    return { render, recolher, avisos, sair, alternarModo, modoAtual, marcarSino, ITENS };
+    return { render, recolher, avisos, sair, alternarModo, modoAtual, marcarSino,
+             alternarGrupo, marcarSombras, ITENS };
 })();

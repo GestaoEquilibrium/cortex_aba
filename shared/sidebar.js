@@ -289,18 +289,29 @@ window.EqSidebar = (function () {
         try { return JSON.parse(localStorage.getItem(CHAVE_GRUPOS) || '[]'); }
         catch (e) { return []; }
     }
-    function grupoFechado(nome) { return gruposFechados().indexOf(nome) !== -1; }
+    // Sistema começa recolhido: Auditoria, Diagnóstico e Configurações são de uso
+    // ocasional, e sem isso o menu não cabe em tela de notebook. Se a pessoa abrir,
+    // a escolha dela passa a valer.
+    const FECHADOS_POR_PADRAO = ['Sistema'];
+
+    function grupoFechado(nome) {
+        const lista = gruposFechados();
+        if (lista.indexOf(nome) !== -1) return true;
+        if (lista.indexOf('!' + nome) !== -1) return false;   // a pessoa abriu de propósito
+        return FECHADOS_POR_PADRAO.indexOf(nome) !== -1;
+    }
 
     function alternarGrupo(nome) {
-        const lista = gruposFechados();
-        const i = lista.indexOf(nome);
-        if (i >= 0) lista.splice(i, 1); else lista.push(nome);
+        const estavaFechado = grupoFechado(nome);
+        let lista = gruposFechados().filter(x => x !== nome && x !== '!' + nome);
+        // guarda a decisão explícita: fechado = nome, aberto = !nome
+        lista.push(estavaFechado ? '!' + nome : nome);
         try { localStorage.setItem(CHAVE_GRUPOS, JSON.stringify(lista)); } catch (e) {}
 
         const bt = document.querySelector('.sidebar-grupo[data-grupo="' + nome + '"]');
         const itens = document.querySelector('.sidebar-grupo-itens[data-itens="' + nome + '"]');
-        if (bt) bt.classList.toggle('fechado', i < 0);
-        if (itens) itens.classList.toggle('fechado', i < 0);
+        if (bt) bt.classList.toggle('fechado', !estavaFechado);
+        if (itens) itens.classList.toggle('fechado', !estavaFechado);
         setTimeout(marcarSombras, 260);
     }
 

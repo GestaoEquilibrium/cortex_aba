@@ -64,13 +64,15 @@ window.EqSidebar = (function () {
           perfis:['coordenador_aba','supervisor_clinico','admin_direcao'],
           icon:'<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>' },
 
-        { id:'auditoria', label:'Auditoria',  href:'auditoria/index.html',
-          perfis:['coordenador_aba','supervisor_clinico','admin_direcao'],
-          icon:'<path d="M12 3l8 4v6c0 4-3.5 7-8 8-4.5-1-8-4-8-8V7z"/><path d="M9 12l2 2 4-4"/>' },
-
         { id:'equipe',    label:'Equipe',     href:'equipe/index.html',
           perfis:['coordenador_aba','admin_direcao'],
           icon:'<circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.2"/><path d="M3 20c0-3 3-5 6-5s6 2 6 5"/>' },
+
+        { grupo:'Sistema' },
+
+        { id:'auditoria', label:'Auditoria',  href:'auditoria/index.html',
+          perfis:['coordenador_aba','supervisor_clinico','admin_direcao'],
+          icon:'<path d="M12 3l8 4v6c0 4-3.5 7-8 8-4.5-1-8-4-8-8V7z"/><path d="M9 12l2 2 4-4"/>' },
 
         { id:'config',    label:'Configurações', href:'configuracoes/index.html', perfis:['admin_direcao'],
           icon:'<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/>' }
@@ -188,6 +190,7 @@ window.EqSidebar = (function () {
             </div>
             <div class="sidebar-nav">`;
 
+        // grupo só aparece se algum item dele passar pelo perfil — rótulo solto é ruído
         let grupoPendente = null;
         ITENS.forEach(item => {
             if (item.grupo) { grupoPendente = item.grupo; return; }

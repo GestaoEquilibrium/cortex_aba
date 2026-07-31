@@ -41,6 +41,8 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
 /* ── impressão: sai o sistema, fica o documento ─────────────────────────── */
 @media print {
     .sidebar, .faixa-perfil, .app-topo, .barra, .faixa-status, .nao-imprime { display:none !important; }
+    .graficos-relatorio { display:block !important; page-break-inside:avoid; }
+    .graficos-relatorio canvas { max-width:100% !important; height:auto !important; }
     body::before { display:none !important; }
     .app-main { margin:0 !important; padding:0 !important; max-width:none !important; }
     .card { border:none !important; box-shadow:none !important; padding:0 !important; }
@@ -52,8 +54,18 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
 .cabecalho-impressao { display:none; margin-bottom:16px; padding-bottom:10px; border-bottom:2px solid #333; }
 .cabecalho-impressao h2 { font-size:16pt; }
 .cabecalho-impressao p { font-size:10pt; color:#444; margin-top:3px; }
+.graficos-relatorio { margin:18px 0; }
+.graficos-relatorio h3 { font-size:12px; text-transform:uppercase; letter-spacing:.08em;
+                         color:var(--ink-soft); font-weight:700; margin-bottom:8px; }
+.grafico-box { position:relative; height:180px; margin-bottom:18px;
+               page-break-inside:avoid; break-inside:avoid; }
+.legenda-graf { display:flex; gap:14px; flex-wrap:wrap; font-size:10.5px;
+                color:var(--ink-muted); margin-top:-8px; margin-bottom:16px; }
+.legenda-graf span { display:flex; align-items:center; gap:5px; }
+.legenda-graf i { width:11px; height:11px; border-radius:3px; }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="../config.js?v=4"></script>
 <script src="../shared/supabase_client.js?v=2"></script>
 <script src="../shared/tema.js?v=2"></script>
@@ -91,7 +103,7 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
 </div>
 
 <script src="../shared/avisos.js?v=14"></script>
-<script src="../shared/sidebar.js?v=12"></script>
+<script src="../shared/sidebar.js?v=13"></script>
 <script>
 'use strict';
 
@@ -345,6 +357,8 @@ function desenhar() {
     const presenca = n.previstas ? Math.round(n.realizadas / n.previstas * 100) : 0;
     const chip = { rascunho:'chip-alerta', em_revisao:'chip-neutro', finalizado:'chip-ok' }[REL.status];
 
+    setTimeout(montarGraficos, 60);
+
     document.getElementById('area').innerHTML = `
     <div class="card">
         <div class="cabecalho-impressao">
@@ -373,6 +387,8 @@ function desenhar() {
                 <div class="kpi-texto">evoluções escritas</div></div>
         </div>
 
+        <div class="graficos-relatorio" id="graficosRelatorio"></div>
+
         ${SECOES.map(s => `
             <div class="secao">
                 <label>${s.r} <span class="origem nao-imprime">${s.o}</span></label>
@@ -396,6 +412,169 @@ function desenhar() {
             sistema sem revisão e finalização por um profissional responsável.
         </div>
     </div>`;
+}
+
+
+// ── gráficos do relatório ───────────────────────────────────────────────────
+// Saem na impressão junto com o texto. Relatório de acompanhamento sem gráfico
+// obriga a família a acreditar na frase; com gráfico, ela vê.
+let GRAFICOS = [];
+
+function limparGraficos() {
+    GRAFICOS.forEach(c => { try { c.destroy(); } catch (e) {} });
+    GRAFICOS = [];
+}
+
+async function montarGraficos() {
+    const alvo = document.getElementById('graficosRelatorio');
+    if (!alvo || typeof Chart === 'undefined') return;
+    limparGraficos();
+
+    const f = faixaMes();
+    try {
+        const [rs, rpei] = await Promise.all([
+            eqClient.from('sessoes').select('data, status')
+                .eq('paciente_id', PAC.id).gte('data', f.ini).lte('data', f.fim).order('data'),
+            eqClient.from('pei').select('id').eq('paciente_id', PAC.id).eq('status','vigente')
+                .order('versao', { ascending:false }).limit(1).maybeSingle()
+        ]);
+
+        const sessoes = rs.data || [];
+        let blocos = '';
+
+        // ── frequência por semana ────────────────────────────────────────
+        if (sessoes.length) {
+            const porSemana = {};
+            sessoes.forEach(s => {
+                const [a,m,d] = s.data.split('-').map(Number);
+                const dt = new Date(a, m-1, d);
+                const seg = new Date(dt); seg.setDate(dt.getDate() - ((dt.getDay()+6) % 7));
+                const k = seg.getDate() + '/' + (seg.getMonth()+1);
+                if (!porSemana[k]) porSemana[k] = { feitas:0, faltas:0 };
+                if (s.status === 'realizada') porSemana[k].feitas++;
+                else if (s.status.indexOf('falta') === 0) porSemana[k].faltas++;
+            });
+            const chaves = Object.keys(porSemana);
+            if (chaves.length) {
+                blocos += `<h3>Frequência no período</h3>
+                    <div class="grafico-box"><canvas id="gFreq"></canvas></div>
+                    <div class="legenda-graf">
+                        <span><i style="background:#16A34A"></i>sessões realizadas</span>
+                        <span><i style="background:#DC2626"></i>faltas</span>
+                    </div>`;
+                setTimeout(() => desenharFrequencia(chaves, porSemana), 50);
+            }
+        }
+
+        // ── independência por objetivo ───────────────────────────────────
+        if (rpei.data) {
+            const rp = await eqClient.from('pei_programas')
+                .select('id, programa:biblioteca_programas(nome)')
+                .eq('pei_id', rpei.data.id).in('status', ['em_ensino','em_manutencao','dominado']);
+            const progs = rp.data || [];
+
+            if (progs.length) {
+                const rt = await eqClient.from('registros_tentativa')
+                    .select('pei_programa_id, resultado, sessao:sessoes(data)')
+                    .in('pei_programa_id', progs.map(p => p.id));
+                const tent = (rt.data || []).filter(t =>
+                    t.sessao && t.sessao.data >= f.ini && t.sessao.data <= f.fim);
+
+                const series = progs.map(p => {
+                    const meus = tent.filter(t => t.pei_programa_id === p.id);
+                    if (!meus.length) return null;
+                    const porData = {};
+                    meus.forEach(t => {
+                        const d = t.sessao.data;
+                        if (!porData[d]) porData[d] = { total:0, indep:0 };
+                        porData[d].total++;
+                        if (t.resultado === 'independente') porData[d].indep++;
+                    });
+                    const datas = Object.keys(porData).sort();
+                    return {
+                        nome: p.programa ? p.programa.nome : 'objetivo',
+                        datas: datas,
+                        valores: datas.map(d => Math.round(porData[d].indep / porData[d].total * 100))
+                    };
+                }).filter(Boolean);
+
+                if (series.length) {
+                    blocos += `<h3>Independência por objetivo</h3>
+                        <div class="grafico-box" style="height:210px"><canvas id="gIndep"></canvas></div>
+                        <div class="legenda-graf">
+                            <span>percentual de respostas independentes em cada sessão</span>
+                        </div>`;
+                    setTimeout(() => desenharIndependencia(series), 50);
+                }
+            }
+        }
+
+        alvo.innerHTML = blocos;
+
+    } catch (e) {
+        console.warn('gráficos do relatório', e);
+        alvo.innerHTML = '';
+    }
+}
+
+// impressão em preto e branco ainda precisa distinguir as séries: cor + traço
+const TRACOS = [[], [6,3], [2,2], [8,3,2,3], [12,4]];
+const CORES_OBJ = ['#0F766E','#2563EB','#7C3AED','#D97706','#DC2626','#0891B2'];
+
+function desenharFrequencia(chaves, dados) {
+    const el = document.getElementById('gFreq');
+    if (!el) return;
+    GRAFICOS.push(new Chart(el, {
+        type: 'bar',
+        data: {
+            labels: chaves.map(c => 'sem ' + c),
+            datasets: [
+                { label:'realizadas', data: chaves.map(c => dados[c].feitas),
+                  backgroundColor:'#16A34A', borderRadius:4 },
+                { label:'faltas', data: chaves.map(c => dados[c].faltas),
+                  backgroundColor:'#DC2626', borderRadius:4 }
+            ]
+        },
+        options: {
+            responsive:true, maintainAspectRatio:false, animation:false,
+            plugins:{ legend:{ display:false } },
+            scales:{ y:{ beginAtZero:true, ticks:{ precision:0, color:'#5C7284' },
+                         grid:{ color:'rgba(12,27,42,.08)' } },
+                     x:{ ticks:{ color:'#5C7284' }, grid:{ display:false } } }
+        }
+    }));
+}
+
+function desenharIndependencia(series) {
+    const el = document.getElementById('gIndep');
+    if (!el) return;
+    const todasDatas = [...new Set(series.flatMap(s => s.datas))].sort();
+    GRAFICOS.push(new Chart(el, {
+        type: 'line',
+        data: {
+            labels: todasDatas.map(d => d.slice(8,10) + '/' + d.slice(5,7)),
+            datasets: series.map((s, i) => ({
+                label: s.nome,
+                data: todasDatas.map(d => {
+                    const idx = s.datas.indexOf(d);
+                    return idx === -1 ? null : s.valores[idx];
+                }),
+                borderColor: CORES_OBJ[i % CORES_OBJ.length],
+                borderDash: TRACOS[i % TRACOS.length],
+                backgroundColor: 'transparent',
+                borderWidth: 2.2, tension: .2, pointRadius: 3, spanGaps: true
+            }))
+        },
+        options: {
+            responsive:true, maintainAspectRatio:false, animation:false,
+            plugins:{ legend:{ position:'bottom',
+                        labels:{ color:'#5C7284', boxWidth:22, font:{ size:10 }, usePointStyle:false } } },
+            scales:{ y:{ min:0, max:100, ticks:{ color:'#5C7284', stepSize:25, callback:v => v+'%' },
+                         grid:{ color:'rgba(12,27,42,.08)' } },
+                     x:{ ticks:{ color:'#5C7284', maxRotation:0, autoSkipPadding:12 },
+                         grid:{ display:false } } }
+        }
+    }));
 }
 
 function coletar() {

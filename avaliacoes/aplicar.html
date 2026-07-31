@@ -50,6 +50,7 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
 <script src="../shared/tema.js?v=2"></script>
 <script src="../shared/confirm_modal.js?v=3"></script>
 <script src="../shared/fotos.js?v=7"></script>
+<script src="../shared/config_sistema.js?v=10"></script>
 <script src="../shared/audit.js?v=5"></script>
 <script src="../shared/config_sistema.js?v=10"></script>
 <script src="../shared/auth_guard.js?v=12"></script>
@@ -90,6 +91,7 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
 
 const ID = new URLSearchParams(location.search).get('id');
 let AVAL = null, DOMINIOS = [], RESPOSTAS = {}, EU = null, PODE_EDITAR = false;
+let SUGESTOES = [];
 
 document.addEventListener('eq:pronto', async function (ev) {
     EqSidebar.render('avaliacoes');
@@ -122,7 +124,7 @@ async function carregar() {
 
         const [rd, rr] = await Promise.all([
             eqClient.from('protocolo_dominios')
-                .select('id, nome, ordem, cor, itens:protocolo_itens(id, codigo, enunciado, ordem)')
+                .select('id, nome, ordem, cor, area, itens:protocolo_itens(id, codigo, enunciado, ordem)')
                 .eq('protocolo_id', AVAL.protocolo.id).order('ordem'),
             eqClient.from('avaliacao_respostas').select('item_id, pontuacao, observacao').eq('avaliacao_id', ID)
         ]);
@@ -132,6 +134,7 @@ async function carregar() {
         (rr.data || []).forEach(r => { RESPOSTAS[r.item_id] = r.pontuacao; });
 
         desenhar();
+        if (AVAL.status === 'concluida') carregarSugestoes();
     } catch (e) {
         console.error(e);
         document.getElementById('area').innerHTML =
@@ -201,7 +204,8 @@ function desenhar() {
 function rodape() {
     if (!PODE_EDITAR) return '';
     if (AVAL.status === 'concluida') {
-        return `<div class="rodape"><button class="btn btn-secundario btn-bloco" onclick="reabrir()">Reabrir para edição</button></div>`;
+        return `<div id="areaSugestoes"></div>
+                <div class="rodape"><button class="btn btn-secundario btn-bloco" onclick="reabrir()">Reabrir para edição</button></div>`;
     }
     const falta = totalItens() - respondidos();
     return `<div class="rodape">
@@ -209,6 +213,129 @@ function rodape() {
             ${falta ? 'Concluir mesmo com ' + falta + ' item(ns) em branco' : 'Concluir avaliação'}
         </button>
     </div>`;
+}
+
+
+// ── o que a avaliação indica ────────────────────────────────────────────────
+async function carregarSugestoes() {
+    const alvo = document.getElementById('areaSugestoes');
+    if (!alvo) return;
+    const corte = window.EqConfig ? parseInt(EqConfig.get('avaliacao_corte_sugestao', 60), 10) : 60;
+
+    try {
+        const { data, error } = await eqClient.rpc('sugerir_programas',
+            { p_avaliacao: ID, p_corte: corte });
+        if (error) throw error;
+        SUGESTOES = data || [];
+
+        const semArea = DOMINIOS.filter(d => !d.area).length;
+
+        if (!SUGESTOES.length) {
+            alvo.innerHTML = `<div class="card" style="margin-top:14px">
+                <div class="card-titulo"><h3>O que a avaliação indica</h3></div>
+                <div class="vazio-msg">
+                    ${semArea === DOMINIOS.length
+                      ? 'Os domínios deste protocolo não têm área marcada, então não há como cruzar com a biblioteca.<br><span class="tiny soft">Marque a área ao cadastrar o protocolo, entre colchetes: # Linguagem receptiva [receptiva]</span>'
+                      : 'Nenhum domínio ficou abaixo de ' + corte + '%, ou os programas indicados já estão no PEI.'}
+                </div></div>`;
+            return;
+        }
+
+        // agrupa por domínio
+        const porDominio = {};
+        SUGESTOES.forEach(s => {
+            if (!porDominio[s.dominio]) porDominio[s.dominio] =
+                { area: s.area, pct: s.percentual, itens: [] };
+            porDominio[s.dominio].itens.push(s);
+        });
+
+        alvo.innerHTML = `<div class="card" style="margin-top:14px">
+            <div class="card-titulo">
+                <h3>O que a avaliação indica</h3>
+                <span class="tiny soft">domínios abaixo de ${corte}%</span>
+            </div>
+            ${Object.keys(porDominio).map(nome => {
+                const d = porDominio[nome];
+                return `<div style="padding:12px 0;border-top:1px solid var(--line)">
+                    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+                        <b style="font-size:13.5px">${nome}</b>
+                        <span class="chip ${d.pct < 40 ? 'chip-erro' : 'chip-alerta'}">${d.pct}%</span>
+                    </div>
+                    ${d.itens.map(s => `
+                        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;
+                                    padding:8px 0;border-top:1px solid var(--surface-alt)">
+                            <div style="flex:1;min-width:0">
+                                <b style="font-size:12.5px">${s.programa}</b>
+                                ${s.objetivo ? `<div class="tiny soft">${s.objetivo}</div>` : ''}
+                            </div>
+                            <button class="btn btn-secundario" style="padding:5px 11px;font-size:11.5px"
+                                    onclick="adicionarAoPei('${s.programa_id}','${s.programa.replace(/'/g,"\\'")}',${s.tentativas || 10},this)">
+                                Incluir no PEI</button>
+                        </div>`).join('')}
+                </div>`;
+            }).join('')}
+            <div class="card-legenda">
+                Sugestão a partir da área do domínio, não do item específico. A escolha do que
+                ensinar continua sendo clínica — isto só evita procurar na biblioteca inteira.
+            </div>
+        </div>`;
+    } catch (e) {
+        console.warn('sugestões', e);
+        alvo.innerHTML = '';
+    }
+}
+
+async function adicionarAoPei(programaId, nome, tentativas, botao) {
+    const ok = await EqConfirm.mostrar({
+        titulo: 'Incluir "' + nome + '" no PEI?',
+        texto: 'Entra como objetivo em ensino, com os valores padrão do programa. ' +
+               'Você ajusta tentativas, critério e responsável na ficha do paciente.',
+        confirmar: 'Incluir', tipo: 'padrao'
+    });
+    if (!ok) return;
+
+    botao.disabled = true; botao.textContent = '...';
+    try {
+        // PEI vigente, ou cria a versão 1
+        let { data: pei } = await eqClient.from('pei')
+            .select('id').eq('paciente_id', AVAL.paciente_id).eq('status','vigente')
+            .order('versao', { ascending:false }).limit(1).maybeSingle();
+
+        if (!pei) {
+            const { data: novo, error: e0 } = await eqClient.from('pei').insert({
+                paciente_id: AVAL.paciente_id, versao: 1, status: 'vigente',
+                coordenador_id: EU.profissional.id
+            }).select('id').single();
+            if (e0) throw e0;
+            pei = novo;
+        }
+
+        const { data, error } = await eqClient.from('pei_programas').insert({
+            pei_id: pei.id,
+            paciente_id: AVAL.paciente_id,
+            programa_id: programaId,
+            tentativas_por_sessao: tentativas,
+            status: 'em_ensino',
+            profissional_id: (await eqClient.from('vinculos_paciente_aplicador')
+                .select('profissional_id').eq('paciente_id', AVAL.paciente_id)
+                .eq('tipo','titular').eq('ativo', true).limit(1).maybeSingle()).data?.profissional_id || null
+        }).select('id').single();
+        if (error) throw error;
+
+        await EqAudit.registrar('criacao', 'pei_programas', data.id, {
+            paciente: AVAL.paciente ? AVAL.paciente.nome_completo : null,
+            programa: nome, origem: 'sugestão da avaliação AV' + AVAL.onda
+        });
+
+        botao.textContent = 'incluído';
+        botao.style.color = 'var(--st-ok)';
+        setTimeout(carregarSugestoes, 900);
+    } catch (e) {
+        console.error(e);
+        botao.disabled = false; botao.textContent = 'Incluir no PEI';
+        await EqConfirm.mostrar({ titulo:'Não foi possível incluir', texto: e.message || 'Erro.',
+            confirmar:'Entendi', cancelar:'Fechar', tipo:'alerta' });
+    }
 }
 
 async function marcar(itemId, valor) {
@@ -249,6 +376,7 @@ async function concluir() {
         });
         AVAL.status = 'concluida';
         desenhar();
+        carregarSugestoes();
     } catch (e) {
         console.error(e);
         await EqConfirm.mostrar({ titulo:'Não foi possível concluir', texto: e.message || 'Erro.',

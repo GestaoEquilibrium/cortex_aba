@@ -126,16 +126,19 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
             </div>
             <div class="campo">
                 <label for="tEstrutura">Domínios e itens *</label>
-                <textarea id="tEstrutura" rows="9" required placeholder="# Linguagem receptiva
+                <textarea id="tEstrutura" rows="9" required placeholder="# Linguagem receptiva [receptiva]
 Aponta para objeto nomeado
 Segue instrução de um passo
 Identifica partes do corpo
 
-# Linguagem expressiva
+# Linguagem expressiva [expressiva]
 Nomeia objetos comuns
 Pede o que quer com palavra"></textarea>
-                <div class="tiny soft" style="margin-top:3px">
-                    Linha começando com <b>#</b> vira domínio. As demais viram itens daquele domínio.
+                <div class="tiny soft" style="margin-top:3px;line-height:1.6">
+                    Linha começando com <b>#</b> vira domínio. As demais viram itens daquele domínio.<br>
+                    Para o sistema sugerir programas depois, marque a área entre colchetes:
+                    <b>[receptiva]</b>, <b>[expressiva]</b>, <b>[cognicao]</b>, <b>[motora]</b>,
+                    <b>[social]</b> ou <b>[autocuidado]</b>.
                 </div>
             </div>
             <div class="aviso" id="erroProtocolo" style="display:none;border-left-color:var(--st-bad);color:var(--st-bad);margin-bottom:10px"></div>
@@ -194,7 +197,7 @@ document.addEventListener('eq:pronto', async function (ev) {
             eqClient.from('pacientes').select('id, nome_completo')
                 .in('status',['ativo','suspenso']).order('nome_completo'),
             eqClient.from('protocolos_avaliacao')
-                .select('*, dominios:protocolo_dominios(id, nome, ordem, itens:protocolo_itens(id))')
+                .select('*, dominios:protocolo_dominios(id, nome, ordem, area, itens:protocolo_itens(id))')
                 .eq('ativo', true).order('nome')
         ]);
         document.getElementById('selPaciente').innerHTML = '<option value="">Selecione o paciente...</option>' +
@@ -238,7 +241,11 @@ function pintarProtocolos() {
                     <b>Instrumento licenciado.</b> ${p.observacao_direitos || 'Autorização de uso não registrada.'}
                 </div>` : ''}
                 <div class="tiny soft" style="margin-top:8px">
-                    Domínios: ${(p.dominios||[]).sort((a,b)=>a.ordem-b.ordem).map(d => d.nome).join(' · ') || '—'}
+                    Domínios: ${(p.dominios||[]).sort((a,b)=>a.ordem-b.ordem)
+                        .map(d => d.nome + (d.area ? '' : ' <span style="color:var(--st-warn)" title="sem área: não gera sugestão de programa">·</span>'))
+                        .join(' · ') || '—'}
+                    ${(p.dominios||[]).some(d => !d.area)
+                      ? '<br><span style="color:var(--st-warn)">Domínios sem área marcada não geram sugestão de programa.</span>' : ''}
                 </div>
             </div>`; }).join('')
         : `<div class="card vazio-msg">Nenhum protocolo cadastrado.<br>
@@ -257,9 +264,21 @@ document.getElementById('formProtocolo').addEventListener('submit', async functi
 
     // interpreta o texto: "# domínio" e linhas de item
     const linhas = document.getElementById('tEstrutura').value.split('\n').map(l => l.trim()).filter(Boolean);
+    const AREAS_VALIDAS = ['receptiva','expressiva','cognicao','motora','social','autocuidado'];
     const estrutura = [];
     linhas.forEach(l => {
-        if (l.startsWith('#')) estrutura.push({ nome: l.replace(/^#+\s*/,''), itens: [] });
+        if (l.startsWith('#')) {
+            let nome = l.replace(/^#+\s*/,'');
+            let area = null;
+            // "# Linguagem receptiva [receptiva]" liga o domínio à área da biblioteca
+            const m = nome.match(/\[([a-zç]+)\]\s*$/i);
+            if (m) {
+                const cand = m[1].toLowerCase().replace('ç','c');
+                if (AREAS_VALIDAS.includes(cand)) area = cand;
+                nome = nome.replace(/\s*\[[^\]]+\]\s*$/, '');
+            }
+            estrutura.push({ nome: nome, area: area, itens: [] });
+        }
         else if (estrutura.length) estrutura[estrutura.length-1].itens.push(l);
     });
 
@@ -301,7 +320,8 @@ document.getElementById('formProtocolo').addEventListener('submit', async functi
         for (let i = 0; i < estrutura.length; i++) {
             const d = estrutura[i];
             const { data: dom, error: e2 } = await eqClient.from('protocolo_dominios').insert({
-                protocolo_id: prot.id, nome: d.nome, ordem: i, cor: CORES[i % CORES.length]
+                protocolo_id: prot.id, nome: d.nome, area: d.area || null,
+                ordem: i, cor: CORES[i % CORES.length]
             }).select('id').single();
             if (e2) throw e2;
             if (d.itens.length) {

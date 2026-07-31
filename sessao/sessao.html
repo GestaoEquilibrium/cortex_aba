@@ -44,6 +44,8 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
 .alvo { border:1px solid var(--line-strong); background:var(--surface); color:var(--ink-muted);
         border-radius:999px; padding:5px 12px; font:inherit; font-size:11.5px; font-weight:700; cursor:pointer; }
 .alvo[aria-pressed="true"] { background:var(--ink); color:#fff; border-color:transparent; }
+.alvo.manut { border-style:dashed; border-color:var(--st-ok); color:var(--st-ok); }
+.alvo.manut[aria-pressed="true"] { background:var(--st-ok); color:#fff; }
 
 /* Botões de tentativa: cores funcionais globais, nunca as primárias do tema */
 .tentativa { display:flex; gap:8px; }
@@ -159,7 +161,7 @@ const AREAS_NOME = {
 const CONTEXTOS = ['dormiu mal','não almoçou','medicação alterada','doente',
                    'intercorrência em casa','mudança de rotina'];
 
-let EU = null, SESSOES = [], SESSAO = null, PROGRAMAS = [], TENTATIVAS = [];
+let EU = null, SESSOES = [], SESSAO = null, PROGRAMAS = [], TENTATIVAS = [], SONDAGENS = [];
 let ALVO_SEL = {}, DICA_SEL = {};
 
 document.addEventListener('eq:pronto', async function (ev) {
@@ -255,7 +257,33 @@ async function abrirSessao() {
             ]);
             PROGRAMAS = rprog.data || [];
             TENTATIVAS = rtent.data || [];
+
+            // rotação: aquisição + até 2 de manutenção, os há mais tempo sem rodar
+            await Promise.all(PROGRAMAS.map(async p => {
+                try {
+                    const { data } = await eqClient.rpc('alvos_do_dia',
+                        { p_pei_programa: p.id, p_manutencao: 2 });
+                    p.alvosHoje = data || [];
+                } catch (e) {
+                    console.warn('rotação de alvos indisponível, usando todos', e);
+                    p.alvosHoje = (p.alvos || []).filter(a => a.status !== 'pausado');
+                }
+            }));
         }
+        // sondagens vencidas deste paciente
+        try {
+            const { data } = await eqClient.from('sondagens_manutencao')
+                .select('id, data_prevista, pei_programa:pei_programas(programa:biblioteca_programas(nome))')
+                .eq('paciente_id', SESSAO.paciente_id)
+                .is('data_realizada', null)
+                .lte('data_prevista', hojeISO())
+                .order('data_prevista');
+            SONDAGENS = (data || []).map(s => ({
+                id: s.id, data_prevista: s.data_prevista,
+                programa: s.pei_programa && s.pei_programa.programa ? s.pei_programa.programa.nome : null
+            }));
+        } catch (e) { console.warn('sondagens', e); SONDAGENS = []; }
+
         desenhar();
 
     } catch (e) {
@@ -272,6 +300,31 @@ function desenhar() {
     const seg = SESSAO.paciente && SESSAO.paciente.cartao_seguranca;
     let html = seg ? `<div class="cartao-seg"><b>Cartão de segurança</b>${seg}</div>` : '';
 
+    if (SONDAGENS.length) {
+        html += `<div class="card" style="border-left:3px solid var(--st-ok);margin-bottom:12px">
+            <div class="card-titulo"><h3>Sondagem de manutenção</h3>
+                <span class="chip chip-ok">${SONDAGENS.length}</span></div>
+            <p class="small muted" style="margin-bottom:9px">
+                Objetivos dados como dominados. Aplique algumas tentativas e registre se a criança manteve.</p>
+            ${SONDAGENS.map(s => `
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;
+                            padding:9px 0;border-top:1px solid var(--line)">
+                    <div>
+                        <b style="font-size:13px">${s.programa || 'objetivo'}</b>
+                        <div class="tiny soft">prevista para ${brlCurto(s.data_prevista)}</div>
+                    </div>
+                    <div style="display:flex;gap:5px">
+                        <button class="bt-presenca" style="border-color:var(--st-ok);color:var(--st-ok)"
+                                onclick="registrarSondagem('${s.id}','manteve')">Manteve</button>
+                        <button class="bt-presenca" style="border-color:var(--st-warn);color:var(--st-warn)"
+                                onclick="registrarSondagem('${s.id}','parcial')">Parcial</button>
+                        <button class="bt-presenca" style="border-color:var(--st-bad);color:var(--st-bad)"
+                                onclick="registrarSondagem('${s.id}','perdeu')">Perdeu</button>
+                    </div>
+                </div>`).join('')}
+        </div>`;
+    }
+
     if (!PROGRAMAS.length) {
         html += `<div class="card vazio-msg">Este paciente ainda não tem objetivos em ensino no PEI.
             <br><span class="tiny soft">A coordenação monta o PEI na ficha do paciente.</span></div>`;
@@ -285,8 +338,10 @@ function desenhar() {
         const indep = feitas.filter(t => t.resultado === 'independente').length;
         const pct = feitas.length ? Math.round(indep / feitas.length * 100) : 0;
         const total = p.tentativas_por_sessao;
-        const alvos = (p.alvos || []).filter(a => a.status !== 'pausado')
-                                     .sort((a,b) => (a.ordem||0) - (b.ordem||0));
+        const alvos = p.alvosHoje && p.alvosHoje.length
+            ? p.alvosHoje
+            : (p.alvos || []).filter(a => a.status !== 'pausado')
+                             .sort((a,b) => (a.ordem||0) - (b.ordem||0));
         const alvoAtual = ALVO_SEL[p.id] || (alvos[0] ? alvos[0].id : null);
         const completo = feitas.length >= total;
 
@@ -300,8 +355,13 @@ function desenhar() {
             </div>
 
             ${alvos.length ? `<div class="alvos">${alvos.map(a =>
-                `<button class="alvo" aria-pressed="${a.id === alvoAtual}"
-                         onclick="escolherAlvo('${p.id}','${a.id}')">${a.nome}</button>`).join('')}</div>` : ''}
+                `<button class="alvo ${a.status === 'manutencao' ? 'manut' : ''}"
+                         aria-pressed="${a.id === alvoAtual}"
+                         title="${a.status === 'manutencao' ? 'em manutenção — sondagem' : 'em aquisição'}"
+                         onclick="escolherAlvo('${p.id}','${a.id}')">${a.nome}${
+                             a.status === 'manutencao' ? ' ·' : ''}</button>`).join('')}</div>
+                ${alvos.some(a => a.status === 'manutencao')
+                  ? '<div class="dica-aviso" style="margin-top:-4px">Alvos com ponto estão em manutenção: entram para verificar se a criança mantém.</div>' : ''}` : ''}
 
             <div class="tentativa">
                 <button class="bt-indep" ${completo?'disabled':''} onclick="registrar('${p.id}','independente')">Independente</button>
@@ -390,6 +450,43 @@ async function registrar(progId, resultado) {
             const chip = document.getElementById('chipStatus');
             chip.textContent = 'em andamento'; chip.className = 'chip chip-neutro';
         } catch (e) { console.warn(e); }
+    }
+}
+
+function brlCurto(iso) { return iso ? iso.slice(0,10).split('-').reverse().slice(0,2).join('/') : ''; }
+
+async function registrarSondagem(id, resultado) {
+    const rotulo = { manteve:'manteve o objetivo', parcial:'manteve parcialmente', perdeu:'perdeu o objetivo' }[resultado];
+    const ok = await EqConfirm.mostrar({
+        titulo: 'Registrar sondagem?',
+        texto: 'A criança ' + rotulo + '.' +
+               (resultado === 'perdeu' ? ' O objetivo volta para ensino e a coordenação é avisada pela tarefa.' : ''),
+        confirmar: 'Registrar', tipo: resultado === 'perdeu' ? 'alerta' : 'padrao'
+    });
+    if (!ok) return;
+
+    try {
+        const { data: sond, error } = await eqClient.from('sondagens_manutencao').update({
+            data_realizada: hojeISO(),
+            resultado: resultado,
+            registrado_por: EU.profissional.id
+        }).eq('id', id).select('pei_programa_id').single();
+        if (error) throw error;
+
+        // perdeu volta para ensino: manutenção sem retorno ao ensino é perda silenciosa
+        if (resultado === 'perdeu' && sond && sond.pei_programa_id) {
+            await eqClient.from('pei_programas')
+                .update({ status: 'em_ensino', data_status: hojeISO() })
+                .eq('id', sond.pei_programa_id);
+        }
+
+        await EqAudit.registrar('status', 'sondagens_manutencao', id,
+            { paciente: SESSAO.paciente ? SESSAO.paciente.nome_completo : null, resultado: resultado });
+        await abrirSessao();
+    } catch (e) {
+        console.error(e);
+        await EqConfirm.mostrar({ titulo:'Não foi possível registrar', texto: e.message || 'Erro.',
+            confirmar:'Entendi', cancelar:'Fechar', tipo:'alerta' });
     }
 }
 

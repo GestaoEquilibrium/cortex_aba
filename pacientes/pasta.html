@@ -399,7 +399,7 @@ const ID = new URLSearchParams(location.search).get('id');
 let PAC = null, GRADE = [], SESSOES = [], VINCULOS = [], PROFS = [], PODE_EDITAR = false;
 let FOTO = null, PEI = null, PEI_PROGS = [], BIBLIOTECA = [];
 let RESPONSAVEIS = [], ORIENTACOES = [], DOCUMENTOS = [], TERMOS = [], ASSINATURAS = [];
-let ANAMNESES = [], MODELOS_ANAMNESE = [];
+let ANAMNESES = [], MODELOS_ANAMNESE = [], SONDAGENS = [];
 
 document.addEventListener('eq:pronto', async function (ev) {
     EqSidebar.render('pacientes');
@@ -499,6 +499,13 @@ async function carregar() {
                 eqClient.from('anamnese_modelos').select('id, nome, estrutura').eq('ativo', true).order('nome')
             ]);
             ANAMNESES = ran.data || []; MODELOS_ANAMNESE = rmo.data || [];
+
+            try {
+                const rsd = await eqClient.from('sondagens_manutencao')
+                    .select('*, pei_programa:pei_programas(programa:biblioteca_programas(nome))')
+                    .eq('paciente_id', ID).order('data_prevista');
+                SONDAGENS = rsd.data || [];
+            } catch (e) { SONDAGENS = []; }
         } catch (e) { console.warn('família não carregada', e); RESPONSAVEIS = []; ORIENTACOES = []; }
 
         FOTO = PAC.foto_url ? await EqFotos.link(PAC.foto_url) : null;
@@ -756,6 +763,36 @@ function painelPei() {
             <thead><tr><th>Objetivo</th><th>Aplicador</th><th>Tent.</th><th>Critério</th><th>Gen.</th><th>Status</th><th></th></tr></thead>
             <tbody>${emEnsino.map(linha).join('')}${outros.map(linha).join('')}</tbody></table>`
         : '<div class="vazio-msg">Nenhum objetivo no PEI ainda. Adicione a partir da biblioteca de programas.</div>'}
+        ${(function () {
+            const pend = SONDAGENS.filter(s => !s.data_realizada);
+            const feitas = SONDAGENS.filter(s => s.data_realizada);
+            const vencidas = pend.filter(s => s.data_prevista <= hojeISO());
+            if (!SONDAGENS.length) return '';
+            return `<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">
+                <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+                    <b style="font-size:13px">Sondagens de manutenção</b>
+                    ${vencidas.length ? `<span class="chip chip-alerta">${vencidas.length} vencida(s)</span>` : ''}
+                    ${pend.length - vencidas.length ? `<span class="chip chip-neutro">${pend.length - vencidas.length} agendada(s)</span>` : ''}
+                </div>
+                <table class="tabela">
+                    <thead><tr><th>Objetivo</th><th>Prevista</th><th>Resultado</th></tr></thead>
+                    <tbody>${SONDAGENS.slice(0,10).map(s => {
+                        const nome = s.pei_programa && s.pei_programa.programa ? s.pei_programa.programa.nome : '—';
+                        const venceu = !s.data_realizada && s.data_prevista <= hojeISO();
+                        const res = { manteve:'chip-ok', parcial:'chip-alerta', perdeu:'chip-erro' }[s.resultado];
+                        return `<tr>
+                            <td>${nome}</td>
+                            <td style="${venceu ? 'color:var(--st-bad);font-weight:700' : 'color:var(--ink-muted)'}">
+                                ${brl(s.data_prevista)}${venceu ? ' · vencida' : ''}</td>
+                            <td>${s.resultado ? `<span class="chip ${res}">${s.resultado}</span>` : '<span class="tiny soft">aguardando</span>'}</td>
+                        </tr>`; }).join('')}</tbody>
+                </table>
+                <div class="card-legenda">
+                    Agendadas sozinhas quando o objetivo é dominado, nos prazos definidos no programa.
+                    O aplicador registra na própria tela de sessão.
+                </div>
+            </div>`;
+        })()}
         <div class="card-legenda">"Gen." é a generalização: com outra pessoa, em outro ambiente e com outro material. Só com as três o objetivo deveria ser dado como dominado.</div>
     </div>`;
 }

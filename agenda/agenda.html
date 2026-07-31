@@ -52,6 +52,41 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
     border-radius:8px; padding:6px 11px; font:inherit; font-size:11.5px; font-weight:700; cursor:pointer;
 }
 .bt-presenca:hover { border-color:currentColor; }
+.acoes-sessao { display:flex; gap:6px; align-items:center; flex:0 0 auto; }
+.bt-realizada {
+    display:inline-flex; align-items:center; gap:6px;
+    border:1px solid var(--st-ok); background:var(--st-ok-bg); color:var(--st-ok);
+    border-radius:9px; padding:8px 14px; font:inherit; font-size:12.5px; font-weight:700;
+    cursor:pointer; white-space:nowrap; transition:var(--transition-base);
+}
+.bt-realizada:hover { background:var(--st-ok); color:#fff; }
+.bt-realizada svg { width:13px; height:13px; }
+.bt-mais {
+    display:inline-flex; align-items:center; justify-content:center;
+    width:34px; height:34px; border:1px solid var(--line-strong); background:var(--surface);
+    color:var(--ink-muted); border-radius:9px; cursor:pointer; transition:var(--transition-base);
+}
+.bt-mais:hover { border-color:var(--ink-muted); color:var(--ink); }
+.bt-mais svg { width:16px; height:16px; }
+.menu-sessao {
+    position:fixed; z-index:120; min-width:190px;
+    background:var(--surface); border:1px solid var(--line);
+    border-radius:12px; padding:6px; box-shadow:var(--shadow-lg);
+    opacity:0; transform:translateY(-4px); transition:opacity .13s ease, transform .13s ease;
+}
+.menu-sessao.aberto { opacity:1; transform:translateY(0); }
+.menu-sessao .menu-titulo {
+    font-size:11px; color:var(--ink-soft); font-weight:700; padding:6px 10px 7px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:230px;
+}
+.menu-sessao button {
+    display:flex; align-items:center; gap:9px; width:100%; text-align:left;
+    border:none; background:transparent; color:var(--ink); font:inherit; font-size:13px;
+    font-weight:600; padding:9px 10px; border-radius:8px; cursor:pointer;
+}
+.menu-sessao button:hover { background:var(--surface-alt); }
+.menu-sessao .ponto { width:8px; height:8px; border-radius:50%; flex:0 0 auto; }
+.menu-sessao .menu-linha { height:1px; background:var(--line); margin:5px 8px; }
 .bt-presenca[data-on="1"] { color:#fff; border-color:transparent; }
 
 /* semana */
@@ -381,14 +416,17 @@ function desenharDia(ss) {
         return;
     }
 
+    // Antes eram 4 ou 5 botões por linha, quase 40 numa vista só — e o chip da
+    // esquerda repetia o botão aceso. Como 63% das sessões terminam realizadas,
+    // essa fica em um toque; o resto entra num menu. Menos alvo, menos erro.
     document.getElementById('area').innerHTML = avisoBloqueio + ss.map(s => {
         const st = STATUS[s.status] || STATUS.agendada;
         const nome = s.paciente ? s.paciente.nome_completo : '—';
-        const bts = RAPIDOS.map(k => `
-            <button class="bt-presenca" data-on="${s.status === k ? 1 : 0}"
-                    style="${s.status === k ? 'background:' + STATUS[k].c : ''}"
-                    onclick="marcar('${s.id}','${k}','${nome.replace(/'/g,'')}')">
-                ${STATUS[k].r}</button>`).join('');
+        const seguro = nome.replace(/'/g, '');
+        const aberta = s.status === 'agendada' || s.status === 'em_andamento';
+        const faltou = s.status && s.status.indexOf('falta') === 0;
+        const podeGerir = ['admin_direcao','coordenador_aba','recepcao'].includes(PERFIL);
+
         return `<div class="sessao">
             <div class="hora">${s.hora_inicio.slice(0,5)}</div>
             <div class="quem">
@@ -396,20 +434,82 @@ function desenharDia(ss) {
                     ? '<span style="color:var(--st-warn)" title="Cartão de segurança">⚠</span>' : ''}</b>
                 <span>${s.profissional ? s.profissional.nome_completo : '—'} · ${s.duracao_min} min</span>
             </div>
-            <span class="chip" style="background:transparent;border:1px solid ${st.c};color:${st.c}">${st.r}</span>
-            <div style="display:flex;gap:5px;flex-wrap:wrap">${bts}
-                ${['admin_direcao','coordenador_aba','recepcao'].includes(PERFIL)
-                  ? `<button class="bt-presenca" style="border-style:dashed"
-                       onclick="abrirCobertura('${s.id}','${nome.replace(/'/g,'')}','${s.hora_inicio}',${s.duracao_min})">Cobertura</button>`
+
+            ${aberta ? '' : `<span class="chip" style="background:transparent;border:1px solid ${st.c};color:${st.c}">${st.r}</span>`}
+
+            <div class="acoes-sessao">
+                ${aberta
+                  ? `<button class="bt-realizada" onclick="marcar('${s.id}','realizada','${seguro}')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round">
+                            <path d="M5 13l4 4L19 7"/></svg>Realizada</button>`
                   : ''}
-                ${(s.status && s.status.indexOf('falta') === 0 && s.paciente
-                   && EqWhats.temNumero(s.paciente.responsavel_telefone))
+
+                ${(faltou && s.paciente && EqWhats.temNumero(s.paciente.responsavel_telefone))
                   ? `<button class="bt-presenca" style="border-color:var(--st-ok);color:var(--st-ok)"
-                       onclick="avisarFalta('${s.paciente.responsavel_telefone}','${nome.replace(/'/g,'')}','${s.data}')">Avisar família</button>`
+                       onclick="avisarFalta('${s.paciente.responsavel_telefone}','${seguro}','${s.data}')">Avisar família</button>`
                   : ''}
+
+                <button class="bt-mais" title="Outras opções"
+                        onclick="abrirOpcoes(event, '${s.id}', '${seguro}', '${s.hora_inicio}', ${s.duracao_min}, ${podeGerir})">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <circle cx="5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="19" cy="12" r="1.9"/>
+                    </svg>
+                </button>
             </div>
         </div>`;
     }).join('');
+}
+
+// menu de opções da sessão, ancorado no botão
+function abrirOpcoes(ev, id, nome, hora, duracao, podeGerir) {
+    ev.stopPropagation();
+    fecharOpcoes();
+
+    const bt = ev.currentTarget;
+    const r = bt.getBoundingClientRect();
+    const menu = document.createElement('div');
+    menu.className = 'menu-sessao';
+    menu.id = 'menuSessao';
+
+    const opcoes = RAPIDOS.map(k =>
+        `<button data-k="${k}"><span class="ponto" style="background:${STATUS[k].c}"></span>${STATUS[k].r}</button>`
+    ).join('');
+
+    menu.innerHTML = `
+        <div class="menu-titulo">${nome}</div>
+        ${opcoes}
+        ${podeGerir ? `<div class="menu-linha"></div>
+            <button data-cobertura="1">
+                <span class="ponto" style="background:var(--acao)"></span>Cobertura</button>` : ''}`;
+
+    document.body.appendChild(menu);
+
+    // abre para cima se não couber embaixo
+    const alt = menu.offsetHeight;
+    const paraCima = r.bottom + alt + 12 > window.innerHeight;
+    menu.style.top  = (paraCima ? r.top - alt - 6 : r.bottom + 6) + 'px';
+    menu.style.left = Math.max(8, Math.min(r.right - menu.offsetWidth, window.innerWidth - menu.offsetWidth - 8)) + 'px';
+    menu.classList.add('aberto');
+
+    menu.querySelectorAll('[data-k]').forEach(b => b.addEventListener('click', function () {
+        fecharOpcoes();
+        marcar(id, this.dataset.k, nome);
+    }));
+    const bc = menu.querySelector('[data-cobertura]');
+    if (bc) bc.addEventListener('click', function () {
+        fecharOpcoes();
+        abrirCobertura(id, nome, hora, duracao);
+    });
+
+    setTimeout(() => {
+        document.addEventListener('click', fecharOpcoes, { once: true });
+        window.addEventListener('scroll', fecharOpcoes, { once: true, passive: true });
+    }, 0);
+}
+
+function fecharOpcoes() {
+    const m = document.getElementById('menuSessao');
+    if (m) m.remove();
 }
 
 // ── visão semana ────────────────────────────────────────────────────────────

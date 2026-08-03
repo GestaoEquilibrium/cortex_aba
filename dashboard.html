@@ -92,7 +92,7 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
     </main>
 </div>
 
-<script src="shared/avisos.js?v=19"></script>
+<script src="shared/avisos.js?v=20"></script>
 <script src="shared/sidebar.js?v=17"></script>
 <script>
 document.addEventListener('eq:pronto', async function (ev) {
@@ -131,7 +131,7 @@ document.addEventListener('eq:pronto', async function (ev) {
                          profissional:profissionais!sessoes_profissional_id_fkey(id, nome_completo)`)
                 .eq('data', hojeISO).order('hora_inicio'),
             eqClient.from('sessoes')
-                .select('id, data, status, profissional_id')
+                .select('id, data, status, profissional_id, observacao')
                 .gte('data', seteISO).lte('data', hojeISO),
             eqClient.from('evolucoes_diarias').select('sessao_id'),
             eqClient.from('tarefas').select('id, status, prazo').eq('status','aberta'),
@@ -143,7 +143,11 @@ document.addEventListener('eq:pronto', async function (ev) {
         if (rHoje.error) throw rHoje.error;
 
         const doDia = rHoje.data || [];
-        const daSemana = rSemana.data || [];
+        // O que veio do sistema anterior não entra nas cobranças: aconteceu antes
+        // do CORTEX existir, e ninguém vai escrever evolução para sessão de junho.
+        // Painel com número impossível de zerar ensina a equipe a ignorar o painel.
+        const IMPORTADO = 'importado do sistema anterior';
+        const daSemana = (rSemana.data || []).filter(s => s.observacao !== IMPORTADO);
         const comEvolucao = new Set((rEvol.data || []).map(e => e.sessao_id));
 
         const realizadasSemana = daSemana.filter(x => x.status === 'realizada');

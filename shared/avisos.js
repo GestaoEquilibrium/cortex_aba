@@ -62,8 +62,9 @@ window.EqAvisos = (function () {
 
                 // ── evoluções pendentes ─────────────────────────────────────
                 const janela = window.EqConfig ? parseInt(EqConfig.get('janela_evolucao_dias', 7), 10) : 7;
-                let qs = eqClient.from('sessoes').select('id, data, profissional_id')
-                    .eq('status', 'realizada').gte('data', emDias(-janela)).lte('data', hoje());
+                let qs = eqClient.from('sessoes').select('id, data, profissional_id, observacao')
+                    .eq('status', 'realizada').gte('data', emDias(-janela)).lte('data', hoje())
+                    .or('observacao.is.null,observacao.neq.importado do sistema anterior');
                 if (eu && ['aplicador','aplicador_itinerante','estagiario_aba'].includes(eu.perfil)) {
                     qs = qs.eq('profissional_id', eu.profissional.id);
                 }

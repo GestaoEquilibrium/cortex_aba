@@ -38,23 +38,6 @@ window.EqAvisos = (function () {
             const avisos = [];
             const coordena = eu && ['admin_direcao','coordenador_aba','supervisor_clinico','recepcao'].includes(eu.perfil);
 
-            // ── banco atrás das telas ───────────────────────────────────
-            // Vem primeiro porque, quando isto acontece, várias telas simplesmente
-            // não funcionam — e o sintoma (lista vazia) não explica a causa.
-            if (coordena) {
-                try {
-                    const { data: mig } = await eqClient.rpc('migrations_pendentes');
-                    if (mig && mig.length) {
-                        avisos.push({ nivel:'alto', icone:'banco',
-                            titulo: mig.length === 1
-                                ? 'Falta rodar 1 atualização de banco'
-                                : 'Faltam rodar ' + mig.length + ' atualizações de banco',
-                            detalhe: mig.map(m => m.para_que).slice(0,3).join(' · '),
-                            href: 'diagnostico/index.html' });
-                    }
-                } catch (e) { /* função ainda não existe: é o próprio caso */ }
-            }
-
             try {
                 // ── minhas tarefas abertas ──────────────────────────────────
                 const { data: tarefas } = await eqClient.from('tarefas')

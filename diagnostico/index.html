@@ -76,7 +76,7 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
     </main>
 </div>
 
-<script src="../shared/avisos.js?v=18"></script>
+<script src="../shared/avisos.js?v=19"></script>
 <script src="../shared/sidebar.js?v=17"></script>
 <script>
 'use strict';
@@ -85,8 +85,11 @@ const ORDEM = { alto:0, medio:1, baixo:2 };
 const COR   = { alto:'var(--st-bad)', medio:'var(--st-warn)', baixo:'var(--ink-soft)' };
 const ROTULO = { alto:'resolver antes de usar', medio:'atrapalha o uso', baixo:'pode esperar' };
 
+let EU_PERFIL = null;
+
 document.addEventListener('eq:pronto', async function (ev) {
     EqSidebar.render('diagnostico');
+    EU_PERFIL = ev.detail.perfil;
     if (!['admin_direcao','coordenador_aba','supervisor_clinico'].includes(ev.detail.perfil)) {
         document.getElementById('area').innerHTML =
             '<div class="card vazio-msg">Tela restrita à coordenação, supervisão e direção.</div>';
@@ -102,7 +105,14 @@ async function carregar() {
     try {
         const { data, error } = await eqClient.rpc('diagnostico_sistema');
         if (error) throw error;
-        pintar(data || []);
+
+        // O bloco de banco é assunto de manutenção, não de operação: só a direção
+        // vê. Coordenação abrindo o Diagnóstico quer saber de cadastro incompleto,
+        // não de arquivo SQL pendente.
+        const itens = (data || []).filter(i =>
+            i.grupo !== 'Banco de dados' || EU_PERFIL === 'admin_direcao');
+
+        pintar(itens);
         await EqAudit.registrar('acesso', 'diagnostico', null, { itens: (data || []).length });
     } catch (e) {
         console.error(e);
@@ -144,7 +154,7 @@ function pintar(itens) {
         grupos[i.grupo].push(i);
     });
 
-    const ordemGrupo = ['Segurança','Pacientes','Equipe','Configuração','Operação'];
+    const ordemGrupo = ['Banco de dados','Segurança','Pacientes','Equipe','Configuração','Operação'];
     const chaves = Object.keys(grupos).sort((a,b) =>
         (ordemGrupo.indexOf(a) + 99) % 99 - (ordemGrupo.indexOf(b) + 99) % 99);
 

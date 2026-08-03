@@ -45,13 +45,36 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
 .alternar button[aria-pressed="true"] { background:var(--acao); color:#fff; }
 
 /* ── cards ───────────────────────────────────────────────────────────────── */
-.cards { display:grid; grid-template-columns:repeat(auto-fill, minmax(250px,1fr)); gap:12px; }
+/* Mesma linguagem do painel e do portal: raio maior, faixa colorida indicando
+   a situação da criança, e entrada escalonada. A faixa carrega informação —
+   verde em dia, âmbar faltando, vermelho sem evolução há muito tempo. */
+.cards { display:grid; grid-template-columns:repeat(auto-fill, minmax(255px,1fr)); gap:13px; }
 .pc {
-    background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-card);
-    padding:14px; cursor:pointer; transition:var(--transition-base); text-align:left; font:inherit; color:inherit;
-    display:block; width:100%;
+    background:var(--surface); border:1px solid var(--line); border-radius:18px;
+    padding:16px; cursor:pointer; text-align:left; font:inherit; color:inherit;
+    display:block; width:100%; position:relative; overflow:hidden;
+    box-shadow:0 2px 8px rgba(15,23,42,.04);
+    transition:transform .28s cubic-bezier(.34,1.56,.64,1), box-shadow .28s, border-color .28s;
+    animation:surgirCard .36s ease-out both;
 }
-.pc:hover { transform:translateY(-2px); box-shadow:var(--shadow-md); border-color:var(--acao); }
+.pc:nth-child(1) { animation-delay:.02s; } .pc:nth-child(2) { animation-delay:.05s; }
+.pc:nth-child(3) { animation-delay:.08s; } .pc:nth-child(4) { animation-delay:.11s; }
+.pc:nth-child(5) { animation-delay:.14s; } .pc:nth-child(6) { animation-delay:.17s; }
+.pc::before {
+    content:''; position:absolute; inset:0 0 auto 0; height:3px;
+    background:var(--pc-faixa, var(--line));
+}
+.pc.sit-ok     { --pc-faixa:linear-gradient(90deg,#14B8A6,#0F766E); }
+.pc.sit-atencao{ --pc-faixa:linear-gradient(90deg,#FBBF24,#D97706); }
+.pc.sit-alerta { --pc-faixa:linear-gradient(90deg,#F87171,#DC2626); }
+.pc.sit-fila   { --pc-faixa:linear-gradient(90deg,#A78BFA,#7C3AED); }
+.pc:hover { transform:translateY(-3px); box-shadow:0 12px 26px rgba(15,23,42,.1); border-color:var(--line-strong); }
+
+@keyframes surgirCard { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:none; } }
+@media (prefers-reduced-motion: reduce) {
+    .pc { animation:none; }
+    .pc:hover { transform:none; }
+}
 .pc:focus-visible { outline:2px solid var(--acao); outline-offset:2px; }
 .pc-topo { display:flex; gap:10px; align-items:flex-start; margin-bottom:10px; }
 .ini {
@@ -336,9 +359,21 @@ function pintar() {
         : linhaDe(lista);
 }
 
+// A faixa do topo diz a situação sem ocupar espaço: verde em dia, âmbar
+// faltando, vermelho sem evolução há muito tempo, roxo esperando vaga.
+function situacaoDe(p) {
+    if (p.status === 'fila_espera') return 'sit-fila';
+    if ((p.faltas || 0) >= 2) return 'sit-alerta';
+    // ultimaSessao já vem como número de dias desde a última sessão realizada
+    if (p.ultimaSessao != null && p.ultimaSessao > 7) return 'sit-alerta';
+    if ((p.faltas || 0) === 1) return 'sit-atencao';
+    if (p.ultimaSessao != null && p.ultimaSessao > 3) return 'sit-atencao';
+    return 'sit-ok';
+}
+
 function cardDe(p) {
     return `
-    <button class="pc" onclick="abrirPasta('${p.id}')">
+    <button class="pc ${situacaoDe(p)}" onclick="abrirPasta('${p.id}')">
         <div class="pc-topo">
             <div class="ini" style="${p.foto ? 'background-image:url(' + p.foto + ');background-size:cover;background-position:center' : 'background:' + p.cor}">${p.foto ? '' : p.inicial}</div>
             <div style="flex:1; min-width:0">

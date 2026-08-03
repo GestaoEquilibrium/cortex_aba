@@ -19,35 +19,176 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
 <link rel="stylesheet" href="../styles/base.css?v=4">
 <link rel="stylesheet" href="../styles/components.css?v=8">
 <style>
-.aba-manuscrito { font-family:'Caveat', cursive; font-size:1.3em; font-weight:700;
-                  display:inline-block; transform:rotate(-6deg); }
-.portal { max-width:470px; margin:0 auto; padding:0 16px 40px; position:relative; z-index:1; }
-.portal-topo { background:var(--side-bg); color:#fff; border-radius:0 0 26px 26px;
-               padding:20px 20px 24px; margin:0 -16px 18px; }
-.topo-linha { display:flex; align-items:center; justify-content:space-between; gap:10px; }
-.marca { display:flex; align-items:center; gap:8px; font-weight:800; font-size:14px; opacity:.92; }
-.bt-topo { width:30px; height:30px; border-radius:9px; background:rgba(255,255,255,.16); border:none;
-           color:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; }
-.crianca { display:flex; align-items:center; gap:12px; margin-top:16px; }
-.foto-crianca { width:52px; height:52px; border-radius:16px; flex:0 0 auto; background:rgba(255,255,255,.2);
-                display:flex; align-items:center; justify-content:center; font-size:19px; font-weight:800;
-                background-size:cover; background-position:center; }
-.crianca h1 { font-size:19px; }
-.crianca p { font-size:12.5px; color:rgba(255,255,255,.85); }
-.seletor { margin-top:12px; }
-.seletor select { width:100%; padding:9px 11px; border-radius:9px; border:1px solid rgba(255,255,255,.3);
-                  background:rgba(255,255,255,.14); color:#fff; font:inherit; font-size:13px; }
-.seletor option { color:#1B1340; }
+/* ============================================================================
+   Portal da família — o herói é a criança, não o sistema.
+   Paleta do tema família: roxo -> ciano. Cor por área, como no CORTEX neuro:
+   atividades roxo · atendimentos azul · relatórios verde · termos âmbar.
+   ============================================================================ */
+:root {
+    --p-roxo:   #7C4DFF;
+    --p-azul:   #2F6FED;
+    --p-ciano:  #06B6D4;
+    --p-verde:  #16A34A;
+    --p-ambar:  #F59E0B;
 
-.item-titulo { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:6px; }
-.item-titulo h3 { font-size:14px; }
-.card p { font-size:13px; color:var(--ink-muted); line-height:1.5; }
-.orientacao + .orientacao { margin-top:10px; padding-top:10px; border-top:1px solid var(--line); }
-.linha-sessao { display:flex; justify-content:space-between; align-items:center; gap:10px;
-                padding:9px 0; border-top:1px solid var(--line); font-size:13px; }
-.linha-sessao:first-child { border-top:none; }
-.vazio-msg { padding:18px; text-align:center; color:var(--ink-muted); font-size:12.5px; }
-.rodape-portal { text-align:center; margin-top:18px; font-size:11px; color:var(--ink-soft); }
+    --g-heroi:  linear-gradient(135deg, #4C1D95 0%, #6D28D9 45%, #0E7490 100%);
+    --g-roxo:   linear-gradient(135deg, #8B5CF6 0%, #6D28D9 100%);
+    --g-azul:   linear-gradient(135deg, #38BDF8 0%, #2F6FED 100%);
+    --g-verde:  linear-gradient(135deg, #34D399 0%, #16A34A 100%);
+    --g-ambar:  linear-gradient(135deg, #FBBF24 0%, #F59E0B 100%);
+
+    --p-raio:   18px;
+    --p-pop:    .34s cubic-bezier(.34, 1.56, .64, 1);
+}
+
+.portal { max-width: 620px; margin: 0 auto; padding: 0 16px 70px; position: relative; z-index: 1; }
+
+/* ── herói ─────────────────────────────────────────────────────────────── */
+.portal-topo {
+    background: var(--g-heroi); color: #fff;
+    border-radius: 0 0 30px 30px;
+    padding: 20px 20px 26px; margin: 0 -16px 20px;
+    position: relative; overflow: hidden;
+}
+/* dois círculos difusos: dão profundidade sem virar enfeite gritante */
+.portal-topo::before, .portal-topo::after {
+    content: ''; position: absolute; border-radius: 50%; pointer-events: none;
+}
+.portal-topo::before {
+    width: 210px; height: 210px; top: -95px; right: -55px;
+    background: radial-gradient(circle, rgba(255,255,255,.16) 0%, transparent 70%);
+}
+.portal-topo::after {
+    width: 160px; height: 160px; bottom: -90px; left: -40px;
+    background: radial-gradient(circle, rgba(6,182,212,.28) 0%, transparent 70%);
+}
+.topo-linha, .crianca, .seletor { position: relative; z-index: 1; }
+
+.topo-linha { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.marca { display: flex; align-items: center; gap: 7px; font-weight: 800; font-size: 13px; opacity: .9; }
+.aba-manuscrito { font-family: 'Caveat', cursive; font-size: 1.35em; font-weight: 700;
+                  display: inline-block; transform: rotate(-6deg); }
+.bt-topo { border: none; background: rgba(255,255,255,.16); color: #fff; border-radius: 10px;
+           padding: 7px 12px; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+           transition: var(--p-pop); }
+.bt-topo:hover { background: rgba(255,255,255,.26); transform: translateY(-1px); }
+
+.crianca { display: flex; align-items: center; gap: 14px; margin-top: 20px; }
+.foto-crianca {
+    width: 66px; height: 66px; border-radius: 20px; flex: 0 0 auto;
+    background: rgba(255,255,255,.18); border: 2px solid rgba(255,255,255,.35);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 24px; font-weight: 800; overflow: hidden;
+    box-shadow: 0 8px 20px rgba(12,31,63,.25);
+}
+.foto-crianca img { width: 100%; height: 100%; object-fit: cover; }
+.crianca h1 { font-size: 22px; line-height: 1.15; letter-spacing: -.01em; }
+.crianca p { font-size: 12.5px; color: rgba(255,255,255,.82); margin-top: 3px; }
+
+.seletor { margin-top: 14px; }
+.seletor select {
+    width: 100%; padding: 10px 12px; border-radius: 11px;
+    border: 1px solid rgba(255,255,255,.28); background: rgba(255,255,255,.14);
+    color: #fff; font: inherit; font-size: 13px; font-weight: 600;
+}
+.seletor option { color: #1B1340; }
+
+/* ── o que precisa de você ─────────────────────────────────────────────── */
+.acoes { display: grid; gap: 10px; margin-bottom: 22px; }
+.acao {
+    display: flex; align-items: center; gap: 14px;
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: var(--p-raio); padding: 15px 17px;
+    text-align: left; width: 100%; font: inherit; color: var(--ink);
+    cursor: pointer; position: relative; overflow: hidden;
+    box-shadow: 0 2px 8px rgba(20,33,58,.05);
+    transition: transform var(--p-pop), box-shadow var(--p-pop);
+    animation: surgir .4s ease-out both;
+}
+.acao:nth-child(1) { animation-delay: .05s; }
+.acao:nth-child(2) { animation-delay: .12s; }
+.acao::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 5px; background: var(--g-roxo); }
+.acao.tipo-termo::before { background: var(--g-ambar); }
+.acao:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(20,33,58,.11); }
+.acao-icone {
+    width: 42px; height: 42px; border-radius: 13px; flex: 0 0 auto;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(124,77,255,.12); color: var(--p-roxo);
+}
+.acao.tipo-termo .acao-icone { background: rgba(245,158,11,.14); color: var(--p-ambar); }
+.acao-texto { flex: 1; min-width: 0; }
+.acao-texto b { font-size: 14.5px; display: block; }
+.acao-texto span { font-size: 12px; color: var(--ink-muted); line-height: 1.45; }
+.acao-seta { color: var(--ink-soft); font-size: 18px; flex: 0 0 auto; }
+
+@keyframes surgir { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+
+/* ── seções ────────────────────────────────────────────────────────────── */
+.secao-titulo {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 11px; text-transform: uppercase; letter-spacing: .12em;
+    font-weight: 800; color: var(--ink-soft); margin: 26px 2px 11px;
+}
+.secao-titulo::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+
+.card {
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: var(--p-raio); padding: 17px 18px; margin-bottom: 12px;
+    position: relative; overflow: hidden;
+    box-shadow: 0 2px 8px rgba(20,33,58,.04);
+    animation: surgir .4s ease-out both;
+}
+/* faixa fina no topo diz de que área é o cartão, sem precisar de rótulo */
+.card::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 3px; background: var(--line); }
+.card.area-roxo::before  { background: var(--g-roxo); }
+.card.area-azul::before  { background: var(--g-azul); }
+.card.area-verde::before { background: var(--g-verde); }
+.card.area-ambar::before { background: var(--g-ambar); }
+
+.item-titulo { display: flex; justify-content: space-between; align-items: center;
+               gap: 10px; margin-bottom: 11px; }
+.item-titulo h3 { font-size: 14.5px; font-weight: 800; letter-spacing: -.01em; }
+
+.orientacao { padding: 13px 0; border-top: 1px solid var(--line); }
+.orientacao:first-of-type { border-top: none; padding-top: 0; }
+.orientacao p { font-size: 13px; color: var(--ink-muted); line-height: 1.55; margin-top: 4px; }
+
+.linha-sessao { display: flex; justify-content: space-between; align-items: center;
+                gap: 10px; padding: 11px 0; border-top: 1px solid var(--line); font-size: 13px; }
+.linha-sessao:first-of-type { border-top: none; }
+.sessao-quando { display: flex; align-items: center; gap: 11px; }
+.sessao-dia {
+    width: 44px; height: 44px; border-radius: 13px; flex: 0 0 auto;
+    background: rgba(47,111,237,.09); color: var(--p-azul);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1;
+}
+.sessao-dia b { font-size: 16px; font-weight: 800; }
+.sessao-dia span { font-size: 9px; text-transform: uppercase; letter-spacing: .06em; margin-top: 2px; }
+
+.bt-feito {
+    width: 100%; margin-top: 11px; border: none; border-radius: 12px;
+    background: var(--g-verde); color: #fff; font: inherit; font-size: 13.5px;
+    font-weight: 700; padding: 12px; cursor: pointer;
+    transition: transform var(--p-pop), box-shadow var(--p-pop);
+}
+.bt-feito:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(22,163,74,.3); }
+.bt-feito:active { transform: scale(.98); }
+
+.bt-assinar {
+    border: none; border-radius: 10px; background: var(--g-ambar); color: #fff;
+    font: inherit; font-size: 12.5px; font-weight: 700; padding: 9px 15px; cursor: pointer;
+    transition: transform var(--p-pop);
+}
+.bt-assinar:hover { transform: translateY(-1px); }
+
+.vazio-msg { padding: 26px 12px; text-align: center; color: var(--ink-muted); font-size: 13px; line-height: 1.6; }
+.rodape-portal { text-align: center; font-size: 11.5px; color: var(--ink-soft);
+                 margin-top: 30px; line-height: 1.7; }
+
+@media (prefers-reduced-motion: reduce) {
+    .acao, .card { animation: none; }
+    .acao:hover, .bt-feito:hover, .bt-assinar:hover { transform: none; }
+}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../config.js?v=4"></script>
@@ -176,97 +317,148 @@ async function carregarFilho() {
     }
 }
 
+const ROTULO_TIPO = { orientacao:'orientação', atividade:'atividade',
+                      recado:'recado', material:'material' };
+
 function desenhar(orientacoes, sessoes, relatorios) {
     const pendentes = orientacoes.filter(o => !o.executado_em && o.tipo === 'atividade');
-
-    const blocoOrientacoes = orientacoes.length ? orientacoes.map(o => `
-        <div class="orientacao">
-            <div class="item-titulo">
-                <h3>${o.titulo}</h3>
-                ${o.executado_em ? '<span class="chip chip-ok">feito</span>'
-                  : o.tipo === 'atividade' ? '<span class="chip chip-alerta">para fazer</span>'
-                  : '<span class="chip chip-neutro">' + o.tipo + '</span>'}
-            </div>
-            <p>${o.texto}</p>
-            <div class="tiny soft" style="margin-top:5px">
-                enviado em ${brl(o.created_at)}${o.vigencia_ate ? ' · até ' + brl(o.vigencia_ate) : ''}
-            </div>
-            ${o.tipo === 'atividade' && !o.executado_em
-              ? `<button class="btn btn-bloco" style="margin-top:9px;background:var(--st-ok)"
-                         onclick="marcarFeito('${o.id}')">Marcar como feito</button>` : ''}
-        </div>`).join('')
-        : '<div class="vazio-msg">Nenhuma orientação por enquanto.</div>';
-
-    const blocoSessoes = sessoes.length ? sessoes.map(s => `
-        <div class="linha-sessao">
-            <span>${brl(s.data)} · ${s.hora_inicio.slice(0,5)}</span>
-            <span class="chip ${s.status === 'agendada' ? 'chip-neutro' : 'chip-ok'}">${s.status.replace(/_/g,' ')}</span>
-        </div>`).join('')
-        : '<div class="vazio-msg">Nenhum atendimento agendado no momento.</div>';
-
-    const liberados = relatorios;
-    const blocoRelatorios = liberados.length ? liberados.map(r => {
-        const [ano, mes] = r.mes_referencia.split('-').map(Number);
-        return `<div class="linha-sessao">
-            <span>${MESES[mes-1]} de ${ano}</span>
-            <a class="chip chip-neutro" href="relatorio.html?id=${r.id}">abrir</a>
-        </div>`; }).join('')
-        : '<div class="vazio-msg">Nenhum relatório liberado ainda.</div>';
 
     const pendentesTermo = TERMOS.filter(t => {
         const a = ASSINATURAS.find(x => x.termo_id === t.id);
         return !a || a.versao_assinada < t.versao;
     });
 
-    const blocoTermos = TERMOS.length ? `
-        <div class="card">
+    // ── O que precisa de você ────────────────────────────────────────────
+    // Vem primeiro e como botão, não como aviso cinza: é a única parte do
+    // portal que depende da família fazer alguma coisa.
+    const acoes = [];
+    if (pendentesTermo.length) {
+        acoes.push(`
+            <button class="acao tipo-termo" onclick="irPara('secao-termos')">
+                <span class="acao-icone">
+                    <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <path d="M14 2v6h6"/><path d="M9 15l2 2 4-4"/></svg>
+                </span>
+                <span class="acao-texto">
+                    <b>${pendentesTermo.length === 1 ? 'Um termo para ler e assinar'
+                                                     : pendentesTermo.length + ' termos para ler e assinar'}</b>
+                    <span>São autorizações necessárias para o acompanhamento continuar.</span>
+                </span>
+                <span class="acao-seta">›</span>
+            </button>`);
+    }
+    if (pendentes.length) {
+        acoes.push(`
+            <button class="acao" onclick="irPara('secao-orientacoes')">
+                <span class="acao-icone">
+                    <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M3 11l19-9-9 19-2-8-8-2z"/></svg>
+                </span>
+                <span class="acao-texto">
+                    <b>${pendentes.length === 1 ? 'Uma atividade para fazer em casa'
+                                                : pendentes.length + ' atividades para fazer em casa'}</b>
+                    <span>Quando terminar, marque aqui — assim a equipe sabe como foi.</span>
+                </span>
+                <span class="acao-seta">›</span>
+            </button>`);
+    }
+
+    // ── Orientações ──────────────────────────────────────────────────────
+    const blocoOrientacoes = orientacoes.length ? orientacoes.map(o => `
+        <div class="orientacao">
             <div class="item-titulo">
-                <h3>Termos e autorizações</h3>
-                ${pendentesTermo.length ? `<span class="chip chip-alerta">${pendentesTermo.length} pendente${pendentesTermo.length>1?'s':''}</span>`
-                                        : '<span class="chip chip-ok">tudo assinado</span>'}
+                <h3 style="font-size:13.5px">${o.titulo}</h3>
+                ${o.executado_em ? '<span class="chip chip-ok">feito</span>'
+                  : o.tipo === 'atividade' ? '<span class="chip chip-alerta">para fazer</span>'
+                  : '<span class="chip chip-neutro">' + (ROTULO_TIPO[o.tipo] || o.tipo) + '</span>'}
+            </div>
+            <p>${o.texto}</p>
+            <div class="tiny soft" style="margin-top:6px">
+                enviado em ${brl(o.created_at)}${o.vigencia_ate ? ' · até ' + brl(o.vigencia_ate) : ''}
+            </div>
+            ${o.tipo === 'atividade' && !o.executado_em
+              ? `<button class="bt-feito" onclick="marcarFeito('${o.id}')">Marcar como feito</button>` : ''}
+        </div>`).join('')
+        : `<div class="vazio-msg">Nenhuma orientação por enquanto.<br>
+             <span class="tiny soft">Quando a equipe enviar uma atividade, ela aparece aqui.</span></div>`;
+
+    // ── Atendimentos ─────────────────────────────────────────────────────
+    const DIAS_CURTO = ['dom','seg','ter','qua','qui','sex','sáb'];
+    const blocoSessoes = sessoes.length ? sessoes.map(s => {
+        const [a, m, d] = s.data.split('-').map(Number);
+        const dt = new Date(a, m - 1, d);
+        return `<div class="linha-sessao">
+            <span class="sessao-quando">
+                <span class="sessao-dia">
+                    <b>${String(d).padStart(2,'0')}</b>
+                    <span>${DIAS_CURTO[dt.getDay()]}</span>
+                </span>
+                <span>
+                    <b style="font-size:13.5px">${s.hora_inicio.slice(0,5)}</b>
+                    <span class="tiny soft" style="display:block">${MESES[m-1]}</span>
+                </span>
+            </span>
+            <span class="chip ${s.status === 'agendada' ? 'chip-neutro' : 'chip-ok'}">${s.status.replace(/_/g,' ')}</span>
+        </div>`; }).join('')
+        : `<div class="vazio-msg">Nenhum atendimento agendado no momento.<br>
+             <span class="tiny soft">Fale com a clínica se estiver esperando um horário.</span></div>`;
+
+    // ── Relatórios ───────────────────────────────────────────────────────
+    const blocoRelatorios = relatorios.length ? relatorios.map(r => {
+        const [ano, mes] = r.mes_referencia.split('-').map(Number);
+        return `<div class="linha-sessao">
+            <span><b style="font-size:13.5px">${MESES[mes-1]}</b>
+                  <span class="tiny soft"> de ${ano}</span></span>
+            <a class="bt-assinar" style="background:var(--g-verde);text-decoration:none;display:inline-block"
+               href="relatorio.html?id=${r.id}">Abrir</a>
+        </div>`; }).join('')
+        : `<div class="vazio-msg">Nenhum relatório liberado ainda.<br>
+             <span class="tiny soft">Os relatórios mensais aparecem aqui depois que a equipe libera.</span></div>`;
+
+    // ── Termos ───────────────────────────────────────────────────────────
+    const blocoTermos = TERMOS.length ? `
+        <div class="secao-titulo" id="secao-termos">Termos e autorizações</div>
+        <div class="card area-ambar">
+            <div class="item-titulo">
+                <h3>Documentos</h3>
+                ${pendentesTermo.length
+                  ? `<span class="chip chip-alerta">${pendentesTermo.length} pendente${pendentesTermo.length>1?'s':''}</span>`
+                  : '<span class="chip chip-ok">tudo assinado</span>'}
             </div>
             ${TERMOS.map(t => {
                 const a = ASSINATURAS.find(x => x.termo_id === t.id);
                 const ok = a && a.versao_assinada >= t.versao;
-                return `<div style="padding:9px 0;border-top:1px solid var(--line);display:flex;
-                                    justify-content:space-between;align-items:center;gap:10px">
-                    <div style="flex:1;min-width:0">
-                        <b style="font-size:13px">${t.nome}</b>
-                        ${ok ? `<div class="tiny soft">assinado em ${brl(a.assinado_em)}</div>` : ''}
-                    </div>
+                return `<div class="linha-sessao">
+                    <span style="flex:1;min-width:0">
+                        <b style="font-size:13.5px">${t.nome}</b>
+                        ${ok ? `<span class="tiny soft" style="display:block">assinado em ${brl(a.assinado_em)}</span>` : ''}
+                    </span>
                     ${ok ? '<span class="chip chip-ok">assinado</span>'
-                         : `<button class="btn" style="padding:7px 13px;font-size:12px"
-                              onclick="abrirTermo('${t.id}')">Ler e assinar</button>`}
+                         : `<button class="bt-assinar" onclick="abrirTermo('${t.id}')">Ler e assinar</button>`}
                 </div>`; }).join('')}
         </div>` : '';
 
     document.getElementById('area').innerHTML = `
-        ${pendentesTermo.length ? `<div class="aviso" style="margin-bottom:12px;border-left-color:var(--st-bad)">
-            <b>${pendentesTermo.length} termo${pendentesTermo.length>1?'s':''} aguardando sua leitura.</b>
-            São autorizações necessárias para o acompanhamento.
-        </div>` : ''}
-        ${pendentes.length ? `<div class="aviso" style="margin-bottom:12px;border-left-color:var(--st-warn)">
-            <b>${pendentes.length} atividade${pendentes.length>1?'s':''} para fazer em casa.</b>
-            Quando terminar, é só marcar aqui — assim a equipe sabe como está indo.
-        </div>` : ''}
+        ${acoes.length ? `<div class="acoes">${acoes.join('')}</div>` : ''}
 
-        <div class="card">
-            <div class="item-titulo"><h3>Orientações e atividades</h3></div>
-            ${blocoOrientacoes}
-        </div>
+        <div class="secao-titulo" id="secao-orientacoes">Orientações e atividades</div>
+        <div class="card area-roxo">${blocoOrientacoes}</div>
 
-        <div class="card">
-            <div class="item-titulo"><h3>Próximos atendimentos</h3></div>
-            ${blocoSessoes}
-        </div>
+        <div class="secao-titulo">Próximos atendimentos</div>
+        <div class="card area-azul">${blocoSessoes}</div>
 
-        <div class="card">
-            <div class="item-titulo"><h3>Relatórios</h3></div>
-            ${blocoRelatorios}
-            <div class="card-legenda">Aparecem aqui os relatórios que a coordenação liberou.</div>
-        </div>
+        <div class="secao-titulo">Relatórios</div>
+        <div class="card area-verde">${blocoRelatorios}</div>
 
         ${blocoTermos}`;
+}
+
+function irPara(id) {
+    const el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 async function abrirTermo(id) {

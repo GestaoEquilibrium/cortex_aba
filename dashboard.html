@@ -30,6 +30,97 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
 <script src="shared/audit.js?v=5"></script>
 <script src="shared/fotos.js?v=7"></script>
 <script src="shared/auth_guard.js?v=12"></script>
+<style>
+/* ============================================================================
+   Painel — mesma linguagem do portal, na paleta da coordenação (verde + navy).
+   Cor por natureza do número: verde o que está em dia, âmbar o que pede
+   atenção, vermelho o que está atrasado. A cor carrega informação.
+   ============================================================================ */
+.saudacao {
+    background: linear-gradient(135deg, #0B3B36 0%, #0F766E 55%, #115E59 100%);
+    color: #fff; border-radius: 18px; padding: 22px 24px; margin-bottom: 18px;
+    position: relative; overflow: hidden;
+    display: flex; justify-content: space-between; align-items: center; gap: 18px; flex-wrap: wrap;
+}
+.saudacao::before {
+    content: ''; position: absolute; width: 280px; height: 280px;
+    top: -150px; right: -70px; border-radius: 50%; pointer-events: none;
+    background: radial-gradient(circle, rgba(255,255,255,.13) 0%, transparent 70%);
+}
+.saudacao::after {
+    content: ''; position: absolute; width: 190px; height: 190px;
+    bottom: -120px; left: 22%; border-radius: 50%; pointer-events: none;
+    background: radial-gradient(circle, rgba(20,184,166,.28) 0%, transparent 70%);
+}
+.saudacao > * { position: relative; z-index: 1; }
+.saudacao h1 { font-size: 23px; letter-spacing: -.015em; }
+.saudacao .sub { font-size: 13px; color: rgba(255,255,255,.82); margin-top: 4px; }
+.saudacao .btn { background: rgba(255,255,255,.16); border: 1px solid rgba(255,255,255,.26);
+                 color: #fff; transition: .28s cubic-bezier(.34,1.56,.64,1); }
+.saudacao .btn:hover { background: rgba(255,255,255,.27); transform: translateY(-1px); }
+
+.kpi {
+    display: flex; align-items: center; gap: 15px;
+    padding: 18px 20px; border-radius: 18px;
+    position: relative; overflow: hidden;
+    transition: transform .28s cubic-bezier(.34,1.56,.64,1), box-shadow .28s;
+    animation: aparecer .38s ease-out both;
+}
+.kpi:nth-child(1) { animation-delay: .04s; }
+.kpi:nth-child(2) { animation-delay: .09s; }
+.kpi:nth-child(3) { animation-delay: .14s; }
+.kpi:nth-child(4) { animation-delay: .19s; }
+.kpi::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 5px;
+               background: var(--kpi-faixa, var(--line-strong)); }
+.kpi:hover { transform: translateY(-2px); box-shadow: 0 10px 22px rgba(15,23,42,.1); }
+.kpi-icone {
+    width: 44px; height: 44px; border-radius: 14px; flex: 0 0 auto;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--kpi-fundo, var(--surface-alt)); color: var(--kpi-cor, var(--ink-muted));
+}
+.kpi-corpo { min-width: 0; }
+.kpi-numero { font-size: 27px; font-weight: 800; line-height: 1; letter-spacing: -.02em; }
+.kpi-texto { font-size: 11.5px; color: var(--ink-muted); margin-top: 4px; line-height: 1.35; }
+
+.kpi.tom-verde    { --kpi-faixa: linear-gradient(180deg,#14B8A6,#0F766E); --kpi-cor:#0F766E; --kpi-fundo:rgba(15,118,110,.1); }
+.kpi.tom-azul     { --kpi-faixa: linear-gradient(180deg,#60A5FA,#2563EB); --kpi-cor:#2563EB; --kpi-fundo:rgba(37,99,235,.1); }
+.kpi.tom-ambar    { --kpi-faixa: linear-gradient(180deg,#FBBF24,#D97706); --kpi-cor:#D97706; --kpi-fundo:rgba(217,119,6,.12); }
+.kpi.tom-vermelho { --kpi-faixa: linear-gradient(180deg,#F87171,#DC2626); --kpi-cor:#DC2626; --kpi-fundo:rgba(220,38,38,.1); }
+
+@keyframes aparecer { from { opacity:0; transform: translateY(10px); } to { opacity:1; transform:none; } }
+
+/* faixa fina no topo do cartão diz de que assunto ele trata */
+.card.faixa-verde, .card.faixa-azul, .card.faixa-ambar { position: relative; overflow: hidden; }
+.card.faixa-verde::before, .card.faixa-azul::before, .card.faixa-ambar::before {
+    content: ''; position: absolute; inset: 0 0 auto 0; height: 3px;
+}
+.card.faixa-verde::before { background: linear-gradient(90deg,#14B8A6,#0F766E); }
+.card.faixa-azul::before  { background: linear-gradient(90deg,#60A5FA,#2563EB); }
+.card.faixa-ambar::before { background: linear-gradient(90deg,#FBBF24,#D97706); }
+
+/* hora da sessão em bloco, para o olho achar o horário sem ler a linha toda */
+.hora-bloco {
+    display: inline-block; min-width: 50px; text-align: center;
+    background: rgba(15,118,110,.09); color: #0F766E;
+    border-radius: 10px; padding: 6px 8px; font-weight: 800; font-size: 12.5px;
+}
+
+/* barras de compliance: definidas aqui para nao depender do CSS compartilhado */
+.barra-linha { display: flex; align-items: center; gap: 11px; font-size: 12.5px; margin-bottom: 10px; }
+.barra-linha .rotulo { width: 104px; flex: 0 0 auto; font-weight: 600;
+                       white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.barra-trilho { flex: 1; height: 8px; background: var(--line); border-radius: 5px;
+                overflow: hidden; display: block; }
+.barra-preenche { display: block; height: 8px; border-radius: 5px;
+                  transition: width .6s cubic-bezier(.22,1,.36,1); }
+.barra-valor { width: 46px; text-align: right; font-weight: 800; flex: 0 0 auto; }
+
+@media (prefers-reduced-motion: reduce) {
+    .kpi { animation: none; }
+    .barra-preenche { transition: none; }
+    .kpi:hover, .saudacao .btn:hover { transform: none; }
+}
+</style>
 </head>
 <body>
 
@@ -38,7 +129,7 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
     <div class="faixa-perfil"></div>
 
     <main class="app-main">
-        <div class="app-topo">
+        <div class="saudacao">
             <div>
                 <h1 id="saudacao">Painel</h1>
                 <div class="sub" id="linhaData">carregando…</div>
@@ -49,7 +140,7 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
         <div class="grid-4" id="kpis"></div>
 
         <div class="grid-2-1" style="margin-top:12px">
-            <div class="card">
+            <div class="card faixa-verde">
                 <div class="card-titulo">
                     <h3>Agenda de hoje</h3>
                     <span class="tiny soft" id="rotuloEquipe"></span>
@@ -61,12 +152,12 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
             </div>
 
             <div>
-                <div class="card">
+                <div class="card faixa-azul">
                     <div class="card-titulo"><h3>Situação dos pacientes</h3></div>
                     <div id="statusPacientes" class="muted small">carregando…</div>
                 </div>
 
-                <div class="card">
+                <div class="card faixa-ambar">
                     <div class="card-titulo">
                         <h3>Supervisão</h3>
                         <a class="tiny" href="supervisao/index.html">ver todas</a>
@@ -160,18 +251,36 @@ document.addEventListener('eq:pronto', async function (ev) {
             dias[agora.getDay()] + ', ' + agora.getDate() + ' de ' + meses[agora.getMonth()] +
             ' · ' + doDia.length + (doDia.length === 1 ? ' sessão prevista' : ' sessões previstas');
 
+        // A cor carrega informação: verde é o que está em dia, âmbar pede
+        // atenção, vermelho está atrasado. Zero pendências fica verde, não cinza.
+        const ICONES = {
+            evolucao: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+            falta:    '<path d="M8 2v4M16 2v4M3 10h18"/><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M9 16l6-6M15 16l-6-6"/>',
+            tarefa:   '<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
+            paciente: '<path d="M17 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9.5" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/>'
+        };
         const kpis = [
             { n: semEvolucao.length, t: 'evoluções pendentes (' + janela + ' dias)',
-              cor: semEvolucao.length ? 'var(--st-bad)' : 'var(--st-ok)' },
+              tom: semEvolucao.length > 3 ? 'vermelho' : semEvolucao.length ? 'ambar' : 'verde',
+              icone: ICONES.evolucao },
             { n: faltasSemana.length, t: 'faltas nesta semana',
-              cor: faltasSemana.length ? 'var(--st-warn)' : 'var(--st-neutro)' },
+              tom: faltasSemana.length > 2 ? 'vermelho' : faltasSemana.length ? 'ambar' : 'verde',
+              icone: ICONES.falta },
             { n: tarefasAbertas, t: tarefasAtrasadas ? tarefasAtrasadas + ' delas atrasadas' : 'tarefas abertas',
-              cor: tarefasAtrasadas ? 'var(--st-bad)' : 'var(--acao)' },
-            { n: rAtivos.count || 0, t: 'pacientes ativos', cor: 'var(--st-neutro)' }
+              tom: tarefasAtrasadas ? 'vermelho' : tarefasAbertas ? 'ambar' : 'verde',
+              icone: ICONES.tarefa },
+            { n: rAtivos.count || 0, t: 'pacientes ativos', tom: 'azul', icone: ICONES.paciente }
         ];
         document.getElementById('kpis').innerHTML = kpis.map(k => `
-            <div class="kpi" style="--kpi-cor:${k.cor}">
-                <div class="kpi-numero">${k.n}</div><div class="kpi-texto">${k.t}</div>
+            <div class="kpi card tom-${k.tom}">
+                <span class="kpi-icone">
+                    <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${k.icone}</svg>
+                </span>
+                <span class="kpi-corpo">
+                    <span class="kpi-numero" style="display:block">${k.n}</span>
+                    <span class="kpi-texto" style="display:block">${k.t}</span>
+                </span>
             </div>`).join('');
 
         const chipDe = st => ({ realizada:'chip-ok', em_andamento:'chip-neutro', agendada:'chip-neutro',
@@ -181,7 +290,7 @@ document.addEventListener('eq:pronto', async function (ev) {
 
         document.getElementById('tbAgenda').innerHTML = doDia.length ? doDia.map(x => `
             <tr>
-                <td style="font-weight:700">${(x.hora_inicio || '').slice(0,5)}</td>
+                <td><span class="hora-bloco">${(x.hora_inicio || '').slice(0,5)}</span></td>
                 <td>${x.paciente ? x.paciente.nome_completo : '—'}</td>
                 <td class="muted">${x.profissional ? x.profissional.nome_completo : '—'}</td>
                 <td><span class="chip ${chipDe(x.status)}">${(x.status || '').replace(/_/g,' ')}</span>

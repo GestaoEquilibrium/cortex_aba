@@ -74,6 +74,7 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
             <button data-p="operacao" aria-pressed="false" onclick="aba('operacao')">Operação</button>
             <button data-p="termos" aria-pressed="false" onclick="aba('termos')">Termos</button>
             <button data-p="anamnese" aria-pressed="false" onclick="aba('anamnese')">Anamnese</button>
+            <button data-p="backup" aria-pressed="false" onclick="aba('backup')">Cópia de segurança</button>
         </div>
 
         <input type="file" id="inputFoto" accept="image/jpeg,image/png,image/webp"
@@ -84,6 +85,7 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
         <div class="painel" id="p-operacao"><div class="card vazio-msg">carregando…</div></div>
         <div class="painel" id="p-termos"><div class="card vazio-msg">carregando…</div></div>
         <div class="painel" id="p-anamnese"><div class="card vazio-msg">carregando…</div></div>
+        <div class="painel" id="p-backup"><div class="card vazio-msg">carregando…</div></div>
     </main>
 </div>
 
@@ -195,16 +197,136 @@ document.addEventListener('eq:pronto', async function (ev) {
     pintarPerfil(); pintarClinica(); pintarOperacao();
     await carregarTermos();
     await carregarModelos();
+    pintarBackup();
 });
 
 function aba(k) {
-    ['perfil','clinica','operacao','termos','anamnese'].forEach(x => {
+    ['perfil','clinica','operacao','termos','anamnese','backup'].forEach(x => {
         document.getElementById('p-' + x).classList.toggle('on', x === k);
         document.querySelector('[data-p="' + x + '"]').setAttribute('aria-pressed', x === k);
     });
 }
 
 
+
+
+// ── cópia de segurança ──────────────────────────────────────────────────────
+// O plano gratuito do Supabase não faz backup automático: hoje os prontuários
+// existem num lugar só.
+let RESUMO_BACKUP = [];
+
+async function pintarBackup() {
+    const alvo = document.getElementById('p-backup');
+    if (!alvo) return;
+    const souDirecao = EU.perfil === 'admin_direcao';
+
+    try {
+        const { data } = await eqClient.rpc('backup_resumo');
+        RESUMO_BACKUP = data || [];
+    } catch (e) { RESUMO_BACKUP = []; }
+
+    const ultima = (function () {
+        try { return localStorage.getItem('eqaba_ultimo_backup'); } catch (e) { return null; }
+    })();
+    const diasDesde = ultima
+        ? Math.floor((Date.now() - new Date(ultima).getTime()) / 86400000) : null;
+
+    alvo.innerHTML = `
+    <div class="card" style="border-left:3px solid ${diasDesde === null || diasDesde > 7 ? 'var(--st-bad)' : 'var(--st-ok)'}">
+        <div class="card-titulo"><h3>Cópia de segurança</h3></div>
+        <p class="small muted" style="line-height:1.6">
+            O plano gratuito do Supabase <b>não faz cópia automática</b>. Se o projeto for
+            apagado, a conta suspensa, ou alguém rodar um comando errado, não há de onde voltar.
+        </p>
+        ${ultima
+          ? `<p class="small" style="margin-top:8px;color:${diasDesde > 7 ? 'var(--st-bad)' : 'var(--st-ok)'}">
+               Última cópia neste computador: ${new Date(ultima).toLocaleDateString('pt-BR')}
+               ${diasDesde > 7 ? ' — faz ' + diasDesde + ' dias' : ''}
+             </p>`
+          : `<p class="small" style="margin-top:8px;color:var(--st-bad)">
+               <b>Nenhuma cópia foi feita a partir deste computador.</b>
+             </p>`}
+
+        ${RESUMO_BACKUP.length ? `<table class="tabela" style="margin-top:12px">
+            <thead><tr><th>O que existe hoje</th><th style="text-align:right">Registros</th></tr></thead>
+            <tbody>${RESUMO_BACKUP.map(r => `<tr>
+                <td>${r.tabela}</td>
+                <td style="text-align:right;font-weight:700">${r.registros}</td>
+            </tr>`).join('')}</tbody>
+        </table>` : ''}
+
+        ${souDirecao
+          ? `<button class="btn btn-bloco" style="margin-top:14px" id="btBackup"
+                onclick="gerarBackup()">Baixar cópia agora</button>`
+          : '<div class="ajuda" style="margin-top:12px">Só a direção pode gerar a cópia.</div>'}
+
+        <div class="ajuda" style="margin-top:14px;line-height:1.7">
+            <b>Guarde fora do computador da clínica.</b> Cópia que mora na mesma máquina
+            não protege de incêndio, roubo nem de disco queimado. Google Drive, um pendrive
+            guardado em outro lugar, ou os dois.<br><br>
+            <b>Isto leva os dados, não a estrutura.</b> As tabelas, funções e permissões vêm
+            dos arquivos em <code>database/</code>, que estão no GitHub. Os dois juntos
+            reconstroem o sistema; nenhum sozinho.<br><br>
+            <b>Fotos e documentos não vêm aqui</b> — ficam no Storage e precisam ser baixados
+            à parte, pelo painel do Supabase.
+        </div>
+    </div>
+
+    <div class="card" style="margin-top:12px">
+        <div class="card-titulo"><h3>A forma completa</h3></div>
+        <p class="small muted" style="line-height:1.6">
+            A cópia acima é rede de segurança. O jeito completo é o <code>pg_dump</code>,
+            que leva estrutura e dados juntos:
+        </p>
+        <pre style="background:var(--surface-alt);border:1px solid var(--line);border-radius:9px;
+                    padding:12px;font-size:11.5px;overflow-x:auto;margin-top:10px">supabase db dump -f backup_$(date +%F).sql --data-only
+supabase db dump -f estrutura_$(date +%F).sql</pre>
+        <div class="ajuda" style="margin-top:10px">
+            Precisa da Supabase CLI instalada e do projeto vinculado.
+            Vale fazer uma vez por mês, além da cópia pelo botão acima.
+        </div>
+    </div>`;
+}
+
+async function gerarBackup() {
+    const bt = document.getElementById('btBackup');
+    const ok = await EqConfirm.mostrar({
+        titulo: 'Baixar a cópia de segurança?',
+        texto: 'Gera um arquivo com todo o conteúdo clínico da clínica. ' +
+               'Guarde em lugar seguro — ele contém dados de todos os pacientes.',
+        confirmar: 'Baixar', tipo: 'alerta'
+    });
+    if (!ok) return;
+
+    bt.disabled = true; bt.textContent = 'Gerando...';
+    try {
+        const { data, error } = await eqClient.rpc('backup_completo');
+        if (error) throw error;
+
+        const hoje = new Date().toISOString().slice(0,10);
+        const url = URL.createObjectURL(new Blob([JSON.stringify(data)],
+            { type: 'application/json' }));
+        const a = document.createElement('a');
+        a.href = url; a.download = 'cortex-aba-backup-' + hoje + '.json'; a.click();
+        URL.revokeObjectURL(url);
+
+        try { localStorage.setItem('eqaba_ultimo_backup', new Date().toISOString()); } catch (e) {}
+        await EqAudit.registrar('exportacao', 'backup', null, { data: hoje });
+
+        await EqConfirm.mostrar({
+            titulo: 'Cópia gerada',
+            texto: 'Agora o passo que importa: mova o arquivo para fora deste computador. ' +
+                   'Cópia guardada na mesma máquina não protege de quase nada.',
+            confirmar: 'Entendi', cancelar: 'Fechar', tipo: 'padrao'
+        });
+        pintarBackup();
+    } catch (e) {
+        console.error(e);
+        if (window.EqErros) EqErros.anotar('backup', e);
+        await EqConfirm.mostrar({ titulo:'Não foi possível gerar', texto: e.message || 'Erro.',
+            confirmar:'Entendi', cancelar:'Fechar', tipo:'alerta' });
+    } finally { bt.disabled = false; bt.textContent = 'Baixar cópia agora'; }
+}
 
 // ── modelos de anamnese ─────────────────────────────────────────────────────
 let MODELOS = [];
@@ -305,7 +427,8 @@ document.getElementById('formModelo').addEventListener('submit', async function 
         await EqAudit.registrar('criacao', 'anamnese_modelos', data.id,
             { nome: document.getElementById('mNome').value.trim(), perguntas: contarPerguntas(estrutura) });
         fechar('modalModelo');
-        await carregarModelos(); aba('anamnese');
+        await carregarModelos();
+    pintarBackup(); aba('anamnese');
     } catch (e) {
         console.error(e);
         erro.textContent = e.message || 'Não foi possível salvar.';
@@ -407,6 +530,7 @@ document.getElementById('formTermo').addEventListener('submit', async function (
         fechar('modalTermo');
         await carregarTermos();
     await carregarModelos();
+    pintarBackup();
         aba('termos');
     } catch (e) {
         console.error(e);
@@ -427,7 +551,8 @@ async function desativarTermo(id, nome) {
         if (error) throw error;
         await EqAudit.registrar('status', 'termos_modelos', id, { nome: nome, ativo: false });
         await carregarTermos();
-    await carregarModelos(); aba('termos');
+    await carregarModelos();
+    pintarBackup(); aba('termos');
     } catch (e) { console.error(e); }
 }
 

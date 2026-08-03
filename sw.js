@@ -21,7 +21,7 @@
 //           como se fosse atual.
 // ============================================================================
 
-const VERSAO = 'cortex-aba-v8';
+const VERSAO = 'cortex-aba-v9';
 const CACHE_ESTATICO = VERSAO + '-estatico';
 const CACHE_PAGINAS  = VERSAO + '-paginas';
 
@@ -93,6 +93,10 @@ self.addEventListener('fetch', function (evento) {
 
     const url = new URL(req.url);
 
+    // A API de cache só aceita http e https. Extensões do navegador usam o esquema
+    // chrome-extension: e derrubavam o `put` com erro no console a cada carregamento.
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
+
     // API e autenticação: passa direto, sempre. Nada de dado de paciente em cache.
     if (ehSupabase(url)) return;
 
@@ -102,7 +106,10 @@ self.addEventListener('fetch', function (evento) {
             fetch(req).then(resp => {
                 if (resp.ok) {
                     const copia = resp.clone();
-                    caches.open(CACHE_ESTATICO).then(c => c.put(req, copia));
+                    // falha ao guardar não pode virar erro na tela: a resposta já foi obtida
+                    caches.open(CACHE_ESTATICO)
+                        .then(c => c.put(req, copia))
+                        .catch(() => {});
                 }
                 return resp;
             }).catch(() => caches.match(req))
@@ -115,7 +122,7 @@ self.addEventListener('fetch', function (evento) {
         evento.respondWith(
             fetch(req).then(resp => {
                 const copia = resp.clone();
-                caches.open(CACHE_PAGINAS).then(c => c.put(req, copia));
+                caches.open(CACHE_PAGINAS).then(c => c.put(req, copia)).catch(() => {});
                 return resp;
             }).catch(() =>
                 caches.match(req)
@@ -137,7 +144,9 @@ self.addEventListener('fetch', function (evento) {
                 const rede = fetch(req).then(resp => {
                     if (resp.ok) {
                         const copia = resp.clone();
-                        caches.open(CACHE_ESTATICO).then(c => c.put(req, copia));
+                        caches.open(CACHE_ESTATICO)
+                            .then(c => c.put(req, copia))
+                            .catch(() => {});
                     }
                     return resp;
                 }).catch(() => cacheado);

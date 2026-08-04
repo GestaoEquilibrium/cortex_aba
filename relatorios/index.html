@@ -251,55 +251,134 @@ async function apurar() {
     };
 }
 
+// ── rascunho do relatório ───────────────────────────────────────────────────
+// Quem lê isto é a mãe, não um auditor. O texto precisa ser exato, mas exatidão
+// não obriga a soar como formulário.
+//
+// Três decisões: usa o primeiro nome da criança, escreve um objetivo por linha
+// em vez de emendar tudo num parágrafo, e troca "respostas independentes em N
+// tentativas" por "fez sozinho em X de Y vezes" — que diz a mesma coisa e
+// qualquer pessoa entende.
+//
+// Os marcadores entre colchetes ficam: são o que depende de leitura clínica, e
+// o sistema não escreve por ninguém.
+// concordância: "1 falta avisada" e não "1 falta(s) avisada(s)". Num documento
+// que a família lê, o (s) espalhado passa desleixo.
+function pl(n, singular, plural) { return n + ' ' + (n === 1 ? singular : plural); }
+
 function textoDe(n) {
     const f = faixaMes();
     const mesNome = MESES[f.mes - 1] + ' de ' + f.ano;
+    const primeiro = (PAC.nome_completo || '').split(' ')[0];
     const presenca = n.previstas ? Math.round(n.realizadas / n.previstas * 100) : 0;
+    const faltas = n.faltaJustificada + n.faltaInjustificada;
 
-    const frequencia =
-        `No mês de ${mesNome} foram previstas ${n.previstas} sessões, das quais ${n.realizadas} foram realizadas ` +
-        `(${presenca}% de presença). Houve ${n.faltaJustificada} falta(s) com aviso prévio e ` +
-        `${n.faltaInjustificada} falta(s) sem aviso.` +
-        (n.faltaInjustificada >= 3 ? ' A frequência irregular no período compromete a continuidade do trabalho e foi tratada com a família.' : '');
+    // ── frequência ──────────────────────────────────────────────────────────
+    let frequencia;
+    if (!n.previstas) {
+        frequencia = `Não houve sessões previstas para ${primeiro} em ${mesNome}.`;
+    } else if (!faltas) {
+        frequencia = `${primeiro} compareceu a todas as ${n.realizadas} sessões previstas em ` +
+                     `${mesNome}. A presença integral favorece muito a continuidade do trabalho.`;
+    } else {
+        frequencia = `Em ${mesNome}, ${primeiro} compareceu a ${n.realizadas} das ` +
+            `${n.previstas} sessões previstas, o que representa ${presenca}% de presença. ` +
+            (n.faltaJustificada && n.faltaInjustificada
+                ? `Houve ${pl(n.faltaJustificada, 'falta avisada', 'faltas avisadas')} ` +
+                  `com antecedência e ${n.faltaInjustificada} sem aviso. `
+                : n.faltaJustificada
+                ? (n.faltaJustificada === 1
+                   ? 'A ausência foi avisada com antecedência. '
+                   : `As ${n.faltaJustificada} ausências foram avisadas com antecedência. `)
+                : `Houve ${pl(n.faltaInjustificada, 'falta', 'faltas')} sem aviso prévio. `) +
+            (n.faltaInjustificada >= 3
+                ? 'A frequência irregular interrompe a sequência do ensino e reduz o ritmo de ' +
+                  'aprendizagem. O assunto foi conversado com a família.'
+                : '');
+    }
 
+    // ── objetivos ───────────────────────────────────────────────────────────
     const objetivos = n.programas.length
-        ? `Foram trabalhados ${n.programas.length} objetivos no período: ` +
-          n.programas.map(p => p.nome).join(', ') + '. ' +
-          `Atualmente ${n.emEnsino} objetivo(s) estão em ensino e ${n.dominados} já foram dados como dominados.`
-        : 'Não houve registro de objetivos trabalhados neste período.';
+        ? (n.programas.length === 1
+             ? 'No período foi trabalhado 1 objetivo:\n\n'
+             : `No período foram trabalhados ${n.programas.length} objetivos:\n\n`) +
+          n.programas.map(p => '• ' + p.nome).join('\n') +
+          '\n\n' +
+          (n.programas.length === 1
+             ? (n.emEnsino === 1 ? 'Ele segue em ensino' : `${n.emEnsino} seguem em ensino`)
+             : (n.emEnsino === 1 ? 'Destes, 1 segue em ensino' : `Destes, ${n.emEnsino} seguem em ensino`)) +
+          (n.dominados
+             ? (n.dominados === 1
+                 ? ' e 1 já foi alcançado e passou para acompanhamento de manutenção.'
+                 : ` e ${n.dominados} já foram alcançados e passaram para acompanhamento de manutenção.`)
+             : '.')
+        : 'Não houve registro de objetivos trabalhados neste período. ' +
+          '[Explique o motivo: início recente, avaliação em curso, ou outra razão.]';
 
+    // ── progressos ──────────────────────────────────────────────────────────
     const subiram = n.programas.filter(p => p.variacao >= 10);
     const cairam  = n.programas.filter(p => p.variacao <= -10);
-    const progressos = n.programas.length
-        ? n.programas.map(p =>
-            `${p.nome}: ${p.pct}% de respostas independentes em ${p.tentativas} tentativas` +
-            (p.variacao > 0 ? `, com evolução de ${p.variacao} pontos ao longo do mês` :
-             p.variacao < 0 ? `, com queda de ${Math.abs(p.variacao)} pontos ao longo do mês` :
-             ', estável no período')).join('. ') + '.' +
-          (subiram.length ? ` Destaque para o avanço em ${subiram.map(p => p.nome).join(' e ')}.` : '')
-        : 'Sem registros de tentativas suficientes para análise de progresso neste período.';
 
+    let progressos;
+    if (!n.programas.length) {
+        progressos = 'Ainda não há registros suficientes para analisar o progresso neste período.';
+    } else {
+        progressos = n.programas.map(p => {
+            const acertos = Math.round(p.tentativas * p.pct / 100);
+            const evolucao = p.variacao > 0
+                ? ` Houve avanço de ${p.variacao} pontos ao longo do mês.`
+                : p.variacao < 0
+                ? ` Houve queda de ${Math.abs(p.variacao)} pontos ao longo do mês.`
+                : ' O desempenho manteve-se estável.';
+            return `• ${p.nome}\n  Fez sozinho em ${acertos} de ` +
+                   `${pl(p.tentativas, 'oportunidade', 'oportunidades')} (${p.pct}%).${evolucao}`;
+        }).join('\n\n');
+
+        if (subiram.length) {
+            progressos += `\n\nO avanço mais claro do mês foi em ` +
+                (subiram.length === 1 ? subiram[0].nome
+                 : subiram.slice(0,-1).map(p => p.nome).join(', ') + ' e ' + subiram.slice(-1)[0].nome) + '.';
+        }
+    }
+
+    // ── comportamento ───────────────────────────────────────────────────────
     const nomesComp = Object.keys(n.comportamentos);
     const comportamento = nomesComp.length
-        ? 'Foram registrados episódios de: ' +
-          nomesComp.map(k => `${k} (${n.comportamentos[k]} episódio(s))`).join(', ') + '.'
-        : 'Não houve registro de comportamentos-problema no período.';
+        ? `Foram registrados episódios de:\n\n` +
+          nomesComp.map(k => `• ${k} — ${pl(n.comportamentos[k], 'episódio', 'episódios')} no mês`).join('\n') +
+          `\n\n[Descreva em que situações costumam aparecer e o que tem funcionado.]`
+        : 'Não houve registro de comportamentos que exigissem manejo específico no período.';
 
+    // ── dificuldades ────────────────────────────────────────────────────────
     const ctx = Object.keys(n.contextos);
-    const dificuldades =
-        (cairam.length ? `Observou-se queda de desempenho em ${cairam.map(p => p.nome).join(' e ')}. ` : '') +
-        (ctx.length ? `Foram registradas intercorrências que podem ter influenciado o período: ` +
-                      ctx.map(c => `${c} (${n.contextos[c]}x)`).join(', ') + '. ' : '') +
-        (!cairam.length && !ctx.length ? 'Sem dificuldades relevantes registradas no período. ' : '') +
-        '[Complemente com a leitura clínica da equipe.]';
+    const partes = [];
+    if (cairam.length) {
+        partes.push('Houve queda de desempenho em ' +
+            (cairam.length === 1 ? cairam[0].nome : cairam.map(p => p.nome).join(' e ')) + '.');
+    }
+    if (ctx.length) {
+        partes.push('Foram registradas situações que podem ter influenciado o período: ' +
+            ctx.map(c => `${c} (${n.contextos[c]}x)`).join(', ') + '.');
+    }
+    if (!partes.length) partes.push('Não foram registradas dificuldades relevantes no período.');
+    const dificuldades = partes.join(' ') + '\n\n[Complemente com a leitura clínica da equipe.]';
 
-    const plano = '[Descreva os objetivos que seguem em ensino, os que entram e os ajustes de plano para o próximo mês.]';
-    const conclusao =
-        `${PAC.nome_completo} manteve ${presenca}% de presença no período` +
-        (subiram.length ? ' e apresentou evolução nos objetivos em ensino' : '') + '. ' +
-        '[Conclua com o parecer da equipe e as orientações à família.]';
+    // ── plano e conclusão ───────────────────────────────────────────────────
+    const plano = '[Descreva os objetivos que seguem em ensino, os que entram no próximo mês ' +
+                  'e os ajustes de plano.]\n\n[Inclua o que a família pode fazer em casa.]';
 
-    return { frequencia, objetivos, progressos, dificuldades, comportamento, plano_proximo: plano, conclusao };
+    let conclusao;
+    if (!n.previstas) {
+        conclusao = `[Conclua com o parecer da equipe sobre o período.]`;
+    } else {
+        conclusao = `${primeiro} manteve ${presenca}% de presença em ${mesNome}` +
+            (subiram.length ? ' e apresentou evolução nos objetivos em ensino'
+             : cairam.length ? ', com desempenho oscilante nos objetivos em ensino' : '') +
+            '.\n\n[Conclua com o parecer da equipe e as orientações à família.]';
+    }
+
+    return { frequencia, objetivos, progressos, dificuldades, comportamento,
+             plano_proximo: plano, conclusao };
 }
 
 async function gerarRascunho() {

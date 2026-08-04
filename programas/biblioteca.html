@@ -77,12 +77,15 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
     <div class="faixa-perfil"></div>
 
     <main class="app-main">
-        <div class="app-topo">
+        <div class="heroi">
             <div>
                 <h1>Biblioteca de programas</h1>
                 <div class="sub" id="contagem">carregando…</div>
             </div>
-            <button class="btn" id="btNovo" style="display:none" onclick="abrirNovo()">Novo programa</button>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button class="btn btn-secundario" onclick="abrirLote()">Cadastrar vários</button>
+                <button class="btn" id="btNovo" style="display:none" onclick="abrirNovo()">Novo programa</button>
+            </div>
         </div>
 
         <div class="aviso" style="margin-bottom:14px">
@@ -172,6 +175,66 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
             <div class="grid-2">
                 <button type="button" class="btn btn-secundario btn-bloco" onclick="fechar('modalForm')">Cancelar</button>
                 <button type="submit" class="btn btn-bloco" id="btSalvar">Salvar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+
+<!-- ── cadastro em lote ────────────────────────────────────────────────────── -->
+<div class="modal-fundo" id="modalLote" onclick="if(event.target===this) fechar('modalLote')">
+    <div class="modal" style="max-width:640px">
+        <h2 style="margin-bottom:4px">Cadastrar vários programas</h2>
+        <p class="tiny soft" style="margin-bottom:15px">
+            Para montar a biblioteca de uma vez, sem abrir o formulário 30 vezes.
+            Os detalhes de cada programa você refina depois, um a um.
+        </p>
+        <form id="formLote">
+            <div class="campo">
+                <label for="loteTexto">Um programa por linha *</label>
+                <textarea id="loteTexto" rows="14" required
+                    style="font-family:ui-monospace,Menlo,monospace;font-size:12px"
+placeholder="# receptiva
+Seguir instrução de um passo | Executar instrução simples dada pelo adulto
+Apontar figura nomeada
+Identificar partes do corpo
+
+# expressiva
+Nomear objetos comuns | Nomear itens do dia a dia quando perguntado
+Pedir item preferido
+
+# social
+Esperar a vez em jogo de mesa
+Responder ao próprio nome"></textarea>
+                <div class="tiny soft" style="margin-top:6px;line-height:1.6">
+                    Linha com <b>#</b> define a área dos programas abaixo dela:
+                    <b>receptiva</b>, <b>expressiva</b>, <b>cognicao</b>, <b>motora</b>,
+                    <b>social</b> ou <b>autocuidado</b>.<br>
+                    Depois do nome, uma barra <b>|</b> permite escrever o objetivo.
+                </div>
+            </div>
+
+            <div class="campo-3">
+                <div class="campo"><label for="loteTentativas">Tentativas por sessão</label>
+                    <input id="loteTentativas" type="number" min="1" max="100" value="10"></div>
+                <div class="campo"><label for="lotePct">Critério: % de acerto</label>
+                    <input id="lotePct" type="number" min="1" max="100" value="80"></div>
+                <div class="campo"><label for="loteSessoes">Em quantas sessões</label>
+                    <input id="loteSessoes" type="number" min="1" max="20" value="3"></div>
+            </div>
+            <div class="dica-campo" style="margin-bottom:11px">
+                Estes valores valem para todos os programas do lote. Cada um pode ser
+                ajustado depois, na edição.
+            </div>
+
+            <div id="lotePreview" style="display:none;background:var(--surface-alt);
+                 border:1px solid var(--line);border-radius:11px;padding:12px;margin-bottom:11px;
+                 max-height:190px;overflow:auto;font-size:12px"></div>
+
+            <div class="aviso" id="erroLote" style="display:none;border-left-color:var(--st-bad);color:var(--st-bad);margin-bottom:10px"></div>
+            <div class="grid-2">
+                <button type="button" class="btn btn-secundario btn-bloco" onclick="fechar('modalLote')">Cancelar</button>
+                <button type="submit" class="btn btn-bloco" id="btSalvarLote">Cadastrar</button>
             </div>
         </form>
     </div>
@@ -328,6 +391,144 @@ function abrirEditar(id) {
     document.getElementById('fPre').value = p.pre_requisitos || '';
     document.getElementById('modalForm').classList.add('aberto');
 }
+
+
+// ── cadastro em lote ────────────────────────────────────────────────────────
+// Montar a biblioteca abrindo o formulário 30 vezes é o tipo de trabalho que
+// faz a pessoa desistir no meio. Aqui vale o mesmo formato de texto dos
+// protocolos de avaliação, que a equipe já conhece.
+const AREAS_VALIDAS = ['receptiva','expressiva','cognicao','motora','social','autocuidado'];
+
+function abrirLote() {
+    document.getElementById('formLote').reset();
+    document.getElementById('lotePreview').style.display = 'none';
+    document.getElementById('modalLote').classList.add('aberto');
+    const t = document.getElementById('loteTexto');
+    if (!t.dataset.ligado) {
+        t.dataset.ligado = '1';
+        t.addEventListener('input', previewLote);
+    }
+}
+
+function interpretarLote(texto) {
+    const linhas = (texto || '').split('\n').map(l => l.trim()).filter(Boolean);
+    const saida = [];
+    let area = null;
+    const problemas = [];
+
+    linhas.forEach((l, i) => {
+        if (l.startsWith('#')) {
+            const cand = l.replace(/^#+\s*/, '').toLowerCase()
+                          .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            if (AREAS_VALIDAS.indexOf(cand) === -1) {
+                problemas.push(`linha ${i+1}: "${cand}" não é uma área válida`);
+                area = null;
+            } else { area = cand; }
+            return;
+        }
+        if (!area) { problemas.push(`linha ${i+1}: "${l.slice(0,30)}" está antes de qualquer área`); return; }
+
+        const partes = l.split('|');
+        const nome = partes[0].trim();
+        if (!nome) return;
+        saida.push({ nome: nome, area: area, objetivo: (partes[1] || '').trim() || null });
+    });
+
+    return { programas: saida, problemas: problemas };
+}
+
+function previewLote() {
+    const r = interpretarLote(document.getElementById('loteTexto').value);
+    const el = document.getElementById('lotePreview');
+    if (!r.programas.length && !r.problemas.length) { el.style.display = 'none'; return; }
+
+    const porArea = {};
+    r.programas.forEach(p => { (porArea[p.area] = porArea[p.area] || []).push(p); });
+
+    el.innerHTML = `
+        ${r.problemas.length ? `<div style="color:var(--st-bad);margin-bottom:8px">
+            ${r.problemas.map(p => '⚠ ' + p).join('<br>')}</div>` : ''}
+        <b>${r.programas.length} programa(s) em ${Object.keys(porArea).length} área(s)</b>
+        ${Object.keys(porArea).map(a => `
+            <div style="margin-top:7px">
+                <span style="color:var(--ink-soft);font-size:10.5px;text-transform:uppercase;
+                             letter-spacing:.07em;font-weight:800">${(AREAS[a] || {r:a}).r}</span>
+                <div style="color:var(--ink-muted);margin-top:2px">
+                    ${porArea[a].map(p => '· ' + p.nome).join('<br>')}
+                </div>
+            </div>`).join('')}`;
+    el.style.display = 'block';
+}
+
+document.getElementById('formLote').addEventListener('submit', async function (ev) {
+    ev.preventDefault();
+    const bt = document.getElementById('btSalvarLote'), erro = document.getElementById('erroLote');
+    const r = interpretarLote(document.getElementById('loteTexto').value);
+
+    if (r.problemas.length) {
+        erro.innerHTML = 'Corrija antes de cadastrar:<br>' + r.problemas.join('<br>');
+        erro.style.display = 'block';
+        return;
+    }
+    if (!r.programas.length) {
+        erro.textContent = 'Nenhum programa reconhecido no texto.';
+        erro.style.display = 'block';
+        return;
+    }
+
+    // avisa sobre nome repetido antes de gravar, em vez de deixar o banco recusar
+    const existentes = new Set(PROGRAMAS.map(p => p.nome.trim().toLowerCase()));
+    const repetidos = r.programas.filter(p => existentes.has(p.nome.toLowerCase()));
+    if (repetidos.length) {
+        const segue = await EqConfirm.mostrar({
+            titulo: repetidos.length + ' programa(s) já existem',
+            texto: repetidos.map(p => p.nome).slice(0,5).join(', ') +
+                   (repetidos.length > 5 ? ' e outros' : '') +
+                   '. Eles serão ignorados; os demais entram normalmente.',
+            confirmar: 'Cadastrar o resto', tipo: 'alerta'
+        });
+        if (!segue) return;
+    }
+
+    bt.disabled = true; bt.textContent = 'Cadastrando...'; erro.style.display = 'none';
+    const novos = r.programas.filter(p => !existentes.has(p.nome.toLowerCase()));
+
+    try {
+        const tentativas = parseInt(document.getElementById('loteTentativas').value || '10', 10);
+        const pct        = parseInt(document.getElementById('lotePct').value || '80', 10);
+        const sessoes    = parseInt(document.getElementById('loteSessoes').value || '3', 10);
+
+        const { data, error } = await eqClient.from('biblioteca_programas').insert(
+            novos.map(p => ({
+                nome: p.nome, area: p.area, objetivo: p.objetivo,
+                tipo_registro: 'tentativas_discretas',
+                tentativas_padrao: tentativas,
+                criterio_percentual: pct,
+                criterio_sessoes: sessoes,
+                manutencao_dias: [15, 30, 60],
+                ativo: true
+            }))
+        ).select('id');
+        if (error) throw error;
+
+        await EqAudit.registrar('criacao', 'biblioteca_programas', null,
+            { quantidade: (data || []).length, origem: 'cadastro em lote' });
+
+        fechar('modalLote');
+        await carregar();
+        await EqConfirm.mostrar({
+            titulo: (data || []).length + ' programa(s) cadastrado(s)',
+            texto: 'Agora vale abrir cada um e completar a instrução, a resposta esperada e ' +
+                   'como reforçar — é o que o aplicador lê na hora da sessão.',
+            confirmar: 'Entendi', cancelar: 'Fechar', tipo: 'padrao'
+        });
+    } catch (e) {
+        console.error(e);
+        if (window.EqErros) EqErros.anotar('cadastro em lote', e);
+        erro.textContent = 'Não foi possível cadastrar: ' + (e.message || 'erro');
+        erro.style.display = 'block';
+    } finally { bt.disabled = false; bt.textContent = 'Cadastrar'; }
+});
 
 document.getElementById('form').addEventListener('submit', async function (ev) {
     ev.preventDefault();

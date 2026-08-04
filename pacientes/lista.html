@@ -98,6 +98,7 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
 <script src="../shared/tema.js?v=2"></script>
 <script src="../shared/confirm_modal.js?v=3"></script>
 <script src="../shared/fotos.js?v=7"></script>
+<script src="../shared/cpf.js?v=21"></script>
 <script src="../shared/audit.js?v=5"></script>
 <script src="../shared/config_sistema.js?v=10"></script>
 <script src="../shared/auth_guard.js?v=12"></script>
@@ -152,7 +153,16 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
                 <div class="campo"><label for="status">Situação</label>
                     <select id="status"><option value="fila_espera">Fila de espera</option><option value="ativo">Ativo</option></select></div>
             </div>
+            <div class="campo"><label for="cpf">CPF da criança</label>
+                <input id="cpf">
+                <div class="tiny" id="cpf_aviso" style="display:none;color:var(--st-bad);margin-top:3px"></div>
+                <div class="tiny soft" style="margin-top:3px">Usado no convênio e na nota fiscal.</div>
+            </div>
             <div class="campo"><label for="responsavel">Responsável legal</label><input id="responsavel"></div>
+            <div class="campo"><label for="cpfResp">CPF do responsável</label>
+                <input id="cpfResp">
+                <div class="tiny" id="cpfResp_aviso" style="display:none;color:var(--st-bad);margin-top:3px"></div>
+            </div>
             <div class="campo-2">
                 <div class="campo"><label for="telefone">Telefone do responsável</label><input id="telefone"></div>
                 <div class="campo"><label for="convenio">Convênio</label><input id="convenio" placeholder="particular, se não houver"></div>
@@ -415,13 +425,24 @@ function abrirPasta(id) {
 }
 
 // ── cadastro ────────────────────────────────────────────────────────────────
-function abrirModal()  { document.getElementById('modal').style.display = 'flex'; document.getElementById('nome').focus(); }
+function abrirModal()  {
+    EqCPF.ligar('cpf'); EqCPF.ligar('cpfResp'); document.getElementById('modal').style.display = 'flex'; document.getElementById('nome').focus(); }
 function fecharModal() { document.getElementById('modal').style.display = 'none';
                          document.getElementById('erroForm').style.display = 'none'; }
 
 document.getElementById('formPaciente').addEventListener('submit', async function (ev) {
     ev.preventDefault();
     const bt = document.getElementById('btSalvar'), erro = document.getElementById('erroForm');
+
+    const ruim = EqCPF.conferirCampos(['cpf', 'cpfResp']);
+    if (ruim) {
+        erro.textContent = ruim === 'cpf'
+            ? 'O CPF da criança não confere. Verifique os números.'
+            : 'O CPF do responsável não confere. Verifique os números.';
+        erro.style.display = 'block';
+        document.getElementById(ruim).focus();
+        return;
+    }
     bt.disabled = true; bt.textContent = 'Salvando...'; erro.style.display = 'none';
 
     const sessoes = document.getElementById('sessoes').value;
@@ -429,6 +450,8 @@ document.getElementById('formPaciente').addEventListener('submit', async functio
         nome_completo: document.getElementById('nome').value.trim(),
         data_nascimento: document.getElementById('nascimento').value,
         status: document.getElementById('status').value,
+        cpf: EqCPF.paraSalvar('cpf'),
+        cpf_responsavel: EqCPF.paraSalvar('cpfResp'),
         responsavel_nome: document.getElementById('responsavel').value.trim() || null,
         responsavel_telefone: document.getElementById('telefone').value.trim() || null,
         convenio: document.getElementById('convenio').value.trim() || null,

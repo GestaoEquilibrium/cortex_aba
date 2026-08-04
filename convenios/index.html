@@ -55,6 +55,7 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
 <script src="../shared/confirm_modal.js?v=3"></script>
 <script src="../shared/fotos.js?v=7"></script>
 <script src="../shared/config_sistema.js?v=10"></script>
+<script src="../shared/cpf.js?v=21"></script>
 <script src="../shared/audit.js?v=5"></script>
 <script src="../shared/auth_guard.js?v=12"></script>
 </head>
@@ -242,6 +243,14 @@ function pintar() {
             </tr></tfoot>
         </table>`
         : '<div class="vazio-msg">Nenhuma sessão realizada no período com esse filtro.</div>'}
+        ${(function () {
+            const semCpf = [...new Set(SESSOES.filter(s => !s.cpf).map(s => s.paciente))];
+            return semCpf.length ? `<div class="nota-metodo" style="color:var(--st-warn)">
+                <b>${semCpf.length} paciente(s) sem CPF cadastrado:</b>
+                ${semCpf.slice(0,4).join(', ')}${semCpf.length > 4 ? ' e outros' : ''}.
+                A maioria dos convênios devolve a prestação de contas sem esse dado.
+            </div>` : '';
+        })()}
         <div class="nota-metodo">
             Conta apenas sessões com status <b>realizada</b>. Faltas, cancelamentos e sessões
             em aberto ficam de fora — é o que a clínica pode cobrar.
@@ -254,7 +263,7 @@ function pintar() {
             <span class="tiny soft">${SESSOES.length} linha(s)</span></div>
         ${SESSOES.length ? `<table class="tabela-conv">
             <thead><tr>
-                <th>Data</th><th>Hora</th><th>Paciente</th><th>Carteirinha</th>
+                <th>Data</th><th>Hora</th><th>Paciente</th><th>CPF</th><th>Carteirinha</th>
                 <th>Guia</th><th>Profissional</th><th style="text-align:right">Min</th>
             </tr></thead>
             <tbody>${SESSOES.map(s => `
@@ -262,6 +271,8 @@ function pintar() {
                     <td>${brl(s.data)}</td>
                     <td class="muted">${(s.hora||'').slice(0,5)}</td>
                     <td>${s.paciente}</td>
+                    <td class="muted">${s.cpf ? EqCPF.formatar(s.cpf)
+                        : '<span style="color:var(--st-warn)">sem CPF</span>'}</td>
                     <td class="muted">${s.carteirinha || '—'}</td>
                     <td class="muted">${s.guia_numero || '—'}
                         ${s.guia_vencida ? '<br><span class="tiny" style="color:var(--st-bad)">vencida na data</span>' : ''}</td>
@@ -282,10 +293,11 @@ async function exportar() {
     });
     if (!ok) return;
 
-    const linhas = [['data','hora','paciente','carteirinha','convenio','guia','validade_guia',
+    const linhas = [['data','hora','paciente','cpf','carteirinha','convenio','guia','validade_guia',
                      'guia_vencida_na_data','profissional','conselho','duracao_min']]
         .concat(SESSOES.map(s => [
-            brl(s.data), (s.hora||'').slice(0,5), s.paciente, s.carteirinha || '',
+            brl(s.data), (s.hora||'').slice(0,5), s.paciente,
+            s.cpf ? EqCPF.formatar(s.cpf) : '', s.carteirinha || '',
             s.convenio || '', s.guia_numero || '', s.guia_validade ? brl(s.guia_validade) : '',
             s.guia_vencida ? 'SIM' : 'nao', s.profissional || '', s.conselho || '', s.duracao_min
         ]));

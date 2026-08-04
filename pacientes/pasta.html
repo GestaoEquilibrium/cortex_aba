@@ -87,6 +87,7 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
 <script src="../shared/documentos.js?v=13"></script>
 <script src="../shared/whatsapp.js?v=14"></script>
 <script src="../shared/acesso.js?v=11"></script>
+<script src="../shared/cpf.js?v=21"></script>
 <script src="../shared/audit.js?v=5"></script>
 <script src="../shared/config_sistema.js?v=10"></script>
 <script src="../shared/auth_guard.js?v=12"></script>
@@ -126,7 +127,15 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
                         <option value="desligado">Desligado</option>
                     </select></div>
             </div>
+            <div class="campo"><label for="eCpf">CPF da criança</label>
+                <input id="eCpf">
+                <div class="tiny" id="eCpf_aviso" style="display:none;color:var(--st-bad);margin-top:3px"></div>
+            </div>
             <div class="campo"><label for="eResp">Responsável legal</label><input id="eResp"></div>
+            <div class="campo"><label for="eCpfResp">CPF do responsável</label>
+                <input id="eCpfResp">
+                <div class="tiny" id="eCpfResp_aviso" style="display:none;color:var(--st-bad);margin-top:3px"></div>
+            </div>
             <div class="campo-2">
                 <div class="campo"><label for="eTel">Telefone</label><input id="eTel"></div>
                 <div class="campo"><label for="eConv">Convênio</label><input id="eConv"></div>
@@ -757,6 +766,8 @@ function painelResumo() {
         <div class="card-titulo"><h3>Cadastro</h3></div>
         <div class="dl">
             <div><span>Responsável legal</span><b>${PAC.responsavel_nome || '—'}</b></div>
+            <div><span>CPF</span><b>${PAC.cpf ? EqCPF.formatar(PAC.cpf)
+                : '<span class="tiny soft">não informado</span>'}</b></div>
             <div><span>Telefone</span><b>${PAC.responsavel_telefone
                 ? EqWhats.botao(PAC.responsavel_telefone,
                     EqWhats.textos.livre({ clinica: nomeClinica() }),
@@ -2076,6 +2087,10 @@ function abrirEditar() {
     document.getElementById('eNasc').value   = PAC.data_nascimento || '';
     document.getElementById('eStatus').value = PAC.status || 'fila_espera';
     document.getElementById('eResp').value   = PAC.responsavel_nome || '';
+    // o banco guarda só dígitos; a tela mostra com máscara
+    document.getElementById('eCpf').value     = EqCPF.formatar(PAC.cpf || '');
+    document.getElementById('eCpfResp').value = EqCPF.formatar(PAC.cpf_responsavel || '');
+    EqCPF.ligar('eCpf'); EqCPF.ligar('eCpfResp');
     document.getElementById('eTel').value    = PAC.responsavel_telefone || '';
     document.getElementById('eConv').value   = PAC.convenio || '';
     document.getElementById('eSess').value   = PAC.sessoes_semana_prescritas || '';
@@ -2088,6 +2103,19 @@ function abrirEditar() {
 
 document.getElementById('formEditar').addEventListener('submit', async function (ev) {
     ev.preventDefault();
+
+    const ruim = EqCPF.conferirCampos(['eCpf', 'eCpfResp']);
+    if (ruim) {
+        const erro = document.getElementById('erroEditar');
+        if (erro) {
+            erro.textContent = ruim === 'eCpf'
+                ? 'O CPF da criança não confere. Verifique os números.'
+                : 'O CPF do responsável não confere. Verifique os números.';
+            erro.style.display = 'block';
+        }
+        document.getElementById(ruim).focus();
+        return;
+    }
     const bt = document.getElementById('btSalvarEditar'), erro = document.getElementById('erroEditar');
     bt.disabled = true; bt.textContent = 'Salvando...'; erro.style.display = 'none';
 

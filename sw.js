@@ -21,7 +21,7 @@
 //           como se fosse atual.
 // ============================================================================
 
-const VERSAO = 'cortex-aba-v15';
+const VERSAO = 'cortex-aba-v16';
 const CACHE_ESTATICO = VERSAO + '-estatico';
 const CACHE_PAGINAS  = VERSAO + '-paginas';
 

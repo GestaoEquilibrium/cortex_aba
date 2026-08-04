@@ -76,7 +76,7 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
     <div class="faixa-perfil"></div>
 
     <main class="app-main" style="max-width:900px">
-        <div class="app-topo">
+        <div class="heroi">
             <div>
                 <h1>Supervisão</h1>
                 <div class="sub" id="subtitulo">carregando…</div>
@@ -242,7 +242,7 @@ function pintar() {
         </div>` : '';
 
     document.getElementById('area').innerHTML = bloco + `
-        <div class="card">
+        <div class="card faixa-roxo">
             <div class="card-titulo"><h3>Histórico</h3></div>
             ${lista.length ? `<table class="tabela">
                 <thead><tr><th>Data</th><th>Aplicador</th><th>Supervisor</th><th>Fidelidade</th><th>IOA</th><th></th></tr></thead>

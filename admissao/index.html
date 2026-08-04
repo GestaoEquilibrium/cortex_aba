@@ -84,7 +84,7 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
     <div class="faixa-perfil"></div>
 
     <main class="app-main">
-        <div class="app-topo">
+        <div class="heroi">
             <div>
                 <h1>Admissão</h1>
                 <div class="sub" id="subtitulo">carregando…</div>
@@ -278,7 +278,7 @@ function pintarFila() {
             <div class="kpi-numero">${antigas}</div><div class="kpi-texto">esperando há mais de 60 dias</div></div>
     </div>
 
-    <div class="card">
+    <div class="card faixa-roxo">
         <div class="card-titulo"><h3>Fila</h3>
             <span class="tiny soft">ordenada por prioridade e depois por tempo de espera</span></div>
         ${FILA.length ? FILA.map(f => `

@@ -83,7 +83,7 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
     <div class="faixa-perfil"></div>
 
     <main class="app-main" style="max-width:900px">
-        <div class="app-topo">
+        <div class="heroi">
             <div>
                 <h1>Relatório mensal</h1>
                 <div class="sub" id="subtitulo">escolha o paciente e o mês</div>
@@ -361,7 +361,7 @@ function desenhar() {
     setTimeout(montarGraficos, 60);
 
     document.getElementById('area').innerHTML = `
-    <div class="card">
+    <div class="card faixa-verde">
         <div class="cabecalho-impressao">
             <h2>Relatório mensal de acompanhamento — ${mesNome}</h2>
             <p>${PAC.nome_completo}${PAC.data_nascimento ? ' · nascido em ' + brl(PAC.data_nascimento) : ''}

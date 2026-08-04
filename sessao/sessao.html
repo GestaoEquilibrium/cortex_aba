@@ -19,7 +19,7 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../styles/base.css?v=4">
-<link rel="stylesheet" href="../styles/components.css?v=8">
+<link rel="stylesheet" href="../styles/components.css?v=9">
 <style>
 /* Feita para tablet: alvo de toque grande, pouco texto, nada de rolagem lateral. */
 .topo-sessao { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:12px; }
@@ -34,7 +34,8 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
 .faixa-observador { background:var(--acao-soft); border:1px solid var(--acao); color:var(--acao);
     border-radius:10px; padding:10px 13px; font-size:12.5px; margin-bottom:12px; font-weight:600; }
 
-.cartao-seg { border:1px solid var(--st-warn); background:var(--st-warn-bg); color:#7C4A05;
+.cartao-seg { border-radius:16px; }
+.cartao-seg-old { border:1px solid var(--st-warn); background:var(--st-warn-bg); color:#7C4A05;
               border-radius:var(--radius-card); padding:12px 14px; font-size:12.5px; margin-bottom:12px; }
 .cartao-seg b { display:block; margin-bottom:3px; }
 .faixa-reforcadores { background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-card);
@@ -114,7 +115,7 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
     <div class="faixa-perfil"></div>
 
     <main class="app-main" style="max-width:820px">
-        <div class="app-topo">
+        <div class="heroi">
             <div>
                 <h1 id="titulo">Sessão de hoje</h1>
                 <div class="sub" id="subtitulo">carregando…</div>

@@ -260,3 +260,95 @@
     background: var(--st-warn-bg);
     color: #7C4A05;
 }
+
+
+/* ============================================================================
+   LINGUAGEM VISUAL — compartilhada
+   ----------------------------------------------------------------------------
+   O mesmo vocabulário do painel e do portal, disponível em qualquer tela.
+   O princípio: cor é informação, não decoração. A faixa colorida diz de que
+   assunto o cartão trata, ou em que estado o item está, antes de você ler.
+   ============================================================================ */
+
+:root {
+    --gv-verde:    linear-gradient(135deg, #14B8A6 0%, #0F766E 100%);
+    --gv-azul:     linear-gradient(135deg, #60A5FA 0%, #2563EB 100%);
+    --gv-roxo:     linear-gradient(135deg, #A78BFA 0%, #7C3AED 100%);
+    --gv-ambar:    linear-gradient(135deg, #FBBF24 0%, #D97706 100%);
+    --gv-vermelho: linear-gradient(135deg, #F87171 0%, #DC2626 100%);
+    --gv-heroi:    linear-gradient(135deg, #0B3B36 0%, #0F766E 55%, #115E59 100%);
+
+    --gv-raio: 18px;
+    --gv-pop:  .28s cubic-bezier(.34, 1.56, .64, 1);
+}
+
+/* ── faixa no topo do cartão ─────────────────────────────────────────────── */
+.faixa-verde, .faixa-azul, .faixa-roxo, .faixa-ambar, .faixa-vermelho {
+    position: relative; overflow: hidden;
+}
+.faixa-verde::before, .faixa-azul::before, .faixa-roxo::before,
+.faixa-ambar::before, .faixa-vermelho::before {
+    content: ''; position: absolute; inset: 0 0 auto 0; height: 3px;
+}
+.faixa-verde::before    { background: var(--gv-verde); }
+.faixa-azul::before     { background: var(--gv-azul); }
+.faixa-roxo::before     { background: var(--gv-roxo); }
+.faixa-ambar::before    { background: var(--gv-ambar); }
+.faixa-vermelho::before { background: var(--gv-vermelho); }
+
+/* ── cabeçalho em gradiente ──────────────────────────────────────────────── */
+.heroi {
+    background: var(--gv-heroi); color: #fff;
+    border-radius: var(--gv-raio); padding: 22px 24px; margin-bottom: 18px;
+    position: relative; overflow: hidden;
+    display: flex; justify-content: space-between; align-items: center;
+    gap: 18px; flex-wrap: wrap;
+}
+.heroi::before {
+    content: ''; position: absolute; width: 280px; height: 280px;
+    top: -150px; right: -70px; border-radius: 50%; pointer-events: none;
+    background: radial-gradient(circle, rgba(255,255,255,.13) 0%, transparent 70%);
+}
+.heroi > * { position: relative; z-index: 1; }
+.heroi h1 { font-size: 22px; letter-spacing: -.015em; }
+.heroi .sub { font-size: 13px; color: rgba(255,255,255,.82); margin-top: 4px; }
+.heroi .btn {
+    background: rgba(255,255,255,.16); border: 1px solid rgba(255,255,255,.26);
+    color: #fff; transition: var(--gv-pop);
+}
+.heroi .btn:hover { background: rgba(255,255,255,.27); transform: translateY(-1px); }
+
+/* ── hora em bloco: o olho acha o horário sem ler a linha ─────────────────── */
+.hora-bloco {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 52px; padding: 7px 9px; border-radius: 11px;
+    background: rgba(15,118,110,.09); color: #0F766E;
+    font-weight: 800; font-size: 12.5px; flex: 0 0 auto;
+}
+.hora-bloco.tom-azul  { background: rgba(37,99,235,.09);  color: #2563EB; }
+.hora-bloco.tom-ambar { background: rgba(217,119,6,.12);  color: #D97706; }
+.hora-bloco.tom-cinza { background: var(--surface-alt);   color: var(--ink-muted); }
+
+/* ── rótulo de seção com linha ───────────────────────────────────────────── */
+.secao-titulo {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 11px; text-transform: uppercase; letter-spacing: .12em;
+    font-weight: 800; color: var(--ink-soft); margin: 22px 2px 11px;
+}
+.secao-titulo::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+
+/* ── entrada escalonada ──────────────────────────────────────────────────── */
+@keyframes gvSurgir { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.surge { animation: gvSurgir .36s ease-out both; }
+.surge:nth-child(1) { animation-delay: .03s; } .surge:nth-child(2) { animation-delay: .07s; }
+.surge:nth-child(3) { animation-delay: .11s; } .surge:nth-child(4) { animation-delay: .15s; }
+.surge:nth-child(5) { animation-delay: .19s; } .surge:nth-child(6) { animation-delay: .23s; }
+
+/* ── cartão que levanta ao passar o mouse ────────────────────────────────── */
+.levanta { transition: transform var(--gv-pop), box-shadow var(--gv-pop); }
+.levanta:hover { transform: translateY(-2px); box-shadow: 0 10px 22px rgba(15,23,42,.1); }
+
+@media (prefers-reduced-motion: reduce) {
+    .surge { animation: none; }
+    .levanta:hover, .heroi .btn:hover { transform: none; }
+}

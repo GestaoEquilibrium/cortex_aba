@@ -19,7 +19,7 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../styles/base.css?v=4">
-<link rel="stylesheet" href="../styles/components.css?v=8">
+<link rel="stylesheet" href="../styles/components.css?v=9">
 <style>
 .barra { display:flex; align-items:center; gap:9px; flex-wrap:wrap; margin-bottom:14px; }
 .barra input[type=date] {
@@ -41,7 +41,11 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
 }
 
 /* dia */
-.sessao { display:flex; align-items:center; gap:14px; flex-wrap:wrap; padding:12px 0; border-top:1px solid var(--line); }
+.sessao {
+    display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+    padding:12px 14px; border:1px solid var(--line); border-radius:14px;
+    background:var(--surface); margin-bottom:8px;
+}
 .sessao:first-child { border-top:none; }
 .sessao .hora { font-weight:800; font-size:14px; width:52px; flex:0 0 auto; }
 .sessao .quem { flex:1; min-width:170px; }
@@ -155,7 +159,7 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
     <div class="faixa-perfil"></div>
 
     <main class="app-main">
-        <div class="app-topo">
+        <div class="heroi">
             <div>
                 <h1>Agenda</h1>
                 <div class="sub" id="resumo">carregando…</div>
@@ -429,10 +433,16 @@ function desenharDia(ss) {
         const seguro = nome.replace(/'/g, '');
         const aberta = s.status === 'agendada' || s.status === 'em_andamento';
         const faltou = s.status && s.status.indexOf('falta') === 0;
+        // o tom do bloco de hora repete o status: verde feito, âmbar falta,
+        // cinza ainda por acontecer. Informação antes da leitura.
+        const tomHora = s.status === 'realizada' ? ''
+                      : faltou ? 'tom-ambar'
+                      : 'tom-cinza';
         const podeGerir = ['admin_direcao','coordenador_aba','recepcao'].includes(PERFIL);
 
-        return `<div class="sessao">
-            <div class="hora">${s.hora_inicio.slice(0,5)}</div>
+
+        return `<div class="sessao surge levanta">
+            <div class="hora-bloco ${tomHora}">${s.hora_inicio.slice(0,5)}</div>
             <div class="quem">
                 <b>${nome} ${s.paciente && s.paciente.cartao_seguranca
                     ? '<span style="color:var(--st-warn)" title="Cartão de segurança">⚠</span>' : ''}</b>

@@ -36,7 +36,15 @@ window.EqAvisos = (function () {
         buscando = (async function () {
             const eu = window.EqSessao;
             const avisos = [];
-            const coordena = eu && ['admin_direcao','coordenador_aba','supervisor_clinico','recepcao'].includes(eu.perfil);
+            // Antes havia um único grupo "coordena", que juntava recepção com
+            // coordenação. São necessidades diferentes: a recepção precisa saber de
+            // guia e contato com família; a coordenação, de evolução e supervisão.
+            // Sino com aviso que não é seu é sino que a pessoa para de abrir.
+            const perfil = eu ? eu.perfil : null;
+            const ehClinico  = ['coordenador_aba','supervisor_clinico','admin_direcao'].includes(perfil);
+            const ehAdmin    = ['recepcao','admin_direcao','coordenador_aba'].includes(perfil);
+            const ehAplicador= ['aplicador','aplicador_itinerante','estagiario_aba'].includes(perfil);
+            const coordena   = ehClinico || ehAdmin;
 
             try {
                 // ── minhas tarefas abertas ──────────────────────────────────
@@ -94,7 +102,7 @@ window.EqAvisos = (function () {
                     }
                 } catch (e) {}
 
-                if (coordena) {
+                if (ehAdmin) {
                     // ── guias vencidas ou vencendo ──────────────────────────
                     const { data: guias } = await eqClient.from('pacientes')
                         .select('id, nome_completo, guia_validade')
@@ -116,6 +124,9 @@ window.EqAvisos = (function () {
                             href: 'indicadores/index.html' });
                     }
 
+                }
+
+                if (ehClinico) {
                     // ── anamneses respondidas aguardando revisão ────────────
                     try {
                         const { data: anam } = await eqClient.from('anamneses')
@@ -125,6 +136,50 @@ window.EqAvisos = (function () {
                                 titulo: anam.length + ' anamnese(s) para revisar',
                                 detalhe: anam.map(a => a.paciente ? a.paciente.nome_completo.split(' ')[0] : '').filter(Boolean).slice(0,3).join(', '),
                                 href: 'pacientes/lista.html' });
+                        }
+                    } catch (e) {}
+                }
+
+                // ── anamneses enviadas e sem resposta (recepção cobra) ─────
+                if (ehAdmin) {
+                    try {
+                        const { data: pend } = await eqClient.from('anamneses')
+                            .select('id, enviado_em, paciente:pacientes(nome_completo)')
+                            .in('status', ['enviada','em_preenchimento'])
+                            .lt('enviado_em', emDias(-7)).limit(20);
+                        if (pend && pend.length) {
+                            avisos.push({ nivel:'info', icone:'anamnese',
+                                titulo: pend.length + ' anamnese(s) sem resposta há mais de uma semana',
+                                detalhe: pend.map(a => a.paciente ? a.paciente.nome_completo.split(' ')[0] : '')
+                                          .filter(Boolean).slice(0,3).join(', ') + ' — vale um lembrete no WhatsApp',
+                                href: 'pacientes/lista.html' });
+                        }
+                    } catch (e) {}
+                }
+
+                // ── meus pacientes sem PEI (só quem aplica precisa saber) ──
+                if (ehAplicador && eu) {
+                    try {
+                        const { data: meus } = await eqClient
+                            .from('vinculos_paciente_aplicador')
+                            .select('paciente:pacientes(id, nome_completo, status)')
+                            .eq('profissional_id', eu.profissional.id).eq('ativo', true);
+                        const ativos = (meus || []).map(v => v.paciente)
+                            .filter(p => p && p.status === 'ativo');
+                        if (ativos.length) {
+                            const { data: peis } = await eqClient.from('pei')
+                                .select('paciente_id')
+                                .in('paciente_id', ativos.map(p => p.id))
+                                .eq('status', 'vigente');
+                            const comPei = new Set((peis || []).map(x => x.paciente_id));
+                            const sem = ativos.filter(p => !comPei.has(p.id));
+                            if (sem.length) {
+                                avisos.push({ nivel:'medio', icone:'pei',
+                                    titulo: sem.length + ' paciente(s) seu(s) sem PEI',
+                                    detalhe: sem.map(p => p.nome_completo.split(' ')[0]).slice(0,3).join(', ') +
+                                             ' — a sessão abre sem objetivo para registrar',
+                                    href: 'pacientes/lista.html' });
+                            }
                         }
                     } catch (e) {}
                 }

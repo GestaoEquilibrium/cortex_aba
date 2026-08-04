@@ -142,6 +142,9 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
                 <input id="mDescricao" placeholder="Estas informações ajudam a equipe a conhecer a criança."></div>
             <div class="campo">
                 <label for="mEstrutura">Seções e perguntas *</label>
+                <button type="button" class="btn btn-secundario"
+                        style="margin-bottom:7px;font-size:12px;padding:6px 12px"
+                        onclick="carregarPontoPartida()">Carregar um ponto de partida</button>
                 <textarea id="mEstrutura" rows="14" required style="font-family:ui-monospace,Menlo,monospace;font-size:12px"
 placeholder="# Gestação e nascimento
 * Como foi a gestação? [longo]
@@ -171,7 +174,7 @@ Tem restrição alimentar? [sim/não]"></textarea>
     </div>
 </div>
 
-<script src="../shared/avisos.js?v=20"></script>
+<script src="../shared/avisos.js?v=22"></script>
 <script src="../shared/sidebar.js?v=17"></script>
 <script>
 'use strict';
@@ -377,6 +380,94 @@ function abrirModelo() {
 
 // Interpreta o texto: "# seção" abre bloco; "* pergunta" é obrigatória;
 // sufixos [longo] [sim/não] [data] [número] definem o tipo.
+
+// ── ponto de partida para a anamnese ────────────────────────────────────────
+// Não é modelo pronto: é um esqueleto para a coordenação editar. A anamnese
+// certa depende de como a clínica trabalha, e ninguém de fora sabe isso.
+//
+// As perguntas seguem o que se costuma levantar numa entrada de ABA infantil —
+// história do desenvolvimento, comunicação, rotina, comportamento. Cabe à
+// coordenação tirar, acrescentar e reescrever antes de enviar para alguém.
+const PONTO_PARTIDA = `# Sobre a criança
+* Quem mora com a criança?
+Como vocês costumam chamá-la no dia a dia?
+Frequenta escola? Qual e em que período? [longo]
+
+# Gestação e nascimento
+Como foi a gestação? [longo]
+Houve intercorrências no parto? [sim/não]
+A criança precisou de UTI neonatal? [sim/não]
+
+# Desenvolvimento
+Com que idade sentou sem apoio? [longo]
+Com que idade andou sozinha? [longo]
+Com que idade falou as primeiras palavras? [longo]
+Houve alguma perda de habilidade que já tinha? [longo]
+
+# Comunicação
+* Como a criança pede o que quer hoje? [longo]
+Ela responde quando é chamada pelo nome? [sim/não]
+Costuma apontar para mostrar algo que achou interessante? [sim/não]
+Usa gestos, figuras ou aparelho para se comunicar? [longo]
+
+# Rotina e autonomia
+Como é a rotina de sono? [longo]
+Como é a alimentação — aceita variedade? [longo]
+O que já faz sozinha: banho, vestir, banheiro? [longo]
+
+# Interesses
+O que ela mais gosta de fazer? [longo]
+Tem algum brinquedo, comida ou atividade que ela adora? [longo]
+Existe algo que a incomoda muito — barulho, textura, luz? [longo]
+
+# Comportamento
+Há comportamentos que preocupam vocês? [longo]
+Em que situações eles costumam aparecer? [longo]
+O que vocês costumam fazer quando acontecem? [longo]
+
+# Saúde
+Faz uso de alguma medicação? Qual e para quê? [longo]
+Tem alguma alergia ou restrição alimentar? [longo]
+Já recebeu algum diagnóstico? Por qual profissional? [longo]
+
+# Outros acompanhamentos
+Faz outras terapias? Quais e com que frequência? [longo]
+Como é a comunicação entre os profissionais hoje? [longo]
+
+# Expectativas da família
+* O que vocês mais esperam deste acompanhamento? [longo]
+Há algo que vocês gostariam que a equipe soubesse? [longo]`;
+
+async function carregarPontoPartida() {
+    const campo = document.getElementById('mEstrutura');
+    if (campo.value.trim()) {
+        const ok = await EqConfirm.mostrar({
+            titulo: 'Substituir o que está escrito?',
+            texto: 'O texto atual será trocado pelo ponto de partida.',
+            confirmar: 'Substituir', tipo: 'alerta'
+        });
+        if (!ok) return;
+    }
+    campo.value = PONTO_PARTIDA;
+    if (!document.getElementById('mNome').value.trim()) {
+        document.getElementById('mNome').value = 'Anamnese inicial';
+    }
+    if (!document.getElementById('mDescricao').value.trim()) {
+        document.getElementById('mDescricao').value =
+            'Estas informações ajudam a equipe a conhecer melhor a criança antes de começar. ' +
+            'Responda com calma — não precisa terminar de uma vez.';
+    }
+    campo.dispatchEvent(new Event('input'));
+
+    await EqConfirm.mostrar({
+        titulo: 'Ponto de partida carregado',
+        texto: 'Leia e ajuste antes de salvar. Isto é um esqueleto, não um modelo pronto: ' +
+               'a anamnese certa depende de como a clínica trabalha. Tire o que não usa e ' +
+               'acrescente o que falta.',
+        confirmar: 'Entendi', cancelar: 'Fechar', tipo: 'padrao'
+    });
+}
+
 function interpretarModelo(texto) {
     const linhas = texto.split('\n').map(l => l.trim()).filter(Boolean);
     const estrutura = [];

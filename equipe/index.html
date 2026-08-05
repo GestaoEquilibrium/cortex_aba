@@ -21,6 +21,8 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
 <link rel="stylesheet" href="../styles/base.css?v=4">
 <link rel="stylesheet" href="../styles/components.css?v=9">
 <style>
+.acoes-acesso { margin-top:5px; font-size:11.5px; line-height:1.7; }
+.acoes-acesso .sep { color:var(--line-strong); margin:0 5px; }
 .bt-link { border:none; background:transparent; color:var(--acao); font:inherit; font-size:10.5px;
            font-weight:700; cursor:pointer; padding:2px 0; text-decoration:underline; }
 .foto-prof { width:34px; height:34px; border-radius:50%; flex:0 0 auto; color:#fff; overflow:hidden;
@@ -48,7 +50,7 @@ document.documentElement.setAttribute('data-modo',m);}catch(e){}})();
 <script src="../shared/tema.js?v=2"></script>
 <script src="../shared/confirm_modal.js?v=3"></script>
 <script src="../shared/fotos.js?v=7"></script>
-<script src="../shared/acesso.js?v=11"></script>
+<script src="../shared/acesso.js?v=23"></script>
 <script src="../shared/audit.js?v=5"></script>
 <script src="../shared/config_sistema.js?v=10"></script>
 <script src="../shared/auth_guard.js?v=12"></script>
@@ -272,13 +274,28 @@ async function carregarProfissionais() {
                         return a ? `<br><span class="chip chip-alerta">${a.motivo} até ${a.data_fim.split('-').reverse().join('/')}</span>` : '';
                     })()}</td>
                 <td class="muted">${nomeEquipe(p.equipe_id)}</td>
-                <td>${p.auth_user_id
-                        ? `<span class="chip chip-ok">com acesso</span>
-                           ${SOU_ADMIN ? `<br><button class="bt-link" onclick="redefinirAcesso('${p.id}','${p.nome_completo.replace(/'/g,"\\'")}')">redefinir senha</button>` : ''}`
+                <td>${(() => {
+                    const nomeSeguro = p.nome_completo.replace(/'/g, "\\'");
+                    const acoes = [];
+                    if (SOU_ADMIN) {
+                        // e-mail pode ser trocado tenha acesso ou não: quem ainda
+                        // está com o endereço provisório precisa corrigir antes
+                        acoes.push(`<button class="bt-link" onclick="alterarEmail('${p.id}','${nomeSeguro}')">alterar e-mail</button>`);
+                        if (p.auth_user_id) {
+                            acoes.push(`<button class="bt-link" onclick="definirSenha('${p.id}','${nomeSeguro}')">definir senha</button>`);
+                            acoes.push(`<button class="bt-link" onclick="redefinirAcesso('${p.id}','${nomeSeguro}')">sortear senha</button>`);
+                        }
+                    }
+                    const linha = acoes.length
+                        ? `<div class="acoes-acesso">${acoes.join('<span class="sep">·</span>')}</div>` : '';
+
+                    return p.auth_user_id
+                        ? `<span class="chip chip-ok">com acesso</span>${linha}`
                         : (SOU_ADMIN
                            ? `<button class="btn btn-secundario" style="padding:5px 10px;font-size:11.5px"
-                                onclick="criarAcesso('${p.id}','${p.nome_completo.replace(/'/g,"\\'")}')">Criar acesso</button>`
-                           : '<span class="sem-conta">sem conta</span>')}</td>
+                                onclick="criarAcesso('${p.id}','${nomeSeguro}')">Criar acesso</button>${linha}`
+                           : '<span class="sem-conta">sem conta</span>');
+                })()}</td>
                 <td style="text-align:right;white-space:nowrap">
                     ${PODE_AUSENCIA ? `<button class="btn btn-secundario" style="padding:5px 10px;font-size:11.5px"
                             onclick="abrirAusencia('${p.id}','${p.nome_completo.replace(/'/g,'')}')">Ausência</button>` : ''}
@@ -368,6 +385,69 @@ async function criarAcesso(id, nome) {
         console.error(e);
         await EqConfirm.mostrar({ titulo:'Não foi possível criar o acesso',
             texto: e.message, confirmar:'Entendi', cancelar:'Fechar', tipo:'alerta' });
+    }
+}
+
+
+// ── alterar e-mail ──────────────────────────────────────────────────────────
+// Muda no cadastro e na conta de acesso na mesma operação. Se mudasse só no
+// cadastro, a pessoa continuaria entrando com o endereço antigo e ninguém
+// entenderia por quê.
+async function alterarEmail(id, nome) {
+    const prof = PROFISSIONAIS.find(x => x.id === id);
+    const atual = prof ? (prof.email || '') : '';
+    const provisorio = /@[\w.-]*\.local$/i.test(atual);
+
+    const novo = await EqAcesso.pedirTexto({
+        titulo: 'Alterar e-mail de ' + nome,
+        texto: (prof && prof.auth_user_id)
+            ? 'O endereço muda no cadastro <b>e no acesso</b>. A pessoa passa a entrar com o novo e-mail; a senha continua a mesma.'
+            : 'Este cadastro ainda não tem acesso criado, então o endereço muda só no cadastro.'
+            + (provisorio ? '<br><br><b>O e-mail atual é provisório</b> e não recebe mensagens.' : ''),
+        valor: provisorio ? '' : atual,
+        exemplo: 'nome@dominio.com.br',
+        tipo: 'email',
+        confirmar: 'Alterar',
+        validar: v => !v ? 'Informe o e-mail.'
+                    : !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v) ? 'Este e-mail não parece válido.'
+                    : v.toLowerCase() === atual.toLowerCase() ? 'É o mesmo e-mail que já está lá.'
+                    : null
+    });
+    if (!novo) return;
+
+    try {
+        const r = await EqAcesso.alterarEmail('profissional', id, novo);
+        await carregar();
+        await EqConfirm.mostrar({ titulo: 'E-mail alterado',
+            texto: r.mensagem || ('Agora é ' + novo + '.'),
+            confirmar: 'Entendi', cancelar: 'Fechar', tipo: 'padrao' });
+    } catch (e) {
+        await EqConfirm.mostrar({ titulo: 'Não foi possível alterar',
+            texto: e.message, confirmar: 'Entendi', cancelar: 'Fechar', tipo: 'alerta' });
+    }
+}
+
+// ── definir uma senha escolhida ─────────────────────────────────────────────
+async function definirSenha(id, nome) {
+    const nova = await EqAcesso.pedirTexto({
+        titulo: 'Definir senha de ' + nome,
+        texto: 'Você escolhe a senha e repassa à pessoa. Ela será obrigada a trocar ' +
+               'no próximo acesso — senha que outra pessoa conhece não é senha.',
+        exemplo: 'pelo menos 8 caracteres',
+        confirmar: 'Definir',
+        validar: v => !v ? 'Informe a senha.'
+                    : v.length < 8 ? 'Precisa de pelo menos 8 caracteres.'
+                    : /^\d+$/.test(v) ? 'Só números é fácil demais de adivinhar.'
+                    : null
+    });
+    if (!nova) return;
+
+    try {
+        const r = await EqAcesso.definirSenha('profissional', id, nova);
+        EqAcesso.mostrarSenha(r.email, nova, 'Senha definida para ' + nome);
+    } catch (e) {
+        await EqConfirm.mostrar({ titulo: 'Não foi possível definir',
+            texto: e.message, confirmar: 'Entendi', cancelar: 'Fechar', tipo: 'alerta' });
     }
 }
 

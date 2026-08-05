@@ -13,7 +13,7 @@
 window.EqAcesso = (function () {
     'use strict';
 
-    async function chamar(acao, tipo, registroId) {
+    async function chamar(acao, tipo, registroId, extra) {
         const { data: { session } } = await eqClient.auth.getSession();
         if (!session) throw new Error('Sessão expirada. Entre novamente.');
 
@@ -25,7 +25,8 @@ window.EqAcesso = (function () {
                 'Authorization': 'Bearer ' + session.access_token,
                 'apikey': SUPABASE_CONFIG.anonKey
             },
-            body: JSON.stringify({ acao: acao, tipo: tipo, registro_id: registroId })
+            body: JSON.stringify(Object.assign(
+                { acao: acao, tipo: tipo, registro_id: registroId }, extra || {}))
         });
 
         let dados = {};
@@ -44,6 +45,71 @@ window.EqAcesso = (function () {
     const criar     = (tipo, id) => chamar('criar', tipo, id);
     const redefinir = (tipo, id) => chamar('redefinir', tipo, id);
     const remover   = (tipo, id) => chamar('remover', tipo, id);
+
+    // Alterar e-mail e definir senha mexem no cadastro e na conta de acesso ao
+    // mesmo tempo. Mudar só de um lado deixa a pessoa sem conseguir entrar, e
+    // depois ninguém entende por quê.
+    const alterarEmail  = (tipo, id, novoEmail) =>
+        chamar('alterar_email', tipo, id, { novo_email: novoEmail });
+    const definirSenha  = (tipo, id, novaSenha) =>
+        chamar('definir_senha', tipo, id, { nova_senha: novaSenha });
+
+
+    // Caixa para digitar um valor. Existe porque `prompt()` do navegador destoa
+    // do resto do sistema e é bloqueado em alguns aparelhos.
+    function pedirTexto(opcoes) {
+        return new Promise(function (resolve) {
+            const o = opcoes || {};
+            const fundo = document.createElement('div');
+            fundo.style.cssText = 'position:fixed;inset:0;background:rgba(11,26,41,.55);' +
+                'backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;' +
+                'z-index:9999;padding:18px';
+            fundo.innerHTML =
+                '<div style="background:var(--surface,#fff);border-radius:18px;padding:24px;' +
+                'max-width:420px;width:100%;box-shadow:0 20px 50px rgba(11,26,41,.3)">' +
+                '<h3 style="font-size:17px;font-weight:800;margin-bottom:6px">' + (o.titulo || '') + '</h3>' +
+                (o.texto ? '<p style="font-size:13px;color:var(--ink-muted,#64748B);line-height:1.55;' +
+                           'margin-bottom:14px">' + o.texto + '</p>' : '') +
+                '<input id="eqPedirCampo" type="' + (o.tipo || 'text') + '" ' +
+                'value="' + String(o.valor || '').replace(/"/g, '&quot;') + '" ' +
+                'placeholder="' + (o.exemplo || '') + '" ' +
+                'style="width:100%;padding:11px 13px;border:1px solid var(--line,#E2E8F0);' +
+                'border-radius:11px;font:inherit;font-size:14px;margin-bottom:6px">' +
+                '<div id="eqPedirErro" style="font-size:12px;color:#DC2626;display:none;' +
+                'margin-bottom:8px"></div>' +
+                '<div style="display:flex;gap:9px;margin-top:12px">' +
+                '<button id="eqPedirNao" style="flex:1;padding:11px;border-radius:11px;border:none;' +
+                'font:inherit;font-size:13.5px;font-weight:700;cursor:pointer;' +
+                'background:var(--surface-alt,#F1F5F9);color:var(--ink,#0F172A)">Cancelar</button>' +
+                '<button id="eqPedirSim" style="flex:1;padding:11px;border-radius:11px;border:none;' +
+                'font:inherit;font-size:13.5px;font-weight:700;cursor:pointer;' +
+                'background:var(--acao,#0F766E);color:#fff">' + (o.confirmar || 'Salvar') + '</button>' +
+                '</div></div>';
+            document.body.appendChild(fundo);
+
+            const campo = fundo.querySelector('#eqPedirCampo');
+            const erro  = fundo.querySelector('#eqPedirErro');
+            campo.focus(); campo.select();
+
+            function fechar(v) { fundo.remove(); resolve(v); }
+            function confirmar() {
+                const v = campo.value.trim();
+                const problema = o.validar ? o.validar(v) : null;
+                if (problema) {
+                    erro.textContent = problema; erro.style.display = 'block';
+                    campo.style.borderColor = '#DC2626'; return;
+                }
+                fechar(v);
+            }
+            fundo.querySelector('#eqPedirSim').addEventListener('click', confirmar);
+            fundo.querySelector('#eqPedirNao').addEventListener('click', function () { fechar(null); });
+            campo.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter') confirmar();
+                if (e.key === 'Escape') fechar(null);
+            });
+            fundo.addEventListener('click', function (e) { if (e.target === fundo) fechar(null); });
+        });
+    }
 
     // Mostra a senha uma vez, com botão de copiar. Ela não fica salva em lugar nenhum.
     function mostrarSenha(email, senha, titulo) {
@@ -90,5 +156,5 @@ window.EqAcesso = (function () {
         fundo.querySelector('#eqFechar').addEventListener('click', () => fundo.remove());
     }
 
-    return { criar, redefinir, remover, mostrarSenha };
+    return { criar, redefinir, remover, alterarEmail, definirSenha, mostrarSenha, pedirTexto };
 })();

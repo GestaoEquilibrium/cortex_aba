@@ -36,6 +36,10 @@ window.MODULOS.permissoes = {
       dica: 'V: consulta. E: elabora e renova (Formulario 01) e recebe alertas de vencimento.' },
     { chave: 'avaliacoes', rotulo: 'Avaliacoes (QADI-R)',
       dica: 'V: consulta resultados. E: aplica e conclui avaliacoes.' },
+    { chave: 'programas', rotulo: 'Programas e alvos',
+      dica: 'V: consulta. E: gere a biblioteca e os programas/alvos dos pacientes.' },
+    { chave: 'evolucao', rotulo: 'Folha de aplicacao e evolucao',
+      dica: 'E: registra tentativas na sessao e escreve a evolucao diaria.' },
     { chave: 'pei', rotulo: 'PEI e Devolutiva',
       dica: 'V: consulta. E: elabora PEI e relatorio de devolutiva.' }
   ],

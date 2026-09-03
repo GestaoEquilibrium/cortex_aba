@@ -922,3 +922,50 @@
 .opcao-perfil.atual { border-color: var(--acao); background: var(--acao-soft); }
 .opcao-perfil b { font-size: 13px; }
 .opcao-perfil small { color: var(--ink-muted); font-size: 11px; flex: 1; }
+
+/* ── Folha de aplicacao ───────────────────────────────────────────────── */
+.folha-alvo { padding: 12px 0; border-bottom: 1px dashed var(--line); }
+.folha-alvo:last-child { border-bottom: none; }
+.folha-alvo-topo {
+    display: flex; justify-content: space-between; align-items: baseline;
+    gap: 12px; margin-bottom: 9px;
+}
+.folha-alvo-topo b { font-size: 13.5px; }
+.folha-cont { font-size: 11px; font-weight: 700; color: var(--ink-muted); white-space: nowrap; }
+.folha-botoes { display: flex; gap: 7px; flex-wrap: wrap; }
+.btn-resposta {
+    min-width: 52px; padding: 11px 0;
+    border: 1.5px solid var(--line);
+    border-radius: 12px;
+    background: var(--surface);
+    font: inherit; font-size: 13px; font-weight: 800;
+    color: var(--ink-muted);
+    cursor: pointer;
+    transition: transform var(--pop), border-color var(--suave), background var(--suave);
+}
+.btn-resposta:hover { border-color: var(--acao); color: var(--acao); }
+.btn-resposta:active { transform: scale(.92); }
+.btn-resposta.indep { border-color: rgba(22,163,74,.5); color: var(--st-ok); }
+.btn-resposta.indep:hover { background: var(--st-ok-bg); border-color: var(--st-ok); }
+
+/* ── Grafico de independencia ─────────────────────────────────────────── */
+.prog-grafico {
+    display: flex; align-items: flex-end; gap: 8px;
+    height: 120px;
+    padding: 6px 2px 0;
+    overflow-x: auto;
+}
+.prog-col {
+    flex: 0 0 30px;
+    height: 100%;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+    gap: 4px;
+}
+.prog-barra {
+    width: 100%;
+    background: linear-gradient(180deg, var(--acao) 0%, var(--acao-forte) 100%);
+    border-radius: 6px 6px 3px 3px;
+    min-height: 4px;
+    transition: height .4s ease;
+}
+.prog-col small { font-size: 9px; color: var(--ink-soft); font-weight: 700; }

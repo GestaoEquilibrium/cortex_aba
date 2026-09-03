@@ -221,6 +221,16 @@ window.MODULOS.pacientes = {
 
     if (id === 'visao') { alvo.innerHTML = this.htmlVisaoGeral(p); return; }
     if (id === 'documentos') { alvo.innerHTML = this.htmlDocumentos(p); return; }
+    if (id === 'programas') {
+      alvo.innerHTML = '<div class="cartao"><p class="sub">Carregando programas...</p></div>';
+      MODULOS.programas.htmlProgramasPaciente(p.id).then(html => { alvo.innerHTML = html; });
+      return;
+    }
+    if (id === 'evolucoes') {
+      alvo.innerHTML = '<div class="cartao"><p class="sub">Carregando evolucoes...</p></div>';
+      MODULOS.programas.htmlEvolucoes(p.id).then(html => { alvo.innerHTML = html; });
+      return;
+    }
     if (id === 'plano') {
       alvo.innerHTML = '<div class="cartao"><p class="sub">Carregando planos...</p></div>';
       MODULOS.plano.htmlDoPaciente(p.id).then(html => {

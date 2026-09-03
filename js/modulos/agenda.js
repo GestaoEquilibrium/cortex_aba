@@ -318,6 +318,9 @@ window.MODULOS.agenda = {
       if (s.status === 'checkin') {
         acoes += '<button class="btn btn-primario" onclick="MODULOS.agenda.statusModal(\'' + id + '\', \'em_atendimento\')">Iniciar atendimento</button>';
       }
+      if (['checkin', 'em_atendimento'].includes(s.status) && perm('evolucao') === 'E') {
+        acoes += '<button class="btn btn-primario" onclick="fecharModal(); MODULOS.programas.abrirFolha(\'' + id + '\')">Folha de aplicacao</button>';
+      }
       if (s.status === 'em_atendimento' || s.status === 'checkin') {
         acoes += '<button class="btn btn-fantasma" onclick="MODULOS.agenda.statusModal(\'' + id + '\', \'concluida\')">Finalizar</button>';
       }

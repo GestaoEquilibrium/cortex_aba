@@ -61,11 +61,33 @@ async function iniciarApp() {
 
   window.CORTEX_SESSAO = sessao;
   const { profile } = sessao;
+
+  // "Ver como": o suporte pode navegar com o sistema de outro perfil
+  profile.perfil_real = profile.perfil;
+  let verComo = null;
+  try { verComo = sessionStorage.getItem('cortex_ver_como'); } catch (e) {}
+  if (profile.perfil_real === 'suporte' && verComo && verComo !== 'suporte') {
+    profile.perfil = verComo;
+    if (typeof TEMA_POR_PERFIL !== 'undefined' && TEMA_POR_PERFIL[verComo]) {
+      document.documentElement.setAttribute('data-tema', TEMA_POR_PERFIL[verComo]);
+    }
+  }
+
   await carregarPermissoes(profile.perfil);
 
   document.getElementById('usuario-nome').textContent = profile.nome;
-  document.getElementById('usuario-perfil').textContent = ROTULOS_PERFIL[profile.perfil] || profile.perfil;
+  document.getElementById('usuario-perfil').innerHTML =
+    (ROTULOS_PERFIL[profile.perfil] || profile.perfil) +
+    (profile.perfil_real === 'suporte' && profile.perfil !== 'suporte'
+      ? ' <span class="ver-como-selo">ver como</span>' : '');
   document.getElementById('avatar').textContent = iniciais(profile.nome);
+
+  if (profile.perfil_real === 'suporte') {
+    const cartao = document.getElementById('usuario-cartao');
+    cartao.classList.add('clicavel-perfil');
+    cartao.title = 'Trocar o perfil de visualizacao';
+    cartao.onclick = abrirSeletorPerfil;
+  }
 
   montarSidebar(profile.perfil);
 
@@ -187,6 +209,33 @@ function formatarCPF(cpf) {
   return cpf.slice(0,3) + '.' + cpf.slice(3,6) + '.' + cpf.slice(6,9) + '-' + cpf.slice(9);
 }
 
+
+// ── "Ver como" (exclusivo do suporte) ───────────────────────────────
+function abrirSeletorPerfil() {
+  const atual = window.CORTEX_SESSAO.profile.perfil;
+  const opcoes = ['suporte', 'direcao', 'coordenador', 'terapeuta', 'aplicador', 'callcenter', 'familia'];
+
+  abrirModal('Ver o sistema como...',
+    '<p class="sub" style="margin-bottom:14px">Voce continua logado como Suporte; apenas a ' +
+    'visualizacao (menu, botoes, tema e permissoes) muda. Valido nesta aba do navegador.</p>' +
+    opcoes.map(p =>
+      '<button type="button" class="opcao-perfil' + (p === atual ? ' atual' : '') + '" ' +
+      'onclick="definirVerComo(\'' + p + '\')">' +
+      '<b>' + (ROTULOS_PERFIL[p] || p) + '</b>' +
+      (p === 'suporte' ? '<small>Acesso total (seu perfil real)</small>' :
+       p === 'familia' ? '<small>Portal da familia (sem vinculos, aparece vazio)</small>' :
+       '<small>Conforme a matriz de permissoes</small>') +
+      (p === atual ? '<span class="selo selo-ok">Atual</span>' : '') +
+      '</button>').join(''));
+}
+
+function definirVerComo(p) {
+  try {
+    if (p === 'suporte') sessionStorage.removeItem('cortex_ver_como');
+    else sessionStorage.setItem('cortex_ver_como', p);
+  } catch (e) {}
+  window.location.reload();
+}
 
 // ── Permissoes dinamicas (fonte: tabela public.permissoes) ─────────────
 // Suporte sempre tem 'E' em tudo. Demais perfis: o que a matriz definir.

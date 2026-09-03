@@ -893,3 +893,32 @@
 .perm { border: none; font: inherit; font-weight: 800; cursor: default; }
 .perm-clic { cursor: pointer; transition: transform var(--pop), box-shadow var(--suave); }
 .perm-clic:hover { transform: scale(1.15); box-shadow: var(--shadow-sm); }
+
+/* ── "Ver como" (suporte) ─────────────────────────────────────────────── */
+.clicavel-perfil { cursor: pointer; }
+.clicavel-perfil:hover .usuario-perfil { color: #FBBF24; }
+.ver-como-selo {
+    display: inline-block;
+    margin-left: 5px;
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: rgba(251, 191, 36, .18);
+    color: #FBBF24;
+    font-size: 9px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase;
+}
+.opcao-perfil {
+    display: flex; align-items: center; gap: 10px;
+    width: 100%;
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    border: 1.5px solid var(--line);
+    border-radius: var(--raio-sm);
+    background: var(--surface);
+    font: inherit; text-align: left;
+    cursor: pointer;
+    transition: border-color var(--suave), transform var(--pop);
+}
+.opcao-perfil:hover { border-color: var(--acao); transform: translateY(-1px); }
+.opcao-perfil.atual { border-color: var(--acao); background: var(--acao-soft); }
+.opcao-perfil b { font-size: 13px; }
+.opcao-perfil small { color: var(--ink-muted); font-size: 11px; flex: 1; }

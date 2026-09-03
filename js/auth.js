@@ -12,14 +12,14 @@ const ROTULOS_PERFIL = {
   familia: 'Familia'
 };
 
-// Tema visual por perfil (cor de acao): coordenacao verde, equipe azul, familia roxo
+// Tema visual por perfil: gestao ambar | equipe violeta | recepcao coral | familia azul
 const TEMA_POR_PERFIL = {
-  direcao: 'coordenacao',
-  coordenador: 'coordenacao',
-  suporte: 'coordenacao',
+  direcao: 'gestao',
+  coordenador: 'gestao',
+  suporte: 'gestao',
   terapeuta: 'equipe',
   aplicador: 'equipe',
-  callcenter: 'equipe',
+  callcenter: 'recepcao',
   familia: 'familia'
 };
 
@@ -71,7 +71,7 @@ async function exigirSessao() {
   }
 
   // Aplica o tema do perfil (cor de acao)
-  document.documentElement.setAttribute('data-tema', TEMA_POR_PERFIL[profile.perfil] || 'coordenacao');
+  document.documentElement.setAttribute('data-tema', TEMA_POR_PERFIL[profile.perfil] || 'gestao');
 
   return { user: session.user, profile };
 }

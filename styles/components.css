@@ -12,9 +12,9 @@
     width: 34px; height: 34px; flex: 0 0 auto;
     display: grid; place-items: center;
     border-radius: 10px;
-    background: var(--acao);
+    background: var(--chip);
     color: #fff;
-    box-shadow: var(--shadow-sm);
+    box-shadow: 0 3px 8px rgba(0, 0, 0, .30);
 }
 .marca .nome {
     font-weight: 800; font-size: 17px; letter-spacing: -.02em;
@@ -25,7 +25,7 @@
     font-family: var(--fonte-mao);
     font-weight: 600; font-size: 21px;
     transform: rotate(-4deg) translateY(1px);
-    color: #2DD4BF;
+    color: var(--mao);
 }
 
 /* ── Sidebar flutuante (descolada da borda, dots passam por tras) ─────── */
@@ -74,54 +74,67 @@
 
 .nav-grupo-titulo {
     font-size: 10.5px; font-weight: 700; letter-spacing: .08em;
-    color: #5F7B93;
+    color: var(--side-soft);
     padding: 14px 12px 6px;
     white-space: nowrap; overflow: hidden;
 }
 .nav-item {
     display: flex; align-items: center; gap: 11px;
-    padding: 9px 12px; margin-bottom: 2px;
+    padding: 10px 12px; margin-bottom: 3px;
     border-radius: var(--raio-sm);
     color: var(--side-ink);
     text-decoration: none;
     font-weight: 600; font-size: 13.5px;
     white-space: nowrap;
-    transition: background var(--suave), color var(--suave);
+    transition: background var(--suave), color var(--suave), transform var(--pop);
 }
 .nav-item:hover { background: rgba(255, 255, 255, .06); color: #fff; }
-.nav-item.ativa { background: var(--side-ativa); color: #fff; }
-.nav-item .icone { width: 20px; flex: 0 0 20px; display: grid; place-items: center; font-size: 15px; }
+.nav-item.ativa {
+    background: var(--pilula);
+    color: var(--pilula-ink);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, .25);
+}
+.nav-item.ativa .icone { color: var(--acao); opacity: 1; }
+.nav-item .icone {
+    width: 20px; flex: 0 0 20px;
+    display: grid; place-items: center;
+    opacity: .85;
+}
+.nav-item .icone svg { width: 16px; height: 16px; }
 
-.sidebar-rodape {
-    padding: 12px 14px;
-    border-top: 1px solid rgba(255, 255, 255, .08);
+.sidebar-rodape { padding: 10px; }
+.cartao-usuario {
     display: flex; align-items: center; gap: 10px;
+    background: rgba(255, 255, 255, .07);
+    border-radius: 13px;
+    padding: 10px 12px;
 }
 .avatar {
     width: 34px; height: 34px; flex: 0 0 auto;
     border-radius: 50%;
-    background: var(--acao);
+    background: var(--chip);
     color: #fff;
     display: grid; place-items: center;
     font-weight: 700; font-size: 13px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, .30);
 }
-.sidebar-rodape .quem { flex: 1; min-width: 0; }
-.sidebar-rodape .usuario-nome {
+.cartao-usuario .quem { flex: 1; min-width: 0; }
+.cartao-usuario .usuario-nome {
     color: #fff; font-weight: 700; font-size: 13px;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.sidebar-rodape .usuario-perfil { color: #5F7B93; font-size: 11.5px; }
+.cartao-usuario .usuario-perfil { color: var(--side-soft); font-size: 11.5px; }
 
 /* recolhida: 78px so com icones */
 .app-shell.recolhida .sidebar { width: calc(var(--sidebar-mini) - var(--sidebar-margem)); }
 .app-shell.recolhida .sidebar .nome,
 .app-shell.recolhida .sidebar .nav-grupo-titulo,
 .app-shell.recolhida .sidebar .nav-item span:not(.icone),
-.app-shell.recolhida .sidebar .quem,
+.app-shell.recolhida .sidebar .cartao-usuario .quem,
 .app-shell.recolhida .sidebar .botao-icone.so-expandida { display: none; }
 .app-shell.recolhida .sidebar-topo { justify-content: center; padding-left: 8px; padding-right: 8px; }
 .app-shell.recolhida .nav-item { justify-content: center; padding-left: 0; padding-right: 0; }
-.app-shell.recolhida .sidebar-rodape { justify-content: center; }
+.app-shell.recolhida .cartao-usuario { justify-content: center; padding: 8px; }
 
 /* ── Area principal ───────────────────────────────────────────────────── */
 .app-main {
@@ -266,7 +279,7 @@
     gap: var(--sidebar-margem);
 }
 .login-heroi {
-    background: var(--gd-neuro);
+    background: var(--gd-login);
     color: #fff;
     border-radius: var(--raio);
     box-shadow: var(--shadow-md);
@@ -289,7 +302,7 @@
 .login-heroi > * { position: relative; z-index: 1; }
 .login-heroi .marca .simbolo { width: 46px; height: 46px; border-radius: 13px; background: rgba(255,255,255,.14); }
 .login-heroi .marca .nome { font-size: 26px; color: #fff; }
-.login-heroi .marca .nome .mao { font-size: 32px; color: #A5B4FC; }
+.login-heroi .marca .nome .mao { font-size: 32px; }
 .login-heroi p {
     margin-top: 22px; max-width: 400px;
     color: rgba(255, 255, 255, .82);

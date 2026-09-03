@@ -21,10 +21,11 @@
     --line:        #E1E8EE;
     --line-strong: #CBD6DF;
 
-    /* ── Sidebar (escura nos dois modos) ──────────────────────────────── */
-    --side-bg:     #0C1B2A;
-    --side-bg-2:   #102438;
-    --side-ink:    #B9C9D6;
+    /* ── Sidebar (ameixa escura nos dois modos) ───────────────────────── */
+    --side-bg:     #150D20;
+    --side-bg-2:   #241832;
+    --side-ink:    #B4A8C8;
+    --side-soft:   #6E5D88;
     --side-ativa:  rgba(255, 255, 255, 0.10);
 
     /* ── Cores por area (fixas, claro e escuro) ───────────────────────── */
@@ -41,16 +42,20 @@
     --st-neutro: #64748B;  --st-neutro-bg: #EEF1F5;
 
     /* ── Gradientes ───────────────────────────────────────────────────── */
-    --gd-heroi:  linear-gradient(135deg, #0B3B36 0%, #0F766E 55%, #115E59 100%);
-    --gd-portal: linear-gradient(135deg, #7C3AED 0%, #4F46E5 55%, #06B6D4 100%);
+    --gd-heroi:  linear-gradient(140deg, #150D20 0%, #241832 45%, #4A2A6B 80%, #6B3FA0 100%);
+    --gd-login:  linear-gradient(150deg, #0F0918 0%, #241832 55%, #4A2A6B 100%);
+    --gd-portal: linear-gradient(135deg, #1D4ED8 0%, #2563EB 55%, #06B6D4 100%);
     --gd-verde:  linear-gradient(135deg, #14B8A6 0%, #0F766E 100%);
     --gd-azul:   linear-gradient(135deg, #60A5FA 0%, #2563EB 100%);
-    --gd-neuro:  linear-gradient(150deg, #0B1226 0%, #1E1B4B 45%, #4338CA 85%, #4F46E5 100%);
 
-    /* ── Acao (muda com o tema do perfil) ─────────────────────────────── */
-    --acao:      #0F766E;
-    --acao-forte:#0B5952;
-    --acao-soft: rgba(15, 118, 110, 0.12);
+    /* ── Acao (muda com o tema do perfil; padrao = gestao/ambar) ──────── */
+    --acao:      #D97706;
+    --acao-forte:#B45309;
+    --acao-soft: rgba(217, 119, 6, 0.12);
+    --chip: linear-gradient(135deg, #FBBF24 0%, #D97706 100%);
+    --mao: #FCD34D;
+    --pilula: #FDF9F0;
+    --pilula-ink: #3B2506;
 
     /* ── Geometria e movimento ────────────────────────────────────────── */
     --raio:    18px;
@@ -74,12 +79,37 @@
     --dot-cor: rgba(12, 27, 42, .10);
 }
 
-/* ── Temas por perfil (so a cor de acao muda) ─────────────────────────── */
-[data-tema="coordenacao"] { --acao: #0F766E; --acao-forte: #0B5952; --acao-soft: rgba(15,118,110,.12); }
-[data-tema="equipe"]      { --acao: #1D4ED8; --acao-forte: #1737A3; --acao-soft: rgba(29,78,216,.12); }
-[data-tema="familia"]     { --acao: #7C3AED; --acao-forte: #5E27C4; --acao-soft: rgba(124,58,237,.12); }
-[data-tema="neuro"]       { --acao: #4F46E5; --acao-forte: #3B34C4; --acao-soft: rgba(79,70,229,.12); }
-[data-modo="escuro"][data-tema="neuro"] { --acao-soft: rgba(79, 70, 229, .22); }
+/* ── Temas por perfil: chrome muda, cores de dado nao ─────────────────── */
+/* gestao = direcao, coordenador, suporte | equipe = terapeuta, aplicador   */
+/* recepcao = callcenter | familia = portal                                 */
+[data-tema="gestao"] {
+    --acao: #D97706; --acao-forte: #B45309; --acao-soft: rgba(217,119,6,.12);
+    --chip: linear-gradient(135deg, #FBBF24 0%, #D97706 100%);
+    --mao: #FCD34D;
+    --pilula: #FDF9F0; --pilula-ink: #3B2506;
+}
+[data-tema="equipe"] {
+    --acao: #7C3AED; --acao-forte: #5E27C4; --acao-soft: rgba(124,58,237,.12);
+    --chip: linear-gradient(135deg, #A78BFA 0%, #7C3AED 100%);
+    --mao: #C4B5FD;
+    --pilula: #F8F5FF; --pilula-ink: #2A1352;
+}
+[data-tema="recepcao"] {
+    --acao: #E11D48; --acao-forte: #BE123C; --acao-soft: rgba(225,29,72,.12);
+    --chip: linear-gradient(135deg, #FB7185 0%, #E11D48 100%);
+    --mao: #FDA4AF;
+    --pilula: #FFF7F5; --pilula-ink: #40121C;
+}
+[data-tema="familia"] {
+    --acao: #2563EB; --acao-forte: #1D4ED8; --acao-soft: rgba(37,99,235,.12);
+    --chip: linear-gradient(135deg, #60A5FA 0%, #2563EB 100%);
+    --mao: #93C5FD;
+    --pilula: #F3F8FF; --pilula-ink: #0C2A5E;
+}
+[data-modo="escuro"][data-tema="gestao"]   { --acao-soft: rgba(217, 119, 6, .22); }
+[data-modo="escuro"][data-tema="equipe"]   { --acao-soft: rgba(124, 58, 237, .22); }
+[data-modo="escuro"][data-tema="recepcao"] { --acao-soft: rgba(225, 29, 72, .22); }
+[data-modo="escuro"][data-tema="familia"]  { --acao-soft: rgba(37, 99, 235, .22); }
 
 /* ── Modo escuro (superficies mudam, cores funcionais NAO) ────────────── */
 [data-modo="escuro"] {

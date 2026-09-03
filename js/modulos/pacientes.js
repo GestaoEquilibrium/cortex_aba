@@ -129,59 +129,122 @@ window.MODULOS.pacientes = {
     return '<span class="selo ' + s[0] + '">' + s[1] + '</span>';
   },
 
-  // ─────────────────────────── DETALHE ───────────────────────────
+  // ─────────────────────────── PRONTUARIO ───────────────────────────
 
-  async telaDetalhe(id) {
+  ABAS: [
+    { id: 'visao',      rotulo: 'Visao geral' },
+    { id: 'anamnese',   rotulo: 'Anamnese',   sprint: 'Sprint 3' },
+    { id: 'avaliacao',  rotulo: 'Avaliacao',  sprint: 'Sprint 7' },
+    { id: 'pei',        rotulo: 'PEI',        sprint: 'Sprint 8' },
+    { id: 'programas',  rotulo: 'Programas',  sprint: 'Sprint 10' },
+    { id: 'evolucoes',  rotulo: 'Evolucoes',  sprint: 'Sprint 10' },
+    { id: 'relatorios', rotulo: 'Relatorios', sprint: 'Sprint 11' },
+    { id: 'documentos', rotulo: 'Documentos' }
+  ],
+
+  paciente: null,
+
+  async telaDetalhe(id, abaInicial) {
     const { data: p, error } = await sb
       .from('pacientes')
       .select('*, responsaveis(*), encaminhamentos(id, medico, sessoes_semanais, arquivo_path, criado_em)')
       .eq('id', id).single();
 
     if (error || !p) { this.telaLista(); return; }
+    this.paciente = p;
 
-    const endereco = [p.endereco, p.numero, p.complemento, p.bairro,
-      (p.cidade && p.uf) ? p.cidade + '/' + p.uf : (p.cidade || p.uf)]
-      .filter(Boolean).join(', ');
-
-    const resps = (p.responsaveis || []).sort((a, b) => (b.principal ? 1 : 0) - (a.principal ? 1 : 0));
-    const encs = (p.encaminhamentos || []).sort((a, b) => b.criado_em.localeCompare(a.criado_em));
+    const podeAdmitir = this.PODE_ADMITIR.includes(this.sessao.profile.perfil);
+    const sexo = p.sexo === 'M' ? 'Masculino' : p.sexo === 'F' ? 'Feminino' : '-';
 
     this.el.innerHTML =
-      '<div class="pagina-cabecalho">' +
-      '  <div>' +
-      '    <button class="btn-voltar" onclick="MODULOS.pacientes.telaLista()">&larr; Pacientes</button>' +
-      '    <h2>' + escaparHtml(p.nome) + '</h2>' +
-      '    <p class="sub">' + calcularIdade(p.data_nascimento) + ' &middot; nasc. ' +
-           new Date(p.data_nascimento + 'T12:00:00').toLocaleDateString('pt-BR') +
-           (p.cpf ? ' &middot; CPF ' + formatarCPF(p.cpf) : '') + '</p>' +
+      '<button class="btn-voltar" onclick="MODULOS.pacientes.telaLista()">&larr; Voltar a lista de pacientes</button>' +
+
+      '<div class="capa">' +
+      '  <div class="capa-linha">' +
+      '    <div class="capa-avatar">' + escaparHtml(this.iniciais(p.nome)) + '</div>' +
+      '    <div class="capa-info">' +
+      '      <h2>' + escaparHtml(p.nome) + '</h2>' +
+      '      <div class="capa-meta">' +
+      '        <div><span>Idade</span><b>' + calcularIdade(p.data_nascimento) + '</b></div>' +
+      '        <div><span>Sexo</span><b>' + sexo + '</b></div>' +
+      '        <div><span>Nascimento</span><b>' +
+               new Date(p.data_nascimento + 'T12:00:00').toLocaleDateString('pt-BR') + '</b></div>' +
+      (p.convenio ? '<div><span>Convenio</span><b>' + escaparHtml(p.convenio) + '</b></div>' : '') +
+      '      </div>' +
+      '      <div class="capa-acoes">' +
+               this.seloNivel(p.nivel) + this.seloStatus(p.status) +
+      (podeAdmitir
+        ? '<button class="btn-chip" onclick="MODULOS.pacientes.telaEditar()">&#9998; Editar dados</button>'
+        : '') +
+      '        <button class="btn-chip" onclick="MODULOS.pacientes.abrirAba(\'documentos\')">&#128196; Documentos</button>' +
+      '      </div>' +
+      '    </div>' +
       '  </div>' +
-      '  <div class="pac-selos">' + this.seloNivel(p.nivel) + this.seloStatus(p.status) + '</div>' +
       '</div>' +
 
-      '<div class="cartao faixa-azul">' +
-      '  <h3>Dados do paciente</h3>' +
-      '  <div class="grade-info">' +
-      '    <div><small>Sexo</small><b>' + (p.sexo === 'M' ? 'Masculino' : p.sexo === 'F' ? 'Feminino' : '-') + '</b></div>' +
-      '    <div><small>Convenio</small><b>' + escaparHtml(p.convenio || '-') +
-           (p.carteirinha ? ' &middot; ' + escaparHtml(p.carteirinha) : '') + '</b></div>' +
-      '    <div><small>Escola</small><b>' + escaparHtml(p.escola || '-') +
-           (p.turno_escolar ? ' &middot; ' + escaparHtml(p.turno_escolar) : '') + '</b></div>' +
-      '    <div class="c-toda"><small>Endereco</small><b>' + escaparHtml(endereco || '-') +
-           (p.cep ? ' &middot; CEP ' + escaparHtml(p.cep) : '') + '</b></div>' +
-      (p.observacoes ? '<div class="c-toda"><small>Observacoes</small><b>' + escaparHtml(p.observacoes) + '</b></div>' : '') +
-      '  </div>' +
+      '<div class="abas" id="pac-abas">' +
+      this.ABAS.map(a =>
+        '<button class="aba" data-aba="' + a.id + '" onclick="MODULOS.pacientes.abrirAba(\'' + a.id + '\')">' +
+        a.rotulo + '</button>').join('') +
       '</div>' +
 
-      '<div class="cartao faixa-roxo">' +
-      '  <h3>Responsaveis e acompanhantes</h3>' +
+      '<div id="pac-aba-conteudo"></div>';
+
+    this.abrirAba(abaInicial || 'visao');
+  },
+
+  abrirAba(id) {
+    document.querySelectorAll('#pac-abas .aba').forEach(b =>
+      b.classList.toggle('ativa', b.dataset.aba === id));
+
+    const alvo = document.getElementById('pac-aba-conteudo');
+    const p = this.paciente;
+    const aba = this.ABAS.find(a => a.id === id);
+
+    if (id === 'visao') { alvo.innerHTML = this.htmlVisaoGeral(p); return; }
+    if (id === 'documentos') { alvo.innerHTML = this.htmlDocumentos(p); return; }
+
+    alvo.innerHTML =
+      '<div class="cartao"><div class="vazio">' +
+      '<div class="simbolo-vazio">&#9881;</div>' +
+      '<strong>' + aba.rotulo + ' em construcao</strong>' +
+      'Este espaco sera ativado no ' + (aba.sprint || 'proximo sprint') + '.' +
+      '</div></div>';
+  },
+
+  htmlVisaoGeral(p) {
+    const endereco = [p.endereco, p.numero, p.complemento, p.bairro]
+      .filter(Boolean).join(', ');
+    const cidade = (p.cidade && p.uf) ? p.cidade + '/' + p.uf : (p.cidade || p.uf || '-');
+    const resps = (p.responsaveis || []).sort((a, b) => (b.principal ? 1 : 0) - (a.principal ? 1 : 0));
+    const principal = resps[0];
+
+    return '<div class="cartao">' +
+      '<h3>Visao geral</h3>' +
+      '<div class="grade-visao">' +
+      this.caixa('Telefone', principal ? principal.telefone : null) +
+      this.caixa('E-mail', principal ? principal.email : null) +
+      this.caixa('CPF do paciente', p.cpf ? formatarCPF(p.cpf) : null) +
+      this.caixa('CPF do responsavel', (principal && principal.cpf) ? formatarCPF(principal.cpf) : null) +
+      this.caixa('Endereco', endereco || null, true) +
+      this.caixa('Cidade', cidade) +
+      this.caixa('CEP', p.cep) +
+      this.caixa('Convenio', p.convenio ? p.convenio + (p.carteirinha ? ' - ' + p.carteirinha : '') : null) +
+      this.caixa('Escola', p.escola ? p.escola + (p.turno_escolar ? ' - ' + p.turno_escolar : '') : null) +
+      this.caixa('Responsavel', principal ?
+        principal.nome + (principal.parentesco ? ' (' + principal.parentesco + ')' : '') : null, true) +
+      (p.observacoes ? this.caixa('Observacoes', p.observacoes, true) : '') +
+      '</div>' +
+      '</div>' +
+
+      '<div class="cartao">' +
+      '<h3>Responsaveis e acompanhantes</h3>' +
       (resps.length ? resps.map(r =>
         '<div class="linha-doc">' +
-        '  <div>' +
-        '    <b>' + escaparHtml(r.nome) + '</b>' +
-        '    <small>' + escaparHtml(r.parentesco || '-') +
+        '  <div><b>' + escaparHtml(r.nome) + '</b>' +
+        '  <small>' + escaparHtml(r.parentesco || '-') +
              (r.telefone ? ' &middot; ' + escaparHtml(r.telefone) : '') +
-             (r.cpf ? ' &middot; CPF ' + formatarCPF(r.cpf) : '') + '</small>' +
-        '  </div>' +
+             (r.cpf ? ' &middot; CPF ' + formatarCPF(r.cpf) : '') + '</small></div>' +
         '  <div class="pac-selos">' +
         (r.principal ? '<span class="selo selo-roxo">Principal</span>' : '') +
         (r.responsavel_legal ? '<span class="selo selo-ok">Resp. legal</span>' : '') +
@@ -190,25 +253,34 @@ window.MODULOS.pacientes = {
         '  </div>' +
         '</div>').join('')
       : '<p class="sub">Nenhum responsavel cadastrado.</p>') +
-      '</div>' +
+      '</div>';
+  },
 
-      '<div class="cartao faixa-ambar">' +
-      '  <h3>Encaminhamento medico</h3>' +
+  caixa(rotulo, valor, larga) {
+    return '<div class="caixa-info' + (larga ? ' larga' : '') + '">' +
+      '<small>' + rotulo + '</small>' +
+      '<b>' + (valor ? escaparHtml(valor) : '&mdash;') + '</b></div>';
+  },
+
+  htmlDocumentos(p) {
+    const encs = (p.encaminhamentos || []).sort((a, b) => b.criado_em.localeCompare(a.criado_em));
+    return '<div class="cartao faixa-ambar">' +
+      '<h3>Encaminhamentos medicos</h3>' +
       (encs.length ? encs.map(e =>
         '<div class="linha-doc">' +
         '  <div><b>' + escaparHtml(e.medico || 'Medico nao informado') + '</b>' +
         '  <small>' + (e.sessoes_semanais ? e.sessoes_semanais + ' sessoes/semana &middot; ' : '') +
            new Date(e.criado_em).toLocaleDateString('pt-BR') + '</small></div>' +
         (e.arquivo_path
-          ? '<button class="btn btn-fantasma" onclick="MODULOS.pacientes.abrirPdf(\'' + e.arquivo_path + '\')">Ver PDF</button>'
+          ? '<button class="btn btn-fantasma" onclick="MODULOS.pacientes.abrirPdf(\'' +
+            e.arquivo_path + '\')">Ver PDF</button>'
           : '<span class="selo selo-neutro">Sem arquivo</span>') +
         '</div>').join('')
       : '<p class="sub">Nenhum encaminhamento registrado.</p>') +
       '</div>' +
-
       '<div class="cartao">' +
-      '  <h3>Proximas etapas</h3>' +
-      '  <p class="sub">Anamnese Global (portal da familia), definicao de nivel e agendamento chegam no Sprint 3.</p>' +
+      '<h3>Termos e outros documentos</h3>' +
+      '<p class="sub">Termo de Responsabilidade Parental e Autorizacao de Uso de Imagem entram com o portal da familia (Sprint 3).</p>' +
       '</div>';
   },
 
@@ -217,7 +289,87 @@ window.MODULOS.pacientes = {
       .from('documentos')
       .createSignedUrl(caminho, 300);
     if (error || !data) { alert('Nao foi possivel abrir o arquivo.'); return; }
-    window.open(data.signedUrl, '_blank');
+    abrirModalPdf('Encaminhamento medico', data.signedUrl);
+  },
+
+  // ─────────────────────────── EDITAR DADOS ───────────────────────────
+
+  telaEditar() {
+    const p = this.paciente;
+    abrirModal('Editar dados de ' + escaparHtml(p.nome),
+      '<form onsubmit="MODULOS.pacientes.salvarEdicao(event)">' +
+      '<div class="grade-form">' +
+      '  <div class="campo c2"><label>Nome completo *</label><input id="e-nome" required value="' + escaparHtml(p.nome) + '"></div>' +
+      '  <div class="campo"><label>Data de nascimento *</label><input type="date" id="e-nasc" required value="' + p.data_nascimento + '"></div>' +
+      '  <div class="campo"><label>CPF</label><input id="e-cpf" value="' + (p.cpf ? formatarCPF(p.cpf) : '') + '" onblur="MODULOS.pacientes.checarCpf(this)"></div>' +
+      '  <div class="campo"><label>Sexo *</label><select id="e-sexo" required>' +
+      '    <option value="M"' + (p.sexo === 'M' ? ' selected' : '') + '>Masculino</option>' +
+      '    <option value="F"' + (p.sexo === 'F' ? ' selected' : '') + '>Feminino</option></select></div>' +
+      '  <div class="campo"><label>Convenio</label><input id="e-convenio" value="' + escaparHtml(p.convenio || '') + '"></div>' +
+      '  <div class="campo"><label>Carteirinha</label><input id="e-carteirinha" value="' + escaparHtml(p.carteirinha || '') + '"></div>' +
+      '  <div class="campo"><label>Escola</label><input id="e-escola" value="' + escaparHtml(p.escola || '') + '"></div>' +
+      '  <div class="campo"><label>Turno escolar</label><select id="e-turno">' +
+      ['', 'Manha', 'Tarde', 'Integral', 'Nao estuda'].map(t =>
+        '<option value="' + t + '"' + ((p.turno_escolar || '') === t ? ' selected' : '') + '>' +
+        (t || 'Nao informado') + '</option>').join('') +
+      '  </select></div>' +
+      '  <div class="campo"><label>CEP</label><input id="e-cep" value="' + escaparHtml(p.cep || '') + '"></div>' +
+      '  <div class="campo c2"><label>Rua / Avenida</label><input id="e-endereco" value="' + escaparHtml(p.endereco || '') + '"></div>' +
+      '  <div class="campo"><label>Numero</label><input id="e-numero" value="' + escaparHtml(p.numero || '') + '"></div>' +
+      '  <div class="campo"><label>Complemento</label><input id="e-complemento" value="' + escaparHtml(p.complemento || '') + '"></div>' +
+      '  <div class="campo"><label>Bairro</label><input id="e-bairro" value="' + escaparHtml(p.bairro || '') + '"></div>' +
+      '  <div class="campo"><label>Cidade</label><input id="e-cidade" value="' + escaparHtml(p.cidade || '') + '"></div>' +
+      '  <div class="campo"><label>UF</label><input id="e-uf" maxlength="2" value="' + escaparHtml(p.uf || '') + '"></div>' +
+      '  <div class="campo c3"><label>Observacoes</label><textarea id="e-obs" rows="2">' + escaparHtml(p.observacoes || '') + '</textarea></div>' +
+      '</div>' +
+      '<div class="mensagem-erro" id="e-erro"></div>' +
+      '<div class="barra-acoes">' +
+      '  <button type="button" class="btn btn-fantasma" onclick="fecharModal()">Cancelar</button>' +
+      '  <button type="submit" class="btn btn-primario" id="e-salvar">Salvar</button>' +
+      '</div>' +
+      '</form>', true);
+  },
+
+  async salvarEdicao(ev) {
+    ev.preventDefault();
+    const botao = document.getElementById('e-salvar');
+    const erro = document.getElementById('e-erro');
+    erro.classList.remove('visivel');
+    botao.disabled = true;
+    botao.textContent = 'Salvando...';
+
+    try {
+      const cpf = document.getElementById('e-cpf').value.replace(/\D/g, '');
+      if (cpf && !validarCPF(cpf)) throw new Error('CPF invalido.');
+
+      const { error } = await sb.from('pacientes').update({
+        nome: document.getElementById('e-nome').value.trim(),
+        data_nascimento: document.getElementById('e-nasc').value,
+        cpf: cpf || null,
+        sexo: document.getElementById('e-sexo').value,
+        convenio: document.getElementById('e-convenio').value.trim() || null,
+        carteirinha: document.getElementById('e-carteirinha').value.trim() || null,
+        escola: document.getElementById('e-escola').value.trim() || null,
+        turno_escolar: document.getElementById('e-turno').value || null,
+        cep: document.getElementById('e-cep').value.trim() || null,
+        endereco: document.getElementById('e-endereco').value.trim() || null,
+        numero: document.getElementById('e-numero').value.trim() || null,
+        complemento: document.getElementById('e-complemento').value.trim() || null,
+        bairro: document.getElementById('e-bairro').value.trim() || null,
+        cidade: document.getElementById('e-cidade').value.trim() || null,
+        uf: document.getElementById('e-uf').value.trim().toUpperCase() || null,
+        observacoes: document.getElementById('e-obs').value.trim() || null
+      }).eq('id', this.paciente.id);
+      if (error) throw new Error(error.message);
+
+      fecharModal();
+      this.telaDetalhe(this.paciente.id);
+    } catch (e) {
+      erro.textContent = e.message;
+      erro.classList.add('visivel');
+      botao.disabled = false;
+      botao.textContent = 'Salvar';
+    }
   },
 
   // ─────────────────────────── NOVA ADMISSAO ───────────────────────────

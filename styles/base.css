@@ -73,7 +73,7 @@
     --sidebar-margem: 12px;
     --sidebar-mini:   78px;
 
-    --fonte:     'Inter', system-ui, -apple-system, sans-serif;
+    --fonte:     'Manrope', system-ui, -apple-system, sans-serif;
     --fonte-mao: 'Caveat', cursive;
 
     --dot-cor: rgba(12, 27, 42, .10);
@@ -149,7 +149,7 @@ html, body { height: 100%; }
 
 body {
     font-family: var(--fonte);
-    font-size: 14.5px;
+    font-size: 13.5px;
     color: var(--ink);
     background: var(--bg);
     -webkit-font-smoothing: antialiased;

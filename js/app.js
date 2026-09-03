@@ -173,4 +173,36 @@ function formatarCPF(cpf) {
   return cpf.slice(0,3) + '.' + cpf.slice(3,6) + '.' + cpf.slice(6,9) + '-' + cpf.slice(9);
 }
 
+
+// ── Modais (janela suspensa) ────────────────────────────────────────────
+function abrirModal(titulo, html, larga) {
+  fecharModal();
+  const fundo = document.createElement('div');
+  fundo.className = 'modal-fundo';
+  fundo.id = 'modal-fundo';
+  fundo.innerHTML =
+    '<div class="modal' + (larga ? ' modal-larga' : '') + '" role="dialog" aria-modal="true">' +
+    '  <div class="modal-topo">' +
+    '    <h3>' + titulo + '</h3>' +
+    '    <button type="button" class="modal-fechar" onclick="fecharModal()" title="Fechar">&times;</button>' +
+    '  </div>' +
+    '  <div class="modal-corpo">' + html + '</div>' +
+    '</div>';
+  fundo.addEventListener('click', e => { if (e.target === fundo) fecharModal(); });
+  document.body.appendChild(fundo);
+  document.body.style.overflow = 'hidden';
+}
+
+function fecharModal() {
+  const m = document.getElementById('modal-fundo');
+  if (m) m.remove();
+  document.body.style.overflow = '';
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') fecharModal(); });
+
+function abrirModalPdf(titulo, url) {
+  abrirModal(titulo, '<iframe src="' + url + '" title="' + titulo + '"></iframe>', true);
+}
+
 document.addEventListener('DOMContentLoaded', iniciarApp);

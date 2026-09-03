@@ -133,8 +133,8 @@ window.MODULOS.pacientes = {
 
   ABAS: [
     { id: 'visao',      rotulo: 'Visao geral' },
-    { id: 'plano',      rotulo: 'Plano' },
     { id: 'anamnese',   rotulo: 'Anamnese',   sprint: 'Sprint 3' },
+    { id: 'plano',      rotulo: 'Plano' },
     { id: 'avaliacao',  rotulo: 'Avaliacao',  sprint: 'Sprint 7' },
     { id: 'pei',        rotulo: 'PEI',        sprint: 'Sprint 8' },
     { id: 'programas',  rotulo: 'Programas',  sprint: 'Sprint 10' },

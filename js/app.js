@@ -213,7 +213,7 @@ function formatarCPF(cpf) {
 // ── "Ver como" (exclusivo do suporte) ───────────────────────────────
 function abrirSeletorPerfil() {
   const atual = window.CORTEX_SESSAO.profile.perfil;
-  const opcoes = ['suporte', 'direcao', 'coordenador', 'terapeuta', 'aplicador', 'callcenter', 'familia'];
+  const opcoes = ['suporte', 'direcao', 'coordenador', 'terapeuta', 'aplicador', 'callcenter', 'recepcao', 'familia'];
 
   abrirModal('Ver o sistema como...',
     '<p class="sub" style="margin-bottom:14px">Voce continua logado como Suporte; apenas a ' +

@@ -15,7 +15,8 @@ window.MODULOS.permissoes = {
     ['coordenador', 'Coordenador'],
     ['terapeuta', 'Terapeuta'],
     ['aplicador', 'Aplicador'],
-    ['callcenter', 'Recepcao']
+    ['callcenter', 'Call Center'],
+    ['recepcao', 'Recepcao']
   ],
 
   CHAVES: [

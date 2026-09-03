@@ -8,6 +8,7 @@ const ROTULOS_PERFIL = {
   terapeuta: 'Terapeuta ABA',
   aplicador: 'Aplicador ABA',
   callcenter: 'Call Center',
+  recepcao: 'Recepcao',
   suporte: 'Suporte Tecnico',
   familia: 'Familia'
 };
@@ -20,6 +21,7 @@ const TEMA_POR_PERFIL = {
   terapeuta: 'equipe',
   aplicador: 'equipe',
   callcenter: 'recepcao',
+  recepcao: 'recepcao',
   familia: 'familia'
 };
 

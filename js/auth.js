@@ -1,6 +1,6 @@
-// ============================================================
-// CORTEX aba - Autenticacao
-// ============================================================
+// ============================================================================
+// CORTEX aba - js/auth.js
+// ============================================================================
 
 const ROTULOS_PERFIL = {
   direcao: 'Direcao',
@@ -12,7 +12,17 @@ const ROTULOS_PERFIL = {
   familia: 'Familia'
 };
 
-// Faz login com e-mail e senha e redireciona para o app
+// Tema visual por perfil (cor de acao): coordenacao verde, equipe azul, familia roxo
+const TEMA_POR_PERFIL = {
+  direcao: 'coordenacao',
+  coordenador: 'coordenacao',
+  suporte: 'coordenacao',
+  terapeuta: 'equipe',
+  aplicador: 'equipe',
+  callcenter: 'equipe',
+  familia: 'familia'
+};
+
 async function fazerLogin(evento) {
   evento.preventDefault();
 
@@ -40,7 +50,7 @@ async function fazerLogin(evento) {
   window.location.href = 'app.html';
 }
 
-// Exige sessao ativa; devolve { user, profile } ou redireciona ao login
+// Exige sessao ativa; devolve { user, profile } ou volta ao login
 async function exigirSessao() {
   const { data: { session } } = await sb.auth.getSession();
   if (!session) {
@@ -60,10 +70,20 @@ async function exigirSessao() {
     return null;
   }
 
+  // Aplica o tema do perfil (cor de acao)
+  document.documentElement.setAttribute('data-tema', TEMA_POR_PERFIL[profile.perfil] || 'coordenacao');
+
   return { user: session.user, profile };
 }
 
 async function sair() {
   await sb.auth.signOut();
   window.location.href = 'index.html';
+}
+
+function iniciais(nome) {
+  const partes = nome.trim().split(/\s+/);
+  const primeira = partes[0] ? partes[0][0] : '';
+  const ultima = partes.length > 1 ? partes[partes.length - 1][0] : '';
+  return (primeira + ultima).toUpperCase();
 }

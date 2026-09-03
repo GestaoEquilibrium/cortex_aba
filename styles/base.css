@@ -1,0 +1,142 @@
+/* ============================================================================
+   CORTEX aba - styles/base.css
+   Tokens, reset, fundo com dots e modo claro/escuro.
+
+   Regras da identidade (definidas no projeto):
+   - Dots: 14px de espacamento, 10% de intensidade (7% no escuro)
+   - Raio padrao 18px, sombras em 3 niveis
+   - Cor por area, nao decoracao: verde = em dia / azul = agenda e equipe /
+     ambar = atencao / vermelho = atraso e falta / roxo = familia e portal
+   - As cores funcionais NAO mudam no modo escuro (o dado perderia significado)
+   ============================================================================ */
+
+:root {
+    /* ── Superficies e texto (modo claro) ─────────────────────────────── */
+    --bg:          #EEF2F6;
+    --surface:     #FFFFFF;
+    --surface-alt: #F6F9FB;
+    --ink:         #0C1B2A;
+    --ink-muted:   #5B6B7B;
+    --ink-soft:    #8B9AA8;
+    --line:        #E1E8EE;
+    --line-strong: #CBD6DF;
+
+    /* ── Sidebar (escura nos dois modos) ──────────────────────────────── */
+    --side-bg:     #0C1B2A;
+    --side-bg-2:   #102438;
+    --side-ink:    #B9C9D6;
+    --side-ativa:  rgba(255, 255, 255, 0.10);
+
+    /* ── Cores por area (fixas, claro e escuro) ───────────────────────── */
+    --area-verde:    #0F766E;
+    --area-azul:     #2563EB;
+    --area-ambar:    #D97706;
+    --area-vermelho: #DC2626;
+    --area-roxo:     #7C3AED;
+
+    /* ── Status ───────────────────────────────────────────────────────── */
+    --st-ok:     #16A34A;  --st-ok-bg:     #E7F6EC;
+    --st-warn:   #D97706;  --st-warn-bg:   #FCF1DF;
+    --st-bad:    #DC2626;  --st-bad-bg:    #FCE9E7;
+    --st-neutro: #64748B;  --st-neutro-bg: #EEF1F5;
+
+    /* ── Gradientes ───────────────────────────────────────────────────── */
+    --gd-heroi:  linear-gradient(135deg, #0B3B36 0%, #0F766E 55%, #115E59 100%);
+    --gd-portal: linear-gradient(135deg, #7C3AED 0%, #4F46E5 55%, #06B6D4 100%);
+    --gd-verde:  linear-gradient(135deg, #14B8A6 0%, #0F766E 100%);
+    --gd-azul:   linear-gradient(135deg, #60A5FA 0%, #2563EB 100%);
+
+    /* ── Acao (muda com o tema do perfil) ─────────────────────────────── */
+    --acao:      #0F766E;
+    --acao-forte:#0B5952;
+    --acao-soft: rgba(15, 118, 110, 0.12);
+
+    /* ── Geometria e movimento ────────────────────────────────────────── */
+    --raio:    18px;
+    --raio-sm: 12px;
+    --pop:     .3s cubic-bezier(.34, 1.56, .64, 1);
+    --suave:   .18s ease;
+
+    --shadow-xs: 0 1px 2px rgba(12, 27, 42, .06);
+    --shadow-sm: 0 2px 8px rgba(12, 27, 42, .08);
+    --shadow-md: 0 8px 22px rgba(12, 27, 42, .12);
+    --shadow-lg: 0 16px 40px rgba(12, 27, 42, .18);
+
+    /* ── Sidebar flutuante ────────────────────────────────────────────── */
+    --sidebar-width:  248px;
+    --sidebar-margem: 12px;
+    --sidebar-mini:   78px;
+
+    --fonte:     'Inter', system-ui, -apple-system, sans-serif;
+    --fonte-mao: 'Caveat', cursive;
+
+    --dot-cor: rgba(12, 27, 42, .10);
+}
+
+/* ── Temas por perfil (so a cor de acao muda) ─────────────────────────── */
+[data-tema="coordenacao"] { --acao: #0F766E; --acao-forte: #0B5952; --acao-soft: rgba(15,118,110,.12); }
+[data-tema="equipe"]      { --acao: #1D4ED8; --acao-forte: #1737A3; --acao-soft: rgba(29,78,216,.12); }
+[data-tema="familia"]     { --acao: #7C3AED; --acao-forte: #5E27C4; --acao-soft: rgba(124,58,237,.12); }
+
+/* ── Modo escuro (superficies mudam, cores funcionais NAO) ────────────── */
+[data-modo="escuro"] {
+    --bg:          #0C1420;
+    --surface:     #131E2C;
+    --surface-alt: #18242F;
+    --ink:         #E8EEF2;
+    --ink-muted:   #93A6B4;
+    --ink-soft:    #6B8092;
+    --line:        #22303F;
+    --line-strong: #2E3F50;
+
+    --side-bg:   #0A1522;
+    --side-bg-2: #0E1E30;
+
+    --st-ok-bg:     rgba(22, 163, 74, .18);
+    --st-warn-bg:   rgba(217, 119, 6, .18);
+    --st-bad-bg:    rgba(220, 38, 38, .18);
+    --st-neutro-bg: rgba(148, 163, 184, .15);
+    --st-neutro:    #94A3B8;
+
+    --shadow-xs: 0 1px 2px rgba(0, 0, 0, .35);
+    --shadow-sm: 0 2px 6px rgba(0, 0, 0, .40);
+    --shadow-md: 0 6px 16px rgba(0, 0, 0, .45);
+    --shadow-lg: 0 14px 34px rgba(0, 0, 0, .55);
+
+    --dot-cor: rgba(255, 255, 255, .07);
+}
+[data-modo="escuro"][data-tema="coordenacao"] { --acao-soft: rgba(15, 118, 110, .22); }
+[data-modo="escuro"][data-tema="equipe"]      { --acao-soft: rgba(29, 78, 216, .22); }
+[data-modo="escuro"][data-tema="familia"]     { --acao-soft: rgba(124, 58, 237, .22); }
+
+/* ══ RESET / BASE ══════════════════════════════════════════════════════ */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body { height: 100%; }
+
+body {
+    font-family: var(--fonte);
+    font-size: 14.5px;
+    color: var(--ink);
+    background: var(--bg);
+    -webkit-font-smoothing: antialiased;
+    transition: background var(--suave), color var(--suave);
+}
+
+/* ── Fundo com pattern de dots (14px / 10%, 7% no escuro) ─────────────── */
+body::before {
+    content: '';
+    position: fixed; inset: 0;
+    pointer-events: none; z-index: 0;
+    background-image: radial-gradient(circle, var(--dot-cor) 1px, transparent 1px);
+    background-size: 14px 14px;
+}
+.app-shell, .app-main, .sidebar, .login-pagina { position: relative; z-index: 1; }
+
+a { color: var(--acao); }
+
+::selection { background: var(--acao-soft); }
+
+@media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+}

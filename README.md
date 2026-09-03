@@ -4,25 +4,30 @@ Sistema de gestao de psicoterapia ABA da Equilibrium Terapia Infantil (Uberlandi
 
 Stack: Supabase (PostgreSQL + Edge Functions + Storage) | HTML + Vanilla JS | GitHub Pages
 
-## Sprint 1 - Fundacao
+## Identidade visual
 
-Conteudo deste sprint:
-- `index.html` - tela de login
-- `app.html` - shell do sistema (sidebar por perfil + area principal)
-- `assets/css/cortex.css` - identidade visual base
-- `assets/js/config.js` - configuracao do Supabase (**colar a chave anon aqui**)
-- `assets/js/auth.js` - autenticacao
-- `assets/js/app.js` - montagem da sidebar por perfil
+- Marca: CORTEX com "aba" manuscrito (Caveat), simbolo de neuronio
+- Fundo com dots: 14px de espacamento, 10% de intensidade (7% no escuro)
+- Sidebar escura flutuante: descolada 12px da borda, cantos 18px, recolhivel para 78px
+- Modo claro/escuro: escolha salva no aparelho, aplicada antes da pagina pintar
+- Cor por area, nao decoracao: verde em dia | azul agenda/equipe | ambar atencao |
+  vermelho atraso/falta | roxo familia/portal (fixas nos dois modos)
+- Raio 18px, sombras em 3 niveis, transicoes com overshoot
 
-## Instalacao
+## Estrutura
 
-1. Copiar todos os arquivos para a raiz do repositorio `GestaoEquilibrium/cortex_aba`
-2. Colar a chave anon em `assets/js/config.js`
-3. Executar o SQL do Sprint 1 (enviado inline no chat) no SQL Editor do Supabase
-4. Criar a Edge Function `criar-acesso` pelo Dashboard (codigo inline no chat), com **Verify JWT desativado**
-5. Criar o primeiro usuario (direcao) pelo Dashboard e executar o SQL de promocao
-6. Commit e push - o GitHub Pages publica automaticamente
+- `index.html` - login
+- `app.html` - shell (sidebar flutuante por perfil + area principal)
+- `styles/base.css` - tokens, modos, dots, reset
+- `styles/components.css` - sidebar, cartoes, botoes, campos, selos, heroi
+- `js/modo.js` - modo claro/escuro sem piscar
+- `js/config.js` - configuracao do Supabase (**colar a chave anon aqui**)
+- `js/auth.js` - autenticacao e tema por perfil
+- `js/app.js` - shell: navegacao, recolher menu, saudacao
 
 ## Perfis
 
 direcao | coordenador | terapeuta | aplicador | callcenter | suporte | familia
+
+Temas: coordenacao (verde) = direcao, coordenador, suporte | equipe (azul) =
+terapeuta, aplicador, callcenter | familia (roxo)

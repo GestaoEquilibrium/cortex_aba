@@ -211,7 +211,9 @@ function fecharModal() {
 document.addEventListener('keydown', e => { if (e.key === 'Escape') fecharModal(); });
 
 function abrirModalPdf(titulo, url) {
-  abrirModal(titulo, '<iframe src="' + url + '" title="' + titulo + '"></iframe>', true);
+  // #toolbar=0 esconde a barra de impressao/download; navpanes=0 esconde as miniaturas
+  const limpo = url + '#toolbar=0&navpanes=0&view=FitH';
+  abrirModal(titulo, '<iframe src="' + limpo + '" title="' + titulo + '"></iframe>', true);
 }
 
 document.addEventListener('DOMContentLoaded', iniciarApp);

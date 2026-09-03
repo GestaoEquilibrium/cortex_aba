@@ -320,12 +320,29 @@ window.MODULOS.anamnese = {
       const doNivel = (qs || []).filter(q => q.conta_nivel);
       const nao = doNivel.filter(q => (mapa[q.id] || '') === 'Nao').length;
       const pct = doNivel.length ? Math.round(nao * 100 / doNivel.length) : 0;
+
+      const { data: pacN } = await sb.from('pacientes')
+        .select('nivel, data_nascimento').eq('id', pacienteId).single();
+      const idade = pacN
+        ? Math.floor((Date.now() - new Date(pacN.data_nascimento + 'T12:00:00')) / 31557600000)
+        : null;
+      const menor8 = idade !== null && idade < 8;
+      const acima60 = pct > 60;
+
+      let motivo;
+      if (menor8 && acima60) motivo = 'Idade menor que 8 anos e mais de 60% de "Nao"';
+      else if (menor8) motivo = 'Idade menor que 8 anos (' + idade + ' anos)';
+      else if (acima60) motivo = 'Mais de 60% de respostas "Nao"';
+      else motivo = 'Idade >= 8 anos e "Nao" dentro do limite de 60%';
+
       nivelHtml =
         '<div class="grade-visao" style="margin-top:12px">' +
+        '<div class="caixa-info"><small>Nivel definido</small><b>' +
+        (pacN && pacN.nivel === 'aba1' ? 'ABA 1' : pacN && pacN.nivel === 'aba2' ? 'ABA 2' : '-') +
+        '</b></div>' +
         '<div class="caixa-info"><small>Respostas "Nao" (18 questoes)</small><b>' +
         nao + ' de ' + doNivel.length + ' (' + pct + '%)</b></div>' +
-        '<div class="caixa-info"><small>Criterio 60%</small><b>' +
-        (pct > 60 ? 'Acima - indica ABA 1' : 'Dentro - indica ABA 2 (se idade >= 8)') + '</b></div>' +
+        '<div class="caixa-info larga"><small>Motivo</small><b>' + motivo + '</b></div>' +
         '</div>';
     }
 

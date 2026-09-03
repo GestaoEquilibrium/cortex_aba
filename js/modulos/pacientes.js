@@ -147,7 +147,7 @@ window.MODULOS.pacientes = {
   async telaDetalhe(id, abaInicial) {
     const { data: p, error } = await sb
       .from('pacientes')
-      .select('*, responsaveis(*), encaminhamentos(id, medico, sessoes_semanais, arquivo_path, criado_em)')
+      .select('*, responsaveis(*), encaminhamentos(id, medico, sessoes_semanais, arquivo_path, criado_em), aplicador:profiles!pacientes_aplicador_id_fkey(id, nome, perfil)')
       .eq('id', id).single();
 
     if (error || !p) { this.telaLista(); return; }
@@ -178,6 +178,9 @@ window.MODULOS.pacientes = {
       '        <div><span>Nascimento</span><b>' +
                new Date(p.data_nascimento + 'T12:00:00').toLocaleDateString('pt-BR') + '</b></div>' +
       (p.convenio ? '<div><span>Convenio</span><b>' + escaparHtml(p.convenio) + '</b></div>' : '') +
+      '<div><span>Profissional</span><b>' +
+      (p.aplicador ? escaparHtml(p.aplicador.nome) : '<span style="color:var(--ink-soft)">Nao designado</span>') +
+      '</b></div>' +
       '      </div>' +
       '      <div class="capa-acoes">' +
                this.seloNivel(p.nivel) + this.seloStatus(p.status) +
@@ -185,6 +188,10 @@ window.MODULOS.pacientes = {
         ? '<button class="btn-chip" onclick="MODULOS.pacientes.telaEditar()">&#9998; Editar dados</button>' +
           '<button class="btn-chip" onclick="MODULOS.pacientes.modalFoto()">&#128247; ' +
           (p.foto_path ? 'Alterar foto' : 'Adicionar foto') + '</button>'
+        : '') +
+      (['direcao','coordenador','suporte'].includes(this.sessao.profile.perfil)
+        ? '<button class="btn-chip" onclick="MODULOS.pacientes.modalAplicador()">&#128100; ' +
+          (p.aplicador ? 'Alterar profissional' : 'Designar profissional') + '</button>'
         : '') +
       '        <button class="btn-chip" onclick="MODULOS.pacientes.abrirAba(\'documentos\')">&#128196; Documentos</button>' +
       '      </div>' +
@@ -305,6 +312,73 @@ window.MODULOS.pacientes = {
       .createSignedUrl(caminho, 300);
     if (error || !data) { alert('Nao foi possivel abrir o arquivo.'); return; }
     abrirModalPdf('Encaminhamento medico', data.signedUrl);
+  },
+
+  async modalAplicador() {
+    const { data: equipe, error } = await sb
+      .from('profiles')
+      .select('id, nome, perfil')
+      .in('perfil', ['aplicador', 'terapeuta'])
+      .eq('ativo', true)
+      .order('nome');
+
+    if (error) { alert('Erro ao carregar a equipe: ' + error.message); return; }
+    if (!equipe || equipe.length === 0) {
+      abrirModal('Designar profissional',
+        '<p class="sub">Nenhum aplicador ou terapeuta cadastrado ainda. ' +
+        'Crie os acessos da equipe em Usuarios e Acessos.</p>' +
+        '<div class="barra-acoes"><button class="btn btn-primario" onclick="fecharModal()">Ok</button></div>');
+      return;
+    }
+
+    const atual = this.paciente.aplicador_id || '';
+    abrirModal('Designar profissional para ' + escaparHtml(this.paciente.nome),
+      '<div class="campo"><label>Aplicador ou terapeuta responsavel</label>' +
+      '<select id="ap-select">' +
+      '<option value="">Nenhum (remover designacao)</option>' +
+      equipe.map(m =>
+        '<option value="' + m.id + '"' + (m.id === atual ? ' selected' : '') + '>' +
+        escaparHtml(m.nome) + ' (' + (ROTULOS_PERFIL[m.perfil] || m.perfil) + ')</option>').join('') +
+      '</select></div>' +
+      '<p class="sub">O profissional designado recebe uma notificacao no Inicio dele.</p>' +
+      '<div class="mensagem-erro" id="ap-erro"></div>' +
+      '<div class="barra-acoes">' +
+      '  <button type="button" class="btn btn-fantasma" onclick="fecharModal()">Cancelar</button>' +
+      '  <button type="button" class="btn btn-primario" id="ap-salvar" ' +
+      '    onclick="MODULOS.pacientes.salvarAplicador()">Salvar</button>' +
+      '</div>');
+  },
+
+  async salvarAplicador() {
+    const novoId = document.getElementById('ap-select').value || null;
+    const erro = document.getElementById('ap-erro');
+    const botao = document.getElementById('ap-salvar');
+    erro.classList.remove('visivel');
+    botao.disabled = true;
+    botao.textContent = 'Salvando...';
+
+    try {
+      const { error } = await sb.from('pacientes')
+        .update({ aplicador_id: novoId }).eq('id', this.paciente.id);
+      if (error) throw new Error(error.message);
+
+      if (novoId && novoId !== this.paciente.aplicador_id) {
+        await sb.from('notificacoes').insert({
+          destinatario_id: novoId,
+          titulo: 'Voce foi designado(a): ' + this.paciente.nome,
+          corpo: 'A coordenacao designou voce como profissional responsavel. ' +
+                 'Consulte o prontuario para conhecer o caso.'
+        });
+      }
+
+      fecharModal();
+      this.telaDetalhe(this.paciente.id);
+    } catch (e) {
+      erro.textContent = e.message;
+      erro.classList.add('visivel');
+      botao.disabled = false;
+      botao.textContent = 'Salvar';
+    }
   },
 
   modalFoto() {

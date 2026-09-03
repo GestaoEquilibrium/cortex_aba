@@ -10,6 +10,8 @@ window.CORTEX_SESSAO = null;
 const SVG_ATTR = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"';
 
 const ICONES = {
+  checkin:    '<svg ' + 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"' + '><circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.5 2.5 5-5.5"/></svg>',
+  permissoes: '<svg ' + 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"' + '><rect x="4" y="10" width="16" height="10" rx="2.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>',
   portal:     '<svg ' + 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"' + '><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>',
   anamnese:   '<svg ' + 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"' + '><path d="M6 3h9l4 4v14H6z"/><path d="M14.5 3v4.5H19"/><line x1="9" y1="12" x2="16" y2="12"/><line x1="9" y1="16" x2="14" y2="16"/></svg>',
   inicio:     '<svg ' + SVG_ATTR + '><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>',
@@ -37,6 +39,7 @@ const NAVEGACAO = [
       { id: 'inicio',     rotulo: 'Inicio',     perfis: ['direcao','coordenador','terapeuta','aplicador','callcenter','suporte'] },
       { id: 'pacientes',  rotulo: 'Pacientes',  perfis: ['direcao','coordenador','terapeuta','aplicador','callcenter'] },
       { id: 'agenda',     rotulo: 'Agenda',     perfis: ['direcao','coordenador','terapeuta','aplicador','callcenter'] },
+      { id: 'checkin',    rotulo: 'Check-in',   perfis: ['direcao','coordenador','callcenter','suporte'] },
       { id: 'avaliacoes', rotulo: 'Avaliacoes', perfis: ['direcao','coordenador','terapeuta'] },
       { id: 'programas',  rotulo: 'Programas',  perfis: ['direcao','coordenador','terapeuta','aplicador'] }
     ]
@@ -47,7 +50,8 @@ const NAVEGACAO = [
       { id: 'presenca', rotulo: 'Lista de Presenca',  perfis: ['direcao','coordenador','callcenter'] },
       { id: 'faltas',   rotulo: 'Gestao de Faltas',   perfis: ['direcao','coordenador'] },
       { id: 'rh',       rotulo: 'RH',                 perfis: ['direcao','coordenador'] },
-      { id: 'admin',    rotulo: 'Usuarios e Acessos', perfis: ['direcao','suporte'] }
+      { id: 'admin',      rotulo: 'Usuarios e Acessos', perfis: ['direcao','suporte'] },
+      { id: 'permissoes', rotulo: 'Permissoes',         perfis: ['direcao','suporte'] }
     ]
   }
 ];

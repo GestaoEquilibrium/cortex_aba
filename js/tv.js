@@ -22,7 +22,15 @@ function iniciarPainel() {
   setInterval(atualizarRelogio, 1000);
 
   cicloTV();
-  setInterval(cicloTV, 10000);
+
+  // Tempo real: qualquer mudanca em sessoes redesenha na hora (~1s)
+  sb.channel('tv-sessoes')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'sessoes' },
+      () => cicloTV())
+    .subscribe();
+
+  // Verificacao periodica de seguranca (caso o tempo real caia)
+  setInterval(cicloTV, 30000);
 }
 
 async function verificarSessaoTV() {

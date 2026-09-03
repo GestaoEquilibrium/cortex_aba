@@ -1,0 +1,126 @@
+/* ============================================================================
+   CORTEX aba - styles/tv.css
+   Painel do Dia: sempre no escuro ameixa, escala grande para leitura a distancia.
+   ============================================================================ */
+
+.tv-corpo {
+    background: linear-gradient(180deg, #241832 0%, #150D20 100%) !important;
+    color: #E9E2F4;
+    min-height: 100vh;
+    overflow: hidden;
+}
+.tv-corpo::before { background-image: radial-gradient(circle, rgba(255,255,255,.06) 1px, transparent 1px); }
+
+/* ── Sobreposicao de inicio ── */
+.tv-inicio {
+    position: fixed; inset: 0; z-index: 10;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 18px; text-align: center;
+    padding: 24px;
+}
+.tv-inicio .marca .nome { color: #fff; font-size: 22px; }
+.tv-inicio .marca .simbolo { width: 46px; height: 46px; border-radius: 13px; }
+.tv-inicio h1 { font-size: 30px; font-weight: 700; color: #fff; }
+.tv-inicio p { color: #B4A8C8; font-size: 15px; line-height: 1.6; max-width: 420px; }
+.tv-inicio p a { color: #FBBF24; }
+.tv-inicio .btn { font-size: 15px; padding: 13px 30px; }
+
+/* ── Painel ── */
+.tv-painel {
+    display: flex; flex-direction: column;
+    height: 100vh;
+    padding: 22px 26px;
+    gap: 18px;
+}
+.tv-topo {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 20px;
+}
+.tv-topo .marca .nome { color: #fff; }
+.tv-data { font-size: 16px; color: #B4A8C8; font-weight: 600; }
+.tv-relogio {
+    font-size: 34px; font-weight: 800;
+    color: #fff;
+    letter-spacing: .02em;
+    font-variant-numeric: tabular-nums;
+}
+
+.tv-colunas {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1.15fr 1fr;
+    gap: 18px;
+    min-height: 0;
+}
+.tv-col {
+    background: rgba(255, 255, 255, .05);
+    border: 1px solid rgba(255, 255, 255, .10);
+    border-radius: 20px;
+    padding: 16px;
+    display: flex; flex-direction: column;
+    min-height: 0;
+}
+.tv-col-titulo {
+    font-size: 15px; font-weight: 800;
+    letter-spacing: .04em; text-transform: uppercase;
+    padding: 4px 6px 14px;
+}
+.tv-col-titulo.aguardando  { color: #B4A8C8; }
+.tv-col-titulo.chegou      { color: #FBBF24; }
+.tv-col-titulo.atendimento { color: #6EE7B7; }
+
+.tv-lista {
+    flex: 1; overflow-y: auto;
+    display: flex; flex-direction: column; gap: 10px;
+    scrollbar-width: none;
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 20px), transparent 100%);
+}
+.tv-lista::-webkit-scrollbar { display: none; }
+
+.tv-cartao {
+    display: flex; align-items: center; gap: 14px;
+    background: rgba(255, 255, 255, .07);
+    border: 1px solid rgba(255, 255, 255, .10);
+    border-radius: 14px;
+    padding: 12px 14px;
+}
+.tv-hora {
+    font-size: 21px; font-weight: 800;
+    color: #fff;
+    font-variant-numeric: tabular-nums;
+    flex: 0 0 auto;
+}
+.tv-quem { min-width: 0; }
+.tv-quem b { display: block; font-size: 17px; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tv-quem small { color: #B4A8C8; font-size: 12.5px; }
+
+/* Chegou: destaque ambar pulsante */
+.tv-cartao.destaque {
+    background: rgba(251, 191, 36, .13);
+    border-color: rgba(251, 191, 36, .45);
+    animation: tv-pulso 2.2s ease-in-out infinite;
+}
+.tv-cartao.destaque .tv-hora { color: #FBBF24; }
+@keyframes tv-pulso {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0); }
+    50%      { box-shadow: 0 0 22px 2px rgba(251, 191, 36, .25); }
+}
+
+.tv-vazio {
+    color: rgba(255, 255, 255, .25);
+    text-align: center;
+    font-size: 22px;
+    padding: 24px 0;
+}
+
+.tv-rodape {
+    text-align: center;
+    color: #6E5D88;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .tv-cartao.destaque { animation: none; }
+}

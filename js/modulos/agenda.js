@@ -52,6 +52,7 @@ window.MODULOS.agenda = {
       '  <div><h2>Agenda</h2><p class="sub">Grade fixa semanal da psicoterapia ABA.</p></div>' +
       '  <div style="display:flex; gap:8px; flex-wrap:wrap">' +
       '    <button class="btn-chip" onclick="MODULOS.agenda.telaDia()">Sessoes do dia</button>' +
+      '    <button class="btn-chip" onclick="window.open(\'tv.html\', \'_blank\')">&#128250; Tela da TV</button>' +
       (gere
         ? '<button class="btn-chip" onclick="MODULOS.agenda.modalSalas()">Salas</button>' +
           '<button class="btn btn-primario" onclick="MODULOS.agenda.modalHorario()">+ Novo horario</button>'
@@ -341,6 +342,12 @@ window.MODULOS.agenda = {
         (s.salas ? ' &middot; ' + escaparHtml(s.salas.nome) : '') + '</small></div>' +
         '<div class="pac-selos">' +
         '<span class="selo ' + m[0] + '">' + m[1] + '</span>' +
+        (s.status === 'agendada'
+          ? '<button class="btn-chip cheio" onclick="MODULOS.agenda.mudarStatus(\'' + s.id + '\', \'checkin\', \'' + s.data + '\')">Check-in</button>'
+          : '') +
+        (s.status === 'checkin'
+          ? '<button class="btn-chip cheio" onclick="MODULOS.agenda.mudarStatus(\'' + s.id + '\', \'em_atendimento\', \'' + s.data + '\')">Iniciar</button>'
+          : '') +
         (aberta
           ? '<button class="btn-chip" onclick="MODULOS.agenda.mudarStatus(\'' + s.id + '\', \'concluida\', \'' + s.data + '\')">Concluir</button>' +
             '<button class="btn-chip" style="color:var(--st-bad)" onclick="MODULOS.agenda.mudarStatus(\'' + s.id + '\', \'falta\', \'' + s.data + '\')">Falta</button>'

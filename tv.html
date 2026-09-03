@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CORTEX aba - Painel do Dia</title>
+  <link rel="icon" type="image/svg+xml" href="icones/favicon.svg">
+  <link rel="shortcut icon" href="icones/favicon.ico">
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Caveat:wght@600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles/base.css">
+  <link rel="stylesheet" href="styles/components.css">
+  <link rel="stylesheet" href="styles/tv.css">
+</head>
+<body class="tv-corpo">
+
+  <!-- Sobreposicao inicial: habilita o som e a tela cheia com um toque -->
+  <div class="tv-inicio" id="tv-inicio">
+    <div class="marca">
+      <span class="simbolo" aria-hidden="true">
+        <svg width="30" height="30" viewBox="0 0 32 32" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+          <line x1="16" y1="16" x2="9" y2="9"/><line x1="16" y1="16" x2="23" y2="9"/>
+          <line x1="16" y1="16" x2="9" y2="23"/><line x1="16" y1="16" x2="23" y2="23"/>
+          <line x1="16" y1="16" x2="16" y2="7"/><line x1="16" y1="16" x2="16" y2="25"/>
+          <circle cx="16" cy="16" r="2.8" stroke="none"/>
+          <circle cx="9" cy="9" r="1.6" stroke="none"/><circle cx="23" cy="9" r="1.6" stroke="none"/>
+          <circle cx="9" cy="23" r="1.6" stroke="none"/><circle cx="23" cy="23" r="1.6" stroke="none"/>
+          <circle cx="16" cy="7" r="1.6" stroke="none"/><circle cx="16" cy="25" r="1.6" stroke="none"/>
+        </svg>
+      </span>
+      <span class="nome">CORTEX <span class="mao">aba</span></span>
+    </div>
+    <h1>Painel do Dia</h1>
+    <p id="tv-inicio-msg">Toque para iniciar o painel em tela cheia com som.</p>
+    <button class="btn btn-primario" onclick="iniciarPainel()">Iniciar painel</button>
+  </div>
+
+  <!-- Painel -->
+  <div class="tv-painel" id="tv-painel" style="display:none">
+    <header class="tv-topo">
+      <div class="marca">
+        <span class="simbolo" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 32 32" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+            <line x1="16" y1="16" x2="9" y2="9"/><line x1="16" y1="16" x2="23" y2="9"/>
+            <line x1="16" y1="16" x2="9" y2="23"/><line x1="16" y1="16" x2="23" y2="23"/>
+            <line x1="16" y1="16" x2="16" y2="7"/><line x1="16" y1="16" x2="16" y2="25"/>
+            <circle cx="16" cy="16" r="2.8" stroke="none"/>
+            <circle cx="9" cy="9" r="1.6" stroke="none"/><circle cx="23" cy="9" r="1.6" stroke="none"/>
+            <circle cx="9" cy="23" r="1.6" stroke="none"/><circle cx="23" cy="23" r="1.6" stroke="none"/>
+            <circle cx="16" cy="7" r="1.6" stroke="none"/><circle cx="16" cy="25" r="1.6" stroke="none"/>
+          </svg>
+        </span>
+        <span class="nome">CORTEX <span class="mao">aba</span></span>
+      </div>
+      <div class="tv-data" id="tv-data"></div>
+      <div class="tv-relogio" id="tv-relogio">--:--</div>
+    </header>
+
+    <main class="tv-colunas">
+      <section class="tv-col">
+        <div class="tv-col-titulo aguardando">Aguardando chegada</div>
+        <div class="tv-lista" id="col-agendada"></div>
+      </section>
+      <section class="tv-col">
+        <div class="tv-col-titulo chegou">Chegou &middot; pode buscar</div>
+        <div class="tv-lista" id="col-checkin"></div>
+      </section>
+      <section class="tv-col">
+        <div class="tv-col-titulo atendimento">Em atendimento</div>
+        <div class="tv-lista" id="col-atendimento"></div>
+      </section>
+    </main>
+
+    <footer class="tv-rodape" id="tv-rodape">Atualizado automaticamente</footer>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/config.js"></script>
+  <script src="js/tv.js"></script>
+</body>
+</html>

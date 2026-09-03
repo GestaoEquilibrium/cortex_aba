@@ -10,6 +10,8 @@ window.CORTEX_SESSAO = null;
 const SVG_ATTR = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"';
 
 const ICONES = {
+  portal:     '<svg ' + 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"' + '><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>',
+  anamnese:   '<svg ' + 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"' + '><path d="M6 3h9l4 4v14H6z"/><path d="M14.5 3v4.5H19"/><line x1="9" y1="12" x2="16" y2="12"/><line x1="9" y1="16" x2="14" y2="16"/></svg>',
   inicio:     '<svg ' + SVG_ATTR + '><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>',
   pacientes:  '<svg ' + SVG_ATTR + '><path d="M12 20s-7-4.5-9-9c-1.2-2.8.6-6 3.7-6C8.6 5 10.5 6.4 12 8c1.5-1.6 3.4-3 5.3-3 3.1 0 4.9 3.2 3.7 6-2 4.5-9 9-9 9z"/></svg>',
   agenda:     '<svg ' + SVG_ATTR + '><rect x="3.5" y="5" width="17" height="16" rx="2.5"/><line x1="3.5" y1="10" x2="20.5" y2="10"/><line x1="8" y1="3" x2="8" y2="7"/><line x1="16" y1="3" x2="16" y2="7"/></svg>',
@@ -22,6 +24,13 @@ const ICONES = {
 };
 
 const NAVEGACAO = [
+  {
+    grupo: 'MEU ACOMPANHAMENTO',
+    itens: [
+      { id: 'portal',       rotulo: 'Inicio',          perfis: ['familia'] },
+      { id: 'anamnese',     rotulo: 'Anamnese Global', perfis: ['familia'] }
+    ]
+  },
   {
     grupo: 'ASSISTENCIAL',
     itens: [
@@ -68,7 +77,7 @@ async function iniciarApp() {
       document.documentElement.getAttribute('data-modo') === 'escuro' ? '\u2600' : '\u263E';
   }
 
-  abrirModulo('inicio');
+  abrirModulo(profile.perfil === 'familia' ? 'portal' : 'inicio');
 }
 
 function montarSidebar(perfil) {

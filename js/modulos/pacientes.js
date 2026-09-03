@@ -156,12 +156,20 @@ window.MODULOS.pacientes = {
     const podeAdmitir = this.PODE_ADMITIR.includes(this.sessao.profile.perfil);
     const sexo = p.sexo === 'M' ? 'Masculino' : p.sexo === 'F' ? 'Feminino' : '-';
 
+    let foto = '';
+    if (p.foto_path) {
+      const { data: urlFoto } = await sb.storage.from('documentos').createSignedUrl(p.foto_path, 3600);
+      if (urlFoto) foto = urlFoto.signedUrl;
+    }
+
     this.el.innerHTML =
       '<button class="btn-voltar" onclick="MODULOS.pacientes.telaLista()">&larr; Voltar a lista de pacientes</button>' +
 
       '<div class="capa">' +
       '  <div class="capa-linha">' +
-      '    <div class="capa-avatar">' + escaparHtml(this.iniciais(p.nome)) + '</div>' +
+      (foto
+        ? '<img class="capa-avatar foto" src="' + foto + '" alt="">'
+        : '<div class="capa-avatar">' + escaparHtml(this.iniciais(p.nome)) + '</div>') +
       '    <div class="capa-info">' +
       '      <h2>' + escaparHtml(p.nome) + '</h2>' +
       '      <div class="capa-meta">' +
@@ -174,7 +182,9 @@ window.MODULOS.pacientes = {
       '      <div class="capa-acoes">' +
                this.seloNivel(p.nivel) + this.seloStatus(p.status) +
       (podeAdmitir
-        ? '<button class="btn-chip" onclick="MODULOS.pacientes.telaEditar()">&#9998; Editar dados</button>'
+        ? '<button class="btn-chip" onclick="MODULOS.pacientes.telaEditar()">&#9998; Editar dados</button>' +
+          '<button class="btn-chip" onclick="MODULOS.pacientes.modalFoto()">&#128247; ' +
+          (p.foto_path ? 'Alterar foto' : 'Adicionar foto') + '</button>'
         : '') +
       '        <button class="btn-chip" onclick="MODULOS.pacientes.abrirAba(\'documentos\')">&#128196; Documentos</button>' +
       '      </div>' +
@@ -203,6 +213,11 @@ window.MODULOS.pacientes = {
 
     if (id === 'visao') { alvo.innerHTML = this.htmlVisaoGeral(p); return; }
     if (id === 'documentos') { alvo.innerHTML = this.htmlDocumentos(p); return; }
+    if (id === 'anamnese') {
+      alvo.innerHTML = '<div class="cartao"><p class="sub">Carregando anamnese...</p></div>';
+      MODULOS.anamnese.htmlResumoInterno(p.id).then(html => { alvo.innerHTML = html; });
+      return;
+    }
 
     alvo.innerHTML =
       '<div class="cartao"><div class="vazio">' +
@@ -290,6 +305,52 @@ window.MODULOS.pacientes = {
       .createSignedUrl(caminho, 300);
     if (error || !data) { alert('Nao foi possivel abrir o arquivo.'); return; }
     abrirModalPdf('Encaminhamento medico', data.signedUrl);
+  },
+
+  modalFoto() {
+    abrirModal('Foto de ' + escaparHtml(this.paciente.nome),
+      '<div class="campo"><label>Escolha a imagem (JPG ou PNG)</label>' +
+      '<input type="file" id="foto-arquivo" accept="image/jpeg,image/png"></div>' +
+      '<div class="mensagem-erro" id="foto-erro"></div>' +
+      '<div class="barra-acoes">' +
+      '  <button type="button" class="btn btn-fantasma" onclick="fecharModal()">Cancelar</button>' +
+      '  <button type="button" class="btn btn-primario" id="foto-salvar" ' +
+      '    onclick="MODULOS.pacientes.salvarFoto()">Salvar foto</button>' +
+      '</div>');
+  },
+
+  async salvarFoto() {
+    const arquivo = document.getElementById('foto-arquivo').files[0];
+    const erro = document.getElementById('foto-erro');
+    const botao = document.getElementById('foto-salvar');
+    erro.classList.remove('visivel');
+
+    if (!arquivo) { erro.textContent = 'Escolha uma imagem.'; erro.classList.add('visivel'); return; }
+    if (arquivo.size > 8 * 1024 * 1024) {
+      erro.textContent = 'Imagem muito grande (max. 8 MB).'; erro.classList.add('visivel'); return;
+    }
+
+    botao.disabled = true;
+    botao.textContent = 'Enviando...';
+    try {
+      const ext = arquivo.type === 'image/png' ? 'png' : 'jpg';
+      const caminho = 'pacientes/' + this.paciente.id + '/foto_' + Date.now() + '.' + ext;
+      const { error: e1 } = await sb.storage.from('documentos')
+        .upload(caminho, arquivo, { contentType: arquivo.type });
+      if (e1) throw new Error(e1.message);
+
+      const { error: e2 } = await sb.from('pacientes')
+        .update({ foto_path: caminho }).eq('id', this.paciente.id);
+      if (e2) throw new Error(e2.message);
+
+      fecharModal();
+      this.telaDetalhe(this.paciente.id);
+    } catch (e) {
+      erro.textContent = e.message;
+      erro.classList.add('visivel');
+      botao.disabled = false;
+      botao.textContent = 'Salvar foto';
+    }
   },
 
   // ─────────────────────────── EDITAR DADOS ───────────────────────────

@@ -20,6 +20,7 @@ window.MODULOS.inicio = {
       '  </div>' +
       '</section>' +
       '<div class="kpis" id="kpis-inicio"></div>' +
+      '<div class="cartao faixa-ambar" id="inicio-notifs"><h3>Notificacoes</h3><p class="sub">Carregando...</p></div>' +
       '<div class="cartao">' +
       '  <div class="vazio">' +
       '    <div class="simbolo-vazio">&#10022;</div>' +
@@ -29,6 +30,34 @@ window.MODULOS.inicio = {
       '</div>';
 
     this.carregarKpis();
+    this.carregarNotificacoes(sessao);
+  },
+
+  async carregarNotificacoes(sessao) {
+    const alvo = document.getElementById('inicio-notifs');
+    if (!alvo) return;
+    const { data } = await sb.from('notificacoes')
+      .select('*')
+      .or('destinatario_perfil.eq.' + sessao.profile.perfil + ',destinatario_id.eq.' + sessao.user.id)
+      .eq('lida', false)
+      .order('criado_em', { ascending: false })
+      .limit(10);
+
+    if (!data || data.length === 0) {
+      alvo.innerHTML = '<h3>Notificacoes</h3><p class="sub">Nenhuma notificacao pendente.</p>';
+      return;
+    }
+    alvo.innerHTML = '<h3>Notificacoes</h3>' + data.map(n =>
+      '<div class="linha-doc"><div><b>' + escaparHtml(n.titulo) + '</b>' +
+      '<small>' + escaparHtml(n.corpo || '') + ' &middot; ' +
+      new Date(n.criado_em).toLocaleDateString('pt-BR') + '</small></div>' +
+      '<button class="btn btn-fantasma" onclick="MODULOS.inicio.marcarLida(\'' + n.id + '\')">Ok</button>' +
+      '</div>').join('');
+  },
+
+  async marcarLida(id) {
+    await sb.from('notificacoes').update({ lida: true }).eq('id', id);
+    this.carregarNotificacoes(window.CORTEX_SESSAO);
   },
 
   async carregarKpis() {

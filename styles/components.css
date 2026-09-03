@@ -612,3 +612,74 @@
 .caixa-info b { font-size: 12.5px; font-weight: 700; word-break: break-word; }
 .caixa-info.larga { grid-column: span 2; }
 @media (max-width: 560px) { .caixa-info.larga { grid-column: span 1; } }
+
+/* ── Anamnese: passos, segmentos e leitura interna ────────────────────── */
+.passos {
+    display: flex; gap: 6px; margin-bottom: 16px;
+    overflow-x: auto; scrollbar-width: none;
+}
+.passos::-webkit-scrollbar { display: none; }
+.passo {
+    flex: 1 0 auto;
+    display: flex; align-items: center; gap: 7px;
+    padding: 8px 13px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    font-size: 11px; font-weight: 700;
+    color: var(--ink-soft);
+    white-space: nowrap;
+}
+.passo span {
+    width: 18px; height: 18px;
+    display: grid; place-items: center;
+    border-radius: 50%;
+    background: var(--surface-alt);
+    font-size: 10px;
+}
+.passo.atual { border-color: var(--acao); color: var(--acao); }
+.passo.atual span { background: var(--acao); color: #fff; }
+.passo.feito { color: var(--st-ok); border-color: rgba(22,163,74,.35); }
+.passo.feito span { background: var(--st-ok-bg); color: var(--st-ok); }
+
+.questao { padding: 10px 0; border-bottom: 1px solid var(--line); margin-bottom: 0; }
+.questao:last-child { border-bottom: none; }
+.questao label { font-size: 12.5px; color: var(--ink); font-weight: 600; margin-bottom: 8px; }
+.questao textarea, .questao input { max-width: 640px; }
+
+.segmento { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+.seg {
+    padding: 7px 18px;
+    border: 1.5px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface);
+    font: inherit; font-size: 12px; font-weight: 700;
+    color: var(--ink-muted);
+    cursor: pointer;
+    transition: border-color var(--suave), background var(--suave), color var(--suave);
+}
+.seg:hover { border-color: var(--acao); color: var(--acao); }
+.seg.ativo { background: var(--acao); border-color: var(--acao); color: #fff; }
+
+.multi { display: flex; flex-direction: column; gap: 6px; }
+
+.bloco-secao { border-bottom: 1px solid var(--line); }
+.bloco-secao:last-child { border-bottom: none; }
+.bloco-secao summary {
+    padding: 12px 4px;
+    font-size: 12.5px; font-weight: 700;
+    cursor: pointer;
+    color: var(--ink);
+}
+.bloco-secao summary:hover { color: var(--acao); }
+.linha-resp {
+    display: flex; justify-content: space-between; gap: 20px;
+    padding: 7px 4px 7px 16px;
+    border-top: 1px dashed var(--line);
+    font-size: 12px;
+}
+.linha-resp span { color: var(--ink-muted); max-width: 62%; }
+.linha-resp b { text-align: right; max-width: 36%; word-break: break-word; }
+
+/* foto do paciente na capa */
+.capa-avatar.foto { object-fit: cover; }

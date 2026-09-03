@@ -45,6 +45,7 @@
     --gd-portal: linear-gradient(135deg, #7C3AED 0%, #4F46E5 55%, #06B6D4 100%);
     --gd-verde:  linear-gradient(135deg, #14B8A6 0%, #0F766E 100%);
     --gd-azul:   linear-gradient(135deg, #60A5FA 0%, #2563EB 100%);
+    --gd-neuro:  linear-gradient(150deg, #0B1226 0%, #1E1B4B 45%, #4338CA 85%, #4F46E5 100%);
 
     /* ── Acao (muda com o tema do perfil) ─────────────────────────────── */
     --acao:      #0F766E;
@@ -77,6 +78,8 @@
 [data-tema="coordenacao"] { --acao: #0F766E; --acao-forte: #0B5952; --acao-soft: rgba(15,118,110,.12); }
 [data-tema="equipe"]      { --acao: #1D4ED8; --acao-forte: #1737A3; --acao-soft: rgba(29,78,216,.12); }
 [data-tema="familia"]     { --acao: #7C3AED; --acao-forte: #5E27C4; --acao-soft: rgba(124,58,237,.12); }
+[data-tema="neuro"]       { --acao: #4F46E5; --acao-forte: #3B34C4; --acao-soft: rgba(79,70,229,.12); }
+[data-modo="escuro"][data-tema="neuro"] { --acao-soft: rgba(79, 70, 229, .22); }
 
 /* ── Modo escuro (superficies mudam, cores funcionais NAO) ────────────── */
 [data-modo="escuro"] {

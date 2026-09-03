@@ -266,7 +266,7 @@
     gap: var(--sidebar-margem);
 }
 .login-heroi {
-    background: var(--gd-heroi);
+    background: var(--gd-neuro);
     color: #fff;
     border-radius: var(--raio);
     box-shadow: var(--shadow-md);
@@ -289,7 +289,7 @@
 .login-heroi > * { position: relative; z-index: 1; }
 .login-heroi .marca .simbolo { width: 46px; height: 46px; border-radius: 13px; background: rgba(255,255,255,.14); }
 .login-heroi .marca .nome { font-size: 26px; color: #fff; }
-.login-heroi .marca .nome .mao { font-size: 32px; }
+.login-heroi .marca .nome .mao { font-size: 32px; color: #A5B4FC; }
 .login-heroi p {
     margin-top: 22px; max-width: 400px;
     color: rgba(255, 255, 255, .82);

@@ -65,6 +65,9 @@ window.MODULOS.portal = {
           rotulo + '</button></div>';
       }
 
+      let relatorios = '';
+      try { relatorios = await MODULOS.relatorios.htmlPortal(p.id, p.nome); } catch (e) {}
+
       html +=
         '<div class="cartao faixa-azul">' +
         '  <div class="pac-topo" style="margin-bottom:14px">' +
@@ -73,6 +76,7 @@ window.MODULOS.portal = {
         '    <span>' + calcularIdade(p.data_nascimento) + '</span></div>' +
         '  </div>' +
         pendencia +
+        relatorios +
         '</div>';
     }
 

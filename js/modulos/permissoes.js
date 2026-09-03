@@ -40,6 +40,8 @@ window.MODULOS.permissoes = {
       dica: 'V: consulta. E: gere a biblioteca e os programas/alvos dos pacientes.' },
     { chave: 'evolucao', rotulo: 'Folha de aplicacao e evolucao',
       dica: 'E: registra tentativas na sessao e escreve a evolucao diaria.' },
+    { chave: 'relatorios', rotulo: 'Relatorio mensal (Form. 07)',
+      dica: 'V: consulta. E: elabora e libera no portal da familia.' },
     { chave: 'pei', rotulo: 'PEI e Devolutiva',
       dica: 'V: consulta. E: elabora PEI e relatorio de devolutiva.' }
   ],

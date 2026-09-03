@@ -1,8 +1,11 @@
 // ============================================================================
 // CORTEX aba - js/app.js
-// Shell: sidebar flutuante por perfil, recolher/expandir, modo claro/escuro.
-// Os modulos serao plugados nos proximos sprints.
+// Shell: sidebar por perfil, roteador de modulos, modo claro/escuro.
+// Cada modulo se registra em window.MODULOS (ver js/modulos/*.js).
 // ============================================================================
+
+window.MODULOS = window.MODULOS || {};
+window.CORTEX_SESSAO = null;
 
 const SVG_ATTR = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"';
 
@@ -22,19 +25,19 @@ const NAVEGACAO = [
   {
     grupo: 'ASSISTENCIAL',
     itens: [
-      { id: 'inicio',     rotulo: 'Inicio',       perfis: ['direcao','coordenador','terapeuta','aplicador','callcenter','suporte'] },
-      { id: 'pacientes',  rotulo: 'Pacientes',    perfis: ['direcao','coordenador','terapeuta','aplicador','callcenter'] },
-      { id: 'agenda',     rotulo: 'Agenda',       perfis: ['direcao','coordenador','terapeuta','aplicador','callcenter'] },
-      { id: 'avaliacoes', rotulo: 'Avaliacoes',   perfis: ['direcao','coordenador','terapeuta'] },
-      { id: 'programas',  rotulo: 'Programas',    perfis: ['direcao','coordenador','terapeuta','aplicador'] }
+      { id: 'inicio',     rotulo: 'Inicio',     perfis: ['direcao','coordenador','terapeuta','aplicador','callcenter','suporte'] },
+      { id: 'pacientes',  rotulo: 'Pacientes',  perfis: ['direcao','coordenador','terapeuta','aplicador','callcenter'] },
+      { id: 'agenda',     rotulo: 'Agenda',     perfis: ['direcao','coordenador','terapeuta','aplicador','callcenter'] },
+      { id: 'avaliacoes', rotulo: 'Avaliacoes', perfis: ['direcao','coordenador','terapeuta'] },
+      { id: 'programas',  rotulo: 'Programas',  perfis: ['direcao','coordenador','terapeuta','aplicador'] }
     ]
   },
   {
     grupo: 'GESTAO',
     itens: [
-      { id: 'presenca', rotulo: 'Lista de Presenca', perfis: ['direcao','coordenador','callcenter'] },
-      { id: 'faltas',   rotulo: 'Gestao de Faltas',  perfis: ['direcao','coordenador'] },
-      { id: 'rh',       rotulo: 'RH',                perfis: ['direcao','coordenador'] },
+      { id: 'presenca', rotulo: 'Lista de Presenca',  perfis: ['direcao','coordenador','callcenter'] },
+      { id: 'faltas',   rotulo: 'Gestao de Faltas',   perfis: ['direcao','coordenador'] },
+      { id: 'rh',       rotulo: 'RH',                 perfis: ['direcao','coordenador'] },
       { id: 'admin',    rotulo: 'Usuarios e Acessos', perfis: ['direcao','suporte'] }
     ]
   }
@@ -44,6 +47,7 @@ async function iniciarApp() {
   const sessao = await exigirSessao();
   if (!sessao) return;
 
+  window.CORTEX_SESSAO = sessao;
   const { profile } = sessao;
 
   document.getElementById('usuario-nome').textContent = profile.nome;
@@ -52,30 +56,19 @@ async function iniciarApp() {
 
   montarSidebar(profile.perfil);
 
-  // Saudacao conforme a hora
-  const hora = new Date().getHours();
-  const saudacao = hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite';
-  document.getElementById('saudacao').textContent =
-    saudacao + ', ' + profile.nome.split(' ')[0] + '!';
-
-  const hoje = new Date().toLocaleDateString('pt-BR',
-    { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
-  document.getElementById('data-hoje').textContent =
-    hoje.charAt(0).toUpperCase() + hoje.slice(1);
-
-  // Restaura estado recolhido da sidebar
   try {
     if (localStorage.getItem('cortex_sidebar') === 'recolhida') {
       document.getElementById('shell').classList.add('recolhida');
     }
   } catch (e) {}
 
-  // Icone inicial do botao de modo
   const botaoModo = document.getElementById('botao-modo');
   if (botaoModo) {
     botaoModo.textContent =
       document.documentElement.getAttribute('data-modo') === 'escuro' ? '\u2600' : '\u263E';
   }
+
+  abrirModulo('inicio');
 }
 
 function montarSidebar(perfil) {
@@ -93,7 +86,8 @@ function montarSidebar(perfil) {
 
     itensVisiveis.forEach(item => {
       const a = document.createElement('a');
-      a.className = 'nav-item' + (item.id === 'inicio' ? ' ativa' : '');
+      a.className = 'nav-item';
+      a.dataset.modulo = item.id;
       a.href = '#' + item.id;
       a.title = item.rotulo;
 
@@ -106,17 +100,30 @@ function montarSidebar(perfil) {
 
       a.appendChild(icone);
       a.appendChild(texto);
-
-      a.addEventListener('click', e => {
-        e.preventDefault();
-        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('ativa'));
-        a.classList.add('ativa');
-        // Modulos serao carregados aqui nos proximos sprints
-      });
-
+      a.addEventListener('click', e => { e.preventDefault(); abrirModulo(item.id); });
       nav.appendChild(a);
     });
   });
+}
+
+function abrirModulo(id) {
+  document.querySelectorAll('.nav-item').forEach(n =>
+    n.classList.toggle('ativa', n.dataset.modulo === id));
+
+  const pagina = document.getElementById('pagina');
+  pagina.innerHTML = '';
+
+  const modulo = window.MODULOS[id];
+  if (modulo && typeof modulo.render === 'function') {
+    modulo.render(pagina, window.CORTEX_SESSAO);
+  } else {
+    pagina.innerHTML =
+      '<div class="cartao"><div class="vazio">' +
+      '<div class="simbolo-vazio">&#9881;</div>' +
+      '<strong>Modulo em construcao</strong>' +
+      'Este modulo chega em um dos proximos sprints.' +
+      '</div></div>';
+  }
 }
 
 function alternarSidebar() {
@@ -126,6 +133,23 @@ function alternarSidebar() {
     localStorage.setItem('cortex_sidebar',
       shell.classList.contains('recolhida') ? 'recolhida' : 'aberta');
   } catch (e) {}
+}
+
+// Utilidades compartilhadas pelos modulos
+function calcularIdade(dataNasc) {
+  const n = new Date(dataNasc + 'T12:00:00');
+  const hoje = new Date();
+  let anos = hoje.getFullYear() - n.getFullYear();
+  let meses = hoje.getMonth() - n.getMonth();
+  if (hoje.getDate() < n.getDate()) meses--;
+  if (meses < 0) { anos--; meses += 12; }
+  return anos + 'a ' + meses + 'm';
+}
+
+function escaparHtml(t) {
+  const d = document.createElement('div');
+  d.textContent = t == null ? '' : String(t);
+  return d.innerHTML;
 }
 
 document.addEventListener('DOMContentLoaded', iniciarApp);

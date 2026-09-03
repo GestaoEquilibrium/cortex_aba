@@ -334,3 +334,107 @@
     .app-main { margin-left: 0; padding: 8px 16px 28px; }
     .app-shell.recolhida .app-main { margin-left: 0; }
 }
+
+/* ── Cabecalho de pagina e toolbar ────────────────────────────────────── */
+.pagina-cabecalho {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 16px; margin-bottom: 16px; flex-wrap: wrap;
+}
+.pagina-cabecalho h2 { font-size: 21px; font-weight: 800; letter-spacing: -.015em; }
+.pagina-cabecalho .sub { color: var(--ink-muted); font-size: 13px; margin-top: 3px; }
+.btn-voltar {
+    background: none; border: none; cursor: pointer;
+    font: inherit; font-weight: 700; font-size: 12.5px;
+    color: var(--acao); padding: 0; margin-bottom: 6px; display: block;
+}
+.btn-voltar:hover { text-decoration: underline; }
+
+.toolbar { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+.toolbar input[type="search"] {
+    flex: 1; min-width: 220px;
+    padding: 10px 14px;
+    border: 1.5px solid var(--line); border-radius: var(--raio-sm);
+    font: inherit; color: var(--ink); background: var(--surface);
+}
+.toolbar select {
+    padding: 10px 14px;
+    border: 1.5px solid var(--line); border-radius: var(--raio-sm);
+    font: inherit; color: var(--ink); background: var(--surface);
+}
+.toolbar input:focus, .toolbar select:focus {
+    outline: none; border-color: var(--acao);
+    box-shadow: 0 0 0 3px var(--acao-soft);
+}
+
+/* ── Grade de pacientes ───────────────────────────────────────────────── */
+.grade-pacientes {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 14px;
+}
+.grade-pacientes .cartao { margin: 0; }
+.cartao-paciente { cursor: pointer; transition: transform var(--pop), box-shadow var(--suave); }
+.cartao-paciente:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+.pac-topo { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.avatar-paciente {
+    width: 40px; height: 40px; flex: 0 0 auto;
+    border-radius: 50%;
+    background: var(--acao-soft); color: var(--acao);
+    display: grid; place-items: center;
+    font-weight: 800; font-size: 14px;
+}
+.pac-quem { min-width: 0; }
+.pac-quem strong { display: block; font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pac-quem span { color: var(--ink-muted); font-size: 12px; }
+.pac-selos { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* ── Formularios em grade ─────────────────────────────────────────────── */
+.grade-form {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 16px;
+}
+.grade-form .campo.c2 { grid-column: span 2; }
+.grade-form .campo.c3 { grid-column: span 3; }
+@media (max-width: 760px) {
+    .grade-form { grid-template-columns: 1fr; }
+    .grade-form .campo.c2, .grade-form .campo.c3 { grid-column: span 1; }
+}
+.barra-acoes {
+    display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px;
+}
+
+/* ── Bloco de informacoes (detalhe) ───────────────────────────────────── */
+.grade-info {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px 18px;
+}
+.grade-info small { display: block; color: var(--ink-soft); font-size: 11.5px; font-weight: 600; margin-bottom: 2px; }
+.grade-info b { font-size: 14px; font-weight: 700; word-break: break-word; }
+
+.linha-doc {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; padding: 10px 0;
+    border-bottom: 1px solid var(--line);
+}
+.linha-doc:last-child { border-bottom: none; }
+.linha-doc small { display: block; color: var(--ink-muted); font-size: 12px; margin-top: 2px; }
+
+/* ── KPIs ─────────────────────────────────────────────────────────────── */
+.kpis {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 14px; margin-bottom: 16px;
+}
+.kpi {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--raio);
+    box-shadow: var(--shadow-xs);
+    padding: 16px 18px;
+    position: relative; overflow: hidden;
+}
+.kpi::before { content: ''; position: absolute; top: 0; left: 0; bottom: 0; width: 4px; }
+.kpi-verde::before  { background: var(--area-verde); }
+.kpi-azul::before   { background: var(--area-azul); }
+.kpi-ambar::before  { background: var(--area-ambar); }
+.kpi-vermelho::before { background: var(--area-vermelho); }
+.kpi-roxo::before   { background: var(--area-roxo); }
+.kpi-valor { font-size: 26px; font-weight: 800; letter-spacing: -.02em; }
+.kpi-rotulo { color: var(--ink-muted); font-size: 12px; font-weight: 600; margin-top: 2px; }

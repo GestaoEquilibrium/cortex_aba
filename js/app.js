@@ -36,21 +36,21 @@ const NAVEGACAO = [
   {
     grupo: 'ASSISTENCIAL',
     itens: [
-      { id: 'inicio',     rotulo: 'Inicio',     perfis: ['direcao','coordenador','terapeuta','aplicador','callcenter','suporte'] },
-      { id: 'pacientes',  rotulo: 'Pacientes',  perfis: ['direcao','coordenador','terapeuta','aplicador','callcenter'] },
-      { id: 'agenda',     rotulo: 'Agenda',     perfis: ['direcao','coordenador','terapeuta','aplicador','callcenter'] },
-      { id: 'avaliacoes', rotulo: 'Avaliacoes', perfis: ['direcao','coordenador','terapeuta'] },
+      { id: 'inicio',     rotulo: 'Inicio',     chave: 'inicio' },
+      { id: 'pacientes',  rotulo: 'Pacientes',  chave: 'pacientes' },
+      { id: 'agenda',     rotulo: 'Agenda',     chave: 'agenda' },
+      { id: 'avaliacoes', rotulo: 'Avaliacoes', chave: 'avaliacoes' },
       { id: 'programas',  rotulo: 'Programas',  perfis: ['direcao','coordenador','terapeuta','aplicador'] }
     ]
   },
   {
     grupo: 'GESTAO',
     itens: [
-      { id: 'presenca', rotulo: 'Lista de Presenca',  perfis: ['direcao','coordenador','callcenter'] },
+      { id: 'presenca', rotulo: 'Lista de Presenca',  chave: 'presenca' },
       { id: 'faltas',   rotulo: 'Gestao de Faltas',   perfis: ['direcao','coordenador'] },
       { id: 'rh',       rotulo: 'RH',                 perfis: ['direcao','coordenador'] },
       { id: 'admin',      rotulo: 'Usuarios e Acessos', perfis: ['direcao','suporte'] },
-      { id: 'permissoes', rotulo: 'Permissoes',         perfis: ['direcao','suporte'] }
+      { id: 'permissoes', rotulo: 'Permissoes',         perfis: ['suporte'] }
     ]
   }
 ];
@@ -61,6 +61,7 @@ async function iniciarApp() {
 
   window.CORTEX_SESSAO = sessao;
   const { profile } = sessao;
+  await carregarPermissoes(profile.perfil);
 
   document.getElementById('usuario-nome').textContent = profile.nome;
   document.getElementById('usuario-perfil').textContent = ROTULOS_PERFIL[profile.perfil] || profile.perfil;
@@ -88,7 +89,8 @@ function montarSidebar(perfil) {
   nav.innerHTML = '';
 
   NAVEGACAO.forEach(grupo => {
-    const itensVisiveis = grupo.itens.filter(i => i.perfis.includes(perfil));
+    const itensVisiveis = grupo.itens.filter(i =>
+      i.chave ? perm(i.chave) !== '' : i.perfis.includes(perfil));
     if (itensVisiveis.length === 0) return;
 
     const titulo = document.createElement('div');
@@ -185,6 +187,26 @@ function formatarCPF(cpf) {
   return cpf.slice(0,3) + '.' + cpf.slice(3,6) + '.' + cpf.slice(6,9) + '-' + cpf.slice(9);
 }
 
+
+// ── Permissoes dinamicas (fonte: tabela public.permissoes) ─────────────
+// Suporte sempre tem 'E' em tudo. Demais perfis: o que a matriz definir.
+let CORTEX_PERMS = {};
+let CORTEX_PERM_TUDO = false;
+
+async function carregarPermissoes(perfil) {
+  if (perfil === 'suporte') { CORTEX_PERM_TUDO = true; return; }
+  if (perfil === 'familia') return; // portal fixo
+  const { data } = await sb.from('permissoes')
+    .select('chave, nivel').eq('perfil', perfil);
+  CORTEX_PERMS = {};
+  (data || []).forEach(r => { CORTEX_PERMS[r.chave] = r.nivel; });
+}
+
+// perm('pacientes') -> 'E' | 'V' | ''
+function perm(chave) {
+  if (CORTEX_PERM_TUDO) return 'E';
+  return CORTEX_PERMS[chave] || '';
+}
 
 // ── Modais (janela suspensa) ────────────────────────────────────────────
 function abrirModal(titulo, html, larga) {

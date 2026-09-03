@@ -50,7 +50,7 @@ window.MODULOS.avaliacoes = {
       return;
     }
 
-    const podeAvaliar = this.PODE_AVALIAR.includes(this.sessao.profile.perfil);
+    const podeAvaliar = perm('avaliacoes') === 'E';
 
     alvo.innerHTML =
       (podeAvaliar ? await this.htmlNovaAvaliacao() : '') +
@@ -315,7 +315,7 @@ window.MODULOS.avaliacoes = {
         ? '<div class="caixa-info larga" style="margin-top:14px"><small>Observacoes</small><b>' +
           escaparHtml(av.observacoes) + '</b></div>'
         : '') +
-      (av.status === 'concluida' && this.PODE_AVALIAR.includes(window.CORTEX_SESSAO.profile.perfil)
+      (av.status === 'concluida' && perm('pei') === 'E'
         ? '<div class="barra-acoes nao-imprime" style="margin-top:14px">' +
           '<button class="btn btn-fantasma" onclick="MODULOS.pei.abrirDevolutiva(\'' + av.id + '\')">Relatorio de devolutiva</button>' +
           '<button class="btn btn-primario" onclick="MODULOS.pei.abrirConstrutor(\'' + av.id + '\', \'' + av.paciente_id + '\')">Gerar PEI</button>' +

@@ -12,9 +12,7 @@ window.MODULOS.pei = {
   PODE_GERIR: ['direcao', 'coordenador', 'terapeuta', 'suporte'],
 
   el() { return document.getElementById('pagina'); },
-  podeGerir() {
-    return this.PODE_GERIR.includes(window.CORTEX_SESSAO.profile.perfil);
-  },
+  podeGerir() { return perm('pei') === 'E'; },
 
   // ─────────────────── ABA PEI DO PRONTUARIO ───────────────────
 

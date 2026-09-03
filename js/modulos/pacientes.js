@@ -24,7 +24,7 @@ window.MODULOS.pacientes = {
   // ───────────────────────────── LISTA ─────────────────────────────
 
   async telaLista() {
-    const podeAdmitir = this.PODE_ADMITIR.includes(this.sessao.profile.perfil);
+    const podeAdmitir = perm('pacientes') === 'E';
 
     this.el.innerHTML =
       '<div class="pagina-cabecalho">' +
@@ -153,7 +153,7 @@ window.MODULOS.pacientes = {
     if (error || !p) { this.telaLista(); return; }
     this.paciente = p;
 
-    const podeAdmitir = this.PODE_ADMITIR.includes(this.sessao.profile.perfil);
+    const podeAdmitir = perm('pacientes') === 'E';
     const sexo = p.sexo === 'M' ? 'Masculino' : p.sexo === 'F' ? 'Feminino' : '-';
 
     let foto = '';
@@ -189,7 +189,7 @@ window.MODULOS.pacientes = {
           '<button class="btn-chip" onclick="MODULOS.pacientes.modalFoto()">&#128247; ' +
           (p.foto_path ? 'Alterar foto' : 'Adicionar foto') + '</button>'
         : '') +
-      (['direcao','coordenador','suporte'].includes(this.sessao.profile.perfil)
+      (perm('pacientes_designar') === 'E'
         ? '<button class="btn-chip" onclick="MODULOS.pacientes.modalAplicador()">&#128100; ' +
           (p.aplicador ? 'Alterar profissional' : 'Designar profissional') + '</button>'
         : '') +

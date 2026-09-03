@@ -888,3 +888,8 @@
 .mes-info.previsto { color: var(--ink-soft); font-weight: 600; }
 .mes-falta { color: var(--st-bad); }
 @media (max-width: 700px) { .mes-dia { min-height: 52px; padding: 5px 7px; } .mes-info { font-size: 9px; } }
+
+/* permissao clicavel */
+.perm { border: none; font: inherit; font-weight: 800; cursor: default; }
+.perm-clic { cursor: pointer; transition: transform var(--pop), box-shadow var(--suave); }
+.perm-clic:hover { transform: scale(1.15); box-shadow: var(--shadow-sm); }

@@ -25,7 +25,7 @@ window.MODULOS.agenda = {
   salas: [],
   _canal: null,
 
-  gere() { return this.PODE_GERIR.includes(this.sessao.profile.perfil); },
+  gere() { return perm('agenda_grade') === 'E'; },
 
   async render(el, sessao) {
     this.el = el;
@@ -310,7 +310,8 @@ window.MODULOS.agenda = {
     const aberta = !['concluida', 'falta', 'cancelada'].includes(s.status);
 
     let acoes = '';
-    if (aberta) {
+    const podeOperar = perm('agenda') === 'E';
+    if (aberta && podeOperar) {
       if (s.status === 'agendada') {
         acoes += '<button class="btn btn-primario" onclick="MODULOS.agenda.statusModal(\'' + id + '\', \'checkin\')">Check-in (chegou)</button>';
       }
@@ -325,10 +326,10 @@ window.MODULOS.agenda = {
     }
 
     let whats = '';
-    if (resp && resp.telefone && aberta) {
+    if (resp && resp.telefone && aberta && podeOperar) {
       whats = '<button class="btn btn-fantasma" onclick="MODULOS.agenda.abrirWhats(\'' + id + '\')">' +
         '&#128172; Enviar confirmacao no WhatsApp</button>';
-    } else if (aberta) {
+    } else if (aberta && podeOperar) {
       whats = '<p class="sub">Sem telefone de responsavel cadastrado para confirmacao.</p>';
     }
 

@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CORTEX aba</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/cortex.css">
+</head>
+<body>
+
+  <div class="app-layout">
+
+    <aside class="sidebar">
+      <div class="sidebar-topo">
+        <div class="catavento pequeno" aria-hidden="true">
+          <span></span><span></span><span></span><span></span>
+        </div>
+        <strong>CORTEX aba<small>EQUILIBRIUM</small></strong>
+      </div>
+
+      <nav class="sidebar-nav" id="sidebar-nav" aria-label="Menu principal"></nav>
+
+      <div class="sidebar-rodape">
+        <div class="usuario-nome" id="usuario-nome">...</div>
+        <div class="usuario-perfil" id="usuario-perfil"></div>
+        <button type="button" onclick="sair()">Sair</button>
+      </div>
+    </aside>
+
+    <div class="conteudo">
+      <header class="topbar">
+        <h1 id="titulo-pagina">Inicio</h1>
+      </header>
+
+      <main class="pagina" id="pagina">
+        <div class="cartao">
+          <h3>Bem-vindo(a), <span id="boas-vindas-nome">...</span></h3>
+          <p style="color: var(--tinta-suave);">
+            O CORTEX aba esta em construcao. Este e o Sprint 1: fundacao, acesso e layout base.
+            Os modulos de admissao, portal da familia, agenda e avaliacoes chegam nos proximos sprints.
+          </p>
+        </div>
+
+        <div class="cartao">
+          <div class="vazio">
+            <div class="catavento" aria-hidden="true">
+              <span></span><span></span><span></span><span></span>
+            </div>
+            <strong>Nenhum modulo ativo ainda</strong>
+            Os itens do menu lateral serao habilitados conforme os sprints avancarem.
+          </div>
+        </div>
+      </main>
+    </div>
+
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="assets/js/config.js"></script>
+  <script src="assets/js/auth.js"></script>
+  <script src="assets/js/app.js"></script>
+</body>
+</html>

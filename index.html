@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CORTEX aba - Entrar</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/cortex.css">
+</head>
+<body>
+
+  <div class="login-pagina">
+
+    <section class="login-marca">
+      <div class="catavento" aria-hidden="true">
+        <span></span><span></span><span></span><span></span>
+      </div>
+      <h1>CORTEX aba<small>EQUILIBRIUM TERAPIA INFANTIL</small></h1>
+      <p>Sistema de gestao da psicoterapia ABA: admissao, avaliacao, intervencao e acompanhamento em um so lugar.</p>
+    </section>
+
+    <section class="login-form-area">
+      <form class="login-cartao" onsubmit="fazerLogin(event)">
+        <h2>Entrar</h2>
+        <p>Use o e-mail e a senha cadastrados pela clinica.</p>
+
+        <div class="mensagem-erro" id="erro-login" role="alert"></div>
+
+        <div class="campo">
+          <label for="email">E-mail</label>
+          <input type="email" id="email" autocomplete="username" required>
+        </div>
+
+        <div class="campo">
+          <label for="senha">Senha</label>
+          <input type="password" id="senha" autocomplete="current-password" required>
+        </div>
+
+        <button type="submit" class="botao botao-primario" id="botao-entrar">Entrar</button>
+      </form>
+    </section>
+
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="assets/js/config.js"></script>
+  <script src="assets/js/auth.js"></script>
+  <script>
+    // Se ja houver sessao ativa, vai direto para o app
+    sb.auth.getSession().then(({ data: { session } }) => {
+      if (session) window.location.href = 'app.html';
+    });
+  </script>
+</body>
+</html>

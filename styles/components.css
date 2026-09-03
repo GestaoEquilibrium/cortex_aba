@@ -829,3 +829,62 @@
 .pm-origem { color: var(--ink-soft); font-size: 10.5px; }
 .pei-rp { display: grid; grid-template-columns: 2fr 1fr; gap: 6px; }
 @media (max-width: 560px) { .pei-rp { grid-template-columns: 1fr; } }
+
+/* ── Agenda: controles e visoes ───────────────────────────────────────── */
+.ag-controles {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; flex-wrap: wrap;
+    margin-bottom: 16px;
+}
+.ag-nav { display: flex; gap: 6px; align-items: center; }
+.botao-icone.tema {
+    width: 34px; height: 34px;
+    display: grid; place-items: center;
+    background: var(--surface);
+    border: 1.5px solid var(--line);
+    border-radius: 10px;
+    font-size: 17px; color: var(--ink);
+    cursor: pointer;
+    transition: border-color var(--suave), color var(--suave);
+}
+.botao-icone.tema:hover { border-color: var(--acao); color: var(--acao); }
+
+.agenda-dia.hoje { border-color: var(--acao); box-shadow: 0 0 0 3px var(--acao-soft); }
+
+.chip-sessao.ok   { border-left-color: var(--st-ok); opacity: .75; }
+.chip-sessao.bad  { border-left-color: var(--st-bad); }
+.chip-sessao.off  { border-left-color: var(--line-strong); opacity: .55; }
+.chip-sessao.conf { border-left-color: var(--st-ok); }
+.clicavel-sessao { cursor: pointer; transition: transform var(--pop), box-shadow var(--suave); }
+.clicavel-sessao:hover { transform: translateY(-2px); box-shadow: var(--shadow-sm); }
+
+/* Mes */
+.mes-grade {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 6px;
+}
+.mes-cab {
+    text-align: center;
+    font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+    color: var(--ink-soft);
+    padding: 4px 0;
+}
+.mes-dia {
+    min-height: 68px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 7px 9px;
+    cursor: pointer;
+    transition: border-color var(--suave), transform var(--pop), box-shadow var(--suave);
+    background: var(--surface);
+}
+.mes-dia:hover { border-color: var(--acao); transform: translateY(-1px); box-shadow: var(--shadow-xs); }
+.mes-dia.vazio-mes { border: none; background: transparent; cursor: default; }
+.mes-dia.vazio-mes:hover { transform: none; box-shadow: none; }
+.mes-dia.hoje { border-color: var(--acao); box-shadow: 0 0 0 3px var(--acao-soft); }
+.mes-num { font-size: 12px; font-weight: 800; }
+.mes-info { display: block; margin-top: 5px; font-size: 10px; font-weight: 700; color: var(--ink-muted); }
+.mes-info.previsto { color: var(--ink-soft); font-weight: 600; }
+.mes-falta { color: var(--st-bad); }
+@media (max-width: 700px) { .mes-dia { min-height: 52px; padding: 5px 7px; } .mes-info { font-size: 9px; } }

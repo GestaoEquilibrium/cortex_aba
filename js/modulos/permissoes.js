@@ -38,7 +38,8 @@ window.MODULOS.permissoes = {
     { f: 'Sessoes do dia: mudar status', p: { direcao: 'E', coordenador: 'E', terapeuta: 'E', aplicador: 'E', callcenter: 'E', suporte: 'E' } },
 
     { grupo: 'Recepcao' },
-    { f: 'Check-in do dia', p: { direcao: 'E', coordenador: 'E', callcenter: 'E', suporte: 'E' } },
+    { f: 'Check-in / finalizar (janela da sessao)', p: { direcao: 'E', coordenador: 'E', terapeuta: 'E', aplicador: 'E', callcenter: 'E', suporte: 'E' } },
+    { f: 'Enviar confirmacao WhatsApp', p: { direcao: 'E', coordenador: 'E', callcenter: 'E', suporte: 'E' } },
     { f: 'Lista de Presenca (imprimir)', p: { direcao: 'V', coordenador: 'V', callcenter: 'V', suporte: 'V' } },
     { f: 'Tela da TV (painel do dia)', p: { direcao: 'V', coordenador: 'V', terapeuta: 'V', aplicador: 'V', callcenter: 'V', suporte: 'V' } },
 

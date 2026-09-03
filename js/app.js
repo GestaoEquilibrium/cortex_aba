@@ -39,7 +39,6 @@ const NAVEGACAO = [
       { id: 'inicio',     rotulo: 'Inicio',     perfis: ['direcao','coordenador','terapeuta','aplicador','callcenter','suporte'] },
       { id: 'pacientes',  rotulo: 'Pacientes',  perfis: ['direcao','coordenador','terapeuta','aplicador','callcenter'] },
       { id: 'agenda',     rotulo: 'Agenda',     perfis: ['direcao','coordenador','terapeuta','aplicador','callcenter'] },
-      { id: 'checkin',    rotulo: 'Check-in',   perfis: ['direcao','coordenador','callcenter','suporte'] },
       { id: 'avaliacoes', rotulo: 'Avaliacoes', perfis: ['direcao','coordenador','terapeuta'] },
       { id: 'programas',  rotulo: 'Programas',  perfis: ['direcao','coordenador','terapeuta','aplicador'] }
     ]

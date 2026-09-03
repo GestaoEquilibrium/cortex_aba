@@ -1,8 +1,9 @@
 // ============================================================================
 // CORTEX aba - js/modulos/agenda.js
-// Sprint 4: grade fixa semanal (dia/hora/profissional/sala), sessoes por data,
-// gestao de salas e notificacoes de mudanca para aplicador e familia.
-// Conflitos de sala/profissional/paciente sao barrados por trigger no banco.
+// Agenda com tres visoes (Dia / Semana / Mes) sobre as sessoes reais.
+// Clicar numa sessao abre a janela suspensa com detalhes, confirmacao via
+// WhatsApp (link que a familia responde e atualiza na hora), check-in,
+// iniciar, finalizar e falta. A grade fixa continua como tela de gestao.
 // ============================================================================
 
 window.MODULOS = window.MODULOS || {};
@@ -10,28 +11,37 @@ window.MODULOS = window.MODULOS || {};
 window.MODULOS.agenda = {
 
   PODE_GERIR: ['direcao', 'coordenador', 'suporte'],
-  DIAS: ['', 'Segunda', 'Terca', 'Quarta', 'Quinta', 'Sexta'],
+  DIAS: ['', 'Segunda', 'Terca', 'Quarta', 'Quinta', 'Sexta', 'Sabado', 'Domingo'],
+  MESES: ['Janeiro', 'Fevereiro', 'Marco', 'Abril', 'Maio', 'Junho',
+          'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'],
 
   el: null,
   sessao: null,
+  visao: 'dia',
+  dataRef: null,
   grade: [],
   pacientes: [],
   equipe: [],
   salas: [],
+  _canal: null,
+
+  gere() { return this.PODE_GERIR.includes(this.sessao.profile.perfil); },
 
   async render(el, sessao) {
     this.el = el;
     this.sessao = sessao;
+    this.dataRef = new Date().toISOString().slice(0, 10);
+    this.visao = 'dia';
     await this.carregarBase();
-    this.telaSemana();
+    this.telaPrincipal();
+    this.ligarTempoReal();
   },
 
   async carregarBase() {
     const [g, p, e, s] = await Promise.all([
       sb.from('grade_horarios')
         .select('*, pacientes(id, nome, nivel), profissional:profiles!grade_horarios_aplicador_id_fkey(id, nome), salas(id, nome)')
-        .eq('ativo', true)
-        .order('hora_inicio'),
+        .eq('ativo', true).order('hora_inicio'),
       sb.from('pacientes').select('id, nome, nivel, aplicador_id').neq('status', 'encerrado').order('nome'),
       sb.from('profiles').select('id, nome, perfil').in('perfil', ['aplicador', 'terapeuta']).eq('ativo', true).order('nome'),
       sb.from('salas').select('*').order('nome')
@@ -42,43 +52,365 @@ window.MODULOS.agenda = {
     this.salas = s.data || [];
   },
 
-  // ───────────────────────── SEMANA (grade fixa) ─────────────────────────
+  ligarTempoReal() {
+    if (this._canal) sb.removeChannel(this._canal);
+    this._canal = sb.channel('agenda-sessoes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sessoes' },
+        () => { if (document.getElementById('ag-corpo')) this.desenhar(); })
+      .subscribe();
+  },
 
-  telaSemana() {
-    const gere = this.PODE_GERIR.includes(this.sessao.profile.perfil);
+  // ───────────────────────── ESTRUTURA ─────────────────────────
 
+  telaPrincipal() {
     this.el.innerHTML =
       '<div class="pagina-cabecalho">' +
-      '  <div><h2>Agenda</h2><p class="sub">Grade fixa semanal da psicoterapia ABA.</p></div>' +
+      '  <div><h2>Agenda</h2><p class="sub" id="ag-sub"></p></div>' +
       '  <div style="display:flex; gap:8px; flex-wrap:wrap">' +
-      '    <button class="btn-chip" onclick="MODULOS.agenda.telaDia()">Sessoes do dia</button>' +
-      '    <button class="btn-chip" onclick="window.open(\'tv.html\', \'_blank\')">&#128250; Tela da TV</button>' +
-      (gere
-        ? '<button class="btn-chip" onclick="MODULOS.agenda.modalSalas()">Salas</button>' +
+      '    <button class="btn-chip" onclick="window.open(\'tv.html\', \'_blank\')">&#128250; TV</button>' +
+      (this.gere()
+        ? '<button class="btn-chip" onclick="MODULOS.agenda.telaGrade()">Grade fixa</button>' +
+          '<button class="btn-chip" onclick="MODULOS.agenda.modalSalas()">Salas</button>' +
           '<button class="btn btn-primario" onclick="MODULOS.agenda.modalHorario()">+ Novo horario</button>'
         : '') +
       '  </div>' +
       '</div>' +
+      '<div class="ag-controles">' +
+      '  <div class="segmento">' +
+      ['dia', 'semana', 'mes'].map(v =>
+        '<button type="button" class="seg' + (this.visao === v ? ' ativo' : '') + '" data-visao="' + v + '" ' +
+        'onclick="MODULOS.agenda.mudarVisao(\'' + v + '\')">' +
+        (v === 'dia' ? 'Dia' : v === 'semana' ? 'Semana' : 'Mes') + '</button>').join('') +
+      '  </div>' +
+      '  <div class="ag-nav">' +
+      '    <button class="botao-icone tema" onclick="MODULOS.agenda.navegar(-1)">&lsaquo;</button>' +
+      '    <button class="btn-chip" onclick="MODULOS.agenda.irHoje()">Hoje</button>' +
+      '    <button class="botao-icone tema" onclick="MODULOS.agenda.navegar(1)">&rsaquo;</button>' +
+      '  </div>' +
+      '</div>' +
+      '<div id="ag-corpo"></div>';
+
+    this.desenhar();
+  },
+
+  mudarVisao(v) {
+    this.visao = v;
+    document.querySelectorAll('[data-visao]').forEach(b =>
+      b.classList.toggle('ativo', b.dataset.visao === v));
+    this.desenhar();
+  },
+
+  navegar(delta) {
+    const d = new Date(this.dataRef + 'T12:00:00');
+    if (this.visao === 'dia') d.setDate(d.getDate() + delta);
+    else if (this.visao === 'semana') d.setDate(d.getDate() + delta * 7);
+    else d.setMonth(d.getMonth() + delta);
+    this.dataRef = d.toISOString().slice(0, 10);
+    this.desenhar();
+  },
+
+  irHoje() {
+    this.dataRef = new Date().toISOString().slice(0, 10);
+    this.desenhar();
+  },
+
+  desenhar() {
+    if (this.visao === 'dia') this.desenharDia();
+    else if (this.visao === 'semana') this.desenharSemana();
+    else this.desenharMes();
+  },
+
+  segunda(dataStr) {
+    const d = new Date(dataStr + 'T12:00:00');
+    const dow = d.getDay();
+    d.setDate(d.getDate() + (dow === 0 ? 1 : 1 - dow));
+    return d;
+  },
+
+  fmt(d) { return d.toISOString().slice(0, 10); },
+
+  selosSessao(s) {
+    const st = {
+      agendada: ['selo-neutro', 'Agendada'],
+      checkin: ['selo-warn', 'Chegou'],
+      em_atendimento: ['selo-roxo', 'Em atendimento'],
+      concluida: ['selo-ok', 'Concluida'],
+      falta: ['selo-bad', 'Falta'],
+      cancelada: ['selo-neutro', 'Cancelada']
+    }[s.status] || ['selo-neutro', s.status];
+    const cf = {
+      confirmada: '<span class="selo selo-ok">Confirmada</span>',
+      desmarcada: '<span class="selo selo-bad">Desmarcada</span>'
+    }[s.confirmacao] || '';
+    return '<span class="selo ' + st[0] + '">' + st[1] + '</span>' + cf;
+  },
+
+  // ───────────────────────── VISAO DIA ─────────────────────────
+
+  async desenharDia() {
+    const d = new Date(this.dataRef + 'T12:00:00');
+    document.getElementById('ag-sub').textContent =
+      this.DIAS[d.getDay() === 0 ? 7 : d.getDay()] + ', ' + d.toLocaleDateString('pt-BR');
+
+    await sb.rpc('gerar_sessoes_do_dia', { p_data: this.dataRef });
+
+    const { data: sessoes, error } = await sb.from('sessoes')
+      .select('*, pacientes(nome), profissional:profiles!sessoes_aplicador_id_fkey(nome), salas(nome)')
+      .eq('data', this.dataRef).order('hora_inicio');
+
+    const alvo = document.getElementById('ag-corpo');
+    if (!alvo) return;
+    if (error) { alvo.innerHTML = '<div class="cartao"><div class="mensagem-erro visivel">' + escaparHtml(error.message) + '</div></div>'; return; }
+
+    if (!sessoes || sessoes.length === 0) {
+      alvo.innerHTML = '<div class="cartao"><div class="vazio">' +
+        '<div class="simbolo-vazio">&#128197;</div><strong>Sem sessoes neste dia</strong>' +
+        'A grade fixa nao tem horarios para esta data.</div></div>';
+      return;
+    }
+
+    alvo.innerHTML = '<div class="grade-checkin">' + sessoes.map(s =>
+      '<div class="cartao cartao-checkin clicavel-sessao' +
+      (s.status === 'checkin' ? ' chegou' : '') + '" ' +
+      'onclick="MODULOS.agenda.abrirSessao(\'' + s.id + '\')">' +
+      '<div class="ck-hora">' + s.hora_inicio.slice(0, 5) + '</div>' +
+      '<div class="ck-info">' +
+      '  <b>' + escaparHtml(s.pacientes ? s.pacientes.nome : '?') + '</b>' +
+      '  <small>' + escaparHtml(s.profissional ? s.profissional.nome.split(' ')[0] : '-') +
+      (s.salas ? ' &middot; ' + escaparHtml(s.salas.nome) : '') + '</small>' +
+      '  <div class="pac-selos">' + this.selosSessao(s) + '</div>' +
+      '</div></div>').join('') + '</div>';
+  },
+
+  // ───────────────────────── VISAO SEMANA ─────────────────────────
+
+  async desenharSemana() {
+    const seg = this.segunda(this.dataRef);
+    const fim = new Date(seg); fim.setDate(seg.getDate() + 4);
+    document.getElementById('ag-sub').textContent =
+      'Semana de ' + seg.toLocaleDateString('pt-BR') + ' a ' + fim.toLocaleDateString('pt-BR');
+
+    const datas = [];
+    for (let i = 0; i < 5; i++) {
+      const d = new Date(seg); d.setDate(seg.getDate() + i);
+      datas.push(this.fmt(d));
+    }
+    await Promise.all(datas.map(dt => sb.rpc('gerar_sessoes_do_dia', { p_data: dt })));
+
+    const { data: sessoes } = await sb.from('sessoes')
+      .select('id, data, hora_inicio, status, confirmacao, pacientes(nome), profissional:profiles!sessoes_aplicador_id_fkey(nome), salas(nome)')
+      .gte('data', datas[0]).lte('data', datas[4]).order('hora_inicio');
+
+    const alvo = document.getElementById('ag-corpo');
+    if (!alvo) return;
+
+    let html = '<div class="agenda-grade">';
+    datas.forEach((dt, i) => {
+      const doDia = (sessoes || []).filter(s => s.data === dt);
+      const hoje = dt === new Date().toISOString().slice(0, 10);
+      html += '<div class="agenda-dia' + (hoje ? ' hoje' : '') + '">' +
+        '<div class="agenda-dia-titulo">' + this.DIAS[i + 1] + ' ' +
+        dt.slice(8, 10) + '/' + dt.slice(5, 7) +
+        ' <span class="selo selo-neutro">' + doDia.length + '</span></div>';
+      if (doDia.length === 0) html += '<div class="agenda-vazio">&mdash;</div>';
+      doDia.forEach(s => {
+        const cor = s.status === 'concluida' ? 'ok' : s.status === 'falta' ? 'bad' :
+                    s.status === 'cancelada' ? 'off' : s.confirmacao === 'confirmada' ? 'conf' : '';
+        html += '<div class="chip-sessao clicavel ' + cor + '" ' +
+          'onclick="MODULOS.agenda.abrirSessao(\'' + s.id + '\')">' +
+          '<b>' + s.hora_inicio.slice(0, 5) + '</b> ' +
+          '<span class="chip-nome">' + escaparHtml(s.pacientes ?
+            s.pacientes.nome.split(' ')[0] + ' ' + (s.pacientes.nome.split(' ')[1] || '') : '?') + '</span>' +
+          '<small>' + escaparHtml(s.profissional ? s.profissional.nome.split(' ')[0] : '-') +
+          (s.salas ? ' &middot; ' + escaparHtml(s.salas.nome) : '') + '</small>' +
+          '</div>';
+      });
+      html += '</div>';
+    });
+    html += '</div>';
+    alvo.innerHTML = html;
+  },
+
+  // ───────────────────────── VISAO MES ─────────────────────────
+
+  async desenharMes() {
+    const ref = new Date(this.dataRef + 'T12:00:00');
+    const ano = ref.getFullYear(), mes = ref.getMonth();
+    document.getElementById('ag-sub').textContent = this.MESES[mes] + ' de ' + ano;
+
+    const primeiro = new Date(ano, mes, 1);
+    const ultimo = new Date(ano, mes + 1, 0);
+
+    const { data: sessoes } = await sb.from('sessoes')
+      .select('data, status')
+      .gte('data', this.fmt(primeiro)).lte('data', this.fmt(ultimo));
+
+    const porDia = {};
+    (sessoes || []).forEach(s => {
+      porDia[s.data] = porDia[s.data] || { total: 0, concluidas: 0, faltas: 0 };
+      porDia[s.data].total++;
+      if (s.status === 'concluida') porDia[s.data].concluidas++;
+      if (s.status === 'falta') porDia[s.data].faltas++;
+    });
+
+    // Previsto pela grade fixa (para dias sem sessoes geradas)
+    const gradePorDow = {};
+    this.grade.forEach(h => { gradePorDow[h.dia_semana] = (gradePorDow[h.dia_semana] || 0) + 1; });
+
+    const hoje = new Date().toISOString().slice(0, 10);
+    let html = '<div class="cartao"><div class="mes-grade">' +
+      ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab', 'Dom'].map(d =>
+        '<div class="mes-cab">' + d + '</div>').join('');
+
+    const inicioDow = primeiro.getDay() === 0 ? 7 : primeiro.getDay();
+    for (let i = 1; i < inicioDow; i++) html += '<div class="mes-dia vazio-mes"></div>';
+
+    for (let dia = 1; dia <= ultimo.getDate(); dia++) {
+      const d = new Date(ano, mes, dia);
+      const dt = this.fmt(d);
+      const dow = d.getDay() === 0 ? 7 : d.getDay();
+      const info = porDia[dt];
+      const previsto = !info && dow <= 6 ? gradePorDow[dow] : null;
+
+      html += '<div class="mes-dia' + (dt === hoje ? ' hoje' : '') + '" ' +
+        'onclick="MODULOS.agenda.abrirDia(\'' + dt + '\')">' +
+        '<span class="mes-num">' + dia + '</span>' +
+        (info
+          ? '<span class="mes-info">' + info.total + ' sessao(oes)' +
+            (info.faltas ? ' <b class="mes-falta">' + info.faltas + 'F</b>' : '') + '</span>'
+          : previsto
+            ? '<span class="mes-info previsto">' + previsto + ' na grade</span>'
+            : '') +
+        '</div>';
+    }
+    html += '</div></div>';
+    document.getElementById('ag-corpo').innerHTML = html;
+  },
+
+  abrirDia(dt) {
+    this.dataRef = dt;
+    this.mudarVisao('dia');
+  },
+
+  // ───────────────────────── JANELA DA SESSAO ─────────────────────────
+
+  async abrirSessao(id) {
+    const { data: s } = await sb.from('sessoes')
+      .select('*, pacientes(id, nome, data_nascimento), profissional:profiles!sessoes_aplicador_id_fkey(nome), salas(nome)')
+      .eq('id', id).single();
+    if (!s) return;
+
+    const { data: resps } = await sb.from('responsaveis')
+      .select('nome, telefone, principal')
+      .eq('paciente_id', s.pacientes.id)
+      .order('principal', { ascending: false });
+    const resp = (resps || []).find(r => r.telefone) || (resps || [])[0] || null;
+
+    const dataFmt = new Date(s.data + 'T12:00:00').toLocaleDateString('pt-BR');
+    const aberta = !['concluida', 'falta', 'cancelada'].includes(s.status);
+
+    let acoes = '';
+    if (aberta) {
+      if (s.status === 'agendada') {
+        acoes += '<button class="btn btn-primario" onclick="MODULOS.agenda.statusModal(\'' + id + '\', \'checkin\')">Check-in (chegou)</button>';
+      }
+      if (s.status === 'checkin') {
+        acoes += '<button class="btn btn-primario" onclick="MODULOS.agenda.statusModal(\'' + id + '\', \'em_atendimento\')">Iniciar atendimento</button>';
+      }
+      if (s.status === 'em_atendimento' || s.status === 'checkin') {
+        acoes += '<button class="btn btn-fantasma" onclick="MODULOS.agenda.statusModal(\'' + id + '\', \'concluida\')">Finalizar</button>';
+      }
+      acoes += '<button class="btn btn-fantasma" style="color:var(--st-bad); border-color:var(--st-bad)" ' +
+        'onclick="if(confirm(\'Registrar falta?\')) MODULOS.agenda.statusModal(\'' + id + '\', \'falta\')">Falta</button>';
+    }
+
+    let whats = '';
+    if (resp && resp.telefone && aberta) {
+      whats = '<button class="btn btn-fantasma" onclick="MODULOS.agenda.abrirWhats(\'' + id + '\')">' +
+        '&#128172; Enviar confirmacao no WhatsApp</button>';
+    } else if (aberta) {
+      whats = '<p class="sub">Sem telefone de responsavel cadastrado para confirmacao.</p>';
+    }
+
+    this._sessaoModal = { s, resp };
+
+    abrirModal('Sessao &middot; ' + dataFmt + ' as ' + s.hora_inicio.slice(0, 5),
+      '<div class="grade-visao" style="margin-bottom:14px">' +
+      '  <div class="caixa-info larga"><small>Paciente</small><b>' + escaparHtml(s.pacientes.nome) + '</b></div>' +
+      '  <div class="caixa-info"><small>Profissional</small><b>' +
+        escaparHtml(s.profissional ? s.profissional.nome : '-') + '</b></div>' +
+      '  <div class="caixa-info"><small>Sala</small><b>' + escaparHtml(s.salas ? s.salas.nome : '-') + '</b></div>' +
+      '  <div class="caixa-info"><small>Duracao</small><b>' + s.duracao_min + ' min</b></div>' +
+      '  <div class="caixa-info"><small>Responsavel</small><b>' +
+        (resp ? escaparHtml(resp.nome) + (resp.telefone ? ' &middot; ' + escaparHtml(resp.telefone) : '') : '-') + '</b></div>' +
+      '</div>' +
+      '<div class="pac-selos" style="margin-bottom:16px">' + this.selosSessao(s) + '</div>' +
+      whats +
+      '<div class="barra-acoes" style="margin-top:16px; flex-wrap:wrap">' + acoes +
+      '<button class="btn-chip" onclick="fecharModal(); MODULOS.pacientes ? abrirModulo(\'pacientes\') : null; ' +
+      'setTimeout(function(){ MODULOS.pacientes.telaDetalhe(\'' + s.pacientes.id + '\'); }, 50)">Abrir prontuario</button>' +
+      '</div>');
+  },
+
+  async statusModal(id, status) {
+    const { error } = await sb.from('sessoes').update({ status: status }).eq('id', id);
+    if (error) { alert('Erro: ' + error.message); return; }
+    this.abrirSessao(id);
+    this.desenhar();
+  },
+
+  abrirWhats(sessaoId) {
+    const { s, resp } = this._sessaoModal || {};
+    if (!s || !resp || !resp.telefone) return;
+
+    let fone = resp.telefone.replace(/\D/g, '');
+    if (fone.length === 10 || fone.length === 11) fone = '55' + fone;
+
+    const base = window.location.origin +
+      window.location.pathname.replace(/[^/]*$/, '');
+    const link = base + 'confirmar.html?t=' + s.confirmacao_token;
+
+    const dataFmt = new Date(s.data + 'T12:00:00').toLocaleDateString('pt-BR');
+    const msg =
+      'Ola, ' + resp.nome.split(' ')[0] + '! Aqui e da Equilibrium Terapia Infantil. ' +
+      'Estamos confirmando a sessao de ' + s.pacientes.nome.split(' ')[0] +
+      ' no dia ' + dataFmt + ' as ' + s.hora_inicio.slice(0, 5) + '. ' +
+      'Toque no link para CONFIRMAR ou DESMARCAR: ' + link;
+
+    window.open('https://wa.me/' + fone + '?text=' + encodeURIComponent(msg), '_blank');
+  },
+
+  // ───────────────────────── GRADE FIXA (gestao) ─────────────────────────
+
+  telaGrade() {
+    this.el.innerHTML =
+      '<div class="pagina-cabecalho">' +
+      '  <div>' +
+      '    <button class="btn-voltar" onclick="MODULOS.agenda.telaPrincipal(); MODULOS.agenda.ligarTempoReal()">&larr; Agenda</button>' +
+      '    <h2>Grade fixa semanal</h2>' +
+      '    <p class="sub">Horarios recorrentes que geram as sessoes de cada dia.</p>' +
+      '  </div>' +
+      (this.gere()
+        ? '<button class="btn btn-primario" onclick="MODULOS.agenda.modalHorario()">+ Novo horario</button>'
+        : '') +
+      '</div>' +
       '<div class="toolbar">' +
-      '  <select id="ag-f-prof" onchange="MODULOS.agenda.desenharSemana()">' +
+      '  <select id="ag-f-prof" onchange="MODULOS.agenda.desenharGrade()">' +
       '    <option value="">Todos os profissionais</option>' +
       this.equipe.map(m => '<option value="' + m.id + '">' + escaparHtml(m.nome) + '</option>').join('') +
       '  </select>' +
-      '  <select id="ag-f-sala" onchange="MODULOS.agenda.desenharSemana()">' +
+      '  <select id="ag-f-sala" onchange="MODULOS.agenda.desenharGrade()">' +
       '    <option value="">Todas as salas</option>' +
       this.salas.filter(s => s.ativo).map(s => '<option value="' + s.id + '">' + escaparHtml(s.nome) + '</option>').join('') +
       '  </select>' +
       '</div>' +
-      '<div id="ag-semana"></div>';
-
-    this.desenharSemana();
+      '<div id="ag-grade"></div>';
+    this.desenharGrade();
   },
 
-  desenharSemana() {
+  desenharGrade() {
     const fp = document.getElementById('ag-f-prof')?.value || '';
     const fs = document.getElementById('ag-f-sala')?.value || '';
-    const gere = this.PODE_GERIR.includes(this.sessao.profile.perfil);
-
     const itens = this.grade.filter(h =>
       (!fp || h.aplicador_id === fp) && (!fs || h.sala_id === fs));
 
@@ -88,15 +420,13 @@ window.MODULOS.agenda = {
       html += '<div class="agenda-dia">' +
         '<div class="agenda-dia-titulo">' + this.DIAS[d] +
         ' <span class="selo selo-neutro">' + doDia.length + '</span></div>';
-      if (doDia.length === 0) {
-        html += '<div class="agenda-vazio">Sem horarios</div>';
-      }
+      if (doDia.length === 0) html += '<div class="agenda-vazio">Sem horarios</div>';
       doDia.forEach(h => {
-        html += '<div class="chip-sessao' + (gere ? ' clicavel' : '') + '"' +
-          (gere ? ' onclick="MODULOS.agenda.modalHorario(\'' + h.id + '\')"' : '') + '>' +
+        html += '<div class="chip-sessao' + (this.gere() ? ' clicavel' : '') + '"' +
+          (this.gere() ? ' onclick="MODULOS.agenda.modalHorario(\'' + h.id + '\')"' : '') + '>' +
           '<b>' + h.hora_inicio.slice(0, 5) + '</b> ' +
-          '<span class="chip-nome">' + escaparHtml(h.pacientes ? h.pacientes.nome.split(' ')[0] +
-            ' ' + (h.pacientes.nome.split(' ')[1] || '') : '?') + '</span>' +
+          '<span class="chip-nome">' + escaparHtml(h.pacientes ?
+            h.pacientes.nome.split(' ')[0] + ' ' + (h.pacientes.nome.split(' ')[1] || '') : '?') + '</span>' +
           '<small>' + escaparHtml(h.profissional ? h.profissional.nome.split(' ')[0] : '-') +
           (h.salas ? ' &middot; ' + escaparHtml(h.salas.nome) : '') + '</small>' +
           '</div>';
@@ -104,10 +434,8 @@ window.MODULOS.agenda = {
       html += '</div>';
     }
     html += '</div>';
-    document.getElementById('ag-semana').innerHTML = html;
+    document.getElementById('ag-grade').innerHTML = html;
   },
-
-  // ───────────────────────── HORARIO (criar/editar) ─────────────────────────
 
   modalHorario(id) {
     const h = id ? this.grade.find(x => x.id === id) : null;
@@ -147,7 +475,6 @@ window.MODULOS.agenda = {
         escaparHtml(s.nome) + '</option>').join('') +
       '    </select></div>' +
       '</div>' +
-      '<p class="sub">Ao selecionar o paciente, o profissional designado no prontuario e sugerido automaticamente.</p>' +
       '<div class="mensagem-erro" id="h-erro"></div>' +
       '<div class="barra-acoes">' +
       (h ? '<button type="button" class="btn btn-fantasma" style="color:var(--st-bad); border-color:var(--st-bad)" ' +
@@ -190,7 +517,6 @@ window.MODULOS.agenda = {
 
     try {
       const anterior = id ? this.grade.find(x => x.id === id) : null;
-
       let salvo;
       if (id) {
         const { paciente_id, ...semPaciente } = dados;
@@ -209,7 +535,8 @@ window.MODULOS.agenda = {
       await this.notificarMudanca(id ? 'mudanca' : 'novo', salvo, anterior);
       fecharModal();
       await this.carregarBase();
-      this.telaSemana();
+      if (document.getElementById('ag-grade')) this.desenharGrade();
+      else this.desenhar();
     } catch (e) {
       erro.textContent = e.message;
       erro.classList.add('visivel');
@@ -226,7 +553,8 @@ window.MODULOS.agenda = {
     await this.notificarMudanca('encerramento', anterior, null);
     fecharModal();
     await this.carregarBase();
-    this.telaSemana();
+    if (document.getElementById('ag-grade')) this.desenharGrade();
+    else this.desenhar();
   },
 
   traduzErro(m) {
@@ -267,109 +595,12 @@ window.MODULOS.agenda = {
           corpo: 'O atendimento deixou de estar com voce (novo formato: ' + descricao + ').'
         });
       }
-
       const { data: fams } = await sb.from('familia_pacientes')
         .select('usuario_id').eq('paciente_id', h.paciente_id);
       (fams || []).forEach(f => notifs.push({ destinatario_id: f.usuario_id, titulo, corpo }));
-
       if (notifs.length) await sb.from('notificacoes').insert(notifs);
-    } catch (e) { /* notificacao nunca deve travar o fluxo */ }
+    } catch (e) { /* notificacao nunca trava o fluxo */ }
   },
-
-  // ───────────────────────── SESSOES DO DIA ─────────────────────────
-
-  async telaDia(dataStr) {
-    const hoje = dataStr || new Date().toISOString().slice(0, 10);
-
-    this.el.innerHTML =
-      '<div class="pagina-cabecalho">' +
-      '  <div>' +
-      '    <button class="btn-voltar" onclick="MODULOS.agenda.telaSemana()">&larr; Grade semanal</button>' +
-      '    <h2>Sessoes do dia</h2>' +
-      '    <p class="sub">As sessoes sao geradas a partir da grade fixa.</p>' +
-      '  </div>' +
-      '  <div style="display:flex; gap:8px; align-items:center">' +
-      '    <input type="date" id="dia-data" value="' + hoje + '" ' +
-      '      onchange="MODULOS.agenda.telaDia(this.value)" ' +
-      '      style="padding:8px 12px; border:1.5px solid var(--line); border-radius:12px; font:inherit; font-size:13px; background:var(--surface); color:var(--ink)">' +
-      '    <button class="btn btn-primario" onclick="MODULOS.agenda.gerarDia()">Gerar sessoes</button>' +
-      '  </div>' +
-      '</div>' +
-      '<div id="dia-lista"><div class="cartao"><p class="sub">Carregando...</p></div></div>';
-
-    await this.listarDia(hoje);
-  },
-
-  async listarDia(data) {
-    const { data: sessoes, error } = await sb
-      .from('sessoes')
-      .select('*, pacientes(nome), profissional:profiles!sessoes_aplicador_id_fkey(nome), salas(nome)')
-      .eq('data', data)
-      .order('hora_inicio');
-
-    const alvo = document.getElementById('dia-lista');
-    if (error) {
-      alvo.innerHTML = '<div class="cartao"><div class="mensagem-erro visivel">' +
-        escaparHtml(error.message) + '</div></div>';
-      return;
-    }
-
-    if (!sessoes || sessoes.length === 0) {
-      alvo.innerHTML = '<div class="cartao"><div class="vazio">' +
-        '<div class="simbolo-vazio">&#128197;</div>' +
-        '<strong>Nenhuma sessao nesta data</strong>' +
-        'Use "Gerar sessoes" para materializar a grade fixa do dia.' +
-        '</div></div>';
-      return;
-    }
-
-    const mapa = {
-      agendada: ['selo-neutro', 'Agendada'],
-      checkin: ['selo-roxo', 'Check-in'],
-      em_atendimento: ['selo-warn', 'Em atendimento'],
-      concluida: ['selo-ok', 'Concluida'],
-      falta: ['selo-bad', 'Falta'],
-      cancelada: ['selo-neutro', 'Cancelada']
-    };
-
-    alvo.innerHTML = '<div class="cartao">' + sessoes.map(s => {
-      const m = mapa[s.status] || ['selo-neutro', s.status];
-      const aberta = !['concluida', 'falta', 'cancelada'].includes(s.status);
-      return '<div class="linha-doc">' +
-        '<div><b>' + s.hora_inicio.slice(0, 5) + ' &middot; ' +
-        escaparHtml(s.pacientes ? s.pacientes.nome : '?') + '</b>' +
-        '<small>' + escaparHtml(s.profissional ? s.profissional.nome : '-') +
-        (s.salas ? ' &middot; ' + escaparHtml(s.salas.nome) : '') + '</small></div>' +
-        '<div class="pac-selos">' +
-        '<span class="selo ' + m[0] + '">' + m[1] + '</span>' +
-        (s.status === 'agendada'
-          ? '<button class="btn-chip cheio" onclick="MODULOS.agenda.mudarStatus(\'' + s.id + '\', \'checkin\', \'' + s.data + '\')">Check-in</button>'
-          : '') +
-        (s.status === 'checkin'
-          ? '<button class="btn-chip cheio" onclick="MODULOS.agenda.mudarStatus(\'' + s.id + '\', \'em_atendimento\', \'' + s.data + '\')">Iniciar</button>'
-          : '') +
-        (aberta
-          ? '<button class="btn-chip" onclick="MODULOS.agenda.mudarStatus(\'' + s.id + '\', \'concluida\', \'' + s.data + '\')">Concluir</button>' +
-            '<button class="btn-chip" style="color:var(--st-bad)" onclick="MODULOS.agenda.mudarStatus(\'' + s.id + '\', \'falta\', \'' + s.data + '\')">Falta</button>'
-          : '') +
-        '</div></div>';
-    }).join('') + '</div>';
-  },
-
-  async gerarDia() {
-    const data = document.getElementById('dia-data').value;
-    const { data: qtd, error } = await sb.rpc('gerar_sessoes_do_dia', { p_data: data });
-    if (error) { alert('Erro: ' + error.message); return; }
-    await this.listarDia(data);
-  },
-
-  async mudarStatus(id, status, data) {
-    const { error } = await sb.from('sessoes').update({ status: status }).eq('id', id);
-    if (error) { alert('Erro: ' + error.message); return; }
-    await this.listarDia(data);
-  },
-
-  // ───────────────────────── SALAS ─────────────────────────
 
   modalSalas() {
     const linhas = this.salas.map(s =>

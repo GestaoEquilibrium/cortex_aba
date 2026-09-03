@@ -807,3 +807,25 @@
 .perm-e { background: var(--st-ok-bg); color: var(--st-ok); }
 .perm-v { background: rgba(124, 58, 237, .12); color: var(--area-roxo); }
 .perm-n { color: var(--line-strong); }
+
+/* ── Construtor do PEI ────────────────────────────────────────────────── */
+.pei-meta {
+    display: flex; gap: 10px; align-items: flex-start;
+    padding: 12px 0;
+    border-bottom: 1px dashed var(--line);
+}
+.pei-meta:last-child { border-bottom: none; }
+.pei-check { padding-top: 8px; }
+.pei-campos { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+.pei-campos input {
+    width: 100%;
+    padding: 8px 11px;
+    border: 1.5px solid var(--line);
+    border-radius: 10px;
+    font: inherit; font-size: 12.5px;
+    color: var(--ink); background: var(--surface);
+}
+.pei-campos input:focus { outline: none; border-color: var(--acao); box-shadow: 0 0 0 3px var(--acao-soft); }
+.pm-origem { color: var(--ink-soft); font-size: 10.5px; }
+.pei-rp { display: grid; grid-template-columns: 2fr 1fr; gap: 6px; }
+@media (max-width: 560px) { .pei-rp { grid-template-columns: 1fr; } }

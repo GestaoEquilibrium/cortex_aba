@@ -252,7 +252,7 @@ window.MODULOS.avaliacoes = {
     await this.carregarQuestoes();
 
     const { data: av } = await sb.from('avaliacoes')
-      .select('*, pacientes(nome, data_nascimento), avaliador:profiles!avaliacoes_avaliador_id_fkey(nome)')
+      .select('*, paciente_id, pacientes(nome, data_nascimento), avaliador:profiles!avaliacoes_avaliador_id_fkey(nome)')
       .eq('id', avaliacaoId).single();
     if (!av) return '<div class="cartao"><p class="sub">Avaliacao nao encontrada.</p></div>';
 
@@ -314,6 +314,12 @@ window.MODULOS.avaliacoes = {
       (av.observacoes
         ? '<div class="caixa-info larga" style="margin-top:14px"><small>Observacoes</small><b>' +
           escaparHtml(av.observacoes) + '</b></div>'
+        : '') +
+      (av.status === 'concluida' && this.PODE_AVALIAR.includes(window.CORTEX_SESSAO.profile.perfil)
+        ? '<div class="barra-acoes nao-imprime" style="margin-top:14px">' +
+          '<button class="btn btn-fantasma" onclick="MODULOS.pei.abrirDevolutiva(\'' + av.id + '\')">Relatorio de devolutiva</button>' +
+          '<button class="btn btn-primario" onclick="MODULOS.pei.abrirConstrutor(\'' + av.id + '\', \'' + av.paciente_id + '\')">Gerar PEI</button>' +
+          '</div>'
         : '') +
       '</div>';
   },

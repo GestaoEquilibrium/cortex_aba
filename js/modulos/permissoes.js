@@ -46,6 +46,10 @@ window.MODULOS.permissoes = {
     { f: 'Aplicar QADI-R', p: { direcao: 'E', coordenador: 'E', terapeuta: 'E', suporte: 'E' } },
     { f: 'Consultar resultados', p: { direcao: 'V', coordenador: 'V', terapeuta: 'V', aplicador: 'V', suporte: 'V' } },
 
+    { grupo: 'PEI e Relatorios' },
+    { f: 'Elaborar PEI e devolutiva', p: { direcao: 'E', coordenador: 'E', terapeuta: 'E', suporte: 'E' } },
+    { f: 'Consultar PEI', p: { direcao: 'V', coordenador: 'V', terapeuta: 'V', aplicador: 'V', suporte: 'V' } },
+
     { grupo: 'Portal da Familia' },
     { f: 'Inicio do portal e pendencias', p: { familia: 'E' } },
 

@@ -32,6 +32,8 @@ window.MODULOS.permissoes = {
       dica: 'E: cria/edita horarios recorrentes e salas.' },
     { chave: 'presenca', rotulo: 'Lista de Presenca',
       dica: 'V: gera e imprime as folhas semanais.' },
+    { chave: 'plano', rotulo: 'Plano Terapeutico',
+      dica: 'V: consulta. E: elabora e renova (Formulario 01) e recebe alertas de vencimento.' },
     { chave: 'avaliacoes', rotulo: 'Avaliacoes (QADI-R)',
       dica: 'V: consulta resultados. E: aplica e conclui avaliacoes.' },
     { chave: 'pei', rotulo: 'PEI e Devolutiva',

@@ -21,6 +21,7 @@ window.MODULOS.inicio = {
       '</section>' +
       '<div class="kpis" id="kpis-inicio"></div>' +
       '<div class="cartao faixa-ambar" id="inicio-notifs"><h3>Notificacoes</h3><p class="sub">Carregando...</p></div>' +
+      '<div id="inicio-vencimentos"></div>' +
       '<div class="cartao">' +
       '  <div class="vazio">' +
       '    <div class="simbolo-vazio">&#10022;</div>' +
@@ -31,6 +32,17 @@ window.MODULOS.inicio = {
 
     this.carregarKpis();
     this.carregarNotificacoes(sessao);
+    this.carregarVencimentos();
+  },
+
+  async carregarVencimentos() {
+    const alvo = document.getElementById('inicio-vencimentos');
+    if (!alvo || perm('plano') === '') { if (alvo) alvo.remove(); return; }
+    try {
+      const html = await MODULOS.plano.htmlVencimentos();
+      if (html) alvo.outerHTML = html;
+      else alvo.remove();
+    } catch (e) { alvo.remove(); }
   },
 
   async carregarNotificacoes(sessao) {

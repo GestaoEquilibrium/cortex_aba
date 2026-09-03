@@ -133,6 +133,7 @@ window.MODULOS.pacientes = {
 
   ABAS: [
     { id: 'visao',      rotulo: 'Visao geral' },
+    { id: 'plano',      rotulo: 'Plano' },
     { id: 'anamnese',   rotulo: 'Anamnese',   sprint: 'Sprint 3' },
     { id: 'avaliacao',  rotulo: 'Avaliacao',  sprint: 'Sprint 7' },
     { id: 'pei',        rotulo: 'PEI',        sprint: 'Sprint 8' },
@@ -220,6 +221,13 @@ window.MODULOS.pacientes = {
 
     if (id === 'visao') { alvo.innerHTML = this.htmlVisaoGeral(p); return; }
     if (id === 'documentos') { alvo.innerHTML = this.htmlDocumentos(p); return; }
+    if (id === 'plano') {
+      alvo.innerHTML = '<div class="cartao"><p class="sub">Carregando planos...</p></div>';
+      MODULOS.plano.htmlDoPaciente(p.id).then(html => {
+        alvo.innerHTML = html || '<div class="cartao"><p class="sub">Nenhum plano.</p></div>';
+      });
+      return;
+    }
     if (id === 'pei') {
       alvo.innerHTML = '<div class="cartao"><p class="sub">Carregando PEIs...</p></div>';
       MODULOS.pei.htmlDoPaciente(p.id).then(html => { alvo.innerHTML = html; });

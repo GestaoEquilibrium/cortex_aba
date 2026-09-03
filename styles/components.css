@@ -438,3 +438,33 @@
 .kpi-roxo::before   { background: var(--area-roxo); }
 .kpi-valor { font-size: 26px; font-weight: 800; letter-spacing: -.02em; }
 .kpi-rotulo { color: var(--ink-muted); font-size: 12px; font-weight: 600; margin-top: 2px; }
+
+/* ── Blocos de responsavel (nova admissao) ────────────────────────────── */
+.bloco-resp {
+    border: 1.5px dashed var(--line-strong);
+    border-radius: var(--raio-sm);
+    padding: 16px 16px 10px;
+    margin-bottom: 14px;
+    background: var(--surface-alt);
+}
+.bloco-resp-topo {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px;
+}
+.bloco-resp-topo strong { font-size: 13.5px; }
+.btn-remover {
+    background: none; border: none; cursor: pointer;
+    font: inherit; font-size: 12px; font-weight: 700;
+    color: var(--st-bad);
+}
+.btn-remover:hover { text-decoration: underline; }
+
+.linha-checks { display: flex; gap: 18px; flex-wrap: wrap; padding: 4px 0 8px; }
+.check {
+    display: inline-flex; align-items: center; gap: 7px;
+    font-size: 13px; font-weight: 600; color: var(--ink-muted);
+    cursor: pointer;
+}
+.check input { width: 16px; height: 16px; accent-color: var(--acao); cursor: pointer; }
+
+.grade-info .c-toda { grid-column: 1 / -1; }

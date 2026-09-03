@@ -220,6 +220,11 @@ window.MODULOS.pacientes = {
 
     if (id === 'visao') { alvo.innerHTML = this.htmlVisaoGeral(p); return; }
     if (id === 'documentos') { alvo.innerHTML = this.htmlDocumentos(p); return; }
+    if (id === 'avaliacao') {
+      alvo.innerHTML = '<div class="cartao"><p class="sub">Carregando avaliacoes...</p></div>';
+      MODULOS.avaliacoes.htmlDoPaciente(p.id).then(html => { alvo.innerHTML = html; });
+      return;
+    }
     if (id === 'anamnese') {
       alvo.innerHTML = '<div class="cartao"><p class="sub">Carregando anamnese...</p></div>';
       MODULOS.anamnese.htmlResumoInterno(p.id).then(html => { alvo.innerHTML = html; });

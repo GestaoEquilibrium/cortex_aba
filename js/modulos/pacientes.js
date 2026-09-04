@@ -264,6 +264,7 @@ window.MODULOS.pacientes = {
     { id: 'avaliacao',  rotulo: 'Avaliacao',  sprint: 'Sprint 7' },
     { id: 'pei',        rotulo: 'PEI',        sprint: 'Sprint 8' },
     { id: 'programas',  rotulo: 'Programas',  sprint: 'Sprint 10' },
+    { id: 'comportamentos', rotulo: 'Comportamentos', sprint: 'Sprint 16' },
     { id: 'evolucoes',  rotulo: 'Evolucoes',  sprint: 'Sprint 10' },
     { id: 'relatorios', rotulo: 'Relatorios', sprint: 'Sprint 11' },
     { id: 'documentos', rotulo: 'Documentos' }
@@ -354,6 +355,11 @@ window.MODULOS.pacientes = {
     if (id === 'relatorios') {
       alvo.innerHTML = '<div class="cartao"><p class="sub">Carregando relatorios...</p></div>';
       MODULOS.relatorios.htmlDoPaciente(p.id).then(html => { alvo.innerHTML = html; });
+      return;
+    }
+    if (id === 'comportamentos') {
+      alvo.innerHTML = '<p class="sub">Carregando...</p>';
+      MODULOS.comportamentos.abaProntuario(alvo, this.paciente);
       return;
     }
     if (id === 'programas') {

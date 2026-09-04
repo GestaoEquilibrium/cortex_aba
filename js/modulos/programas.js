@@ -344,11 +344,30 @@ window.MODULOS.programas = {
       registros: regs || []
     };
 
+    this._folha.faixaComp = await MODULOS.comportamentos.faixaFolha(s.paciente_id, sessaoId);
+
     if (s.status === 'checkin') {
       await sb.from('sessoes').update({ status: 'em_atendimento' }).eq('id', sessaoId);
     }
 
     this.desenharFolha();
+  },
+
+  async atualizarFaixaComp() {
+    const f = this._folha;
+    if (!f || !document.getElementById('faixa-comp')) return;
+    const { data: regs } = await sb.from('comportamento_registros')
+      .select('comportamento_id, quantidade, duracao_seg')
+      .eq('sessao_id', f.sessao.id);
+    const soma = {};
+    (regs || []).forEach(r => {
+      soma[r.comportamento_id] = (soma[r.comportamento_id] || 0) +
+        (r.quantidade || Math.round((r.duracao_seg || 0) / 60) || 0);
+    });
+    MODULOS.comportamentos.lista.forEach(c2 => {
+      const b = document.getElementById('comp-badge-' + c2.id);
+      if (b) b.textContent = soma[c2.id] || 0;
+    });
   },
 
   contagem(alvoId) {
@@ -361,7 +380,7 @@ window.MODULOS.programas = {
     const f = this._folha;
     const s = f.sessao;
 
-    let corpo = '';
+    let corpo = f.faixaComp || '';
     f.programas.forEach(pp => {
       const alvos = (pp.alvos || []).filter(a => a.status === 'em_intervencao')
         .sort((a, b) => a.ordem - b.ordem);

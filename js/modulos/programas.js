@@ -168,7 +168,8 @@ window.MODULOS.programas = {
 
     html += '<div id="prog-grade">' + this.gradeProgramas() + '</div>';
 
-    html += '<div class="cartao"><h3>Atendimentos realizados</h3>' +
+    html += '<div class="cartao"><h3>Sessoes realizadas</h3>' +
+      '<p class="sub" style="margin-bottom:8px">Toque numa sessao para ver o relatorio completo, com o grafico da sessao e a opcao de PDF.</p>' +
       '<div id="prog-atds"><p class="sub">Carregando...</p></div></div>';
     setTimeout(() => this.carregarAtendimentos(pacienteId), 0);
 
@@ -411,15 +412,124 @@ window.MODULOS.programas = {
       const pcts = porSessao[s.id] || [];
       const media = pcts.length ? Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length) : null;
       const evo = (s.evolucoes && s.evolucoes[0] && s.evolucoes[0].texto) || '';
-      return '<div class="atd-item">' +
+      return '<div class="atd-item clicavel" onclick="MODULOS.programas.abrirRelatorioSessao(\'' + s.id + '\')">' +
         '<div class="atd-meta"><b>' + s.data.split('-').reverse().join('/') + '</b> as ' +
         s.hora_inicio.slice(0, 5) +
         (pcts.length ? ' &middot; ' + pcts.length + ' alvo(s)' : '') +
         (media !== null ? ' &middot; <span class="atd-pct">' + media + '% independente</span>' : '') +
-        '</div>' +
+        ' <span class="atd-abrir">Ver relatorio &rarr;</span></div>' +
         (evo ? '<p class="sub">' + escaparHtml(evo.length > 140 ? evo.slice(0, 140) + '...' : evo) + '</p>' : '') +
         '</div>';
     }).join('');
+  },
+
+  async abrirRelatorioSessao(sessaoId) {
+    const ov = document.createElement('div');
+    ov.id = 'rel-sessao-overlay';
+    ov.className = 'folha-overlay nao-imprime-fundo';
+    ov.innerHTML = '<div class="folha-pagina" id="rel-sessao-corpo"><p class="sub">Montando o relatorio...</p></div>';
+    document.body.appendChild(ov);
+
+    const [rS, rFotos, rTent, rEvo, rComp] = await Promise.all([
+      sb.from('sessoes')
+        .select('id, data, hora_inicio, duracao_min, pacientes(nome), profissional:profiles!sessoes_aplicador_id_fkey(nome)')
+        .eq('id', sessaoId).single(),
+      sb.from('alvo_sessao_registros')
+        .select('alvo_id, tentativas, pct_independencia, nivel_dominio, observacao, alvos(descricao, paciente_programas(programas(nome, area)))')
+        .eq('sessao_id', sessaoId),
+      sb.from('registros_tentativas').select('alvo_id, resposta').eq('sessao_id', sessaoId),
+      sb.from('evolucoes').select('texto, aplicador:profiles!evolucoes_aplicador_id_fkey(nome)').eq('sessao_id', sessaoId),
+      sb.from('comportamento_registros')
+        .select('quantidade, duracao_seg, antecedente, descricao, consequencia, comportamentos(nome, medida)')
+        .eq('sessao_id', sessaoId)
+    ]);
+
+    const s = rS.data;
+    if (!s) { document.getElementById('rel-sessao-overlay')?.remove(); return; }
+    const fotos = rFotos.data || [];
+    const tents = rTent.data || [];
+    const evo = (rEvo.data && rEvo.data[0]) || null;
+    const comps = rComp.data || [];
+
+    const porResp = {};
+    tents.forEach(t => {
+      porResp[t.alvo_id] = porResp[t.alvo_id] || {};
+      porResp[t.alvo_id][t.resposta] = (porResp[t.alvo_id][t.resposta] || 0) + 1;
+    });
+
+    const dataFmt = s.data.split('-').reverse().join('/');
+
+    // Grafico da sessao: uma barra por alvo (% independente)
+    let grafico = '';
+    if (fotos.length) {
+      grafico = '<div class="rel-bloco"><h4>Grafico da sessao <small>% de independencia por alvo</small></h4>' +
+        '<div class="rel-grafico">' +
+        fotos.map(fx => {
+          const area = fx.alvos && fx.alvos.paciente_programas && fx.alvos.paciente_programas.programas
+            ? fx.alvos.paciente_programas.programas.area : 'Outros';
+          const cor = this.CORES_AREA[area] || '#64748B';
+          const pct = fx.pct_independencia || 0;
+          return '<div class="rel-col" title="' + escaparHtml(fx.alvos ? fx.alvos.descricao : '') + ': ' + pct + '%">' +
+            '<span class="rel-pct">' + pct + '%</span>' +
+            '<div class="rel-trilho"><div class="rel-barra" style="height:' + pct + '%; background:' + cor + '"></div></div>' +
+            '<span class="rel-rotulo">' + escaparHtml((fx.alvos ? fx.alvos.descricao : '').slice(0, 16)) + '</span>' +
+            '</div>';
+        }).join('') + '</div></div>';
+    }
+
+    const SIGLAS = ['I', 'FT', 'FP', 'G', 'Ve', 'Vi'];
+    let tabela = '';
+    if (fotos.length) {
+      tabela = '<div class="rel-bloco"><h4>Alvos trabalhados</h4>' +
+        fotos.map(fx => {
+          const prog = fx.alvos && fx.alvos.paciente_programas && fx.alvos.paciente_programas.programas;
+          const resps = porResp[fx.alvo_id] || {};
+          const detalhe = SIGLAS.filter(x => resps[x]).map(x => x + ' ' + resps[x]).join(' &middot; ');
+          return '<div class="rel-alvo">' +
+            '<div class="rel-alvo-topo"><b>' + escaparHtml(fx.alvos ? fx.alvos.descricao : '-') + '</b>' +
+            '<span class="selo selo-neutro">N' + (fx.nivel_dominio || '-') + '/10</span></div>' +
+            '<small>' + (prog ? escaparHtml(prog.nome) + ' &middot; ' : '') +
+            (fx.tentativas || 0) + ' tentativa(s) &middot; ' + (fx.pct_independencia || 0) + '% independente' +
+            (detalhe ? ' &middot; ' + detalhe : '') + '</small>' +
+            (fx.observacao ? '<p class="sub">' + escaparHtml(fx.observacao) + '</p>' : '') +
+            '</div>';
+        }).join('') + '</div>';
+    }
+
+    let compHtml = '';
+    if (comps.length) {
+      compHtml = '<div class="rel-bloco"><h4>Comportamentos registrados</h4>' +
+        comps.map(r => {
+          const nome = r.comportamentos ? r.comportamentos.nome : '-';
+          const medida = r.comportamentos && r.comportamentos.medida === 'duracao'
+            ? Math.round((r.duracao_seg || 0) / 60) + ' min' : (r.quantidade || 0) + 'x';
+          return '<div class="rel-alvo"><div class="rel-alvo-topo"><b>' + escaparHtml(nome) + '</b>' +
+            '<span class="selo selo-st-vermelho">' + medida + '</span></div>' +
+            ((r.antecedente || r.descricao || r.consequencia)
+              ? '<small>' + ['A: ' + (r.antecedente || '-'), 'B: ' + (r.descricao || '-'), 'C: ' + (r.consequencia || '-')]
+                  .map(escaparHtml).join(' &middot; ') + '</small>'
+              : '') + '</div>';
+        }).join('') + '</div>';
+    }
+
+    document.getElementById('rel-sessao-corpo').innerHTML =
+      '<div class="pagina-cabecalho nao-imprime">' +
+      '  <div><button class="btn-voltar" onclick="document.getElementById(\'rel-sessao-overlay\').remove()">&larr; Fechar</button>' +
+      '  <h2>Relatorio da sessao</h2></div>' +
+      '  <button class="btn btn-primario" onclick="window.print()">&#128424; Imprimir / PDF</button>' +
+      '</div>' +
+      '<div class="rel-imprimivel" id="rel-imprimivel">' +
+      '  <div class="rel-cab-imp">' +
+      '    <h2>Relatorio de sessao &middot; CORTEX aba</h2>' +
+      '    <p><b>' + escaparHtml(s.pacientes.nome) + '</b> &middot; ' + dataFmt + ' as ' + s.hora_inicio.slice(0, 5) +
+      '    &middot; ' + s.duracao_min + ' min &middot; Profissional: ' +
+           escaparHtml(s.profissional ? s.profissional.nome : '-') + '</p>' +
+      '  </div>' +
+      grafico + tabela + compHtml +
+      (evo ? '<div class="rel-bloco"><h4>Evolucao</h4><p class="rel-evo">' + escaparHtml(evo.texto) + '</p>' +
+             (evo.aplicador ? '<small class="sub">Registrado por ' + escaparHtml(evo.aplicador.nome) + '</small>' : '') + '</div>'
+           : '<div class="rel-bloco"><p class="sub">Sessao sem evolucao registrada.</p></div>') +
+      '</div>';
   },
 
   async abrirFolhaProntuario(pacienteId) {

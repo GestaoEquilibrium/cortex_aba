@@ -47,7 +47,7 @@ const NAVEGACAO = [
     grupo: 'GESTAO',
     itens: [
       { id: 'presenca', rotulo: 'Lista de Presenca',  chave: 'presenca' },
-      { id: 'faltas',   rotulo: 'Gestao de Faltas',   perfis: ['direcao','coordenador'] },
+      { id: 'faltas',   rotulo: 'Gestao de Faltas',   chave: 'faltas' },
       { id: 'rh',       rotulo: 'RH',                 perfis: ['direcao','coordenador'] },
       { id: 'admin',      rotulo: 'Usuarios e Acessos', perfis: ['direcao','suporte'] },
       { id: 'permissoes', rotulo: 'Permissoes',         perfis: ['suporte'] }

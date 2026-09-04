@@ -106,6 +106,46 @@ window.MODULOS.admin = {
       '</div>');
   },
 
+  htmlCredencial(nome, email, senha, perfil) {
+    return '<div class="cred-cartao">' +
+      '  <div class="cred-topo">' +
+      '    <div class="cred-avatar">' + escaparHtml(nome.trim().slice(0, 1).toUpperCase()) + '</div>' +
+      '    <div><b>' + escaparHtml(nome) + '</b>' +
+      '    <small class="sub">' + escaparHtml(ROTULOS_PERFIL[perfil] || perfil) + '</small></div>' +
+      '  </div>' +
+      '  <div class="cred-linha"><small>Login</small>' +
+      '    <div class="cred-valor"><span>' + escaparHtml(email) + '</span>' +
+      '    <button class="btn-chip" onclick="MODULOS.admin.copiar(\'' + escaparHtml(email) + '\', this)">Copiar</button></div></div>' +
+      '  <div class="cred-linha"><small>Senha temporaria</small>' +
+      '    <div class="cred-senha"><span>' + escaparHtml(senha) + '</span>' +
+      '    <button class="btn-chip" onclick="MODULOS.admin.copiar(\'' + senha + '\', this)">Copiar</button></div></div>' +
+      '  <div class="cred-aviso">&#128274; Exibida uma unica vez. No primeiro acesso, o sistema ' +
+      'exigira foto de perfil e uma senha definitiva.</div>' +
+      '</div>';
+  },
+
+  async copiar(texto, botao) {
+    try {
+      await navigator.clipboard.writeText(texto);
+      const antes = botao.textContent;
+      botao.textContent = 'Copiado!';
+      setTimeout(() => { botao.textContent = antes; }, 1400);
+    } catch (e) {
+      prompt('Copie manualmente:', texto);
+    }
+  },
+
+  copiarBoasVindas(botao) {
+    const cr = this._cred;
+    if (!cr) return;
+    const msg = 'Ola, ' + cr.nome.split(' ')[0] + '! Seu acesso ao CORTEX aba foi criado. \u{1F389}\n\n' +
+      'Endereco: ' + window.location.origin + window.location.pathname.replace('app.html', '') + '\n' +
+      'Login: ' + cr.email + '\n' +
+      'Senha temporaria: ' + cr.senha + '\n\n' +
+      'No primeiro acesso, o sistema vai pedir sua foto de perfil e a criacao de uma senha definitiva.';
+    this.copiar(msg, botao);
+  },
+
   gerarSenha() {
     const chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789';
     let s = '';
@@ -146,16 +186,13 @@ window.MODULOS.admin = {
       const corpo = await resp.json();
       if (!resp.ok) throw new Error(corpo.erro || 'Falha ao criar o acesso.');
 
-      abrirModal('Acesso criado: ' + escaparHtml(nome),
-        '<div class="grade-info">' +
-        '  <div><small>Login</small><b>' + escaparHtml(email) + '</b></div>' +
-        '  <div><small>Senha temporaria</small><b>' + escaparHtml(senha) + '</b></div>' +
-        '  <div><small>Perfil</small><b>' + (ROTULOS_PERFIL[perfil] || perfil) + '</b></div>' +
-        '</div>' +
-        '<p class="sub" style="margin-top:12px">Anote ou copie agora: a senha nao sera exibida novamente.</p>' +
+      this._cred = { nome: nome, email: email, senha: senha, perfil: perfil };
+      abrirModal('&#127881; Acesso criado',
+        this.htmlCredencial(nome, email, senha, perfil) +
         '<div class="barra-acoes">' +
+        '  <button class="btn btn-fantasma" onclick="MODULOS.admin.copiarBoasVindas(this)">&#128203; Copiar mensagem de boas-vindas</button>' +
         '  <button class="btn btn-primario" onclick="fecharModal(); MODULOS.admin.render(MODULOS.admin.el, MODULOS.admin.sessao)">Concluir</button>' +
-        '</div>');
+        '</div>', true);
     } catch (e) {
       erro.textContent = e.message;
       erro.classList.add('visivel');
@@ -247,11 +284,19 @@ window.MODULOS.admin = {
       // Forca a troca (e conferencia da foto) no proximo login
       await sb.from('profiles').update({ primeiro_acesso: true }).eq('id', id);
 
-      abrirModal('Nova senha de ' + escaparHtml(nome),
-        '<div class="grade-info"><div><small>Senha temporaria</small><b style="font-size:16px">' +
-        escaparHtml(senha) + '</b></div></div>' +
-        '<p class="sub" style="margin-top:12px">Envie com seguranca. Ela nao sera exibida novamente.</p>' +
-        '<div class="barra-acoes"><button class="btn btn-primario" onclick="fecharModal()">Concluir</button></div>');
+      abrirModal('&#128273; Nova senha gerada',
+        '<div class="cred-cartao">' +
+        '  <div class="cred-topo"><div class="cred-avatar">' +
+             escaparHtml(nome.trim().slice(0, 1).toUpperCase()) + '</div>' +
+        '    <div><b>' + escaparHtml(nome) + '</b>' +
+        '    <small class="sub">A senha antiga parou de funcionar agora.</small></div></div>' +
+        '  <div class="cred-linha"><small>Senha temporaria</small>' +
+        '    <div class="cred-senha"><span>' + escaparHtml(senha) + '</span>' +
+        '    <button class="btn-chip" onclick="MODULOS.admin.copiar(\'' + senha + '\', this)">Copiar</button></div></div>' +
+        '  <p class="sub" style="margin:10px 0 0">No proximo login, o sistema exigira a troca ' +
+        '  por uma senha definitiva. Esta senha nao sera exibida novamente.</p>' +
+        '</div>' +
+        '<div class="barra-acoes"><button class="btn btn-primario" onclick="fecharModal()">Concluir</button></div>', true);
     } catch (e) {
       alert('Erro: ' + e.message);
     }

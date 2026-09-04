@@ -1165,3 +1165,64 @@
 }
 .primeiro-passo:last-of-type { border-bottom: none; }
 .primeiro-passo > b { font-size: 13px; }
+
+/* ── Correcao: badges respeitam hidden ────────────────────────────────── */
+.chat-fab-badge[hidden], .nav-badge[hidden] { display: none !important; }
+
+/* ── Cartao de credencial (Usuarios e Acessos) ────────────────────────── */
+.cred-cartao {
+    border: 1.5px solid var(--line);
+    border-radius: var(--raio-sm, 12px);
+    padding: 16px;
+    background: linear-gradient(180deg, var(--acao-soft) 0%, var(--surface) 46%);
+}
+.cred-topo {
+    display: flex; align-items: center; gap: 12px;
+    padding-bottom: 12px;
+    margin-bottom: 6px;
+    border-bottom: 1px dashed var(--line);
+}
+.cred-avatar {
+    width: 46px; height: 46px; flex: none;
+    border-radius: 50%;
+    background: var(--acao);
+    color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 800;
+}
+.cred-topo b { font-size: 14px; }
+.cred-topo small { display: block; }
+.cred-linha { padding: 9px 0; }
+.cred-linha > small {
+    display: block;
+    font-size: 10.5px; font-weight: 800;
+    text-transform: uppercase; letter-spacing: .05em;
+    color: var(--ink-muted);
+    margin-bottom: 4px;
+}
+.cred-valor, .cred-senha {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 9px 13px;
+    border: 1.5px solid var(--line);
+    border-radius: 11px;
+    background: var(--surface);
+}
+.cred-valor span { font-size: 13px; word-break: break-all; }
+.cred-senha {
+    border-color: var(--acao);
+    background: var(--acao-soft);
+}
+.cred-senha span {
+    font-family: 'Consolas', 'Menlo', monospace;
+    font-size: 17px; font-weight: 800;
+    letter-spacing: .12em;
+    color: var(--acao-forte, var(--acao));
+}
+.cred-aviso {
+    margin-top: 10px;
+    padding: 9px 12px;
+    border-radius: 10px;
+    background: rgba(217, 119, 6, .08);
+    font-size: 11.5px; line-height: 1.55;
+    color: var(--ink-muted);
+}

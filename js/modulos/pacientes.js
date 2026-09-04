@@ -48,7 +48,9 @@ window.MODULOS.pacientes = {
 
     const { data, error } = await sb
       .from('pacientes')
-      .select('id, nome, data_nascimento, nivel, status, responsaveis(nome, principal)')
+      .select('id, nome, data_nascimento, nivel, status, convenio, foto_path, ' +
+              'aplicador:profiles!pacientes_aplicador_id_fkey(nome), ' +
+              'responsaveis(nome, telefone, principal)')
       .order('nome');
 
     if (error) {
@@ -60,10 +62,40 @@ window.MODULOS.pacientes = {
 
     this.dados = (data || []).map(p => {
       const principal = (p.responsaveis || []).find(r => r.principal) || (p.responsaveis || [])[0];
+      p._respObj = principal || null;
       p._resp = principal ? principal.nome : '';
       p._todosResp = (p.responsaveis || []).map(r => r.nome).join(' ');
+      p._fotoUrl = null;
+      p._proxima = null;
       return p;
     });
+
+    // Fotos assinadas em lote
+    const comFoto = this.dados.filter(p => p.foto_path);
+    if (comFoto.length) {
+      try {
+        const { data: urls } = await sb.storage.from('documentos')
+          .createSignedUrls(comFoto.map(p => p.foto_path), 3600);
+        (urls || []).forEach((u, i) => {
+          if (u && u.signedUrl) comFoto[i]._fotoUrl = u.signedUrl;
+        });
+      } catch (e) {}
+    }
+
+    // Proxima sessao de cada um (uma consulta so)
+    try {
+      const hoje = new Date().toISOString().slice(0, 10);
+      const { data: prox } = await sb.from('sessoes')
+        .select('paciente_id, data, hora_inicio')
+        .gte('data', hoje)
+        .in('status', ['agendada', 'checkin', 'em_atendimento'])
+        .order('data').order('hora_inicio')
+        .limit(500);
+      const mapa = {};
+      (prox || []).forEach(s => { if (!mapa[s.paciente_id]) mapa[s.paciente_id] = s; });
+      this.dados.forEach(p => { p._proxima = mapa[p.id] || null; });
+    } catch (e) {}
+
     this.filtrar();
   },
 
@@ -93,18 +125,43 @@ window.MODULOS.pacientes = {
       return;
     }
 
-    alvo.innerHTML = '<div class="grade-pacientes">' + filtrados.map(p =>
-      '<div class="cartao cartao-paciente" onclick="MODULOS.pacientes.telaDetalhe(\'' + p.id + '\')">' +
-      '  <div class="pac-topo">' +
-      '    <div class="avatar-paciente">' + escaparHtml(this.iniciais(p.nome)) + '</div>' +
-      '    <div class="pac-quem">' +
-      '      <strong>' + escaparHtml(p.nome) + '</strong>' +
-      '      <span>' + calcularIdade(p.data_nascimento) + ' &middot; Resp.: ' +
-             escaparHtml(p._resp || '-') + '</span>' +
-      '    </div>' +
-      '  </div>' +
-      '  <div class="pac-selos">' + this.seloNivel(p.nivel) + this.seloStatus(p.status) + '</div>' +
-      '</div>').join('') + '</div>';
+    const diasSem = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
+    const infoItem = (rotulo, valor) =>
+      '<div class="pac-info"><small>' + rotulo + '</small><span>' + valor + '</span></div>';
+
+    alvo.innerHTML = '<div class="grade-pacientes">' + filtrados.map(p => {
+      const foto = p._fotoUrl
+        ? '<div class="avatar-paciente"><img src="' + p._fotoUrl + '" alt=""></div>'
+        : '<div class="avatar-paciente">' + escaparHtml(this.iniciais(p.nome)) + '</div>';
+
+      let proxima = '&mdash;';
+      if (p._proxima) {
+        const d = new Date(p._proxima.data + 'T12:00:00');
+        proxima = diasSem[d.getDay()] + ' ' +
+          d.toLocaleDateString('pt-BR').slice(0, 5) + ' ' + p._proxima.hora_inicio.slice(0, 5);
+      }
+
+      return '<div class="cartao cartao-paciente" onclick="MODULOS.pacientes.telaDetalhe(\'' + p.id + '\')">' +
+        '  <div class="pac-topo">' +
+        foto +
+        '    <div class="pac-quem">' +
+        '      <strong>' + escaparHtml(p.nome) + '</strong>' +
+        '      <span>' + calcularIdade(p.data_nascimento) + '</span>' +
+        '    </div>' +
+        '    <div class="pac-selos" style="margin-left:auto">' +
+             this.seloNivel(p.nivel) + this.seloStatus(p.status) + '</div>' +
+        '  </div>' +
+        '  <div class="pac-infos">' +
+        infoItem('Responsavel', p._respObj
+          ? escaparHtml(p._respObj.nome.split(' ')[0]) +
+            (p._respObj.telefone ? ' &middot; ' + escaparHtml(p._respObj.telefone) : '')
+          : '&mdash;') +
+        infoItem('Convenio', escaparHtml(p.convenio || '') || '&mdash;') +
+        infoItem('Profissional', p.aplicador ? escaparHtml(p.aplicador.nome.split(' ')[0]) : '&mdash;') +
+        infoItem('Proxima sessao', proxima) +
+        '  </div>' +
+        '</div>';
+    }).join('') + '</div>';
   },
 
   iniciais(nome) {

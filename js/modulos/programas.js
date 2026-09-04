@@ -403,8 +403,7 @@ window.MODULOS.programas = {
         data: hoje,
         hora_inicio: agora,
         aplicador_id: window.CORTEX_SESSAO.user.id,
-        status: 'em_atendimento',
-        criado_por: window.CORTEX_SESSAO.user.id
+        status: 'em_atendimento'
       }).select('id').single();
       if (error) { alert('Nao foi possivel iniciar o atendimento: ' + error.message); return; }
       sessaoId = nova.id;

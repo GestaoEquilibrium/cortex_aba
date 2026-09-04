@@ -221,8 +221,8 @@ window.MODULOS.pacientes = {
     const etapas = [
       ['admissao',    'Admissao',    'visao',     true],
       ['anamnese',    'Anamnese',    'anamnese',  j.anamnese],
-      ['plano',       'Plano',       'plano',     j.plano],
       ['avaliacao',   'Avaliacao',   'avaliacao', j.avaliacao],
+      ['plano',       'Plano',       'plano',     j.plano],
       ['pei',         'PEI',         'pei',       j.pei],
       ['intervencao', 'Intervencao', 'programas', j.intervencao]
     ];
@@ -260,8 +260,8 @@ window.MODULOS.pacientes = {
   ABAS: [
     { id: 'visao',      rotulo: 'Visao geral' },
     { id: 'anamnese',   rotulo: 'Anamnese',   sprint: 'Sprint 3' },
-    { id: 'plano',      rotulo: 'Plano' },
     { id: 'avaliacao',  rotulo: 'Avaliacao',  sprint: 'Sprint 7' },
+    { id: 'plano',      rotulo: 'Plano' },
     { id: 'pei',        rotulo: 'PEI',        sprint: 'Sprint 8' },
     { id: 'programas',  rotulo: 'Programas',  sprint: 'Sprint 10' },
     { id: 'comportamentos', rotulo: 'Comportamentos', sprint: 'Sprint 16' },

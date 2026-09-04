@@ -12,8 +12,8 @@ window.MODULOS.painel = {
   ETAPAS: [
     ['admissao',    'Admissao'],
     ['anamnese',    'Anamnese'],
-    ['plano',       'Plano'],
     ['avaliacao',   'Avaliacao'],
+    ['plano',       'Plano'],
     ['pei',         'PEI'],
     ['intervencao', 'Intervencao']
   ],

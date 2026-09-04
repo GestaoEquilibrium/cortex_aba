@@ -1,8 +1,7 @@
 // ============================================================================
-// CORTEX aba - js/modulos/painel.js
-// Painel da direcao: indicadores do mes, funil da jornada clinica, sessoes
-// da semana e produtividade por profissional. Renderizado dentro do Inicio
-// para quem tem a chave 'painel' na matriz de permissoes.
+// CORTEX aba - js/modulos/painel.js  (v2 - redesenho)
+// Painel da direcao no Inicio: faixa de indicadores compactos, jornada
+// clinica, semana em colunas e produtividade por profissional.
 // ============================================================================
 
 window.MODULOS = window.MODULOS || {};
@@ -10,7 +9,6 @@ window.MODULOS = window.MODULOS || {};
 window.MODULOS.painel = {
 
   ETAPAS: [
-    ['admissao',    'Admissao'],
     ['anamnese',    'Anamnese'],
     ['avaliacao',   'Avaliacao'],
     ['plano',       'Plano'],
@@ -27,7 +25,6 @@ window.MODULOS.painel = {
       const dHoje = hoje.toISOString().slice(0, 10);
       const inicioMes = dHoje.slice(0, 8) + '01';
 
-      // Segunda-feira da semana atual
       const seg = new Date(hoje);
       seg.setDate(hoje.getDate() - ((hoje.getDay() + 6) % 7));
       const dSeg = seg.toISOString().slice(0, 10);
@@ -36,7 +33,7 @@ window.MODULOS.painel = {
 
       const [rMes, rSemana, rPacs] = await Promise.all([
         sb.from('sessoes')
-          .select('data, status, profissional:profiles!sessoes_aplicador_id_fkey(nome)')
+          .select('data, status, profissional:profiles!sessoes_aplicador_id_fkey(id, nome)')
           .gte('data', inicioMes).lte('data', dHoje).limit(3000),
         sb.from('sessoes')
           .select('data, status')
@@ -48,19 +45,18 @@ window.MODULOS.painel = {
       const semana = rSemana.data || [];
       const pacs = rPacs.data || [];
 
-      // Jornada em lote (mesma logica dos cartoes de pacientes)
       const ids = pacs.map(p => p.id);
-      let funil = { admissao: ids.length, anamnese: 0, plano: 0, avaliacao: 0, pei: 0, intervencao: 0 };
+      let funil = { total: ids.length, anamnese: 0, avaliacao: 0, plano: 0, pei: 0, intervencao: 0 };
       if (ids.length) {
-        const [an, pl, av, pei, prog] = await Promise.all([
+        const [an, av, pl, pei, prog] = await Promise.all([
           sb.from('anamneses').select('paciente_id').in('paciente_id', ids).eq('status', 'concluida'),
-          sb.from('planos_terapeuticos').select('paciente_id').in('paciente_id', ids).eq('status', 'ativo'),
           sb.from('avaliacoes').select('paciente_id').in('paciente_id', ids).eq('status', 'concluida'),
+          sb.from('planos_terapeuticos').select('paciente_id').in('paciente_id', ids).eq('status', 'ativo'),
           sb.from('peis').select('paciente_id').in('paciente_id', ids),
           sb.from('paciente_programas').select('paciente_id').in('paciente_id', ids)
         ]);
         const conta = r => new Set((r.data || []).map(x => x.paciente_id)).size;
-        funil.anamnese = conta(an); funil.plano = conta(pl); funil.avaliacao = conta(av);
+        funil.anamnese = conta(an); funil.avaliacao = conta(av); funil.plano = conta(pl);
         funil.pei = conta(pei); funil.intervencao = conta(prog);
       }
 
@@ -71,99 +67,120 @@ window.MODULOS.painel = {
   },
 
   html(mes, semana, pacs, funil, dHoje, seg) {
-    // ── KPIs do mes ──
     const sessoesHoje = mes.filter(s => s.data === dHoje).length;
     const realizadas = mes.filter(s => s.status === 'concluida').length;
     const faltas = mes.filter(s => s.status === 'falta').length;
     const ocorridas = realizadas + faltas;
-    const absenteismo = ocorridas ? Math.round(faltas * 100 / ocorridas) : 0;
+    const absent = ocorridas ? Math.round(faltas * 100 / ocorridas) : 0;
     const ativos = pacs.filter(p => p.status === 'ativo').length;
+    const triagem = pacs.filter(p => p.status === 'triagem').length;
 
-    const kpi = (v, r, cor) =>
-      '<div class="kpi kpi-' + cor + '"><div class="kpi-valor">' + v + '</div>' +
-      '<div class="kpi-rotulo">' + r + '</div></div>';
+    const corFaltas = absent >= 30 ? 'vermelho' : absent >= 15 ? 'ambar' : 'verde';
+    const mesRotulo = new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
 
-    let html =
-      '<div class="cartao painel-direcao">' +
-      '<h3>Painel da direcao <span class="selo selo-neutro">' +
-      new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }) + '</span></h3>' +
-
-      '<div class="kpis" style="margin-bottom:14px">' +
-      kpi(sessoesHoje, 'Sessoes hoje', 'azul') +
-      kpi(realizadas, 'Realizadas no mes', 'verde') +
-      kpi(faltas, 'Faltas no mes' + (ocorridas ? ' (' + absenteismo + '%)' : ''),
-          absenteismo >= 30 ? 'vermelho' : absenteismo >= 15 ? 'ambar' : 'verde') +
-      kpi(ativos, 'Pacientes ativos', 'roxo') +
+    const kpi = (v, r, cor, extra) =>
+      '<div class="kpi2 kpi2-' + cor + '">' +
+      '  <div class="kpi2-valor">' + v + (extra ? '<small>' + extra + '</small>' : '') + '</div>' +
+      '  <div class="kpi2-rotulo">' + r + '</div>' +
       '</div>';
 
-    // ── Funil da jornada ──
-    const total = funil.admissao || 1;
-    html += '<div class="painel-bloco"><h4>Jornada clinica <small>' + funil.admissao +
-      ' paciente(s) em acompanhamento</small></h4>';
+    // ── Faixa de indicadores ──
+    let html =
+      '<div class="painel-kpis">' +
+      kpi(sessoesHoje, 'Sessoes hoje', 'azul') +
+      kpi(realizadas, 'Realizadas no mes', 'verde') +
+      kpi(faltas, 'Faltas no mes', corFaltas, ocorridas ? absent + '%' : '') +
+      kpi(ativos, 'Pacientes ativos', 'roxo') +
+      kpi(triagem, 'Em triagem', triagem > 0 ? 'ambar' : 'cinza') +
+      '</div>';
+
+    // ── Duas colunas ──
+    html += '<div class="painel-grid">';
+
+    // Coluna 1: jornada + produtividade
+    html += '<div class="cartao painel-bloco2">' +
+      '<div class="painel-titulo"><h3>Jornada clinica</h3>' +
+      '<span class="selo selo-neutro">' + funil.total + ' em acompanhamento</span></div>';
+    const base = funil.total || 1;
     this.ETAPAS.forEach(([id, rotulo]) => {
       const v = funil[id];
-      const pct = Math.round(v * 100 / total);
-      html += '<div class="funil-linha" title="' + rotulo + ': ' + v + ' de ' + funil.admissao + '">' +
+      const pct = Math.round(v * 100 / base);
+      html += '<div class="funil-linha" title="' + rotulo + ': ' + v + ' de ' + funil.total + ' (' + pct + '%)">' +
         '<span class="funil-rotulo">' + rotulo + '</span>' +
         '<span class="funil-trilho"><span class="funil-barra jor-' + id + ' feita" style="width:' +
-        Math.max(pct, v > 0 ? 4 : 0) + '%"></span></span>' +
+          Math.max(pct, v > 0 ? 3 : 0) + '%"></span>' +
+        '<span class="funil-pct">' + pct + '%</span></span>' +
         '<span class="funil-valor">' + v + '</span></div>';
     });
+    html += '<p class="painel-nota">Pacientes nao encerrados que concluiram cada etapa. Clique nos cartoes da lista de Pacientes para destravar as pendencias.</p>';
     html += '</div>';
 
-    // ── Semana em colunas ──
+    // Coluna 2: semana
     const dias = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
     const porDia = dias.map((_, i) => {
       const d = new Date(seg); d.setDate(seg.getDate() + i);
       const chave = d.toISOString().slice(0, 10);
       const doDia = semana.filter(s => s.data === chave);
       return {
-        rotulo: dias[i],
-        hoje: chave === dHoje,
+        rotulo: dias[i], hoje: chave === dHoje,
         total: doDia.length,
-        concluidas: doDia.filter(s => s.status === 'concluida').length,
-        faltas: doDia.filter(s => s.status === 'falta').length
+        faltas: doDia.filter(s => s.status === 'falta').length,
+        concluidas: doDia.filter(s => s.status === 'concluida').length
       };
     });
     const maxDia = Math.max(1, ...porDia.map(d => d.total));
 
-    html += '<div class="painel-bloco"><h4>Semana atual <small>' +
-      semana.length + ' sessao(oes) agendada(s)</small></h4>' +
-      '<div class="semana-grafico">' +
+    html += '<div class="cartao painel-bloco2">' +
+      '<div class="painel-titulo"><h3>Semana atual</h3>' +
+      '<span class="selo selo-neutro">' + semana.length + ' sessoes</span></div>' +
+      '<div class="sem2-grafico">' +
       porDia.map(d =>
-        '<div class="semana-dia' + (d.hoje ? ' hoje' : '') + '" title="' + d.rotulo + ': ' +
-        d.total + ' sessao(oes), ' + d.concluidas + ' concluida(s), ' + d.faltas + ' falta(s)">' +
-        '<div class="semana-coluna">' +
-        '<div class="semana-preench" style="height:' + Math.round(d.total * 100 / maxDia) + '%">' +
-        (d.faltas ? '<div class="semana-falta" style="height:' +
-          Math.round(d.faltas * 100 / Math.max(d.total, 1)) + '%"></div>' : '') +
-        '</div></div>' +
-        '<span class="semana-num">' + (d.total || '') + '</span>' +
-        '<span class="semana-rotulo">' + d.rotulo + '</span>' +
+        '<div class="sem2-dia' + (d.hoje ? ' hoje' : '') + '" title="' + d.rotulo + ': ' + d.total +
+        ' sessoes, ' + d.concluidas + ' concluidas, ' + d.faltas + ' faltas">' +
+        '  <span class="sem2-num">' + (d.total || '&middot;') + '</span>' +
+        '  <div class="sem2-trilho">' +
+        '    <div class="sem2-barra" style="height:' + Math.round(d.total * 100 / maxDia) + '%">' +
+        (d.faltas ? '<div class="sem2-falta" style="height:' +
+            Math.round(d.faltas * 100 / Math.max(d.total, 1)) + '%"></div>' : '') +
+        '    </div>' +
+        '  </div>' +
+        '  <span class="sem2-rotulo">' + d.rotulo + '</span>' +
         '</div>').join('') +
-      '</div></div>';
+      '</div>' +
+      '<p class="painel-nota"><span class="legenda-cor" style="background:#DC2626"></span> faltas &middot; dia de hoje contornado</p>' +
+      '</div>';
 
-    // ── Produtividade por profissional (mes) ──
+    // Largura total: produtividade
     const porProf = {};
     mes.filter(s => s.status === 'concluida').forEach(s => {
-      const nome = s.profissional ? s.profissional.nome.split(' ')[0] : 'Sem designacao';
-      porProf[nome] = (porProf[nome] || 0) + 1;
+      if (!s.profissional) {
+        porProf['x'] = porProf['x'] || { nome: 'Sem designacao', n: 0 };
+        porProf['x'].n++;
+        return;
+      }
+      const k = s.profissional.id;
+      porProf[k] = porProf[k] || { nome: s.profissional.nome, n: 0 };
+      porProf[k].n++;
     });
-    const ranking = Object.entries(porProf).sort((a, b) => b[1] - a[1]).slice(0, 8);
+    const ranking = Object.values(porProf).sort((a, b) => b.n - a.n).slice(0, 8);
 
     if (ranking.length) {
-      const maxProf = ranking[0][1];
-      html += '<div class="painel-bloco"><h4>Sessoes concluidas por profissional <small>no mes</small></h4>';
-      ranking.forEach(([nome, v]) => {
-        html += '<div class="funil-linha">' +
-          '<span class="funil-rotulo">' + escaparHtml(nome) + '</span>' +
-          '<span class="funil-trilho"><span class="funil-barra prof-barra" style="width:' +
-          Math.round(v * 100 / maxProf) + '%"></span></span>' +
-          '<span class="funil-valor">' + v + '</span></div>';
+      const maxProf = ranking[0].n;
+      html += '<div class="cartao painel-bloco2 painel-largo">' +
+        '<div class="painel-titulo"><h3>Sessoes concluidas por profissional</h3>' +
+        '<span class="selo selo-neutro">' + mesRotulo + '</span></div>';
+      ranking.forEach((r, i) => {
+        const nomeCurto = r.nome.split(' ').slice(0, 2).join(' ');
+        html += '<div class="funil-linha" title="' + escaparHtml(r.nome) + ': ' + r.n + ' sessao(oes)">' +
+          '<span class="funil-rotulo">' + escaparHtml(nomeCurto) + '</span>' +
+          '<span class="funil-trilho"><span class="funil-barra prof-barra' + (i === 0 ? ' lider' : '') +
+          '" style="width:' + Math.round(r.n * 100 / maxProf) + '%"></span></span>' +
+          '<span class="funil-valor">' + r.n + '</span></div>';
       });
       html += '</div>';
     }
 
-    return html + '</div>';
+    html += '</div>';
+    return html;
   }
 };

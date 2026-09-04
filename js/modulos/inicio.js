@@ -19,8 +19,7 @@ window.MODULOS.inicio = {
       '    <div class="sub">' + hoje.charAt(0).toUpperCase() + hoje.slice(1) + '</div>' +
       '  </div>' +
       '</section>' +
-      '<div class="kpis" id="kpis-inicio"></div>' +
-      (perm('painel') !== '' ? '<div id="inicio-painel"></div>' : '') +
+      (perm('painel') === '' ? '<div class="kpis" id="kpis-inicio"></div>' : '<div id="inicio-painel"></div>') +
       '<div class="cartao faixa-ambar" id="inicio-notifs"><h3>Notificacoes</h3><p class="sub">Carregando...</p></div>' +
       '<div id="inicio-vencimentos"></div>' +
       '<div class="cartao">' +
@@ -31,8 +30,8 @@ window.MODULOS.inicio = {
       '  </div>' +
       '</div>';
 
-    this.carregarKpis();
-    if (perm('painel') !== '') MODULOS.painel.carregar('inicio-painel');
+    if (perm('painel') === '') this.carregarKpis();
+    else MODULOS.painel.carregar('inicio-painel');
     this.carregarNotificacoes(sessao);
     this.carregarVencimentos();
   },

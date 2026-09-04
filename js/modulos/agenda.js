@@ -131,12 +131,12 @@ window.MODULOS.agenda = {
 
   selosSessao(s) {
     const st = {
-      agendada: ['selo-neutro', 'Agendada'],
-      checkin: ['selo-warn', 'Chegou'],
-      em_atendimento: ['selo-roxo', 'Em atendimento'],
-      concluida: ['selo-ok', 'Concluida'],
-      falta: ['selo-bad', 'Falta'],
-      cancelada: ['selo-neutro', 'Cancelada']
+      agendada: ['selo-st-amarelo', 'Agendada'],
+      checkin: ['selo-st-azul', 'Chegou'],
+      em_atendimento: ['selo-st-verde', 'Em atendimento'],
+      concluida: ['selo-st-roxo', 'Concluida'],
+      falta: ['selo-st-vermelho', 'Falta'],
+      cancelada: ['selo-st-vermelho', 'Cancelada']
     }[s.status] || ['selo-neutro', s.status];
     const cf = {
       confirmada: '<span class="selo selo-ok">Confirmada</span>',
@@ -169,17 +169,20 @@ window.MODULOS.agenda = {
       return;
     }
 
-    alvo.innerHTML = '<div class="grade-checkin">' + sessoes.map(s =>
-      '<div class="cartao cartao-checkin clicavel-sessao' +
-      (s.status === 'checkin' ? ' chegou' : '') + '" ' +
-      'onclick="MODULOS.agenda.abrirSessao(\'' + s.id + '\')">' +
-      '<div class="ck-hora">' + s.hora_inicio.slice(0, 5) + '</div>' +
-      '<div class="ck-info">' +
-      '  <b>' + escaparHtml(s.pacientes ? s.pacientes.nome : '?') + '</b>' +
-      '  <small>' + escaparHtml(s.profissional ? s.profissional.nome.split(' ')[0] : '-') +
-      (s.salas ? ' &middot; ' + escaparHtml(s.salas.nome) : '') + '</small>' +
-      '  <div class="pac-selos">' + this.selosSessao(s) + '</div>' +
-      '</div></div>').join('') + '</div>';
+    alvo.innerHTML = '<div class="grade-checkin">' + sessoes.map(s => {
+      const prof = s.profissional
+        ? s.profissional.nome.split(' ').slice(0, 2).join(' ')
+        : 'Sem profissional';
+      return '<div class="cartao cartao-checkin clicavel-sessao ck-st-' + s.status + '" ' +
+        'onclick="MODULOS.agenda.abrirSessao(\'' + s.id + '\')">' +
+        '<div class="ck-hora">' + s.hora_inicio.slice(0, 5) + '</div>' +
+        '<div class="ck-info">' +
+        '  <b>' + escaparHtml(s.pacientes ? s.pacientes.nome : '?') + '</b>' +
+        '  <span class="ck-prof">&#128100; ' + escaparHtml(prof) +
+        (s.salas ? ' <small>&middot; ' + escaparHtml(s.salas.nome) + '</small>' : '') + '</span>' +
+        '  <div class="pac-selos">' + this.selosSessao(s) + '</div>' +
+        '</div></div>';
+    }).join('') + '</div>';
   },
 
   // ───────────────────────── VISAO SEMANA ─────────────────────────
@@ -214,14 +217,12 @@ window.MODULOS.agenda = {
         ' <span class="selo selo-neutro">' + doDia.length + '</span></div>';
       if (doDia.length === 0) html += '<div class="agenda-vazio">&mdash;</div>';
       doDia.forEach(s => {
-        const cor = s.status === 'concluida' ? 'ok' : s.status === 'falta' ? 'bad' :
-                    s.status === 'cancelada' ? 'off' : s.confirmacao === 'confirmada' ? 'conf' : '';
-        html += '<div class="chip-sessao clicavel ' + cor + '" ' +
+        html += '<div class="chip-sessao clicavel ck-st-' + s.status + '" ' +
           'onclick="MODULOS.agenda.abrirSessao(\'' + s.id + '\')">' +
           '<b>' + s.hora_inicio.slice(0, 5) + '</b> ' +
           '<span class="chip-nome">' + escaparHtml(s.pacientes ?
             s.pacientes.nome.split(' ')[0] + ' ' + (s.pacientes.nome.split(' ')[1] || '') : '?') + '</span>' +
-          '<small>' + escaparHtml(s.profissional ? s.profissional.nome.split(' ')[0] : '-') +
+          '<small class="chip-prof">&#128100; ' + escaparHtml(s.profissional ? s.profissional.nome.split(' ')[0] : '-') +
           (s.salas ? ' &middot; ' + escaparHtml(s.salas.nome) : '') + '</small>' +
           '</div>';
       });

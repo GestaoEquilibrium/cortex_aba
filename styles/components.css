@@ -1646,3 +1646,37 @@
 .st-btn.st-vermelho.atual { border-color: #DC2626; background: #FEF2F2; color: #B91C1C; }
 .st-btn.st-vermelho:hover:not(:disabled) { border-color: #DC2626; color: #B91C1C; }
 .st-btn.st-cinza.atual    { border-color: var(--ink-muted); background: var(--surface-alt); color: var(--ink-muted); }
+
+/* ── Agenda: cores por status + profissional em evidencia ─────────────── */
+/* agendada amarelo | check-in azul | em atendimento verde | concluida roxo | falta/cancelada vermelho */
+.cartao-checkin { border-left: 5px solid transparent; }
+.ck-st-agendada       { border-left-color: #EAB308; }
+.ck-st-checkin        { border-left-color: #0EA5E9; background: linear-gradient(90deg, #F0F9FF 0%, var(--surface) 55%); }
+.ck-st-em_atendimento { border-left-color: #059669; background: linear-gradient(90deg, #ECFDF5 0%, var(--surface) 55%); }
+.ck-st-concluida      { border-left-color: #7C3AED; }
+.ck-st-falta,
+.ck-st-cancelada      { border-left-color: #DC2626; opacity: .8; }
+
+.ck-prof {
+    display: block;
+    font-size: 12.5px; font-weight: 800;
+    color: var(--ink);
+    margin: 2px 0 4px;
+}
+.ck-prof small { font-weight: 600; color: var(--ink-muted); }
+
+.chip-sessao { border-left: 4px solid transparent; }
+.chip-sessao.ck-st-agendada       { border-left-color: #EAB308; }
+.chip-sessao.ck-st-checkin        { border-left-color: #0EA5E9; background: #F0F9FF; }
+.chip-sessao.ck-st-em_atendimento { border-left-color: #059669; background: #ECFDF5; }
+.chip-sessao.ck-st-concluida      { border-left-color: #7C3AED; background: #F5F3FF; }
+.chip-sessao.ck-st-falta,
+.chip-sessao.ck-st-cancelada      { border-left-color: #DC2626; background: #FEF2F2; opacity: .85; }
+.chip-prof { display: block; font-weight: 700; color: var(--ink); }
+
+/* Selos de status na mesma paleta */
+.selo-st-amarelo  { background: #FEF9C3; color: #854D0E; }
+.selo-st-azul     { background: #E0F2FE; color: #075985; }
+.selo-st-verde    { background: #D1FAE5; color: #065F46; }
+.selo-st-roxo     { background: #EDE9FE; color: #5B21B6; }
+.selo-st-vermelho { background: #FEE2E2; color: #991B1B; }

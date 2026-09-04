@@ -1572,3 +1572,77 @@
 .sem2-dia.hoje .sem2-trilho { outline: 2px solid var(--acao); outline-offset: 2px; }
 .sem2-dia.hoje .sem2-rotulo { color: var(--acao); }
 .sem2-rotulo { font-size: 11px; font-weight: 800; color: var(--ink-muted); }
+
+/* ── Janela da sessao v2 ──────────────────────────────────────────────── */
+.sess-cab {
+    display: flex; align-items: center; gap: 12px;
+    background: linear-gradient(120deg, #241832, #3A2450);
+    border-radius: var(--raio-sm);
+    padding: 14px 16px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+}
+.sess-avatar {
+    width: 52px; height: 52px; border-radius: 50%;
+    background: rgba(255, 255, 255, .14);
+    color: #FBBF24;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 17px;
+    overflow: hidden; flex-shrink: 0;
+    border: 2px solid rgba(251, 191, 36, .5);
+}
+.sess-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.sess-quem { display: flex; flex-direction: column; min-width: 0; }
+.sess-quem strong { color: #fff; font-size: 15px; }
+.sess-quem span { color: rgba(255, 255, 255, .75); font-size: 12px; font-weight: 600; }
+.sess-cab-acoes { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.btn-chip.claro { background: rgba(255,255,255,.12); color: #fff; border-color: rgba(255,255,255,.25); }
+.btn-chip.claro:hover { background: rgba(255,255,255,.22); }
+
+.sess-grid { display: grid; grid-template-columns: 1.15fr .85fr; gap: 16px; }
+@media (max-width: 560px) { .sess-grid { grid-template-columns: 1fr; } }
+.sess-col { display: flex; flex-direction: column; gap: 10px; }
+
+.sess-quando { display: flex; align-items: center; gap: 12px; }
+.sess-quando b { text-transform: capitalize; }
+.dia-badge {
+    width: 54px; height: 58px;
+    border: 1.5px solid var(--line);
+    border-radius: 12px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: var(--surface);
+    flex-shrink: 0;
+}
+.dia-badge b { font-size: 20px; line-height: 1; color: var(--acao); }
+.dia-badge span { font-size: 10.5px; font-weight: 800; text-transform: uppercase; color: var(--ink-muted); }
+
+.st-titulo {
+    font-size: 11px; font-weight: 800;
+    text-transform: uppercase; letter-spacing: .05em;
+    color: var(--ink-muted);
+    margin: 0 0 2px;
+}
+.st-btn {
+    width: 100%;
+    padding: 9px 12px;
+    border: 1.5px solid var(--line);
+    border-radius: var(--raio-sm);
+    background: var(--surface);
+    font: inherit; font-size: 12.5px; font-weight: 700;
+    color: var(--ink-muted);
+    cursor: pointer;
+    text-align: left;
+    transition: border-color .12s ease, transform .08s ease;
+}
+.st-btn:hover:not(:disabled) { border-color: var(--acao); color: var(--ink); }
+.st-btn:active:not(:disabled) { transform: scale(.98); }
+.st-btn:disabled { cursor: default; }
+.st-btn.atual {
+    border-color: var(--acao);
+    background: var(--acao-soft);
+    color: var(--acao);
+}
+.st-btn.st-verde.atual    { border-color: #059669; background: #ECFDF5; color: #047857; }
+.st-btn.st-vermelho.atual { border-color: #DC2626; background: #FEF2F2; color: #B91C1C; }
+.st-btn.st-vermelho:hover:not(:disabled) { border-color: #DC2626; color: #B91C1C; }
+.st-btn.st-cinza.atual    { border-color: var(--ink-muted); background: var(--surface-alt); color: var(--ink-muted); }

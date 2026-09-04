@@ -296,7 +296,7 @@ window.MODULOS.agenda = {
 
   async abrirSessao(id) {
     const { data: s } = await sb.from('sessoes')
-      .select('*, pacientes(id, nome, data_nascimento), profissional:profiles!sessoes_aplicador_id_fkey(nome), salas(nome)')
+      .select('*, pacientes(id, nome, data_nascimento, foto_path), profissional:profiles!sessoes_aplicador_id_fkey(nome), salas(nome)')
       .eq('id', id).single();
     if (!s) return;
 
@@ -309,48 +309,87 @@ window.MODULOS.agenda = {
     const dataFmt = new Date(s.data + 'T12:00:00').toLocaleDateString('pt-BR');
     const aberta = !['concluida', 'falta', 'cancelada'].includes(s.status);
 
-    let acoes = '';
     const podeOperar = perm('agenda') === 'E';
-    if (aberta && podeOperar) {
-      if (s.status === 'agendada') {
-        acoes += '<button class="btn btn-primario" onclick="MODULOS.agenda.statusModal(\'' + id + '\', \'checkin\')">Check-in (chegou)</button>';
-      }
-      if (s.status === 'checkin') {
-        acoes += '<button class="btn btn-primario" onclick="MODULOS.agenda.statusModal(\'' + id + '\', \'em_atendimento\')">Iniciar atendimento</button>';
-      }
-      if (s.status === 'em_atendimento' || s.status === 'checkin') {
-        acoes += '<button class="btn btn-fantasma" onclick="MODULOS.agenda.statusModal(\'' + id + '\', \'concluida\')">Finalizar</button>';
-      }
-      acoes += '<button class="btn btn-fantasma" style="color:var(--st-bad); border-color:var(--st-bad)" ' +
-        'onclick="if(confirm(\'Registrar falta?\')) MODULOS.agenda.statusModal(\'' + id + '\', \'falta\')">Falta</button>';
+
+    let fotoUrl = null;
+    if (s.pacientes.foto_path) {
+      try {
+        const { data: u } = await sb.storage.from('documentos')
+          .createSignedUrl(s.pacientes.foto_path, 600);
+        fotoUrl = u ? u.signedUrl : null;
+      } catch (e) {}
     }
 
+    const STATUS = [
+      ['agendada',       'Agendada',        ''],
+      ['checkin',        'Chegou (check-in)', ''],
+      ['em_atendimento', 'Em atendimento',  ''],
+      ['concluida',      'Concluida',       'st-verde'],
+      ['falta',          'Falta',           'st-vermelho'],
+      ['cancelada',      'Cancelada',       'st-cinza']
+    ];
+    const listaStatus = STATUS.map(([v, rotulo, cor]) => {
+      const atual = s.status === v;
+      return '<button type="button" class="st-btn ' + cor + (atual ? ' atual' : '') + '" ' +
+        (atual || !podeOperar ? 'disabled' : 'onclick="MODULOS.agenda.mudarStatusSeguro(\'' + id + '\', \'' + v + '\')"') +
+        '>' + (atual ? '&#10003; ' : '') + rotulo + '</button>';
+    }).join('');
+
     let whats = '';
-    if (resp && resp.telefone && aberta && podeOperar) {
-      whats = '<button class="btn btn-fantasma" onclick="MODULOS.agenda.abrirWhats(\'' + id + '\')">' +
+    if (podeOperar && aberta && resp && resp.telefone) {
+      whats = '<button class="btn btn-fantasma" style="width:100%" onclick="MODULOS.agenda.abrirWhats(\'' + id + '\')">' +
         '&#128172; Enviar confirmacao no WhatsApp</button>';
-    } else if (aberta && podeOperar) {
-      whats = '<p class="sub">Sem telefone de responsavel cadastrado para confirmacao.</p>';
     }
 
     this._sessaoModal = { s, resp };
 
-    abrirModal('Sessao &middot; ' + dataFmt + ' as ' + s.hora_inicio.slice(0, 5),
-      '<div class="grade-visao" style="margin-bottom:14px">' +
-      '  <div class="caixa-info larga"><small>Paciente</small><b>' + escaparHtml(s.pacientes.nome) + '</b></div>' +
-      '  <div class="caixa-info"><small>Profissional</small><b>' +
-        escaparHtml(s.profissional ? s.profissional.nome : '-') + '</b></div>' +
-      '  <div class="caixa-info"><small>Sala</small><b>' + escaparHtml(s.salas ? s.salas.nome : '-') + '</b></div>' +
-      '  <div class="caixa-info"><small>Duracao</small><b>' + s.duracao_min + ' min</b></div>' +
-      '  <div class="caixa-info"><small>Responsavel</small><b>' +
-        (resp ? escaparHtml(resp.nome) + (resp.telefone ? ' &middot; ' + escaparHtml(resp.telefone) : '') : '-') + '</b></div>' +
+    const dExt = new Date(s.data + 'T12:00:00');
+    const mesCurto = dExt.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '');
+
+    abrirModal('Sessao',
+      '<div class="sess-cab">' +
+      '  <div class="sess-avatar">' +
+      (fotoUrl ? '<img src="' + fotoUrl + '" alt="">' :
+        escaparHtml(s.pacientes.nome.trim().split(/\s+/).map(x => x[0]).slice(0, 2).join('').toUpperCase())) +
+      '  </div>' +
+      '  <div class="sess-quem">' +
+      '    <strong>' + escaparHtml(s.pacientes.nome) + '</strong>' +
+      '    <span>' + (resp
+             ? escaparHtml(resp.nome.split(' ')[0]) + (resp.telefone ? ' &middot; ' + escaparHtml(resp.telefone) : '')
+             : 'Sem responsavel cadastrado') + '</span>' +
+      '  </div>' +
+      '  <div class="sess-cab-acoes">' + this.selosSessao(s) +
+      '    <button class="btn-chip claro" onclick="fecharModal(); abrirModulo(\'pacientes\'); ' +
+      '      setTimeout(function(){ MODULOS.pacientes.telaDetalhe(\'' + s.pacientes.id + '\'); }, 50)">Prontuario</button>' +
+      '  </div>' +
       '</div>' +
-      '<div class="pac-selos" style="margin-bottom:16px">' + this.selosSessao(s) + '</div>' +
+
+      '<div class="sess-grid">' +
+      '  <div class="sess-col">' +
+      '    <div class="sess-quando">' +
+      '      <div class="dia-badge"><b>' + s.data.slice(8) + '</b><span>' + mesCurto + '</span></div>' +
+      '      <div><b>' + dExt.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' }) + '</b>' +
+      '      <p class="sub">' + s.hora_inicio.slice(0, 5) + ' &middot; ' + s.duracao_min + ' min</p></div>' +
+      '    </div>' +
+      '    <div class="caixa-info"><small>Profissional</small><b>' +
+             escaparHtml(s.profissional ? s.profissional.nome : '-') + '</b></div>' +
+      '    <div class="caixa-info"><small>Sala</small><b>' + escaparHtml(s.salas ? s.salas.nome : '-') + '</b></div>' +
       whats +
-      '<div class="barra-acoes" style="margin-top:16px; flex-wrap:wrap">' + acoes +
-      '<button class="btn-chip" onclick="fecharModal(); MODULOS.pacientes ? abrirModulo(\'pacientes\') : null; ' +
-      'setTimeout(function(){ MODULOS.pacientes.telaDetalhe(\'' + s.pacientes.id + '\'); }, 50)">Abrir prontuario</button>' +
+      '  </div>' +
+      '  <div class="sess-col">' +
+      '    <p class="st-titulo">Alterar status</p>' +
+      listaStatus +
+      '  </div>' +
       '</div>');
+  },
+
+  mudarStatusSeguro(id, novo) {
+    const s = this._sessaoModal && this._sessaoModal.s;
+    if (s && ['concluida', 'falta', 'cancelada'].includes(s.status) &&
+        !confirm('Esta sessao ja esta encerrada como "' + s.status + '". Alterar mesmo assim?')) return;
+    if (novo === 'falta' && !confirm('Registrar falta?')) return;
+    if (novo === 'cancelada' && !confirm('Cancelar esta sessao?')) return;
+    this.statusModal(id, novo);
   },
 
   async statusModal(id, status) {

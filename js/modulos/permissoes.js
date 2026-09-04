@@ -30,6 +30,8 @@ window.MODULOS.permissoes = {
       dica: 'V: visualiza. E: check-in, iniciar, finalizar, falta e WhatsApp.' },
     { chave: 'agenda_grade', rotulo: 'Grade fixa e salas',
       dica: 'E: cria/edita horarios recorrentes e salas.' },
+    { chave: 'rh', rotulo: 'RH (pasta funcional)',
+      dica: 'V: consulta fichas. E: gere colaboradores e documentos.' },
     { chave: 'faltas', rotulo: 'Gestao de Faltas',
       dica: 'V: consulta o painel. E: tambem dispara os alertas de consecutivas.' },
     { chave: 'presenca', rotulo: 'Lista de Presenca',

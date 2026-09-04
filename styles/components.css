@@ -1304,3 +1304,53 @@
 .jor-avaliacao.feita   { background: #7C3AED; }
 .jor-pei.feita         { background: #EC4899; }
 .jor-intervencao.feita { background: #059669; }
+
+/* ── Painel da direcao ────────────────────────────────────────────────── */
+.painel-direcao h3 { display: flex; align-items: center; gap: 8px; }
+.painel-bloco { margin-top: 16px; }
+.painel-bloco h4 {
+    font-size: 12.5px; font-weight: 800;
+    margin-bottom: 8px; color: var(--ink);
+}
+.painel-bloco h4 small { color: var(--ink-muted); font-weight: 600; margin-left: 6px; }
+
+.funil-linha {
+    display: grid;
+    grid-template-columns: 110px 1fr 34px;
+    align-items: center; gap: 10px;
+    padding: 3px 0;
+}
+.funil-rotulo { font-size: 12px; font-weight: 700; color: var(--ink-muted); }
+.funil-trilho {
+    height: 12px; border-radius: 6px;
+    background: var(--surface-alt);
+    overflow: hidden; display: block;
+}
+.funil-barra { display: block; height: 100%; border-radius: 6px; transition: width .4s ease; }
+.funil-valor { font-size: 12.5px; font-weight: 800; text-align: right; }
+.prof-barra { background: var(--acao); }
+
+.semana-grafico {
+    display: grid; grid-template-columns: repeat(6, 1fr);
+    gap: 10px; align-items: end;
+    height: 110px; padding-top: 6px;
+}
+.semana-dia { display: flex; flex-direction: column; align-items: center; height: 100%; }
+.semana-coluna {
+    flex: 1; width: 100%; max-width: 44px;
+    display: flex; align-items: flex-end;
+    background: var(--surface-alt); border-radius: 8px;
+    overflow: hidden;
+}
+.semana-preench {
+    width: 100%;
+    background: var(--acao);
+    border-radius: 8px 8px 0 0;
+    display: flex; flex-direction: column; justify-content: flex-start;
+    min-height: 3px;
+    transition: height .4s ease;
+}
+.semana-falta { background: #DC2626; border-radius: 8px 8px 0 0; }
+.semana-dia.hoje .semana-coluna { outline: 2px solid var(--acao); outline-offset: 2px; }
+.semana-num { font-size: 11px; font-weight: 800; margin-top: 4px; }
+.semana-rotulo { font-size: 10.5px; font-weight: 700; color: var(--ink-muted); }

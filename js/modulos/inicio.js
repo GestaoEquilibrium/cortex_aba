@@ -20,6 +20,7 @@ window.MODULOS.inicio = {
       '  </div>' +
       '</section>' +
       '<div class="kpis" id="kpis-inicio"></div>' +
+      (perm('painel') !== '' ? '<div id="inicio-painel"></div>' : '') +
       '<div class="cartao faixa-ambar" id="inicio-notifs"><h3>Notificacoes</h3><p class="sub">Carregando...</p></div>' +
       '<div id="inicio-vencimentos"></div>' +
       '<div class="cartao">' +
@@ -31,6 +32,7 @@ window.MODULOS.inicio = {
       '</div>';
 
     this.carregarKpis();
+    if (perm('painel') !== '') MODULOS.painel.carregar('inicio-painel');
     this.carregarNotificacoes(sessao);
     this.carregarVencimentos();
   },

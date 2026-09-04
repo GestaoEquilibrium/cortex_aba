@@ -104,7 +104,10 @@ window.MODULOS.chat = {
 
     const alvo = document.getElementById('chat-conversas');
     if (!alvo) return;
-    alvo.innerHTML = '<h3>Conversas</h3>' +
+    alvo.innerHTML =
+      '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px">' +
+      '<h3 style="margin:0">Conversas</h3>' +
+      '<button class="btn-chip" onclick="MODULOS.chat.modalNovaConversa()">+ Nova</button></div>' +
       (lista.length === 0
         ? '<p class="sub">Ninguem chamou ainda.</p>'
         : lista.map(c =>
@@ -230,6 +233,49 @@ window.MODULOS.chat = {
     }
   },
 
+  async modalNovaConversa() {
+    const eu = window.CORTEX_SESSAO.user.id;
+    const { data } = await sb.from('profiles')
+      .select('id, nome, perfil')
+      .neq('perfil', 'familia').eq('ativo', true).neq('id', eu)
+      .order('nome');
+    this._equipe = data || [];
+
+    abrirModal('Nova conversa',
+      '<input id="nc-busca" placeholder="Buscar pelo nome..." ' +
+      'oninput="MODULOS.chat.filtrarEquipe()" ' +
+      'style="width:100%; padding:9px 12px; border:1.5px solid var(--line); border-radius:12px; ' +
+      'font:inherit; font-size:13px; background:var(--surface); color:var(--ink); margin-bottom:10px">' +
+      '<div id="nc-lista">' + this.htmlEquipe(this._equipe) + '</div>', true);
+    setTimeout(() => document.getElementById('nc-busca')?.focus(), 60);
+  },
+
+  htmlEquipe(lista) {
+    if (lista.length === 0) return '<p class="sub">Ninguem encontrado.</p>';
+    return lista.map(p =>
+      '<div class="chat-item" onclick="MODULOS.chat.iniciarConversa(\'' + p.id + '\')">' +
+      '<div><b>' + escaparHtml(p.nome) + '</b>' +
+      '<small>' + escaparHtml(ROTULOS_PERFIL[p.perfil] || p.perfil) + '</small></div>' +
+      '</div>').join('');
+  },
+
+  filtrarEquipe() {
+    const termo = (document.getElementById('nc-busca')?.value || '').toLowerCase();
+    const alvo = document.getElementById('nc-lista');
+    if (alvo) alvo.innerHTML = this.htmlEquipe(
+      this._equipe.filter(p => p.nome.toLowerCase().includes(termo)));
+  },
+
+  iniciarConversa(usuarioId) {
+    fecharModal();
+    if (document.getElementById('chat-conversas')) {
+      this.abrirConversa(usuarioId);
+    } else {
+      abrirModulo('chat');
+      setTimeout(() => this.abrirConversa(usuarioId), 120);
+    }
+  },
+
   alternarMini() {
     const mini = document.getElementById('chat-mini');
     this._miniAberto = mini.hidden;
@@ -259,7 +305,10 @@ window.MODULOS.chat = {
 
       mini.innerHTML =
         '<div class="chat-mini-topo"><b>Conversas</b>' +
-        '<button class="botao-icone" onclick="MODULOS.chat.alternarMini()">&times;</button></div>' +
+        '<span style="display:flex; gap:4px">' +
+        '<button class="botao-icone" title="Nova conversa" ' +
+        'onclick="MODULOS.chat.alternarMini(); MODULOS.chat.modalNovaConversa()">+</button>' +
+        '<button class="botao-icone" onclick="MODULOS.chat.alternarMini()">&times;</button></span></div>' +
         '<div class="chat-mini-corpo">' +
         (lista.length === 0 ? '<p class="sub" style="padding:14px">Ninguem chamou ainda.</p>'
           : lista.slice(0, 8).map(cv =>

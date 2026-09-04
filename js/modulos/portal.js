@@ -73,6 +73,9 @@ window.MODULOS.portal = {
       let agenda = '';
       try { agenda = await this.htmlAgenda(p.id, p.nome); } catch (e) {}
 
+      let termos = '';
+      try { termos = await this.htmlTermos(p.id); } catch (e) {}
+
       html +=
         '<div class="cartao faixa-azul">' +
         '  <div class="pac-topo" style="margin-bottom:14px">' +
@@ -81,12 +84,83 @@ window.MODULOS.portal = {
         '    <span>' + calcularIdade(p.data_nascimento) + '</span></div>' +
         '  </div>' +
         pendencia +
+        termos +
         agenda +
         relatorios +
         '</div>';
     }
 
     alvo.innerHTML = html;
+  },
+
+  // ── Termos digitais pendentes de aceite ──
+
+  _termosCache: {},
+
+  async htmlTermos(pacienteId) {
+    const [{ data: termos }, { data: aceites }] = await Promise.all([
+      sb.from('termos').select('id, titulo, texto').eq('ativo', true),
+      sb.from('termo_aceites').select('termo_id').eq('paciente_id', pacienteId)
+    ]);
+    const aceitos = new Set((aceites || []).map(a => a.termo_id));
+    const pendentes = (termos || []).filter(t => !aceitos.has(t.id));
+    if (pendentes.length === 0) return '';
+
+    pendentes.forEach(t => { this._termosCache[t.id] = t; });
+
+    return '<div class="portal-pendencia" style="margin-top:10px">' +
+      '<b>&#128196; Termos aguardando o seu aceite</b>' +
+      pendentes.map(t =>
+        '<div class="linha-doc"><div><b>' + escaparHtml(t.titulo) + '</b></div>' +
+        '<button class="btn btn-primario" onclick="MODULOS.portal.lerTermo(\'' +
+        t.id + '\', \'' + pacienteId + '\')">Ler e aceitar</button></div>').join('') +
+      '</div>';
+  },
+
+  lerTermo(termoId, pacienteId) {
+    const t = this._termosCache[termoId];
+    if (!t) return;
+    abrirModal(escaparHtml(t.titulo),
+      '<div style="max-height:45vh; overflow-y:auto; font-size:13px; line-height:1.8; ' +
+      'white-space:pre-wrap; padding:4px 2px; margin-bottom:14px; border-bottom:1px solid var(--line)">' +
+      escaparHtml(t.texto) + '</div>' +
+      '<div class="campo"><label>Para aceitar, digite seu nome completo (vale como assinatura)</label>' +
+      '<input id="ta-nome" placeholder="Nome completo do responsavel"></div>' +
+      '<div class="mensagem-erro" id="ta-erro"></div>' +
+      '<div class="barra-acoes">' +
+      '  <button class="btn btn-fantasma" onclick="fecharModal()">Fechar</button>' +
+      '  <button class="btn btn-primario" id="ta-btn" onclick="MODULOS.portal.aceitarTermo(\'' +
+      termoId + '\', \'' + pacienteId + '\')">Li e aceito</button>' +
+      '</div>', true);
+  },
+
+  async aceitarTermo(termoId, pacienteId) {
+    const erro = document.getElementById('ta-erro');
+    const botao = document.getElementById('ta-btn');
+    erro.classList.remove('visivel');
+
+    const nome = document.getElementById('ta-nome').value.trim();
+    if (nome.split(' ').filter(Boolean).length < 2) {
+      erro.textContent = 'Digite o nome completo para confirmar.';
+      erro.classList.add('visivel');
+      return;
+    }
+
+    botao.disabled = true;
+    const { error } = await sb.from('termo_aceites').insert({
+      termo_id: termoId,
+      paciente_id: pacienteId,
+      usuario_id: window.CORTEX_SESSAO.user.id,
+      nome_confirmado: nome
+    });
+    if (error) {
+      erro.textContent = 'Nao foi possivel registrar: ' + error.message;
+      erro.classList.add('visivel');
+      botao.disabled = false;
+      return;
+    }
+    fecharModal();
+    this.render(this.el, this.sessao || window.CORTEX_SESSAO);
   },
 
   // ── Proximas sessoes da crianca (com confirmacao no proprio portal) ──

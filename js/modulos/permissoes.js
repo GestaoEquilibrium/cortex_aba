@@ -34,6 +34,8 @@ window.MODULOS.permissoes = {
       dica: 'V: consulta a trilha de tudo que foi feito no sistema.' },
     { chave: 'chat', rotulo: 'Chat de Suporte',
       dica: 'E: fala com o suporte tecnico pelo sistema.' },
+    { chave: 'termos', rotulo: 'Termos digitais',
+      dica: 'V: consulta aceites. E: cria e edita os termos do portal.' },
     { chave: 'rh', rotulo: 'RH (pasta funcional)',
       dica: 'V: consulta fichas. E: gere colaboradores e documentos.' },
     { chave: 'faltas', rotulo: 'Gestao de Faltas',

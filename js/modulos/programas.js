@@ -143,7 +143,15 @@ window.MODULOS.programas = {
       dominado: ['Dominados', 'faixa-verde']
     };
 
-    let html = podeE
+    let html = perm('evolucao') === 'E'
+      ? '<div class="cartao faixa-verde atd-hero">' +
+        '<div><h3>Atendimento de hoje</h3>' +
+        '<p class="sub">Abre a folha de aplicacao por cima do prontuario. Usa a sessao de hoje da agenda ou cria uma avulsa agora; ao encerrar, fica salva com data, tentativas e evolucao.</p></div>' +
+        '<button class="btn btn-primario" onclick="MODULOS.programas.abrirFolhaProntuario(\'' + pacienteId + '\')">&#9654; Iniciar atendimento</button>' +
+        '</div>'
+      : '';
+
+    html += podeE
       ? '<div class="cartao faixa-ambar"><h3>Adicionar programa</h3>' +
         '<p class="sub" style="margin-bottom:10px">Escolha da biblioteca e defina os alvos deste paciente.</p>' +
         '<button class="btn btn-primario" onclick="MODULOS.programas.modalAtribuir(\'' + pacienteId + '\')">+ Programa para o paciente</button></div>'
@@ -171,7 +179,13 @@ window.MODULOS.programas = {
         '</div>';
     });
 
-    return html || '<div class="cartao"><p class="sub">Nenhum programa atribuido.</p></div>';
+    if (!html) html = '<div class="cartao"><p class="sub">Nenhum programa atribuido.</p></div>';
+
+    html += '<div class="cartao"><h3>Atendimentos realizados</h3>' +
+      '<div id="prog-atds"><p class="sub">Carregando...</p></div></div>';
+    setTimeout(() => this.carregarAtendimentos(pacienteId), 0);
+
+    return html;
   },
 
   async modalAtribuir(pacienteId) {
@@ -321,14 +335,99 @@ window.MODULOS.programas = {
 
   // ══════════════════ FOLHA DE APLICACAO (sessao) ══════════════════
 
-  async abrirFolha(sessaoId) {
-    const el = this.el();
+  elFolha() {
+    return document.getElementById('folha-corpo') || this.el();
+  },
+
+  fecharFolha(recarregar) {
+    document.getElementById('folha-overlay')?.remove();
+    this._overlay = false;
+    if (recarregar && this._pacProgPaciente && MODULOS.pacientes.paciente) {
+      MODULOS.pacientes.abrirAba('programas');
+    }
+  },
+
+  async carregarAtendimentos(pacienteId) {
+    const alvo = document.getElementById('prog-atds');
+    if (!alvo) return;
+
+    const { data: ss } = await sb.from('sessoes')
+      .select('id, data, hora_inicio, evolucoes(texto)')
+      .eq('paciente_id', pacienteId).eq('status', 'concluida')
+      .order('data', { ascending: false }).order('hora_inicio', { ascending: false })
+      .limit(8);
+    const lista = ss || [];
+    if (!lista.length) {
+      alvo.innerHTML = '<p class="sub">Nenhum atendimento registrado ainda.</p>';
+      return;
+    }
+
+    const { data: fotos } = await sb.from('alvo_sessao_registros')
+      .select('sessao_id, pct_independencia')
+      .in('sessao_id', lista.map(s => s.id));
+    const porSessao = {};
+    (fotos || []).forEach(r => {
+      (porSessao[r.sessao_id] = porSessao[r.sessao_id] || []).push(r.pct_independencia || 0);
+    });
+
+    alvo.innerHTML = lista.map(s => {
+      const pcts = porSessao[s.id] || [];
+      const media = pcts.length ? Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length) : null;
+      const evo = (s.evolucoes && s.evolucoes[0] && s.evolucoes[0].texto) || '';
+      return '<div class="atd-item">' +
+        '<div class="atd-meta"><b>' + s.data.split('-').reverse().join('/') + '</b> as ' +
+        s.hora_inicio.slice(0, 5) +
+        (pcts.length ? ' &middot; ' + pcts.length + ' alvo(s)' : '') +
+        (media !== null ? ' &middot; <span class="atd-pct">' + media + '% independente</span>' : '') +
+        '</div>' +
+        (evo ? '<p class="sub">' + escaparHtml(evo.length > 140 ? evo.slice(0, 140) + '...' : evo) + '</p>' : '') +
+        '</div>';
+    }).join('');
+  },
+
+  async abrirFolhaProntuario(pacienteId) {
+    const hoje = new Date().toISOString().slice(0, 10);
+
+    // Usa a sessao de hoje da agenda, se existir; senao cria uma avulsa agora
+    const { data: existente } = await sb.from('sessoes')
+      .select('id, status')
+      .eq('paciente_id', pacienteId).eq('data', hoje)
+      .in('status', ['agendada', 'checkin', 'em_atendimento'])
+      .order('hora_inicio').limit(1);
+
+    let sessaoId = existente && existente[0] ? existente[0].id : null;
+    if (!sessaoId) {
+      const agora = new Date().toTimeString().slice(0, 5) + ':00';
+      const { data: nova, error } = await sb.from('sessoes').insert({
+        paciente_id: pacienteId,
+        data: hoje,
+        hora_inicio: agora,
+        aplicador_id: window.CORTEX_SESSAO.user.id,
+        status: 'em_atendimento',
+        criado_por: window.CORTEX_SESSAO.user.id
+      }).select('id').single();
+      if (error) { alert('Nao foi possivel iniciar o atendimento: ' + error.message); return; }
+      sessaoId = nova.id;
+    }
+    this.abrirFolha(sessaoId, true);
+  },
+
+  async abrirFolha(sessaoId, emJanela) {
+    this._overlay = !!emJanela;
+    if (this._overlay && !document.getElementById('folha-overlay')) {
+      const ov = document.createElement('div');
+      ov.id = 'folha-overlay';
+      ov.className = 'folha-overlay';
+      ov.innerHTML = '<div class="folha-pagina" id="folha-corpo"></div>';
+      document.body.appendChild(ov);
+    }
+    const el = this.elFolha();
     el.innerHTML = '<div class="cartao"><p class="sub">Preparando a folha de aplicacao...</p></div>';
 
     const { data: s } = await sb.from('sessoes')
       .select('id, data, hora_inicio, status, paciente_id, pacientes(nome)')
       .eq('id', sessaoId).single();
-    if (!s) { abrirModulo('agenda'); return; }
+    if (!s) { this._overlay ? this.fecharFolha(false) : abrirModulo('agenda'); return; }
 
     const { data: pps } = await sb.from('paciente_programas')
       .select('id, programas(id, nome, area, procedimento), alvos(id, descricao, status, ordem, nivel_dominio)')
@@ -400,8 +499,9 @@ window.MODULOS.programas = {
             '<div class="folha-botoes">' +
             this.RESPOSTAS.map(([v, rotulo]) =>
               '<button type="button" class="btn-resposta' + (v === 'I' ? ' indep' : '') + '" ' +
-              'title="' + rotulo + '" ' +
-              'onclick="MODULOS.programas.registrar(\'' + a.id + '\', \'' + v + '\')">' + v + '</button>').join('') +
+              'onclick="MODULOS.programas.registrar(\'' + a.id + '\', \'' + v + '\')">' +
+              '<span class="br-sigla">' + v + '</span>' +
+              '<span class="br-nome">' + rotulo + '</span></button>').join('') +
             '</div></div>';
         }).join('') +
         '</div>';
@@ -415,14 +515,16 @@ window.MODULOS.programas = {
         '</div></div>';
     }
 
-    this.el().innerHTML =
+    this.elFolha().innerHTML =
       '<div class="pagina-cabecalho">' +
       '  <div>' +
-      '    <button class="btn-voltar" onclick="abrirModulo(\'agenda\')">&larr; Agenda</button>' +
+      (this._overlay
+        ? '<button class="btn-voltar" onclick="MODULOS.programas.fecharFolha(true)">&larr; Voltar ao prontuario</button>'
+        : '<button class="btn-voltar" onclick="abrirModulo(\'agenda\')">&larr; Agenda</button>') +
       '    <h2>Folha de aplicacao &middot; ' + escaparHtml(s.pacientes.nome) + '</h2>' +
       '    <p class="sub">' + new Date(s.data + 'T12:00:00').toLocaleDateString('pt-BR') +
       ' as ' + s.hora_inicio.slice(0, 5) +
-      ' &middot; I = independente; FT/FP/G/Ve/Vi = tipo de ajuda. Cada toque registra uma tentativa.</p>' +
+      ' &middot; A cada apresentacao da tarefa, toque no nivel de suporte que a crianca precisou.</p>' +
       '  </div>' +
       '  <div style="display:flex; gap:8px">' +
       '    <button class="btn btn-fantasma" onclick="MODULOS.programas.desfazer()">Desfazer ultima</button>' +
@@ -442,7 +544,7 @@ window.MODULOS.programas = {
     this._folha.registros.push(data);
     const ct = this.contagem(alvoId);
     const cont = document.getElementById('cont-' + alvoId);
-    if (cont) cont.innerHTML = ct.total + ' tentativa(s) &middot; ' + ct.pct + '% I';
+    if (cont) cont.innerHTML = ct.total + ' tentativa(s) &middot; ' + ct.pct + '% independente';
   },
 
   async desfazer() {
@@ -452,7 +554,7 @@ window.MODULOS.programas = {
     this._folha.registros.pop();
     const ct = this.contagem(ultimo.alvo_id);
     const cont = document.getElementById('cont-' + ultimo.alvo_id);
-    if (cont) cont.innerHTML = ct.total + ' tentativa(s) &middot; ' + ct.pct + '% I';
+    if (cont) cont.innerHTML = ct.total + ' tentativa(s) &middot; ' + ct.pct + '% independente';
   },
 
   // ══════════════════ FECHAMENTO ══════════════════
@@ -569,7 +671,8 @@ window.MODULOS.programas = {
       if (e3) throw new Error(e3.message);
 
       fecharModal();
-      abrirModulo('agenda');
+      if (this._overlay) this.fecharFolha(true);
+      else abrirModulo('agenda');
     } catch (e) {
       erro.textContent = e.message;
       erro.classList.add('visivel');

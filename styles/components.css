@@ -1436,3 +1436,54 @@
     display: inline-flex; align-items: center; justify-content: center;
     padding: 0 5px;
 }
+
+/* ── Folha de aplicacao em janela suspensa + botoes com palavra ───────── */
+.folha-overlay {
+    position: fixed; inset: 0;
+    z-index: 90;
+    background: rgba(21, 13, 32, .5);
+    overflow-y: auto;
+    padding: 26px 16px 40px;
+}
+.folha-pagina {
+    max-width: 880px;
+    margin: 0 auto;
+    background: var(--bg);
+    border-radius: 18px;
+    padding: 20px 22px 26px;
+    box-shadow: 0 24px 70px rgba(21, 13, 32, .35);
+}
+.folha-botoes {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+    gap: 8px;
+    margin-top: 8px;
+}
+.btn-resposta {
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    padding: 10px 6px;
+    border: 1.5px solid var(--line);
+    border-radius: var(--raio-sm);
+    background: var(--surface);
+    cursor: pointer;
+    font: inherit;
+    transition: transform .08s ease, border-color .12s ease;
+}
+.btn-resposta:active { transform: scale(.96); }
+.btn-resposta .br-sigla {
+    font-size: 15px; font-weight: 800;
+    color: var(--ink);
+}
+.btn-resposta .br-nome {
+    font-size: 11px; font-weight: 700;
+    color: var(--ink-muted);
+}
+.btn-resposta.indep { border-color: #059669; }
+.btn-resposta.indep .br-sigla { color: #059669; }
+.btn-resposta:hover { border-color: var(--acao); }
+
+.atd-hero { display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; }
+.atd-item { border-top: 1px dashed var(--line); padding: 9px 0 7px; }
+.atd-item:first-child { border-top: none; padding-top: 2px; }
+.atd-meta { font-size: 12.5px; }
+.atd-pct { font-weight: 800; color: #059669; }

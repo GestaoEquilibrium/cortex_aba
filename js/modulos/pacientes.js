@@ -494,13 +494,16 @@ window.MODULOS.pacientes = {
       erro.textContent = 'Imagem muito grande (max. 8 MB).'; erro.classList.add('visivel'); return;
     }
 
+    // Ajuste da foto (arrastar + zoom) antes de salvar
+    const ajustada = await MODULOS.foto.ajustar(arquivo);
+    if (!ajustada) return; // cancelou o ajuste
+
     botao.disabled = true;
     botao.textContent = 'Enviando...';
     try {
-      const ext = arquivo.type === 'image/png' ? 'png' : 'jpg';
-      const caminho = 'pacientes/' + this.paciente.id + '/foto_' + Date.now() + '.' + ext;
+      const caminho = 'pacientes/' + this.paciente.id + '/foto_' + Date.now() + '.jpg';
       const { error: e1 } = await sb.storage.from('documentos')
-        .upload(caminho, arquivo, { contentType: arquivo.type });
+        .upload(caminho, ajustada, { contentType: 'image/jpeg' });
       if (e1) throw new Error(e1.message);
 
       const { error: e2 } = await sb.from('pacientes')

@@ -1256,3 +1256,29 @@
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     display: block;
 }
+
+/* ── Ajustador de foto ────────────────────────────────────────────────── */
+.foto-visor {
+    position: relative;
+    width: 280px; height: 280px;
+    margin: 0 auto;
+    overflow: hidden;
+    border-radius: 14px;
+    background: #1a1024;
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+}
+.foto-visor:active { cursor: grabbing; }
+.foto-visor img {
+    position: absolute; top: 0; left: 0;
+    transform-origin: top left;
+    pointer-events: none;
+    max-width: none;
+}
+.foto-mascara {
+    position: absolute; inset: 0;
+    border-radius: 50%;
+    box-shadow: 0 0 0 999px rgba(21, 13, 32, .55);
+    pointer-events: none;
+}

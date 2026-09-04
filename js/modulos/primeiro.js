@@ -72,13 +72,16 @@ window.MODULOS.primeiro = {
       return;
     }
 
+    // Ajuste da foto (arrastar + zoom) antes de salvar
+    const ajustada = await MODULOS.foto.ajustar(arquivo);
+    if (!ajustada) { input.value = ''; msg.textContent = 'JPG ou PNG, ate 8 MB.'; return; }
+
     msg.textContent = 'Enviando...';
     const eu = window.CORTEX_SESSAO.user.id;
-    const ext = arquivo.type === 'image/png' ? 'png' : 'jpg';
-    const caminho = 'perfil/' + eu + '/foto_' + Date.now() + '.' + ext;
+    const caminho = 'perfil/' + eu + '/foto_' + Date.now() + '.jpg';
 
     const { error } = await sb.storage.from('documentos')
-      .upload(caminho, arquivo, { contentType: arquivo.type });
+      .upload(caminho, ajustada, { contentType: 'image/jpeg' });
     if (error) {
       msg.textContent = 'Falha no envio: ' + error.message;
       return;

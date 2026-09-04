@@ -229,7 +229,7 @@ window.MODULOS.programas = {
 
   async modalAlvos(ppId) {
     const { data: pp } = await sb.from('paciente_programas')
-      .select('id, status, paciente_id, programas(nome), alvos(id, descricao, status, ordem)')
+      .select('id, status, paciente_id, programas(nome), alvos(id, descricao, status, ordem, nivel_dominio)')
       .eq('id', ppId).single();
     if (!pp) return;
     this._ppAtual = pp;
@@ -243,8 +243,14 @@ window.MODULOS.programas = {
 
     abrirModal('Alvos &middot; ' + escaparHtml(pp.programas.nome),
       alvos.map(a =>
-        '<div class="linha-doc"><div><b>' + escaparHtml(a.descricao) + '</b></div>' +
-        '<div class="pac-selos">' + seloAlvo(a.status) +
+        '<div class="linha-doc"><div><b>' + escaparHtml(a.descricao) + '</b>' +
+        (a.nivel_dominio ? '<small>Dominio: ' + a.nivel_dominio + '/10</small>' : '<small>Dominio: sem registro</small>') +
+        '</div>' +
+        '<div class="pac-selos">' +
+        (a.nivel_dominio ? '<span class="selo selo-roxo">' + a.nivel_dominio + '/10</span>' : '') +
+        '<button class="btn-chip" onclick="MODULOS.programas.historicoAlvo(\'' + a.id + '\', \'' +
+        escaparHtml(a.descricao).replace(/'/g, '') + '\')">Historico</button>' +
+        seloAlvo(a.status) +
         '<select onchange="MODULOS.programas.mudarAlvo(\'' + a.id + '\', this.value)" ' +
         'style="padding:5px 8px; border:1.5px solid var(--line); border-radius:8px; font:inherit; font-size:11px; background:var(--surface); color:var(--ink)">' +
         [['em_aberto', 'Aberto'], ['em_intervencao', 'Intervencao'], ['manutencao', 'Manutencao'], ['dominado', 'Dominado']]
@@ -283,6 +289,29 @@ window.MODULOS.programas = {
     this.modalAlvos(this._ppAtual.id);
   },
 
+  async historicoAlvo(alvoId, descricao) {
+    const { data } = await sb.from('alvo_sessao_registros')
+      .select('tentativas, pct_independencia, nivel_dominio, observacao, sessoes(data, hora_inicio)')
+      .eq('alvo_id', alvoId)
+      .order('criado_em', { ascending: false })
+      .limit(40);
+    const lista = data || [];
+
+    abrirModal('Historico do alvo &middot; ' + escaparHtml(descricao),
+      (lista.length === 0
+        ? '<p class="sub">Ainda sem registros de sessao para este alvo. O retrato e gravado no encerramento de cada sessao.</p>'
+        : lista.map(r =>
+            '<div class="linha-doc" style="align-items:flex-start"><div style="flex:1">' +
+            '<b>' + (r.sessoes ? new Date(r.sessoes.data + 'T12:00:00').toLocaleDateString('pt-BR') : '-') + '</b>' +
+            '<small>' + r.tentativas + ' tentativas &middot; ' + r.pct_independencia + '% I</small>' +
+            (r.observacao
+              ? '<p style="margin-top:5px; font-size:12px; line-height:1.6; white-space:pre-wrap">' +
+                escaparHtml(r.observacao) + '</p>' : '') +
+            '</div>' +
+            '<span class="selo selo-roxo">' + r.nivel_dominio + '/10</span>' +
+            '</div>').join('')), true);
+  },
+
   recarregarAbaProgramas() {
     const alvo = document.getElementById('pac-aba-conteudo');
     if (alvo && this._pacProgPaciente) {
@@ -302,7 +331,7 @@ window.MODULOS.programas = {
     if (!s) { abrirModulo('agenda'); return; }
 
     const { data: pps } = await sb.from('paciente_programas')
-      .select('id, programas(id, nome, area, procedimento), alvos(id, descricao, status, ordem)')
+      .select('id, programas(id, nome, area, procedimento), alvos(id, descricao, status, ordem, nivel_dominio)')
       .eq('paciente_id', s.paciente_id)
       .eq('status', 'em_intervencao');
 
@@ -420,17 +449,31 @@ window.MODULOS.programas = {
       });
     });
 
+    this._fechamento = linhas;
     abrirModal('Encerrar sessao',
       (linhas.length
-        ? '<p class="sub" style="margin-bottom:10px">Resumo dos alvos trabalhados. ' +
-          'Marque os que atingiram criterio para promover a Dominado (a promocao acontece apenas aqui, no fechamento).</p>' +
+        ? '<p class="sub" style="margin-bottom:10px">Para cada alvo trabalhado: nivel de dominio da sessao (1 a 10), ' +
+          'observacao (opcional) e, se atingiu criterio, a promocao a Dominado (que acontece apenas aqui, no fechamento).</p>' +
           linhas.map(l =>
-            '<div class="linha-doc">' +
-            '<div><b>' + escaparHtml(l.alvo.descricao) + '</b>' +
-            '<small>' + escaparHtml(l.programa) + ' &middot; ' + l.ct.total + ' tentativas &middot; ' +
-            l.ct.pct + '% independente</small></div>' +
-            '<label class="check"><input type="checkbox" class="promover" value="' + l.alvo.id + '"' +
-            (l.ct.pct >= 80 ? ' checked' : '') + '> Dominado</label>' +
+            '<div class="fech-alvo" data-alvo="' + l.alvo.id + '">' +
+            '  <div class="folha-alvo-topo">' +
+            '    <b>' + escaparHtml(l.alvo.descricao) + '</b>' +
+            '    <span class="folha-cont">' + escaparHtml(l.programa) + ' &middot; ' +
+                 l.ct.total + ' tentativas &middot; ' + l.ct.pct + '% I</span>' +
+            '  </div>' +
+            '  <div class="fech-linha">' +
+            '    <label class="fech-rotulo">Dominio</label>' +
+            '    <select class="fech-nivel">' +
+                 Array.from({length: 10}, (_, i) => i + 1).map(n =>
+                   '<option value="' + n + '"' +
+                   ((l.alvo.nivel_dominio || Math.max(1, Math.round(l.ct.pct / 10))) === n ? ' selected' : '') +
+                   '>' + n + '</option>').join('') +
+            '    </select><span class="fech-rotulo">/ 10</span>' +
+            '    <label class="check" style="margin-left:auto">' +
+            '      <input type="checkbox" class="promover" value="' + l.alvo.id + '"' +
+                   (l.ct.pct >= 80 ? ' checked' : '') + '> Dominado</label>' +
+            '  </div>' +
+            '  <input class="fech-obs" placeholder="Observacao deste alvo na sessao (opcional)">' +
             '</div>').join('')
         : '<p class="sub">Nenhuma tentativa registrada nesta sessao.</p>') +
       '<div class="campo" style="margin-top:12px"><label>Evolucao diaria *</label>' +
@@ -466,6 +509,32 @@ window.MODULOS.programas = {
         const { error: e1 } = await sb.from('alvos')
           .update({ status: 'dominado' }).in('id', promover);
         if (e1) throw new Error(e1.message);
+      }
+
+      // Retrato de cada alvo trabalhado nesta sessao (nivel 1-10 + observacao)
+      const blocos = Array.from(document.querySelectorAll('.fech-alvo'));
+      if (blocos.length) {
+        const retratos = blocos.map(b => {
+          const alvoId = b.dataset.alvo;
+          const l = (this._fechamento || []).find(x => x.alvo.id === alvoId);
+          return {
+            sessao_id: f.sessao.id,
+            alvo_id: alvoId,
+            tentativas: l ? l.ct.total : 0,
+            pct_independencia: l ? l.ct.pct : 0,
+            nivel_dominio: parseInt(b.querySelector('.fech-nivel').value, 10),
+            observacao: b.querySelector('.fech-obs').value.trim() || null,
+            registrado_por: window.CORTEX_SESSAO.user.id
+          };
+        });
+        const { error: eR } = await sb.from('alvo_sessao_registros')
+          .upsert(retratos, { onConflict: 'sessao_id,alvo_id' });
+        if (eR) throw new Error(eR.message);
+
+        for (const r of retratos) {
+          await sb.from('alvos')
+            .update({ nivel_dominio: r.nivel_dominio }).eq('id', r.alvo_id);
+        }
       }
 
       const { error: e2 } = await sb.from('evolucoes').insert({

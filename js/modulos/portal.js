@@ -8,6 +8,8 @@ window.MODULOS = window.MODULOS || {};
 window.MODULOS.portal = {
 
   async render(el, sessao) {
+    this.el = el;
+    this.sessao = sessao;
     const nome = sessao.profile.nome.split(' ')[0];
 
     el.innerHTML =
@@ -68,6 +70,9 @@ window.MODULOS.portal = {
       let relatorios = '';
       try { relatorios = await MODULOS.relatorios.htmlPortal(p.id, p.nome); } catch (e) {}
 
+      let agenda = '';
+      try { agenda = await this.htmlAgenda(p.id, p.nome); } catch (e) {}
+
       html +=
         '<div class="cartao faixa-azul">' +
         '  <div class="pac-topo" style="margin-bottom:14px">' +
@@ -76,11 +81,77 @@ window.MODULOS.portal = {
         '    <span>' + calcularIdade(p.data_nascimento) + '</span></div>' +
         '  </div>' +
         pendencia +
+        agenda +
         relatorios +
         '</div>';
     }
 
     alvo.innerHTML = html;
+  },
+
+  // ── Proximas sessoes da crianca (com confirmacao no proprio portal) ──
+
+  _tokens: {},
+
+  async htmlAgenda(pacienteId, nomeCrianca) {
+    const hoje = new Date().toISOString().slice(0, 10);
+    const limite = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10);
+
+    const { data } = await sb.from('sessoes')
+      .select('id, data, hora_inicio, status, confirmacao, confirmacao_token')
+      .eq('paciente_id', pacienteId)
+      .gte('data', hoje).lte('data', limite)
+      .in('status', ['agendada', 'checkin', 'em_atendimento'])
+      .order('data').order('hora_inicio')
+      .limit(10);
+    const lista = data || [];
+    if (lista.length === 0) return '';
+
+    const nomeDia = d => {
+      const dt = new Date(d + 'T12:00:00');
+      const dias = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
+      return dias[dt.getDay()] + ' ' + dt.toLocaleDateString('pt-BR').slice(0, 5);
+    };
+
+    return '<div style="margin-top:12px">' +
+      '<b style="font-size:12.5px">Proximas sessoes</b>' +
+      lista.map(s => {
+        this._tokens[s.id] = s.confirmacao_token;
+        const ehHoje = s.data === hoje;
+        let selo, acoes = '';
+        if (s.confirmacao === 'confirmada') {
+          selo = '<span class="selo selo-ok">Confirmada</span>';
+        } else if (s.confirmacao === 'desmarcada') {
+          selo = '<span class="selo selo-neutro">Desmarcada</span>';
+        } else {
+          selo = '<span class="selo selo-warn">Aguardando</span>';
+          acoes =
+            '<button class="btn-chip" onclick="MODULOS.portal.responder(\'' + s.id + '\', \'sim\', this)">Confirmar</button>' +
+            '<button class="btn-chip" onclick="MODULOS.portal.responder(\'' + s.id + '\', \'nao\', this)">Desmarcar</button>';
+        }
+        return '<div class="linha-doc"><div><b>' + nomeDia(s.data) +
+          (ehHoje ? ' (hoje)' : '') + ' &middot; ' + s.hora_inicio.slice(0, 5) + '</b>' +
+          '<small>Sessao de ' + escaparHtml(nomeCrianca.split(' ')[0]) + '</small></div>' +
+          '<div class="pac-selos">' + selo + acoes + '</div></div>';
+      }).join('') +
+      '</div>';
+  },
+
+  async responder(sessaoId, resposta, botao) {
+    if (resposta === 'nao' &&
+        !confirm('Desmarcar esta sessao? A clinica sera avisada.')) return;
+    const token = this._tokens[sessaoId];
+    if (!token) return;
+
+    botao.disabled = true;
+    const { error } = await sb.rpc('responder_confirmacao',
+      { p_token: token, p_resposta: resposta });
+    if (error) {
+      alert('Nao foi possivel registrar: ' + error.message);
+      botao.disabled = false;
+      return;
+    }
+    this.render(this.el, this.sessao || window.CORTEX_SESSAO);
   },
 
   iniciais(nome) {

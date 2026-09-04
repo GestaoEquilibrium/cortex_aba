@@ -22,6 +22,7 @@ const ICONES = {
   presenca:   '<svg ' + SVG_ATTR + '><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8.5 12.5l2.5 2.5 5-5.5"/></svg>',
   faltas:     '<svg ' + SVG_ATTR + '><path d="M12 4 2.8 19.5h18.4z"/><line x1="12" y1="10" x2="12" y2="14"/><circle cx="12" cy="16.8" r=".4"/></svg>',
   rh:         '<svg ' + SVG_ATTR + '><circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19.5c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5"/><circle cx="17" cy="9.5" r="2.4"/><path d="M15.8 14.7c2.6.2 4.2 1.8 4.7 4.3"/></svg>',
+  chat:       '<svg ' + SVG_ATTR + '><path d="M21 11.5a8.5 8.5 0 0 1-12.4 7.5L3 21l2-5.6A8.5 8.5 0 1 1 21 11.5z"/></svg>',
   admin:      '<svg ' + SVG_ATTR + '><circle cx="8.5" cy="12" r="4"/><path d="M12.5 12H21M18 12v3M15.5 12v2"/></svg>'
 };
 
@@ -49,6 +50,7 @@ const NAVEGACAO = [
       { id: 'presenca', rotulo: 'Lista de Presenca',  chave: 'presenca' },
       { id: 'faltas',   rotulo: 'Gestao de Faltas',   chave: 'faltas' },
       { id: 'rh',       rotulo: 'RH',                 chave: 'rh' },
+      { id: 'chat',       rotulo: 'Suporte',            chave: 'chat' },
       { id: 'admin',      rotulo: 'Usuarios e Acessos', perfis: ['direcao','suporte'] },
       { id: 'permissoes', rotulo: 'Permissoes',         perfis: ['suporte'] }
     ]

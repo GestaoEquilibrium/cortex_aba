@@ -69,7 +69,7 @@ window.MODULOS.pei = {
     const [{ data: pac }, { data: resps }, { data: equipe }] = await Promise.all([
       sb.from('pacientes').select('id, nome, data_nascimento, aplicador_id').eq('id', pacienteId).single(),
       sb.from('avaliacao_respostas').select('questao_id, resposta').eq('avaliacao_id', avaliacaoId),
-      sb.from('profiles').select('id, nome').in('perfil', ['aplicador', 'terapeuta']).eq('ativo', true).order('nome')
+      sb.from('profiles').select('id, nome').eq('atende_pacientes', true).eq('ativo', true).order('nome')
     ]);
 
     const mapa = {};

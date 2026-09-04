@@ -34,7 +34,7 @@ window.MODULOS.admin = {
 
   async carregar() {
     const { data } = await sb.from('profiles')
-      .select('id, nome, email, perfil, ativo, criado_em')
+      .select('id, nome, email, perfil, ativo, atende_pacientes, criado_em')
       .order('nome');
     const todos = data || [];
     this.equipe = todos.filter(p => p.perfil !== 'familia');
@@ -60,6 +60,7 @@ window.MODULOS.admin = {
       '<small>' + escaparHtml(p.email || 'e-mail nao registrado') + '</small></div>' +
       '<div class="pac-selos">' +
       '<span class="selo selo-roxo">' + (ROTULOS_PERFIL[p.perfil] || p.perfil) + '</span>' +
+      (p.atende_pacientes ? '<span class="selo selo-ok">Atende</span>' : '') +
       (p.ativo ? '<span class="selo selo-ok">Ativo</span>' : '<span class="selo selo-bad">Inativo</span>') +
       '<button class="btn-chip" onclick="MODULOS.admin.modalUsuario(\'' + p.id + '\')">Gerenciar</button>' +
       '</div></div>';
@@ -91,12 +92,17 @@ window.MODULOS.admin = {
     abrirModal('Novo acesso da equipe',
       '<div class="grade-form">' +
       '  <div class="campo c2"><label>Nome completo *</label><input id="nv-nome"></div>' +
-      '  <div class="campo"><label>Perfil *</label><select id="nv-perfil">' +
+      '  <div class="campo"><label>Perfil *</label><select id="nv-perfil" ' +
+      'onchange="document.getElementById(\'nv-atende\').checked = MODULOS.admin.perfilAtendePadrao(this.value)">' +
       this.PERFIS_EQUIPE.map(p =>
         '<option value="' + p + '">' + (ROTULOS_PERFIL[p] || p) + '</option>').join('') +
       '  </select></div>' +
       '  <div class="campo c3"><label>E-mail (login) *</label>' +
       '    <input type="email" id="nv-email" placeholder="nome@equilibrium.com.br"></div>' +
+      '  <div class="campo c3"><label class="check">' +
+      '    <input type="checkbox" id="nv-atende"> Atende pacientes ' +
+      '    <small style="font-weight:600; color:var(--ink-muted)">(aparece nas listas de profissional da agenda, prontuario, PEI e plano)</small>' +
+      '  </label></div>' +
       '</div>' +
       '<p class="sub">A senha e gerada automaticamente e exibida uma unica vez apos a criacao.</p>' +
       '<div class="mensagem-erro" id="nv-erro"></div>' +
@@ -155,10 +161,15 @@ window.MODULOS.admin = {
     return s;
   },
 
+  perfilAtendePadrao(perfil) {
+    return perfil === 'aplicador' || perfil === 'terapeuta';
+  },
+
   async criarAcesso() {
     const nome = document.getElementById('nv-nome').value.trim();
     const email = document.getElementById('nv-email').value.trim().toLowerCase();
     const perfil = document.getElementById('nv-perfil').value;
+    const atende = document.getElementById('nv-atende').checked;
     const erro = document.getElementById('nv-erro');
     const botao = document.getElementById('nv-salvar');
     erro.classList.remove('visivel');
@@ -185,6 +196,10 @@ window.MODULOS.admin = {
       });
       const corpo = await resp.json();
       if (!resp.ok) throw new Error(corpo.erro || 'Falha ao criar o acesso.');
+
+      if (atende && corpo.usuario_id) {
+        await sb.from('profiles').update({ atende_pacientes: true }).eq('id', corpo.usuario_id);
+      }
 
       this._cred = { nome: nome, email: email, senha: senha, perfil: perfil };
       abrirModal('&#127881; Acesso criado',
@@ -224,6 +239,12 @@ window.MODULOS.admin = {
             (ROTULOS_PERFIL[x] || x) + '</option>').join('') +
           '</select></div>'
         : '') +
+      (!ehFamilia && !eu
+        ? '<div class="campo"><label class="check">' +
+          '<input type="checkbox" id="ger-atende"' + (p.atende_pacientes ? ' checked' : '') + '> Atende pacientes ' +
+          '<small style="font-weight:600; color:var(--ink-muted)">(listas de profissional da agenda, prontuario, PEI e plano)</small>' +
+          '</label></div>'
+        : '') +
       (eu ? '<p class="sub">Voce nao pode mudar o proprio perfil nem se inativar.</p>' : '') +
 
       '<div class="mensagem-erro" id="ger-erro"></div>' +
@@ -243,8 +264,10 @@ window.MODULOS.admin = {
 
   async salvarPerfil(id) {
     const novo = document.getElementById('ger-perfil').value;
+    const atende = document.getElementById('ger-atende')?.checked || false;
     const erro = document.getElementById('ger-erro');
-    const { error } = await sb.from('profiles').update({ perfil: novo }).eq('id', id);
+    const { error } = await sb.from('profiles')
+      .update({ perfil: novo, atende_pacientes: atende }).eq('id', id);
     if (error) {
       erro.textContent = error.message;
       erro.classList.add('visivel');

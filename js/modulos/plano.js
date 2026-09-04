@@ -77,7 +77,7 @@ window.MODULOS.plano = {
 
     const [{ data: pac }, { data: equipe }, { data: enc }] = await Promise.all([
       sb.from('pacientes').select('id, nome, data_nascimento, nivel, convenio, aplicador_id').eq('id', pacienteId).single(),
-      sb.from('profiles').select('id, nome, perfil').in('perfil', ['terapeuta', 'aplicador', 'coordenador']).eq('ativo', true).order('nome'),
+      sb.from('profiles').select('id, nome, perfil').eq('atende_pacientes', true).eq('ativo', true).order('nome'),
       sb.from('encaminhamentos').select('sessoes_semanais').eq('paciente_id', pacienteId)
         .order('criado_em', { ascending: false }).limit(1)
     ]);

@@ -477,7 +477,7 @@ window.MODULOS.pacientes = {
     const { data: equipe, error } = await sb
       .from('profiles')
       .select('id, nome, perfil')
-      .in('perfil', ['aplicador', 'terapeuta'])
+      .eq('atende_pacientes', true)
       .eq('ativo', true)
       .order('nome');
 

@@ -43,7 +43,7 @@ window.MODULOS.agenda = {
         .select('*, pacientes(id, nome, nivel), profissional:profiles!grade_horarios_aplicador_id_fkey(id, nome), salas(id, nome)')
         .eq('ativo', true).order('hora_inicio'),
       sb.from('pacientes').select('id, nome, nivel, aplicador_id').neq('status', 'encerrado').order('nome'),
-      sb.from('profiles').select('id, nome, perfil').in('perfil', ['aplicador', 'terapeuta']).eq('ativo', true).order('nome'),
+      sb.from('profiles').select('id, nome, perfil').eq('atende_pacientes', true).eq('ativo', true).order('nome'),
       sb.from('salas').select('*').order('nome')
     ]);
     this.grade = g.data || [];

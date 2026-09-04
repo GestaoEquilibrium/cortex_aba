@@ -50,12 +50,18 @@ window.MODULOS.pacientes = {
       '</div>' +
       '<div id="pac-lista"></div>';
 
-    const { data, error } = await sb
+    // Aplicador e terapeuta enxergam apenas os pacientes designados a eles
+    const soMeus = ['aplicador', 'terapeuta'].includes(this.sessao.profile.perfil);
+
+    let consulta = sb
       .from('pacientes')
-      .select('id, nome, data_nascimento, nivel, status, convenio, foto_path, ' +
+      .select('id, nome, data_nascimento, nivel, status, convenio, aplicador_id, foto_path, ' +
               'aplicador:profiles!pacientes_aplicador_id_fkey(nome), ' +
               'responsaveis(nome, telefone, principal)')
       .order('nome');
+    if (soMeus) consulta = consulta.eq('aplicador_id', this.sessao.user.id);
+
+    const { data, error } = await consulta;
 
     if (error) {
       document.getElementById('pac-lista').innerHTML =
@@ -135,7 +141,9 @@ window.MODULOS.pacientes = {
       (!status || p.status === status));
 
     document.getElementById('pac-contagem').textContent =
-      filtrados.length + ' de ' + this.dados.length + ' paciente(s)';
+      (['aplicador', 'terapeuta'].includes(this.sessao.profile.perfil)
+        ? filtrados.length + ' paciente(s) designado(s) a voce'
+        : filtrados.length + ' de ' + this.dados.length + ' paciente(s)');
 
     const alvo = document.getElementById('pac-lista');
 
@@ -273,6 +281,21 @@ window.MODULOS.pacientes = {
   paciente: null,
 
   async telaDetalhe(id, abaInicial) {
+    if (['aplicador', 'terapeuta'].includes(this.sessao.profile.perfil)) {
+      const { data: dono } = await sb.from('pacientes')
+        .select('aplicador_id').eq('id', id).single();
+      if (dono && dono.aplicador_id !== this.sessao.user.id) {
+        this.el.innerHTML = '<div class="cartao"><div class="vazio">' +
+          '<div class="simbolo-vazio">&#128274;</div>' +
+          '<strong>Paciente de outro profissional</strong>' +
+          'Este prontuario pertence a carteira de outro colega. ' +
+          'Se voce assumiu o caso, peca a coordenacao para atualizar a designacao.' +
+          '</div><div class="barra-acoes"><button class="btn btn-fantasma" ' +
+          'onclick="MODULOS.pacientes.telaLista()">&larr; Voltar aos meus pacientes</button></div></div>';
+        return;
+      }
+    }
+
     const { data: p, error } = await sb
       .from('pacientes')
       .select('*, responsaveis(*), encaminhamentos(id, medico, sessoes_semanais, arquivo_path, criado_em), aplicador:profiles!pacientes_aplicador_id_fkey(id, nome, perfil)')

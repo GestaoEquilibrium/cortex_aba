@@ -135,57 +135,94 @@ window.MODULOS.programas = {
       .select('id, status, programas(id, nome, area, criterio_avanco), alvos(id, descricao, status, ordem)')
       .eq('paciente_id', pacienteId)
       .order('criado_em');
-    const lista = data || [];
+    this._progLista = data || [];
+    const lista = this._progLista;
 
-    const grupos = {
-      em_intervencao: ['Em intervencao', 'faixa-roxo'],
-      na_fila: ['Na fila', 'faixa-azul'],
-      dominado: ['Dominados', 'faixa-verde']
-    };
+    const nInt = lista.filter(p => p.status === 'em_intervencao').length;
+    const nFila = lista.filter(p => p.status === 'na_fila').length;
+    const nDom = lista.filter(p => p.status === 'dominado').length;
 
-    let html = perm('evolucao') === 'E'
-      ? '<div class="cartao faixa-verde atd-hero">' +
-        '<div><h3>Atendimento de hoje</h3>' +
-        '<p class="sub">Abre a folha de aplicacao por cima do prontuario. Usa a sessao de hoje da agenda ou cria uma avulsa agora; ao encerrar, fica salva com data, tentativas e evolucao.</p></div>' +
-        '<button class="btn btn-primario" onclick="MODULOS.programas.abrirFolhaProntuario(\'' + pacienteId + '\')">&#9654; Iniciar atendimento</button>' +
-        '</div>'
-      : '';
+    // Barra de acoes compacta
+    let html = '<div class="aba-acoes">';
+    if (perm('evolucao') === 'E') {
+      html += '<button class="btn btn-primario" title="Abre a folha de aplicacao por cima do prontuario. Usa a sessao de hoje ou cria uma avulsa; ao encerrar fica salva com data e detalhes." ' +
+        'onclick="MODULOS.programas.abrirFolhaProntuario(\'' + pacienteId + '\')">&#9654; Iniciar atendimento</button>';
+    }
+    if (podeE) {
+      html += '<button class="btn btn-fantasma" title="Escolha um programa da biblioteca e defina os alvos deste paciente." ' +
+        'onclick="MODULOS.programas.modalAtribuir(\'' + pacienteId + '\')">+ Adicionar programa</button>';
+    }
 
-    html += podeE
-      ? '<div class="cartao faixa-ambar"><h3>Adicionar programa</h3>' +
-        '<p class="sub" style="margin-bottom:10px">Escolha da biblioteca e defina os alvos deste paciente.</p>' +
-        '<button class="btn btn-primario" onclick="MODULOS.programas.modalAtribuir(\'' + pacienteId + '\')">+ Programa para o paciente</button></div>'
-      : '';
+    // Filtros interativos
+    this._progFiltro = this._progFiltro || 'em_intervencao';
+    const filtros = [
+      ['em_intervencao', 'Em intervencao', nInt],
+      ['na_fila', 'Na fila', nFila],
+      ['dominado', 'Dominados', nDom]
+    ];
+    html += '<div class="filtro-chips">' + filtros.map(([v, r, n]) =>
+      '<button class="fchip' + (this._progFiltro === v ? ' ativo' : '') + '" ' +
+      'onclick="MODULOS.programas.filtrarProg(\'' + v + '\')">' + r +
+      ' <span class="fchip-n">' + n + '</span></button>').join('') + '</div>';
+    html += '</div>';
 
-    Object.entries(grupos).forEach(([status, [rotulo, faixa]]) => {
-      const doGrupo = lista.filter(pp => pp.status === status);
-      if (doGrupo.length === 0 && status !== 'em_intervencao') return;
-      html += '<div class="cartao ' + faixa + '"><h3>' + rotulo +
-        ' <span class="selo selo-neutro">' + doGrupo.length + '</span></h3>' +
-        (doGrupo.length === 0 ? '<p class="sub">Nenhum programa aqui.</p>' :
-        doGrupo.map(pp => {
-          const alvos = (pp.alvos || []).sort((a, b) => a.ordem - b.ordem);
-          const emInt = alvos.filter(a => a.status === 'em_intervencao').length;
-          const dom = alvos.filter(a => a.status === 'dominado').length;
-          return '<div class="linha-doc"><div><b>' + escaparHtml(pp.programas.nome) + '</b>' +
-            '<small>' + escaparHtml(pp.programas.area) + ' &middot; ' +
-            alvos.length + ' alvo(s): ' + emInt + ' em intervencao, ' + dom + ' dominado(s)' +
-            (pp.programas.criterio_avanco ? ' &middot; ' + escaparHtml(pp.programas.criterio_avanco) : '') +
-            '</small></div>' +
-            '<div class="pac-selos">' +
-            (podeE ? '<button class="btn-chip" onclick="MODULOS.programas.modalAlvos(\'' + pp.id + '\')">Alvos</button>' : '') +
-            '</div></div>';
-        }).join('')) +
-        '</div>';
-    });
-
-    if (!html) html = '<div class="cartao"><p class="sub">Nenhum programa atribuido.</p></div>';
+    html += '<div id="prog-grade">' + this.gradeProgramas() + '</div>';
 
     html += '<div class="cartao"><h3>Atendimentos realizados</h3>' +
       '<div id="prog-atds"><p class="sub">Carregando...</p></div></div>';
     setTimeout(() => this.carregarAtendimentos(pacienteId), 0);
 
     return html;
+  },
+
+  CORES_AREA: {
+    'Mando': '#0EA5E9', 'Tato': '#8B5CF6', 'Ecoico': '#EC4899',
+    'Imitacao': '#F59E0B', 'Ouvinte': '#10B981', 'Brincar': '#F97316',
+    'Habilidades Sociais': '#6366F1', 'AVD': '#14B8A6',
+    'Coordenacao Motora': '#84CC16', 'Academico': '#7C3AED', 'Outros': '#64748B'
+  },
+
+  filtrarProg(status) {
+    this._progFiltro = status;
+    document.querySelectorAll('.filtro-chips .fchip').forEach(b =>
+      b.classList.toggle('ativo', b.textContent.trim().startsWith({
+        em_intervencao: 'Em intervencao', na_fila: 'Na fila', dominado: 'Dominados'
+      }[status])));
+    const alvo = document.getElementById('prog-grade');
+    if (alvo) alvo.innerHTML = this.gradeProgramas();
+  },
+
+  gradeProgramas() {
+    const podeE = perm('programas') === 'E';
+    const doGrupo = (this._progLista || []).filter(pp => pp.status === this._progFiltro);
+
+    if (!doGrupo.length) {
+      const vazio = {
+        em_intervencao: 'Nenhum programa em intervencao. Adicione da biblioteca ou promova um da fila.',
+        na_fila: 'Nenhum programa aguardando na fila.',
+        dominado: 'Nenhum programa dominado ainda - eles chegam aqui conforme a crianca evolui.'
+      }[this._progFiltro];
+      return '<div class="cartao"><p class="sub">' + vazio + '</p></div>';
+    }
+
+    return '<div class="prog-grade">' + doGrupo.map(pp => {
+      const alvos = (pp.alvos || []).sort((a, b) => a.ordem - b.ordem);
+      const dom = alvos.filter(a => a.status === 'dominado').length;
+      const pct = alvos.length ? Math.round(dom * 100 / alvos.length) : 0;
+      const cor = this.CORES_AREA[pp.programas.area] || '#64748B';
+
+      return '<div class="prog-cartao clicavel" onclick="MODULOS.programas.modalAlvos(\'' + pp.id + '\')">' +
+        '<div class="prog-cab">' +
+        '  <span class="area-chip" style="background:' + cor + '1A; color:' + cor + '">' +
+             escaparHtml(pp.programas.area) + '</span>' +
+        (podeE ? '<button class="btn-chip" onclick="event.stopPropagation(); MODULOS.programas.modalAlvos(\'' + pp.id + '\')">Alvos</button>' : '') +
+        '</div>' +
+        '<b class="prog-nome">' + escaparHtml(pp.programas.nome) + '</b>' +
+        '<div class="prog-progresso"><div class="prog-preench" style="width:' + pct + '%; background:' + cor + '"></div></div>' +
+        '<small class="prog-meta">' + dom + ' de ' + alvos.length + ' alvo(s) dominado(s)' +
+        (alvos.length ? ' &middot; ' + pct + '%' : '') + '</small>' +
+        '</div>';
+    }).join('') + '</div>';
   },
 
   async modalAtribuir(pacienteId) {

@@ -36,6 +36,10 @@ window.MODULOS.pacientes = {
       '<div class="toolbar">' +
       '  <input type="search" id="pac-busca" placeholder="Buscar por paciente ou responsavel..." ' +
       '         oninput="MODULOS.pacientes.filtrar()">' +
+      '  <div class="toggle-visao" id="pac-visao">' +
+      '    <button type="button" data-modo="simples" onclick="MODULOS.pacientes.mudarModo(\'simples\')">Simples</button>' +
+      '    <button type="button" data-modo="detalhada" onclick="MODULOS.pacientes.mudarModo(\'detalhada\')">Detalhada</button>' +
+      '  </div>' +
       '  <select id="pac-status" onchange="MODULOS.pacientes.filtrar()">' +
       '    <option value="">Todos os status</option>' +
       '    <option value="triagem">Triagem</option>' +
@@ -147,11 +151,16 @@ window.MODULOS.pacientes = {
       return;
     }
 
+    const modo = this.modoVisao();
+    document.querySelectorAll('#pac-visao button').forEach(b =>
+      b.classList.toggle('ativo', b.dataset.modo === modo));
+
     const diasSem = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
     const infoItem = (rotulo, valor) =>
       '<div class="pac-info"><small>' + rotulo + '</small><span>' + valor + '</span></div>';
 
-    alvo.innerHTML = '<div class="grade-pacientes">' + filtrados.map(p => {
+    alvo.innerHTML = '<div class="grade-pacientes' + (modo === 'simples' ? ' simples' : '') + '">' +
+      filtrados.map(p => {
       const foto = p._fotoUrl
         ? '<div class="avatar-paciente"><img src="' + p._fotoUrl + '" alt=""></div>'
         : '<div class="avatar-paciente">' + escaparHtml(this.iniciais(p.nome)) + '</div>';
@@ -163,16 +172,26 @@ window.MODULOS.pacientes = {
           d.toLocaleDateString('pt-BR').slice(0, 5) + ' ' + p._proxima.hora_inicio.slice(0, 5);
       }
 
-      return '<div class="cartao cartao-paciente" onclick="MODULOS.pacientes.telaDetalhe(\'' + p.id + '\')">' +
+      const topo =
         '  <div class="pac-topo">' +
         foto +
         '    <div class="pac-quem">' +
         '      <strong>' + escaparHtml(p.nome) + '</strong>' +
-        '      <span>' + calcularIdade(p.data_nascimento) + '</span>' +
+        '      <span>' + calcularIdade(p.data_nascimento) +
+        (modo === 'simples' && p._resp ? ' &middot; Resp.: ' + escaparHtml(p._resp.split(' ')[0]) : '') +
+        '</span>' +
         '    </div>' +
         '    <div class="pac-selos" style="margin-left:auto">' +
              this.seloNivel(p.nivel) + this.seloStatus(p.status) + '</div>' +
-        '  </div>' +
+        '  </div>';
+
+      if (modo === 'simples') {
+        return '<div class="cartao cartao-paciente" onclick="MODULOS.pacientes.telaDetalhe(\'' + p.id + '\')">' +
+          topo + '</div>';
+      }
+
+      return '<div class="cartao cartao-paciente" onclick="MODULOS.pacientes.telaDetalhe(\'' + p.id + '\')">' +
+        topo +
         '  <div class="pac-infos">' +
         infoItem('Responsavel', p._respObj
           ? escaparHtml(p._respObj.nome.split(' ')[0]) +
@@ -185,6 +204,16 @@ window.MODULOS.pacientes = {
         this.barraJornada(p) +
         '</div>';
     }).join('') + '</div>';
+  },
+
+  modoVisao() {
+    try { return localStorage.getItem('cortex_pac_visao') || 'detalhada'; }
+    catch (e) { return 'detalhada'; }
+  },
+
+  mudarModo(modo) {
+    try { localStorage.setItem('cortex_pac_visao', modo); } catch (e) {}
+    this.filtrar();
   },
 
   barraJornada(p) {

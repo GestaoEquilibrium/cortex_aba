@@ -30,6 +30,8 @@ window.MODULOS.permissoes = {
       dica: 'V: visualiza. E: check-in, iniciar, finalizar, falta e WhatsApp.' },
     { chave: 'agenda_grade', rotulo: 'Grade fixa e salas',
       dica: 'E: cria/edita horarios recorrentes e salas.' },
+    { chave: 'auditoria', rotulo: 'Auditoria',
+      dica: 'V: consulta a trilha de tudo que foi feito no sistema.' },
     { chave: 'chat', rotulo: 'Chat de Suporte',
       dica: 'E: fala com o suporte tecnico pelo sistema.' },
     { chave: 'rh', rotulo: 'RH (pasta funcional)',

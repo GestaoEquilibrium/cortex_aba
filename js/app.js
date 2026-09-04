@@ -95,6 +95,12 @@ async function iniciarApp() {
 
   montarSidebar(profile.perfil);
 
+  // Chat: bolinha de nao-lidas na sidebar + mini-chat flutuante
+  if ((perm('chat') !== '' || profile.perfil_real === 'suporte')
+      && window.MODULOS && MODULOS.chat) {
+    try { MODULOS.chat.iniciarFlutuante(); } catch (e) {}
+  }
+
   try {
     if (localStorage.getItem('cortex_sidebar') === 'recolhida') {
       document.getElementById('shell').classList.add('recolhida');

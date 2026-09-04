@@ -318,7 +318,7 @@ window.MODULOS.avaliacoes = {
       (av.status === 'concluida' && perm('pei') === 'E'
         ? '<div class="barra-acoes nao-imprime" style="margin-top:14px">' +
           '<button class="btn btn-fantasma" onclick="MODULOS.pei.abrirDevolutiva(\'' + av.id + '\')">Relatorio de devolutiva</button>' +
-          '<button class="btn btn-primario" onclick="MODULOS.pei.abrirConstrutor(\'' + av.id + '\', \'' + av.paciente_id + '\')">Gerar PEI</button>' +
+          '<span class="sub">O PEI e elaborado na aba PEI do prontuario do paciente.</span>' +
           '</div>'
         : '') +
       '</div>';

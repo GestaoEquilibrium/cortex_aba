@@ -31,13 +31,17 @@ window.MODULOS.pei = {
 
     let html = '';
     if (this.podeGerir()) {
-      html += '<div class="cartao faixa-ambar"><h3>Novo PEI</h3>' +
+      html += '<div class="aba-acoes">' +
         (temAvaliacao
-          ? '<p class="sub" style="margin-bottom:10px">Gera as metas candidatas a partir dos "Nao" da ultima avaliacao QADI-R concluida (' +
-            new Date(avs[0].concluido_em).toLocaleDateString('pt-BR') + ').</p>' +
-            '<button class="btn btn-primario" onclick="MODULOS.pei.abrirConstrutor(\'' +
-            avs[0].id + '\', \'' + pacienteId + '\')">Gerar PEI a partir do QADI-R</button>'
-          : '<p class="sub">Conclua uma avaliacao QADI-R para gerar o PEI.</p>') +
+          ? '<button class="btn btn-primario" ' +
+            'title="Gera as metas candidatas a partir dos Nao da ultima avaliacao QADI-R concluida (' +
+            new Date(avs[0].concluido_em).toLocaleDateString('pt-BR') + ')." ' +
+            'onclick="MODULOS.pei.abrirConstrutor(\'' + avs[0].id + '\', \'' + pacienteId + '\')">+ Elaborar PEI</button>' +
+            '<span class="sub">A partir da avaliacao de ' +
+            new Date(avs[0].concluido_em).toLocaleDateString('pt-BR') + '</span>'
+          : '<button class="btn btn-primario" disabled ' +
+            'title="E preciso uma avaliacao QADI-R concluida para elaborar o PEI.">+ Elaborar PEI</button>' +
+            '<span class="sub">Conclua uma avaliacao QADI-R na aba Avaliacao para liberar.</span>') +
         '</div>';
     }
 

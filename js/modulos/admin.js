@@ -244,6 +244,9 @@ window.MODULOS.admin = {
       const corpo = await resp.json();
       if (!resp.ok) throw new Error(corpo.erro || 'Falha ao redefinir.');
 
+      // Forca a troca (e conferencia da foto) no proximo login
+      await sb.from('profiles').update({ primeiro_acesso: true }).eq('id', id);
+
       abrirModal('Nova senha de ' + escaparHtml(nome),
         '<div class="grade-info"><div><small>Senha temporaria</small><b style="font-size:16px">' +
         escaparHtml(senha) + '</b></div></div>' +

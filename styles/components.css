@@ -1141,3 +1141,27 @@
 .aud-antes { background: rgba(220, 38, 38, .08); color: var(--ink); text-decoration: line-through; }
 .aud-depois { background: rgba(22, 163, 74, .10); color: var(--ink); }
 .aud-seta { text-align: center; color: var(--ink-soft); font-size: 12px; margin: 2px 0; }
+
+/* ── Primeiro acesso (bloqueante) ─────────────────────────────────────── */
+.primeiro-overlay {
+    position: fixed; inset: 0;
+    background: rgba(21, 13, 32, .78);
+    backdrop-filter: blur(4px);
+    z-index: 1200;
+    display: flex; align-items: center; justify-content: center;
+    padding: 18px;
+}
+.primeiro-caixa {
+    width: 520px; max-width: 100%;
+    max-height: 92vh; overflow-y: auto;
+    background: var(--surface);
+    border-radius: var(--raio, 16px);
+    box-shadow: var(--shadow-lg, 0 18px 44px rgba(0,0,0,.3));
+    padding: 24px;
+}
+.primeiro-passo {
+    padding: 13px 0;
+    border-bottom: 1px dashed var(--line);
+}
+.primeiro-passo:last-of-type { border-bottom: none; }
+.primeiro-passo > b { font-size: 13px; }

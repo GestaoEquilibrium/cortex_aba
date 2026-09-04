@@ -62,7 +62,7 @@ async function exigirSessao() {
 
   const { data: profile, error } = await sb
     .from('profiles')
-    .select('id, nome, perfil, ativo')
+    .select('id, nome, perfil, ativo, foto_path, primeiro_acesso')
     .eq('id', session.user.id)
     .single();
 

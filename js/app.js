@@ -99,6 +99,21 @@ async function iniciarApp() {
 
   montarSidebar(profile.perfil);
 
+  // Primeiro acesso: foto + troca de senha obrigatorias (bloqueante)
+  if (window.MODULOS && MODULOS.primeiro && MODULOS.primeiro.precisa(profile)) {
+    MODULOS.primeiro.abrir(profile);
+  }
+
+  // Avatar com foto (quando houver)
+  if (profile.foto_path) {
+    sb.storage.from('documentos').createSignedUrl(profile.foto_path, 3600)
+      .then(({ data }) => {
+        if (data) document.getElementById('avatar').innerHTML =
+          '<img src="' + data.signedUrl +
+          '" style="width:100%; height:100%; object-fit:cover; border-radius:inherit">';
+      });
+  }
+
   // Chat: bolinha de nao-lidas na sidebar + mini-chat flutuante
   if ((perm('chat') !== '' || profile.perfil_real === 'suporte')
       && window.MODULOS && MODULOS.chat) {

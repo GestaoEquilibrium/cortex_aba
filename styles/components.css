@@ -1378,3 +1378,21 @@
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
 }
 .grade-pacientes.simples .pac-topo { margin-bottom: 0; }
+
+/* ── Selecao manual de nivel de intervencao ───────────────────────────── */
+.nivel-opcoes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.nivel-opcao {
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    padding: 14px 10px;
+    border: 1.5px solid var(--line); border-radius: var(--raio-sm);
+    cursor: pointer; text-align: center;
+    background: var(--surface);
+}
+.nivel-opcao b { font-size: 15px; }
+.nivel-opcao small { color: var(--ink-muted); font-size: 11.5px; font-weight: 600; }
+.nivel-opcao:has(input:checked) {
+    border-color: var(--acao);
+    background: var(--acao-soft);
+    box-shadow: 0 0 0 3px var(--acao-soft);
+}
+.nivel-opcao input { position: absolute; opacity: 0; }

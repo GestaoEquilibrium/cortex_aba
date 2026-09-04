@@ -320,6 +320,10 @@ window.MODULOS.pacientes = {
         ? '<button class="btn-chip" onclick="MODULOS.pacientes.modalAplicador()">&#128100; ' +
           (p.aplicador ? 'Alterar profissional' : 'Designar profissional') + '</button>'
         : '') +
+      (['coordenador', 'suporte'].includes(this.sessao.profile.perfil)
+        ? '<button class="btn-chip" onclick="MODULOS.pacientes.modalNivel()">&#127919; ' +
+          (p.nivel ? 'Alterar nivel de intervencao' : 'Selecionar nivel de intervencao') + '</button>'
+        : '') +
       '        <button class="btn-chip" onclick="MODULOS.pacientes.abrirAba(\'documentos\')">&#128196; Documentos</button>' +
       '      </div>' +
       '    </div>' +
@@ -538,6 +542,64 @@ window.MODULOS.pacientes = {
       botao.disabled = false;
       botao.textContent = 'Salvar';
     }
+  },
+
+  modalNivel() {
+    const p = this.paciente;
+    abrirModal('Nivel de intervencao de ' + escaparHtml(p.nome),
+      '<div id="nivel-etapa1">' +
+      '  <p style="margin-bottom:6px"><b>Tem certeza que deseja definir o nivel manualmente?</b></p>' +
+      '  <p class="sub" style="margin-bottom:14px">O caminho padrao e a Anamnese Global calcular o nivel ' +
+      '  automaticamente. A definicao manual e indicada para pacientes antigos, importados do sistema ' +
+      '  anterior, cuja anamnese ainda nao foi preenchida no CORTEX.' +
+      (p.nivel ? '<br><br>Nivel atual: <b>' + (p.nivel === 'aba1' ? 'ABA 1' : 'ABA 2') + '</b>.' : '') + '</p>' +
+      '  <div class="barra-acoes">' +
+      '    <button class="btn btn-fantasma" onclick="fecharModal()">Cancelar</button>' +
+      '    <button class="btn btn-primario" ' +
+      '      onclick="document.getElementById(\'nivel-etapa1\').hidden = true; ' +
+      '               document.getElementById(\'nivel-etapa2\').hidden = false">Sim, continuar</button>' +
+      '  </div>' +
+      '</div>' +
+
+      '<div id="nivel-etapa2" hidden>' +
+      '  <p class="sub" style="margin-bottom:12px">Escolha o nivel de intervencao:</p>' +
+      '  <div class="nivel-opcoes">' +
+      '    <label class="nivel-opcao"><input type="radio" name="nivel-op" value="aba1"' +
+             (p.nivel === 'aba1' ? ' checked' : '') + '>' +
+      '      <b>ABA 1</b><small>Intervencao intensiva</small></label>' +
+      '    <label class="nivel-opcao"><input type="radio" name="nivel-op" value="aba2"' +
+             (p.nivel === 'aba2' ? ' checked' : '') + '>' +
+      '      <b>ABA 2</b><small>Intervencao moderada</small></label>' +
+      '  </div>' +
+      '  <div class="mensagem-erro" id="nivel-erro"></div>' +
+      '  <div class="barra-acoes">' +
+      '    <button class="btn btn-fantasma" onclick="fecharModal()">Cancelar</button>' +
+      '    <button class="btn btn-primario" id="nivel-salvar" ' +
+      '      onclick="MODULOS.pacientes.salvarNivel()">Definir nivel</button>' +
+      '  </div>' +
+      '</div>');
+  },
+
+  async salvarNivel() {
+    const op = document.querySelector('input[name="nivel-op"]:checked');
+    const erro = document.getElementById('nivel-erro');
+    erro.classList.remove('visivel');
+    if (!op) { erro.textContent = 'Escolha ABA 1 ou ABA 2.'; erro.classList.add('visivel'); return; }
+
+    const botao = document.getElementById('nivel-salvar');
+    botao.disabled = true;
+    botao.textContent = 'Salvando...';
+    const { error } = await sb.from('pacientes')
+      .update({ nivel: op.value }).eq('id', this.paciente.id);
+    if (error) {
+      erro.textContent = error.message;
+      erro.classList.add('visivel');
+      botao.disabled = false;
+      botao.textContent = 'Definir nivel';
+      return;
+    }
+    fecharModal();
+    this.telaDetalhe(this.paciente.id);
   },
 
   modalFoto() {

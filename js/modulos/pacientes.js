@@ -82,6 +82,28 @@ window.MODULOS.pacientes = {
       } catch (e) {}
     }
 
+    // Jornada clinica em lote (5 consultas para a lista inteira)
+    try {
+      const ids = this.dados.map(p => p.id);
+      if (ids.length) {
+        const [an, pl, av, pei, prog] = await Promise.all([
+          sb.from('anamneses').select('paciente_id').in('paciente_id', ids).eq('status', 'concluida'),
+          sb.from('planos_terapeuticos').select('paciente_id').in('paciente_id', ids).eq('status', 'ativo'),
+          sb.from('avaliacoes').select('paciente_id').in('paciente_id', ids).eq('status', 'concluida'),
+          sb.from('peis').select('paciente_id').in('paciente_id', ids),
+          sb.from('paciente_programas').select('paciente_id').in('paciente_id', ids)
+        ]);
+        const setDe = r => new Set((r.data || []).map(x => x.paciente_id));
+        const sAn = setDe(an), sPl = setDe(pl), sAv = setDe(av), sPei = setDe(pei), sProg = setDe(prog);
+        this.dados.forEach(p => {
+          p._jornada = {
+            anamnese: sAn.has(p.id), plano: sPl.has(p.id), avaliacao: sAv.has(p.id),
+            pei: sPei.has(p.id), intervencao: sProg.has(p.id)
+          };
+        });
+      }
+    } catch (e) {}
+
     // Proxima sessao de cada um (uma consulta so)
     try {
       const hoje = new Date().toISOString().slice(0, 10);
@@ -160,8 +182,26 @@ window.MODULOS.pacientes = {
         infoItem('Profissional', p.aplicador ? escaparHtml(p.aplicador.nome.split(' ')[0]) : '&mdash;') +
         infoItem('Proxima sessao', proxima) +
         '  </div>' +
+        this.barraJornada(p) +
         '</div>';
     }).join('') + '</div>';
+  },
+
+  barraJornada(p) {
+    const j = p._jornada || {};
+    const etapas = [
+      ['admissao',    'Admissao',    'visao',     true],
+      ['anamnese',    'Anamnese',    'anamnese',  j.anamnese],
+      ['plano',       'Plano',       'plano',     j.plano],
+      ['avaliacao',   'Avaliacao',   'avaliacao', j.avaliacao],
+      ['pei',         'PEI',         'pei',       j.pei],
+      ['intervencao', 'Intervencao', 'programas', j.intervencao]
+    ];
+    return '<div class="pac-jornada">' + etapas.map(e =>
+      '<span class="jor jor-' + e[0] + (e[3] ? ' feita' : '') + '" ' +
+      'title="' + e[1] + (e[3] ? ' concluida' : ' pendente') + '" ' +
+      'onclick="event.stopPropagation(); MODULOS.pacientes.telaDetalhe(\'' + p.id + '\', \'' + e[2] + '\')"></span>'
+    ).join('') + '</div>';
   },
 
   iniciais(nome) {

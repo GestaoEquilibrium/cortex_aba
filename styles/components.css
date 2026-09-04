@@ -1282,3 +1282,25 @@
     box-shadow: 0 0 0 999px rgba(21, 13, 32, .55);
     pointer-events: none;
 }
+
+/* ── Jornada do paciente (etapas coloridas no cartao) ─────────────────── */
+.pac-jornada {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 4px;
+    margin-top: 9px;
+}
+.jor {
+    height: 6px;
+    border-radius: 4px;
+    background: var(--line);
+    cursor: pointer;
+    transition: transform .12s ease, filter .12s ease;
+}
+.jor:hover { transform: scaleY(1.7); filter: brightness(1.12); }
+.jor-admissao.feita    { background: #0EA5E9; }
+.jor-anamnese.feita    { background: #8B5CF6; }
+.jor-plano.feita       { background: #D97706; }
+.jor-avaliacao.feita   { background: #7C3AED; }
+.jor-pei.feita         { background: #EC4899; }
+.jor-intervencao.feita { background: #059669; }

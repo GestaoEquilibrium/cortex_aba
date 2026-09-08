@@ -272,7 +272,7 @@ window.MODULOS.pei = {
       '    <button class="btn-voltar" onclick="MODULOS.pacientes.telaDetalhe(\'' + pei.pacientes.id + '\', \'pei\')">&larr; Prontuario</button>' +
       '    <h2>Plano de Ensino Individualizado</h2>' +
       '  </div>' +
-      '  <button class="btn btn-primario" onclick="window.print()">&#128424; Imprimir</button>' +
+      '  <button class="btn btn-primario" onclick="MODULOS.pei.docPEI(\'' + pei.id + '\')">&#128196; Documento oficial</button>' +
       '</div>' +
 
       '<div class="cartao folha-presenca">' +
@@ -525,6 +525,83 @@ window.MODULOS.pei = {
       '<div class="deq-local">Uberl&acirc;ndia-MG, ' + new Date().toLocaleDateString('pt-BR') + '</div>' +
       '<div class="deq-assinatura">Wessilon Marques de Sousa<br>' +
       'Neuropsic&oacute;logo e Analista do Comportamento<br>CRP 04/53832</div>' +
+
+      '<div class="deq-rodape">' +
+      '  <span>Equilibrium Terapia Infantil &middot; Uberl&acirc;ndia/MG</span>' +
+      '  <span class="pontos"><i style="background:var(--eq-teal)"></i><i style="background:var(--eq-amarelo)"></i>' +
+      '<i style="background:var(--eq-rosa)"></i><i style="background:var(--eq-azul)"></i></span>' +
+      '  <span>Documento gerado pelo CORTEX aba &middot; ' + new Date().toLocaleDateString('pt-BR') + '</span>' +
+      '</div>' +
+      '</div>';
+  },
+
+  // ─────────── DOCUMENTO OFICIAL: PEI / Formulario 02 (identidade Equilibrium) ───────────
+
+  async docPEI(peiId) {
+    const ov = document.createElement('div');
+    ov.id = 'doc-eq-overlay';
+    ov.className = 'folha-overlay';
+    ov.innerHTML = '<div class="folha-pagina" id="doc-eq-corpo" style="max-width:960px">' +
+      '<p class="sub">Montando o documento...</p></div>';
+    document.body.appendChild(ov);
+
+    const { data: pei } = await sb.from('peis')
+      .select('*, pacientes(nome, data_nascimento), profissional:profiles!peis_profissional_id_fkey(nome), pei_metas(*)')
+      .eq('id', peiId).single();
+    if (!pei) { ov.remove(); return; }
+
+    const fmt = d => d ? new Date(d + 'T12:00:00').toLocaleDateString('pt-BR') : '&mdash;';
+    const metas = (pei.pei_metas || []).sort((a, b) => a.ordem - b.ordem);
+    const porArea = {};
+    metas.forEach(m => { (porArea[m.area] = porArea[m.area] || []).push(m); });
+    const cores = ['deq-teal', 'deq-amarelo', 'deq-rosa', ''];
+
+    const blocos = Object.entries(porArea).map(([area, lista], ix) =>
+      '<h2 style="margin-top:12px"><span class="ponto ' + cores[ix % 4] + '"></span>' + escaparHtml(area) +
+      ' <small>&middot; ' + lista.length + ' meta(s)</small></h2>' +
+      '<div class="deq-caixa">' +
+      '<table style="width:100%; border-collapse:collapse; font-size:12px">' +
+      '<tr><th style="text-align:left; padding:7px 12px; background:var(--eq-azul); color:#fff; font-size:10.5px; letter-spacing:.06em">META</th>' +
+      '<th style="text-align:left; padding:7px 12px; background:var(--eq-azul); color:#fff; font-size:10.5px; letter-spacing:.06em; width:220px">RECURSO</th>' +
+      '<th style="text-align:left; padding:7px 12px; background:var(--eq-azul); color:#fff; font-size:10.5px; letter-spacing:.06em; width:95px">PRAZO</th></tr>' +
+      lista.map(m =>
+        '<tr>' +
+        '<td style="padding:7px 12px; border-top:1px solid var(--eq-linha); line-height:1.55">' + escaparHtml(m.meta) + '</td>' +
+        '<td style="padding:7px 12px; border-top:1px solid var(--eq-linha)">' + escaparHtml(m.recurso || '&mdash;') + '</td>' +
+        '<td style="padding:7px 12px; border-top:1px solid var(--eq-linha)">' + escaparHtml(m.prazo || '&mdash;') + '</td></tr>').join('') +
+      '</table></div>').join('');
+
+    document.getElementById('doc-eq-corpo').innerHTML =
+      '<div class="pagina-cabecalho nao-imprime">' +
+      '  <div><button class="btn-voltar" onclick="document.getElementById(\'doc-eq-overlay\').remove()">&larr; Fechar</button>' +
+      '  <h2>PEI &middot; documento oficial</h2></div>' +
+      '  <button class="btn btn-primario" onclick="window.print()">&#128424; Imprimir / PDF</button>' +
+      '</div>' +
+
+      '<div class="doc-eq">' +
+      '<div class="deq-cab">' +
+      '  <img src="icones/equilibrium.png" alt="Equilibrium">' +
+      '  <div class="deq-cab-t"><h1>PLANO DE ENSINO INDIVIDUALIZADO</h1>' +
+      '  <p>Equilibrium Terapia Infantil &middot; Psicoterapia ABA</p></div>' +
+      '  <span class="deq-pilula">' + fmt(pei.periodo_inicio) + ' &ndash; ' + fmt(pei.periodo_fim) + '</span>' +
+      '</div>' +
+
+      '<h2><span class="ponto deq-teal"></span>Identifica&ccedil;&atilde;o</h2>' +
+      '<div class="deq-caixa deq-dados" style="grid-template-columns:2fr 1fr 1.4fr">' +
+      '  <div style="border-bottom:none"><small>Paciente</small><b>' + escaparHtml(pei.pacientes.nome) + '</b></div>' +
+      '  <div style="border-bottom:none"><small>Nascimento</small><b>' + fmt(pei.pacientes.data_nascimento) + '</b></div>' +
+      '  <div style="border-bottom:none"><small>Profissional respons&aacute;vel</small><b>' +
+           escaparHtml(pei.profissional ? pei.profissional.nome : '&mdash;') + '</b></div>' +
+      '</div>' +
+
+      (pei.finalidade
+        ? '<h2><span class="ponto deq-amarelo"></span>Finalidade</h2>' +
+          '<div class="deq-caixa deq-texto" style="min-height:0">' + escaparHtml(pei.finalidade) + '</div>' : '') +
+
+      blocos +
+
+      '<div class="deq-assinatura">' + escaparHtml(pei.profissional ? pei.profissional.nome : '') +
+      '<br>Profissional / N&ordm; do Registro de Classe</div>' +
 
       '<div class="deq-rodape">' +
       '  <span>Equilibrium Terapia Infantil &middot; Uberl&acirc;ndia/MG</span>' +

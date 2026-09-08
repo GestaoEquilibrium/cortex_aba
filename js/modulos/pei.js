@@ -323,7 +323,7 @@ window.MODULOS.pei = {
       (editavel
         ? '<button class="btn btn-fantasma" onclick="MODULOS.pei.finalizarDevolutiva()">Finalizar</button>'
         : '') +
-      '  <button class="btn btn-primario" onclick="window.print()">&#128424; Imprimir</button>' +
+      '  <button class="btn btn-primario" onclick="MODULOS.pei.docAvaliacao()">&#128196; Documento oficial</button>' +
       '  </div>' +
       '</div>' +
 
@@ -337,34 +337,81 @@ window.MODULOS.pei = {
       '    <span class="folha-marca">CORTEX aba &middot; Equilibrium Terapia Infantil</span>' +
       '  </div>' +
       resultadoHtml +
-      campo('demanda', 'Demanda', rel.demanda) +
-      campo('procedimento', 'Procedimento', rel.procedimento) +
-      campo('analise', 'Analise clinica', rel.analise) +
-      campo('conclusao', 'Conclusao', rel.conclusao) +
+      campo('demanda', 'II. Descricao da demanda', rel.demanda) +
+      campo('procedimento', 'III. Procedimento', rel.procedimento) +
+      '<h3 style="margin-top:14px">IV. Analise por dominio</h3>' +
+      '<p class="sub" style="margin-bottom:8px">Apresente o resultado e os atrasos identificados em cada area. ' +
+      'O texto institucional que descreve cada dominio ja sai automaticamente no documento oficial.</p>' +
+      MODULOS.pei.DOMINIOS.map(d => campo('an-' + d[0], d[1], (rel.analises || {})[d[0]])).join('') +
+      campo('conclusao', 'V. Conclusao', rel.conclusao) +
       '</div>';
+
+    if (editavel) {
+      if (!rel.demanda) {
+        const elD = document.getElementById('dev-demanda');
+        if (elD) elD.placeholder = 'Paciente do sexo ..., com ... anos, encaminhado(a) pelo(a) Dr.(a) ..., ' +
+          'para avaliacao do desenvolvimento e comportamento infantil, e planejamento da intervencao ABA, em virtude de ...';
+      }
+      if (!rel.procedimento) {
+        const elP = document.getElementById('dev-procedimento');
+        if (elP) elP.value = 'Foi utilizado questionario estruturado com base em ferramentas padronizadas de ' +
+          'avaliacao do desenvolvimento infantil: VB-MAPP, Inventario Portage, Bayley-III e Vineland-II, ' +
+          'organizado por faixas etarias e dominios do neurodesenvolvimento: Linguagem Receptiva, Linguagem ' +
+          'Expressiva, Cognicao, Motricidade Grossa, Motricidade Fina e Socializacao. Sua aplicacao ocorreu ' +
+          'ao longo de XX sessoes de 40 minutos, por meio de observacao clinica e interacao direta entre ' +
+          'terapeuta e paciente.';
+      }
+    }
+  },
+
+  DOMINIOS: [
+    ['lr', 'Linguagem Receptiva'],
+    ['le', 'Linguagem Expressiva'],
+    ['cog', 'Cognicao'],
+    ['mg', 'Motricidade Grossa'],
+    ['mf', 'Motricidade Fina'],
+    ['soc', 'Socializacao']
+  ],
+
+  DOMINIO_DESC: {
+    lr: 'Esta \u00e1rea avalia a capacidade da crian\u00e7a de compreender a linguagem falada. Engloba desde a rea\u00e7\u00e3o a sons e o reconhecimento de palavras familiares at\u00e9 a compreens\u00e3o de instru\u00e7\u00f5es simples, perguntas complexas e no\u00e7\u00f5es temporais. A linguagem receptiva \u00e9 a base para uma comunica\u00e7\u00e3o eficaz, refletindo o quanto a crian\u00e7a \u00e9 capaz de processar e interpretar informa\u00e7\u00f5es verbais oriundas do ambiente.',
+    le: 'Refere-se \u00e0 habilidade da crian\u00e7a de se comunicar verbalmente ou por meio de outros recursos expressivos. Abrange desde vocaliza\u00e7\u00f5es e balbucios iniciais at\u00e9 a imita\u00e7\u00e3o de sons, uso de gestos com intencionalidade comunicativa, nomea\u00e7\u00e3o de objetos e pessoas, formula\u00e7\u00e3o de frases simples e relato de eventos. Esta \u00e1rea demonstra a capacidade da crian\u00e7a de se expressar de maneira compreens\u00edvel para os outros.',
+    cog: 'Esta \u00e1rea investiga os processos mentais relacionados ao pensamento, aten\u00e7\u00e3o, mem\u00f3ria, aprendizagem e resolu\u00e7\u00e3o de problemas. As habilidades avaliadas incluem explora\u00e7\u00e3o do ambiente, aten\u00e7\u00e3o sustentada, associa\u00e7\u00e3o e identifica\u00e7\u00e3o de imagens/objetos, discrimina\u00e7\u00e3o de caracter\u00edsticas, reconhecimento de padr\u00f5es e compreens\u00e3o de rela\u00e7\u00f5es de causa e efeito. Trata-se de uma \u00e1rea fundamental para o desenvolvimento intelectual e para a constru\u00e7\u00e3o de estrat\u00e9gias de intera\u00e7\u00e3o com o meio.',
+    mg: 'Avalia o desenvolvimento dos grandes grupos musculares envolvidos em movimentos amplos e coordenados. Inclui habilidades como rolar, sentar, engatinhar, andar (com e sem apoio), correr, saltar, chutar bola e subir/descer escadas. O dom\u00ednio da motricidade grossa est\u00e1 diretamente relacionado \u00e0 autonomia da crian\u00e7a, permitindo maior explora\u00e7\u00e3o e intera\u00e7\u00e3o com o ambiente f\u00edsico.',
+    mf: 'Diz respeito \u00e0 coordena\u00e7\u00e3o dos pequenos m\u00fasculos, especialmente das m\u00e3os e dos dedos, necess\u00e1ria para tarefas que exigem precis\u00e3o. S\u00e3o investigadas habilidades como segurar e manipular objetos, empilhar blocos, encaixar pe\u00e7as, rabiscar, desenhar, recortar, utilizar instrumentos como l\u00e1pis e apontador, e manusear objetos pequenos. Essa \u00e1rea \u00e9 essencial n\u00e3o s\u00f3 para brincadeiras que envolvam destreza manual e para o processo de escrita, mas tamb\u00e9m para o desempenho independente em atividades de vida di\u00e1ria, como usar talheres, aboto\u00e1-las, amarrar os sapatos e pentear o cabelo.',
+    soc: 'Explora a forma como a crian\u00e7a se relaciona com os outros e desenvolve habilidades sociais e emocionais. S\u00e3o observados comportamentos como estabelecimento de contato visual, sorriso em resposta \u00e0 intera\u00e7\u00e3o, interesse por outras crian\u00e7as, imita\u00e7\u00e3o de gestos e express\u00f5es, compartilhamento de brinquedos, participa\u00e7\u00e3o em brincadeiras cooperativas, express\u00e3o de sentimentos, compreens\u00e3o e respeito \u00e0s regras, demonstra\u00e7\u00e3o de empatia e capacidade de solicitar ajuda ou pedir desculpas. Essa \u00e1rea \u00e9 fundamental para a forma\u00e7\u00e3o de v\u00ednculos, adapta\u00e7\u00e3o a contextos sociais e desenvolvimento da intelig\u00eancia emocional.'
   },
 
   _devTimer: null,
   salvarDevAuto() {
     clearTimeout(this._devTimer);
     this._devTimer = setTimeout(async () => {
+      const analises = {};
+      MODULOS.pei.DOMINIOS.forEach(d => {
+        analises[d[0]] = document.getElementById('dev-an-' + d[0])?.value || null;
+      });
       const dados = {
         demanda: document.getElementById('dev-demanda')?.value || null,
         procedimento: document.getElementById('dev-procedimento')?.value || null,
-        analise: document.getElementById('dev-analise')?.value || null,
+        analises: analises,
         conclusao: document.getElementById('dev-conclusao')?.value || null
       };
       await sb.from('relatorios_devolutiva').update(dados).eq('id', this._devolutiva.id);
+      Object.assign(this._devolutiva, dados);
     }, 700);
   },
 
   async finalizarDevolutiva() {
     if (!confirm('Finalizar a devolutiva? Depois ela fica somente leitura.')) return;
     clearTimeout(this._devTimer);
+    const analises = {};
+    MODULOS.pei.DOMINIOS.forEach(d => {
+      analises[d[0]] = document.getElementById('dev-an-' + d[0])?.value || null;
+    });
     const dados = {
       demanda: document.getElementById('dev-demanda')?.value || null,
       procedimento: document.getElementById('dev-procedimento')?.value || null,
-      analise: document.getElementById('dev-analise')?.value || null,
+      analises: analises,
       conclusao: document.getElementById('dev-conclusao')?.value || null,
       status: 'finalizado',
       finalizado_em: new Date().toISOString()
@@ -373,5 +420,94 @@ window.MODULOS.pei = {
       .update(dados).eq('id', this._devolutiva.id);
     if (error) { alert('Erro: ' + error.message); return; }
     this.abrirDevolutiva(this._devolutiva.avaliacao_id);
+  },
+
+  // ─────────── DOCUMENTO OFICIAL: Relatorio de Avaliacao (identidade Equilibrium) ───────────
+
+  async docAvaliacao() {
+    const rel = this._devolutiva;
+    if (!rel) return;
+
+    const ov = document.createElement('div');
+    ov.id = 'doc-eq-overlay';
+    ov.className = 'folha-overlay';
+    ov.innerHTML = '<div class="folha-pagina" id="doc-eq-corpo" style="max-width:900px">' +
+      '<p class="sub">Montando o documento...</p></div>';
+    document.body.appendChild(ov);
+
+    const [rAv, rPlano] = await Promise.all([
+      sb.from('avaliacoes')
+        .select('concluido_em, avaliador:profiles!avaliacoes_avaliador_id_fkey(nome), pacientes(nome, data_nascimento)')
+        .eq('id', rel.avaliacao_id).single(),
+      sb.from('planos_terapeuticos').select('frequencia_semanal').eq('paciente_id', rel.paciente_id)
+        .eq('status', 'ativo').order('criado_em', { ascending: false }).limit(1)
+    ]);
+    const av = rAv.data;
+    const pac = av.pacientes;
+    const freq = rPlano.data && rPlano.data[0] && rPlano.data[0].frequencia_semanal
+      ? rPlano.data[0].frequencia_semanal + ' sessoes semanais de 40 minutos' : '&mdash;';
+    const fmt = d => d ? new Date(d + 'T12:00:00').toLocaleDateString('pt-BR') : '&mdash;';
+
+    const secTexto = (classe, titulo, valor) =>
+      '<h2><span class="ponto ' + classe + '"></span>' + titulo + '</h2>' +
+      '<div class="deq-caixa deq-texto">' + escaparHtml(valor || '') + '</div>';
+
+    const dominios = this.DOMINIOS.map((d, i) => {
+      const cores = ['deq-teal', 'deq-amarelo', 'deq-rosa', '', 'deq-teal', 'deq-amarelo'];
+      const texto = (rel.analises || {})[d[0]] || rel.analise || '';
+      return '<h2 style="margin-top:12px"><span class="ponto ' + cores[i] + '"></span>' + d[1] + '</h2>' +
+        '<div class="deq-caixa">' +
+        '<div class="deq-texto" style="min-height:0; color:var(--eq-cinza); font-size:11px; ' +
+        'border-bottom:1px solid var(--eq-linha); background:var(--eq-fundo)">' +
+        this.DOMINIO_DESC[d[0]] + '</div>' +
+        '<div class="deq-texto">' + escaparHtml((rel.analises || {})[d[0]] || '') + '</div>' +
+        '</div>';
+    }).join('');
+
+    document.getElementById('doc-eq-corpo').innerHTML =
+      '<div class="pagina-cabecalho nao-imprime">' +
+      '  <div><button class="btn-voltar" onclick="document.getElementById(\'doc-eq-overlay\').remove()">&larr; Fechar</button>' +
+      '  <h2>Relatorio de avaliacao &middot; documento oficial</h2></div>' +
+      '  <button class="btn btn-primario" onclick="window.print()">&#128424; Imprimir / PDF</button>' +
+      '</div>' +
+
+      '<div class="doc-eq">' +
+      '<div class="deq-cab">' +
+      '  <img src="icones/equilibrium.png" alt="Equilibrium">' +
+      '  <div class="deq-cab-t"><h1>RELAT&Oacute;RIO</h1>' +
+      '  <p>Avalia&ccedil;&atilde;o do Desenvolvimento e Comportamento Infantil</p></div>' +
+      '</div>' +
+
+      '<h2><span class="ponto deq-teal"></span>I. Identifica&ccedil;&atilde;o</h2>' +
+      '<div class="deq-caixa deq-dados" style="grid-template-columns:2fr 1fr 1fr">' +
+      '  <div><small>Nome</small><b>' + escaparHtml(pac.nome) + '</b></div>' +
+      '  <div><small>Data de nascimento</small><b>' + fmt(pac.data_nascimento) + '</b></div>' +
+      '  <div><small>Avalia&ccedil;&atilde;o conclu&iacute;da em</small><b>' +
+           (av.concluido_em ? new Date(av.concluido_em).toLocaleDateString('pt-BR') : '&mdash;') + '</b></div>' +
+      '  <div style="grid-column:span 1; border-bottom:none"><small>Psic&oacute;logo respons&aacute;vel</small>' +
+      '  <b>Wessilon Marques de Sousa - CRP 04/53832</b></div>' +
+      '  <div style="border-bottom:none"><small>Especialidade</small><b>Psicoterapia ABA</b></div>' +
+      '  <div style="border-bottom:none"><small>Frequ&ecirc;ncia terap&ecirc;utica</small><b>' + freq + '</b></div>' +
+      '</div>' +
+
+      secTexto('deq-amarelo', 'II. Descri&ccedil;&atilde;o da Demanda', rel.demanda) +
+      secTexto('deq-rosa', 'III. Procedimento', rel.procedimento) +
+
+      '<h2 style="margin-top:16px"><span class="ponto"></span>IV. An&aacute;lise</h2>' +
+      dominios +
+
+      secTexto('deq-teal', 'V. Conclus&atilde;o', rel.conclusao) +
+
+      '<div class="deq-local">Uberl&acirc;ndia-MG, ' + new Date().toLocaleDateString('pt-BR') + '</div>' +
+      '<div class="deq-assinatura">Wessilon Marques de Sousa<br>' +
+      'Neuropsic&oacute;logo e Analista do Comportamento<br>CRP 04/53832</div>' +
+
+      '<div class="deq-rodape">' +
+      '  <span>Equilibrium Terapia Infantil &middot; Uberl&acirc;ndia/MG</span>' +
+      '  <span class="pontos"><i style="background:var(--eq-teal)"></i><i style="background:var(--eq-amarelo)"></i>' +
+      '<i style="background:var(--eq-rosa)"></i><i style="background:var(--eq-azul)"></i></span>' +
+      '  <span>Documento gerado pelo CORTEX aba &middot; ' + new Date().toLocaleDateString('pt-BR') + '</span>' +
+      '</div>' +
+      '</div>';
   }
 };

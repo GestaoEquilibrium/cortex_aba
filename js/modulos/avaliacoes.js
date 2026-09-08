@@ -20,6 +20,45 @@ window.MODULOS.avaliacoes = {
   ],
   itensSS: [],
 
+  _overlay: false,
+
+  abrirJanela(avaliacaoId, resultado) {
+    document.getElementById('aval-overlay')?.remove();
+    const ov = document.createElement('div');
+    ov.id = 'aval-overlay';
+    ov.className = 'folha-overlay';
+    ov.innerHTML = '<div class="folha-pagina" id="aval-corpo" style="max-width:1100px"></div>';
+    document.body.appendChild(ov);
+    this.el = document.getElementById('aval-corpo');
+    this._overlay = true;
+    if (resultado) this.telaResultado(avaliacaoId);
+    else this.abrirAplicacao(avaliacaoId);
+  },
+
+  fecharJanela() {
+    document.getElementById('aval-overlay')?.remove();
+    this._overlay = false;
+    const alvo = document.getElementById('pac-aba-conteudo');
+    if (alvo && this._pacAtualId && MODULOS.pacientes.paciente) {
+      MODULOS.pacientes.abrirAba('avaliacao');
+    }
+  },
+
+  voltarHtml() {
+    return this._overlay
+      ? '<button class="btn-voltar" onclick="MODULOS.avaliacoes.fecharJanela()">&larr; Fechar</button>'
+      : '<button class="btn-voltar" onclick="MODULOS.avaliacoes.telaLista()">&larr; Avaliacoes</button>';
+  },
+
+  async iniciarDoProntuario(pacienteId, protocolo) {
+    const { data, error } = await sb.from('avaliacoes')
+      .insert({ paciente_id: pacienteId, protocolo: protocolo,
+                avaliador_id: window.CORTEX_SESSAO.user.id })
+      .select('id').single();
+    if (error) { alert('Erro: ' + error.message); return; }
+    this.abrirJanela(data.id);
+  },
+
   async carregarItensSS() {
     if (this.itensSS.length) return;
     const { data } = await sb.from('ss_itens').select('*').order('ordem');
@@ -50,15 +89,16 @@ window.MODULOS.avaliacoes = {
   async telaLista() {
     this.el.innerHTML =
       '<div class="pagina-cabecalho">' +
-      '  <div><h2>Avaliacoes</h2>' +
-      '  <p class="sub">Protocolos aplicados e em andamento. QADI-R e Socially Savvy disponiveis; IPO chega depois.</p></div>' +
+      '  <div><h2>Avaliacoes &middot; administracao</h2>' +
+      '  <p class="sub">Visao da coordenacao. As aplicacoes acontecem na pasta de cada paciente (aba Avaliacao do prontuario).</p></div>' +
       '</div>' +
       '<div id="av-lista"><div class="cartao"><p class="sub">Carregando...</p></div></div>';
 
     const { data, error } = await sb
       .from('avaliacoes')
       .select('id, protocolo, status, iniciado_em, concluido_em, pacientes(id, nome), avaliador:profiles!avaliacoes_avaliador_id_fkey(nome)')
-      .order('iniciado_em', { ascending: false });
+      .order('iniciado_em', { ascending: false })
+      .limit(60);
 
     const alvo = document.getElementById('av-lista');
     if (error) {
@@ -67,58 +107,89 @@ window.MODULOS.avaliacoes = {
       return;
     }
 
-    const podeAvaliar = perm('avaliacoes') === 'E';
+    await Promise.all([this.carregarQuestoes(), this.carregarItensSS()]);
+    const lista = data || [];
+    const abertas = lista.filter(x => x.status !== 'concluida');
+    const concluidas = lista.filter(x => x.status === 'concluida');
+    const nomeProt = x => x.protocolo === 'ss' ? 'Socially Savvy' : 'QADI-R';
+    const diasAberta = x => Math.floor((Date.now() - new Date(x.iniciado_em)) / 86400000);
 
     alvo.innerHTML =
-      (podeAvaliar ? await this.htmlNovaAvaliacao() : '') +
-      '<div class="cartao"><h3>Historico</h3>' +
-      ((data && data.length) ? data.map(a =>
-        '<div class="linha-doc">' +
-        '<div><b>' + escaparHtml(a.pacientes ? a.pacientes.nome : '?') + ' &middot; ' +
-        (a.protocolo === 'ss' ? 'Socially Savvy' : 'QADI-R') + '</b>' +
-        '<small>' + (a.avaliador ? 'Avaliador: ' + escaparHtml(a.avaliador.nome) + ' &middot; ' : '') +
-        new Date(a.iniciado_em).toLocaleDateString('pt-BR') + '</small></div>' +
+      '<div class="grade-visao" style="margin-bottom:14px">' +
+      '  <div class="caixa-info"><small>Em andamento</small><b>' + abertas.length + '</b></div>' +
+      '  <div class="caixa-info"><small>Concluidas (60 recentes)</small><b>' + concluidas.length + '</b></div>' +
+      '  <div class="caixa-info"><small>QADI-R &middot; catalogo</small><b>' + this.questoes.length + ' questoes</b></div>' +
+      '  <div class="caixa-info"><small>Socially Savvy &middot; catalogo</small><b>' + this.itensSS.length + ' itens</b></div>' +
+      '</div>' +
+
+      '<div class="cartao faixa-ambar"><h3>Em andamento <span class="selo selo-neutro">' + abertas.length + '</span></h3>' +
+      (abertas.length ? abertas.map(x =>
+        '<div class="linha-doc"><div><b>' + escaparHtml(x.pacientes ? x.pacientes.nome : '?') +
+        ' &middot; ' + nomeProt(x) + '</b>' +
+        '<small>' + (x.avaliador ? escaparHtml(x.avaliador.nome) + ' &middot; ' : '') +
+        'iniciada em ' + new Date(x.iniciado_em).toLocaleDateString('pt-BR') +
+        (diasAberta(x) >= 7 ? ' &middot; <b style="color:var(--acao)">' + diasAberta(x) + ' dias aberta</b>' : '') +
+        '</small></div>' +
         '<div class="pac-selos">' +
-        (a.status === 'concluida'
-          ? '<span class="selo selo-ok">Concluida</span>' +
-            '<button class="btn-chip" onclick="MODULOS.avaliacoes.telaResultado(\'' + a.id + '\')">Resultado</button>'
-          : '<span class="selo selo-warn">Em andamento</span>' +
-            (podeAvaliar ? '<button class="btn-chip cheio" onclick="MODULOS.avaliacoes.abrirAplicacao(\'' + a.id + '\')">Continuar</button>' : '')) +
+        '<button class="btn-chip cheio" onclick="MODULOS.avaliacoes.abrirJanela(\'' + x.id + '\')">Abrir</button>' +
+        '<button class="btn-chip" title="Cancela e apaga esta aplicacao aberta por engano. As respostas ja registradas vao junto." ' +
+        'onclick="MODULOS.avaliacoes.cancelarAvaliacao(\'' + x.id + '\', \'' +
+        escaparHtml((x.pacientes ? x.pacientes.nome : '') + ' - ' + nomeProt(x)) + '\')">Cancelar</button>' +
         '</div></div>').join('')
-      : '<p class="sub">Nenhuma avaliacao registrada.</p>') +
+      : '<p class="sub">Nenhuma aplicacao em aberto.</p>') +
+      '</div>' +
+
+      '<div class="cartao"><h3>Concluidas recentes</h3>' +
+      (concluidas.length ? concluidas.map(x =>
+        '<div class="linha-doc"><div><b>' + escaparHtml(x.pacientes ? x.pacientes.nome : '?') +
+        ' &middot; ' + nomeProt(x) + '</b>' +
+        '<small>' + (x.avaliador ? escaparHtml(x.avaliador.nome) + ' &middot; ' : '') +
+        'concluida em ' + new Date(x.concluido_em).toLocaleDateString('pt-BR') + '</small></div>' +
+        '<button class="btn-chip" onclick="MODULOS.avaliacoes.abrirJanela(\'' + x.id + '\', true)">Resultado</button>' +
+        '</div>').join('')
+      : '<p class="sub">Nenhuma avaliacao concluida.</p>') +
+      '</div>' +
+
+      '<div class="cartao"><h3>Protocolos</h3>' +
+      '<div class="linha-doc"><div><b>QADI-R</b><small>' + this.questoes.length +
+      ' questoes por faixa etaria e area &middot; aplicado pela coordenacao e terapeutas</small></div>' +
+      '<button class="btn-chip" onclick="MODULOS.avaliacoes.verCatalogo(\'qadi\')">Ver itens</button></div>' +
+      '<div class="linha-doc"><div><b>Socially Savvy</b><small>' + this.itensSS.length +
+      ' itens em 7 areas, escala 0-3 &middot; aplicadores tambem aplicam</small></div>' +
+      '<button class="btn-chip" onclick="MODULOS.avaliacoes.verCatalogo(\'ss\')">Ver itens</button></div>' +
+      '<div class="linha-doc"><div><b>IPO</b><small>Aguardando criterios para entrar no sistema</small></div>' +
+      '<span class="selo selo-neutro">Em breve</span></div>' +
       '</div>';
   },
 
-  async htmlNovaAvaliacao() {
-    const { data: pacs } = await sb.from('pacientes')
-      .select('id, nome, status').in('status', ['avaliacao', 'ativo']).order('nome');
-    this._pacs = pacs || [];
-    return '<div class="cartao faixa-ambar"><h3>Nova avaliacao</h3>' +
-      '<div class="grade-form">' +
-      '<div class="campo c2"><label>Paciente</label><select id="av-novo-pac">' +
-      '<option value="">Selecione</option>' +
-      this._pacs.map(p => '<option value="' + p.id + '">' + escaparHtml(p.nome) + '</option>').join('') +
-      '</select></div>' +
-      '<div class="campo"><label>Protocolo</label><select id="av-novo-prot">' +
-      '<option value="qadi">QADI-R</option>' +
-      '<option value="ss">Socially Savvy</option>' +
-      '</select></div>' +
-      '<div class="campo" style="display:flex; align-items:flex-end">' +
-      '<button class="btn btn-primario" onclick="MODULOS.avaliacoes.criarAvaliacao()">Iniciar aplicacao</button>' +
-      '</div></div></div>';
+  verCatalogo(protocolo) {
+    let corpo = '';
+    if (protocolo === 'qadi') {
+      this.FAIXAS.forEach(f => {
+        const qs = this.questoes.filter(q => q.faixa === f);
+        corpo += '<h3 style="margin-top:10px">' + f + ' <span class="selo selo-neutro">' + qs.length + '</span></h3>' +
+          qs.map(q => '<div class="linha-doc"><div><small style="color:var(--ink-muted)">' +
+            escaparHtml(q.area) + '</small><br>' + escaparHtml(q.pergunta) + '</div></div>').join('');
+      });
+    } else {
+      this.SS_AREAS.forEach(area => {
+        const its = this.itensSS.filter(i => i.area === area);
+        corpo += '<h3 style="margin-top:10px">' + area + ' <span class="selo selo-neutro">' + its.length + '</span></h3>' +
+          its.map(i => '<div class="linha-doc"><div><b style="color:var(--ink-muted); margin-right:6px">' +
+            i.codigo + '</b>' + escaparHtml(i.texto) + '</div></div>').join('');
+      });
+    }
+    abrirModal('Catalogo &middot; ' + (protocolo === 'qadi' ? 'QADI-R' : 'Socially Savvy'),
+      '<div style="max-height:60vh; overflow:auto; padding-right:6px">' + corpo + '</div>' +
+      '<div class="barra-acoes"><button class="btn btn-primario" onclick="fecharModal()">Fechar</button></div>', true);
   },
 
-  async criarAvaliacao() {
-    const pacienteId = document.getElementById('av-novo-pac').value;
-    if (!pacienteId) return;
-
-    const protocolo = document.getElementById('av-novo-prot')?.value || 'qadi';
-    const { data, error } = await sb.from('avaliacoes')
-      .insert({ paciente_id: pacienteId, protocolo: protocolo,
-                avaliador_id: this.sessao.user.id })
-      .select('id').single();
-    if (error) { alert('Erro: ' + error.message); return; }
-    this.abrirAplicacao(data.id);
+  async cancelarAvaliacao(id, rotulo) {
+    if (!confirm('Cancelar e apagar a aplicacao "' + rotulo + '"?\n' +
+      'As respostas ja registradas serao apagadas junto. Esta acao nao tem volta.')) return;
+    const { error } = await sb.from('avaliacoes').delete().eq('id', id);
+    if (error) { alert('Nao foi possivel cancelar: ' + error.message); return; }
+    this.telaLista();
   },
 
   // ───────────────────────── APLICACAO ─────────────────────────
@@ -189,7 +260,7 @@ window.MODULOS.avaliacoes = {
     this.el.innerHTML =
       '<div class="pagina-cabecalho">' +
       '  <div>' +
-      '    <button class="btn-voltar" onclick="MODULOS.avaliacoes.telaLista()">&larr; Avaliacoes</button>' +
+      this.voltarHtml() +
       '    <h2>QADI-R &middot; ' + escaparHtml(this.pacienteAtual.nome) + '</h2>' +
       '    <p class="sub">' + calcularIdade(this.pacienteAtual.data_nascimento) +
       ' &middot; Respostas salvas automaticamente. Aplique quantas faixas precisar.</p>' +
@@ -266,7 +337,7 @@ window.MODULOS.avaliacoes = {
 
   async telaResultado(avaliacaoId) {
     this.el.innerHTML =
-      '<button class="btn-voltar" onclick="MODULOS.avaliacoes.telaLista()">&larr; Avaliacoes</button>' +
+      this.voltarHtml() +
       '<div id="av-resultado"><div class="cartao"><p class="sub">Calculando...</p></div></div>';
     document.getElementById('av-resultado').innerHTML = await this.htmlResultado(avaliacaoId);
   },
@@ -351,26 +422,57 @@ window.MODULOS.avaliacoes = {
 
   // Lista de avaliacoes de um paciente (aba do prontuario)
   async htmlDoPaciente(pacienteId) {
+    this._pacAtualId = pacienteId;
     const { data } = await sb.from('avaliacoes')
-      .select('id, status, iniciado_em, concluido_em')
+      .select('id, protocolo, status, iniciado_em, concluido_em')
       .eq('paciente_id', pacienteId)
       .order('iniciado_em', { ascending: false });
 
-    if (!data || data.length === 0) {
-      return '<div class="cartao"><div class="vazio"><div class="simbolo-vazio">&#9998;</div>' +
-        '<strong>Nenhuma avaliacao aplicada</strong>' +
-        'Inicie o QADI-R pelo menu Avaliacoes.</div></div>';
+    const podeQadi = perm('avaliacoes') === 'E';
+    const podeSS = podeQadi || perm('evolucao') === 'E';
+    let acoes = '';
+    if (podeQadi || podeSS) {
+      acoes = '<div class="aba-acoes">' +
+        (podeQadi
+          ? '<button class="btn btn-primario" title="Inicia uma aplicacao QADI-R deste paciente, em janela por cima do prontuario." ' +
+            'onclick="MODULOS.avaliacoes.iniciarDoProntuario(\'' + pacienteId + '\', \'qadi\')">+ QADI-R</button>' : '') +
+        (podeSS
+          ? '<button class="btn ' + (podeQadi ? 'btn-fantasma' : 'btn-primario') + '" ' +
+            'title="Inicia uma aplicacao Socially Savvy deste paciente, em janela por cima do prontuario." ' +
+            'onclick="MODULOS.avaliacoes.iniciarDoProntuario(\'' + pacienteId + '\', \'ss\')">+ Socially Savvy</button>' : '') +
+        '</div>';
     }
 
-    // Mostra o resultado da mais recente + lista das demais
-    let html = await this.htmlResultado(data[0].id);
-    if (data.length > 1) {
+    if (!data || data.length === 0) {
+      return acoes + '<div class="cartao"><div class="vazio"><div class="simbolo-vazio">&#9998;</div>' +
+        '<strong>Nenhuma avaliacao aplicada</strong>' +
+        (podeSS ? 'Inicie o QADI-R ou o Socially Savvy pelos botoes acima.' :
+          'As aplicacoes aparecem aqui quando a equipe avaliar.') + '</div></div>';
+    }
+
+    const abertas = data.filter(x => x.status !== 'concluida');
+    if (abertas.length) {
+      acoes += '<div class="cartao faixa-ambar"><h3>Em andamento</h3>' +
+        abertas.map(x =>
+          '<div class="linha-doc"><div><b>' + (x.protocolo === 'ss' ? 'Socially Savvy' : 'QADI-R') + '</b>' +
+          '<small>Iniciada em ' + new Date(x.iniciado_em).toLocaleDateString('pt-BR') + '</small></div>' +
+          '<button class="btn-chip cheio" onclick="MODULOS.avaliacoes.abrirJanela(\'' + x.id + '\')">Continuar</button>' +
+          '</div>').join('') + '</div>';
+    }
+
+    const concluida = data.find(x => x.status === 'concluida');
+    let html = acoes;
+    if (concluida) html += await this.htmlResultado(concluida.id);
+    const demais = data.filter(x => !concluida || x.id !== concluida.id)
+      .filter(x => x.status === 'concluida');
+    if (demais.length) {
       html += '<div class="cartao"><h3>Aplicacoes anteriores</h3>' +
-        data.slice(1).map(a =>
-          '<div class="linha-doc"><b>' + (a.protocolo === 'ss' ? 'Socially Savvy' : 'QADI-R') + ' &middot; ' +
-          new Date(a.iniciado_em).toLocaleDateString('pt-BR') + '</b>' +
-          '<span class="selo ' + (a.status === 'concluida' ? 'selo-ok">Concluida' : 'selo-warn">Em andamento') +
-          '</span></div>').join('') + '</div>';
+        demais.map(a =>
+          '<div class="linha-doc"><div><b>' + (a.protocolo === 'ss' ? 'Socially Savvy' : 'QADI-R') + ' &middot; ' +
+          new Date(a.iniciado_em).toLocaleDateString('pt-BR') + '</b></div>' +
+          '<div class="pac-selos"><span class="selo selo-ok">Concluida</span>' +
+          '<button class="btn-chip" onclick="MODULOS.avaliacoes.abrirJanela(\'' + a.id + '\', true)">Resultado</button>' +
+          '</div></div>').join('') + '</div>';
     }
     return html;
   },
@@ -424,7 +526,7 @@ window.MODULOS.avaliacoes = {
     this.el.innerHTML =
       '<div class="pagina-cabecalho">' +
       '  <div>' +
-      '    <button class="btn-voltar" onclick="MODULOS.avaliacoes.telaLista()">&larr; Avaliacoes</button>' +
+      this.voltarHtml() +
       '    <h2>Socially Savvy &middot; ' + escaparHtml(this.pacienteAtual.nome) +
       '    <span class="selo selo-roxo">Avaliacao ' + this.numSS + '</span></h2>' +
       '    <p class="sub">' + calcularIdade(this.pacienteAtual.data_nascimento) +

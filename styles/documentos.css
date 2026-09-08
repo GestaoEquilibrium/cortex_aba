@@ -1,0 +1,156 @@
+/* ============================================================
+   CORTEX aba - Documentos institucionais Equilibrium
+   Identidade: azul #1468B2 + detalhes do catavento da logo
+   ============================================================ */
+.doc-eq {
+    --eq-azul: #1468B2; --eq-azul-escuro: #0E4E86;
+    --eq-rosa: #E9586A; --eq-amarelo: #F3B63D; --eq-teal: #56C4CF;
+    --eq-tinta: #23303C; --eq-cinza: #64748B;
+    --eq-linha: #DFE6EC; --eq-fundo: #F7FAFC;
+    font-family: 'Segoe UI', 'Manrope', Arial, sans-serif;
+    color: var(--eq-tinta);
+    background: #fff;
+    border-radius: 16px;
+    padding: 28px 34px 22px;
+}
+.doc-eq * { box-sizing: border-box; }
+
+.deq-cab {
+    display: flex; align-items: center; gap: 16px;
+    padding-bottom: 12px;
+    border-bottom: 3px solid var(--eq-azul);
+    position: relative;
+    margin-bottom: 10px;
+}
+.deq-cab::after {
+    content: '';
+    position: absolute; left: 0; right: 0; bottom: -7px;
+    height: 4px; border-radius: 4px;
+    background: linear-gradient(90deg,
+      var(--eq-teal) 0 25%, var(--eq-amarelo) 25% 50%,
+      var(--eq-rosa) 50% 75%, var(--eq-azul) 75% 100%);
+}
+.deq-cab img { width: 78px; }
+.deq-cab-t { flex: 1; }
+.deq-cab-t h1 { margin: 0; font-size: 21px; color: var(--eq-azul); letter-spacing: .4px; }
+.deq-cab-t p { margin: 2px 0 0; font-size: 11px; color: var(--eq-cinza); font-weight: 600; }
+.deq-pilula {
+    background: var(--eq-azul); color: #fff;
+    font-size: 12px; font-weight: 800; letter-spacing: .5px;
+    padding: 7px 15px; border-radius: 999px;
+    white-space: nowrap;
+}
+
+.doc-eq h2 {
+    font-size: 11.5px; letter-spacing: .07em; text-transform: uppercase;
+    color: var(--eq-azul-escuro);
+    display: flex; align-items: center; gap: 8px;
+    margin: 14px 0 7px;
+}
+.doc-eq h2 .ponto { width: 10px; height: 10px; border-radius: 4px; background: var(--eq-azul); }
+.doc-eq h2 small { font-weight: 600; text-transform: none; letter-spacing: 0; color: var(--eq-cinza); }
+.deq-teal { background: var(--eq-teal) !important; }
+.deq-amarelo { background: var(--eq-amarelo) !important; }
+.deq-rosa { background: var(--eq-rosa) !important; }
+
+.deq-caixa { border: 1px solid var(--eq-linha); border-radius: 13px; overflow: hidden; background: #fff; }
+
+.deq-dados { display: grid; }
+.deq-dados > div { padding: 8px 13px; border-right: 1px solid var(--eq-linha); border-bottom: 1px solid var(--eq-linha); }
+.deq-dados small {
+    display: block; font-size: 9px; font-weight: 800;
+    letter-spacing: .06em; text-transform: uppercase; color: var(--eq-azul);
+}
+.deq-dados b { font-size: 12.5px; }
+
+.deq-chks { padding: 10px 12px; display: flex; flex-wrap: wrap; gap: 7px; }
+.deq-chk {
+    display: inline-flex; align-items: center; gap: 7px;
+    border: 1.5px solid var(--eq-linha); border-radius: 999px;
+    padding: 5px 12px; font-size: 11.5px; font-weight: 600; color: var(--eq-cinza);
+}
+.deq-chk i { width: 13px; height: 13px; border-radius: 4px; border: 1.5px solid var(--eq-cinza); }
+.deq-chk.marcado { border-color: var(--eq-azul); color: var(--eq-azul-escuro); background: #EEF5FB; font-weight: 800; }
+.deq-chk.marcado i { border-color: var(--eq-azul); background: var(--eq-azul); position: relative; }
+.deq-chk.marcado i::after {
+    content: '\2713'; color: #fff; font-size: 9.5px; font-weight: 900;
+    position: absolute; top: -2px; left: 2px;
+}
+.deq-cid { border-top: 1px solid var(--eq-linha); padding: 8px 13px; font-size: 12px; }
+.deq-cid small { font-size: 9px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--eq-azul); margin-right: 8px; }
+
+.deq-niveis { display: grid; grid-template-columns: 1fr 1fr 1fr; }
+.deq-niveis > div {
+    padding: 10px; text-align: center;
+    border-right: 1px solid var(--eq-linha);
+    font-size: 12.5px; font-weight: 700; color: var(--eq-cinza);
+}
+.deq-niveis > div:last-child { border-right: none; }
+.deq-niveis .marcado {
+    background: #EEF5FB; color: var(--eq-azul-escuro); font-weight: 800;
+    box-shadow: inset 0 -3px 0 var(--eq-azul);
+}
+
+.deq-texto { padding: 11px 14px; font-size: 12px; line-height: 1.7; min-height: 46px; white-space: pre-wrap; }
+
+.deq-freq { width: 100%; border-collapse: collapse; }
+.deq-freq th { background: var(--eq-azul); color: #fff; font-size: 10.5px; letter-spacing: .08em; padding: 7px 0; }
+.deq-freq td {
+    border-top: 1px solid var(--eq-linha);
+    border-right: 1px solid var(--eq-linha);
+    padding: 6px 0; text-align: center; width: 20%;
+    font-size: 11px;
+}
+.deq-freq td:last-child { border-right: none; }
+.deq-freq td.vazia { background: var(--eq-fundo); }
+.deq-fdata { font-weight: 700; color: var(--eq-cinza); margin-right: 6px; }
+.deq-fp, .deq-ff, .deq-fv {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 20px; height: 20px; border-radius: 6px;
+    font-size: 10.5px; font-weight: 800; vertical-align: middle;
+}
+.deq-fp { background: var(--eq-azul); color: #fff; }
+.deq-ff { background: var(--eq-rosa); color: #fff; }
+.deq-fv { border: 1.5px dashed var(--eq-linha); color: var(--eq-cinza); }
+.deq-freq-rodape {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 7px 13px; background: var(--eq-fundo);
+    border-top: 1px solid var(--eq-linha);
+    font-size: 10px; font-weight: 700; color: var(--eq-cinza);
+}
+.deq-freq-rodape b { color: var(--eq-azul-escuro); font-size: 11.5px; }
+
+.deq-reaval {
+    display: flex; align-items: center; gap: 10px;
+    margin-top: 14px;
+    background: var(--eq-fundo);
+    border: 1px solid var(--eq-linha);
+    border-radius: 12px;
+    padding: 9px 14px; font-size: 12px;
+}
+.deq-reaval small { font-size: 9px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--eq-azul); }
+.deq-reaval b { font-size: 13px; }
+
+.deq-local { text-align: right; font-size: 11.5px; font-weight: 600; color: var(--eq-cinza); margin-top: 12px; }
+.deq-assinatura {
+    width: 320px; margin: 26px auto 2px;
+    border-top: 1.5px solid var(--eq-tinta);
+    text-align: center; padding-top: 5px;
+    font-size: 11px; color: var(--eq-cinza); font-weight: 700;
+}
+.deq-rodape {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-top: 14px; padding-top: 8px;
+    border-top: 1px solid var(--eq-linha);
+    font-size: 9px; color: var(--eq-cinza); font-weight: 600;
+}
+.deq-rodape .pontos { display: flex; gap: 4px; }
+.deq-rodape .pontos i { width: 6px; height: 6px; border-radius: 50%; display: block; }
+
+@media print {
+    .doc-eq { border-radius: 0; padding: 0; }
+    .doc-eq, .deq-caixa, .deq-freq td, .deq-freq th,
+    .deq-fp, .deq-ff, .deq-chk, .deq-niveis .marcado {
+        -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    }
+}

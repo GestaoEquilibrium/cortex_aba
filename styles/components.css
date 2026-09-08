@@ -1787,9 +1787,10 @@
 
 @media print {
     .folha-overlay { position: static; padding: 0; background: #fff; overflow: visible; }
+    .folha-overlay .folha-pagina { box-shadow: none; max-width: none; border-radius: 0; }
     .folha-pagina { box-shadow: none; border-radius: 0; max-width: none; padding: 0; }
     .rel-trilho { border: 1px solid #ddd; }
-    body > *:not(#rel-sessao-overlay):not(#folha-overlay) { display: none !important; }
+    body > *:not(#rel-sessao-overlay):not(#folha-overlay):not(#doc-eq-overlay) { display: none !important; }
 }
 
 /* ── Sprint 17: ficha de tentativas v2, niveis e estimulos ────────────── */

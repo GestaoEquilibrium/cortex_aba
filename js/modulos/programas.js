@@ -1,56 +1,96 @@
 // ============================================================================
-// CORTEX aba - js/modulos/programas.js
-// Sprint 10: Intervencao.
-// - Biblioteca de programas de ensino (clinica)
-// - Programas e alvos por paciente (fila > intervencao > dominado)
-// - Folha de aplicacao na sessao: tentativas I / FT / FP / G / Ve / Vi
-// - Fechamento: resumo, promocao de alvos e evolucao diaria
-// Licao da v1: alvo so e promovido no fechamento da sessao.
+// CORTEX aba - js/modulos/programas.js  (Sprint 17: Ficha de tentativas v2)
+// - Biblioteca: cada programa define o NUMERO DE TENTATIVAS e QUAIS NIVEIS
+//   DE AJUDA se aplicam (decisao da coordenacao).
+// - Banco de Estimulos: cadastro unico da clinica (aplicador pode criar).
+// - Ficha de aplicacao em grade numerada: cada tentativa = estimulo +
+//   um nivel + reforcador digitado (banco de reforcadores so para sugestao).
+// - Independencia = C (Correto) / total de tentativas do programa.
+// - Cada sessao gera um retrato por programa (programa_sessao_registros).
+// Legado: sessoes antigas usavam alvos e siglas I/G/Ve/Vi (convertidas
+// para C/GE/VE/VI no banco) - relatorios antigos continuam legiveis.
 // ============================================================================
 
 window.MODULOS = window.MODULOS || {};
 
 window.MODULOS.programas = {
 
-  RESPOSTAS: [
-    ['I',  'Independente'],
+  NIVEIS: [
     ['FT', 'Fisica total'],
     ['FP', 'Fisica parcial'],
-    ['G',  'Gestual'],
-    ['Ve', 'Verbal'],
-    ['Vi', 'Visual']
+    ['MO', 'Modelacao'],
+    ['GE', 'Gestual'],
+    ['VE', 'Verbal'],
+    ['VI', 'Visual'],
+    ['ER', 'Erro'],
+    ['SR', 'Sem resposta'],
+    ['NA', 'Nao aplicado'],
+    ['FA', 'Falta'],
+    ['C',  'Correto']
   ],
+  NIVEIS_PADRAO: ['FT', 'FP', 'MO', 'GE', 'VE', 'VI', 'ER', 'SR', 'NA', 'FA', 'C'],
+
   AREAS: ['Mando', 'Tato', 'Ecoico', 'Imitacao', 'Ouvinte', 'Brincar',
           'Habilidades Sociais', 'AVD', 'Coordenacao Motora', 'Academico', 'Outros'],
 
+  CORES_AREA: {
+    'Mando': '#0EA5E9', 'Tato': '#8B5CF6', 'Ecoico': '#EC4899',
+    'Imitacao': '#F59E0B', 'Ouvinte': '#10B981', 'Brincar': '#F97316',
+    'Habilidades Sociais': '#6366F1', 'AVD': '#14B8A6',
+    'Coordenacao Motora': '#84CC16', 'Academico': '#7C3AED', 'Outros': '#64748B'
+  },
+
   el() { return document.getElementById('pagina'); },
 
-  // ══════════════════ BIBLIOTECA (menu Programas) ══════════════════
+  nomeNivel(sigla) {
+    const n = this.NIVEIS.find(x => x[0] === sigla);
+    return n ? n[1] : sigla;
+  },
+
+  legendaNiveis(siglas) {
+    return '<div class="niv-legenda">' + (siglas || this.NIVEIS_PADRAO).map(s =>
+      '<span class="niv-leg-item' + (s === 'C' ? ' correto' : '') + '">' +
+      '<b>' + s + '</b> ' + this.nomeNivel(s) + '</span>').join('') + '</div>';
+  },
+
+  // ═══════════════════ MENU PROGRAMAS (Biblioteca | Estimulos) ═══════════════════
 
   async render(el) {
-    const podeE = perm('programas') === 'E';
-
+    this._subaba = this._subaba || 'biblioteca';
     el.innerHTML =
       '<div class="pagina-cabecalho">' +
-      '  <div><h2>Biblioteca de Programas</h2>' +
-      '  <p class="sub">Programas de ensino da clinica. Os alvos sao definidos por paciente, no prontuario.</p></div>' +
-      (podeE ? '<button class="btn btn-primario" onclick="MODULOS.programas.modalPrograma()">+ Novo programa</button>' : '') +
+      '  <div><h2 id="prog-titulo">Biblioteca de Programas</h2>' +
+      '  <p class="sub" id="prog-sub">Programas de ensino da clinica.</p></div>' +
+      '  <div id="prog-acao-topo"></div>' +
       '</div>' +
-      '<div id="bib-lista"><div class="cartao"><p class="sub">Carregando...</p></div></div>';
+      '<div class="abas" style="margin-bottom:14px">' +
+      '  <button class="aba" data-sub="biblioteca" onclick="MODULOS.programas.trocarSubaba(\'biblioteca\')">Biblioteca</button>' +
+      '  <button class="aba" data-sub="estimulos" onclick="MODULOS.programas.trocarSubaba(\'estimulos\')">Estimulos</button>' +
+      '</div>' +
+      '<div id="prog-conteudo"><div class="cartao"><p class="sub">Carregando...</p></div></div>';
+    this.trocarSubaba(this._subaba);
+  },
+
+  trocarSubaba(sub) {
+    this._subaba = sub;
+    document.querySelectorAll('.aba[data-sub]').forEach(b =>
+      b.classList.toggle('ativa', b.dataset.sub === sub));
+    if (sub === 'biblioteca') this.renderBiblioteca();
+    else this.renderEstimulos();
+  },
+
+  // ─────────────── Biblioteca ───────────────
+
+  async renderBiblioteca() {
+    const podeE = perm('programas') === 'E';
+    document.getElementById('prog-titulo').textContent = 'Biblioteca de Programas';
+    document.getElementById('prog-sub').textContent =
+      'A coordenacao define, por programa, o numero de tentativas e os niveis de ajuda usados.';
+    document.getElementById('prog-acao-topo').innerHTML = podeE
+      ? '<button class="btn btn-primario" onclick="MODULOS.programas.modalPrograma()">+ Novo programa</button>' : '';
 
     await this.carregarBiblioteca();
-    this.desenharBiblioteca();
-  },
-
-  async carregarBiblioteca() {
-    const { data } = await sb.from('programas')
-      .select('*').order('area').order('nome');
-    this.biblioteca = data || [];
-  },
-
-  desenharBiblioteca() {
-    const podeE = perm('programas') === 'E';
-    const alvo = document.getElementById('bib-lista');
+    const alvo = document.getElementById('prog-conteudo');
     if (!alvo) return;
 
     if (this.biblioteca.length === 0) {
@@ -63,37 +103,68 @@ window.MODULOS.programas = {
     const porArea = {};
     this.biblioteca.forEach(p => { (porArea[p.area] = porArea[p.area] || []).push(p); });
 
-    alvo.innerHTML = Object.entries(porArea).map(([area, lista]) =>
-      '<div class="cartao"><h3>' + escaparHtml(area) +
-      ' <span class="selo selo-neutro">' + lista.length + '</span></h3>' +
-      lista.map(p =>
-        '<div class="linha-doc"><div><b>' + escaparHtml(p.nome) + '</b>' +
-        '<small>' + escaparHtml(p.objetivo || '') + '</small></div>' +
-        '<div class="pac-selos">' +
-        (p.ativo ? '' : '<span class="selo selo-neutro">Inativo</span>') +
-        (podeE ? '<button class="btn-chip" onclick="MODULOS.programas.modalPrograma(\'' + p.id + '\')">Editar</button>' : '') +
-        '</div></div>').join('') +
-      '</div>').join('');
+    alvo.innerHTML = Object.entries(porArea).map(([area, lista]) => {
+      const cor = this.CORES_AREA[area] || '#64748B';
+      return '<div class="cartao"><h3><span class="area-chip" style="background:' + cor + '1A; color:' + cor + '">' +
+        escaparHtml(area) + '</span> <span class="selo selo-neutro">' + lista.length + '</span></h3>' +
+        lista.map(p =>
+          '<div class="linha-doc"><div><b>' + escaparHtml(p.nome) + '</b>' +
+          '<small>' + escaparHtml(p.objetivo || '') + '</small></div>' +
+          '<div class="pac-selos">' +
+          '<span class="selo selo-neutro">' + (p.tentativas_padrao || 10) + ' tentativas</span>' +
+          (p.ativo ? '' : '<span class="selo selo-neutro">Inativo</span>') +
+          (podeE
+            ? '<button class="btn-chip" onclick="MODULOS.programas.modalPrograma(\'' + p.id + '\')">Editar</button>' : '') +
+          '</div></div>').join('') +
+        '</div>';
+    }).join('');
+  },
+
+  async carregarBiblioteca() {
+    const { data } = await sb.from('programas')
+      .select('*').order('area').order('nome');
+    this.biblioteca = data || [];
   },
 
   modalPrograma(id) {
     const p = id ? this.biblioteca.find(x => x.id === id) : null;
+    const niveisAtuais = (p && p.niveis && p.niveis.length) ? p.niveis : this.NIVEIS_PADRAO;
+
     abrirModal(p ? 'Editar programa' : 'Novo programa',
       '<div class="grade-form">' +
       '  <div class="campo c2"><label>Nome *</label><input id="bp-nome" value="' + escaparHtml(p ? p.nome : '') + '"></div>' +
       '  <div class="campo"><label>Area *</label><select id="bp-area">' +
       this.AREAS.map(a => '<option' + (p && p.area === a ? ' selected' : '') + '>' + a + '</option>').join('') +
       '  </select></div>' +
-      '  <div class="campo c3"><label>Objetivo</label><textarea id="bp-objetivo" rows="2">' +
+      '  <div class="campo"><label>N&ordm; de tentativas *</label>' +
+      '    <div class="stepper">' +
+      '      <button type="button" onclick="MODULOS.programas.passoTentativas(-1)">&minus;</button>' +
+      '      <input type="number" id="bp-tent" min="1" max="30" value="' + (p ? (p.tentativas_padrao || 10) : 10) + '">' +
+      '      <button type="button" onclick="MODULOS.programas.passoTentativas(1)">+</button>' +
+      '    </div>' +
+      '    <small class="sub">Toda ficha de aplicacao deste programa tera exatamente este numero de tentativas.</small></div>' +
+      '  <div class="campo c2"><label>Objetivo</label><textarea id="bp-objetivo" rows="2">' +
       escaparHtml(p ? p.objetivo || '' : '') + '</textarea></div>' +
       '  <div class="campo c3"><label>Procedimento</label><textarea id="bp-proc" rows="3">' +
       escaparHtml(p ? p.procedimento || '' : '') + '</textarea></div>' +
       '  <div class="campo c2"><label>Criterio de avanco</label><input id="bp-criterio" ' +
-      'placeholder="Ex.: 80% de independencia em 3 sessoes" value="' + escaparHtml(p ? p.criterio_avanco || '' : '') + '"></div>' +
+      'placeholder="Ex.: 80% de acertos em 3 sessoes consecutivas" value="' + escaparHtml(p ? p.criterio_avanco || '' : '') + '"></div>' +
       (p ? '<div class="campo"><label>Situacao</label><select id="bp-ativo">' +
         '<option value="true"' + (p.ativo ? ' selected' : '') + '>Ativo</option>' +
         '<option value="false"' + (!p.ativo ? ' selected' : '') + '>Inativo</option></select></div>' : '') +
       '</div>' +
+
+      '<div class="campo" style="margin-top:12px"><label>Niveis de ajuda deste programa ' +
+      '<small>(marque os que a aplicadora vera na ficha; C - Correto e sempre incluido)</small></label>' +
+      '<div class="niv-escolha">' +
+      this.NIVEIS.map(([v, r]) =>
+        '<label class="niv-opcao' + (v === 'C' ? ' travado' : '') + '">' +
+        '<input type="checkbox" class="bp-nivel" value="' + v + '"' +
+        (niveisAtuais.includes(v) || v === 'C' ? ' checked' : '') +
+        (v === 'C' ? ' disabled' : '') + '>' +
+        '<b>' + v + '</b> ' + r + '</label>').join('') +
+      '</div></div>' +
+
       '<div class="mensagem-erro" id="bp-erro"></div>' +
       '<div class="barra-acoes">' +
       '  <button class="btn btn-fantasma" onclick="fecharModal()">Cancelar</button>' +
@@ -102,18 +173,30 @@ window.MODULOS.programas = {
       '</div>', true);
   },
 
+  passoTentativas(delta) {
+    const el = document.getElementById('bp-tent');
+    el.value = Math.max(1, Math.min(30, (parseInt(el.value, 10) || 10) + delta));
+  },
+
   async salvarPrograma(id) {
     const erro = document.getElementById('bp-erro');
     erro.classList.remove('visivel');
+
+    const niveis = Array.from(document.querySelectorAll('.bp-nivel:checked')).map(cb => cb.value);
+    if (!niveis.includes('C')) niveis.push('C');
+
     const dados = {
       nome: document.getElementById('bp-nome').value.trim(),
       area: document.getElementById('bp-area').value,
+      tentativas_padrao: Math.max(1, Math.min(30, parseInt(document.getElementById('bp-tent').value, 10) || 10)),
+      niveis: niveis,
       objetivo: document.getElementById('bp-objetivo').value.trim() || null,
       procedimento: document.getElementById('bp-proc').value.trim() || null,
       criterio_avanco: document.getElementById('bp-criterio').value.trim() || null
     };
     if (id) dados.ativo = document.getElementById('bp-ativo').value === 'true';
     if (!dados.nome) { erro.textContent = 'Informe o nome.'; erro.classList.add('visivel'); return; }
+    if (niveis.length < 2) { erro.textContent = 'Marque ao menos um nivel de ajuda alem do C.'; erro.classList.add('visivel'); return; }
 
     const q = id
       ? sb.from('programas').update(dados).eq('id', id)
@@ -121,45 +204,153 @@ window.MODULOS.programas = {
     const { error } = await q;
     if (error) { erro.textContent = error.message; erro.classList.add('visivel'); return; }
     fecharModal();
-    await this.carregarBiblioteca();
-    this.desenharBiblioteca();
+    this.renderBiblioteca();
   },
 
-  // ══════════════════ PROGRAMAS DO PACIENTE (aba do prontuario) ══════════════════
+  // ─────────────── Banco de Estimulos ───────────────
+
+  async renderEstimulos() {
+    document.getElementById('prog-titulo').textContent = 'Banco de Estimulos';
+    document.getElementById('prog-sub').textContent =
+      'Cadastro unico da clinica. Usado na aplicacao dos programas, sem redigitar a cada sessao.';
+    const podeCriar = perm('evolucao') === 'E' || perm('programas') === 'E';
+    document.getElementById('prog-acao-topo').innerHTML = podeCriar
+      ? '<button class="btn btn-primario" onclick="MODULOS.programas.modalEstimulo()">+ Novo estimulo</button>' : '';
+
+    await this.carregarEstimulos();
+    const alvo = document.getElementById('prog-conteudo');
+    if (!alvo) return;
+    alvo.innerHTML =
+      '<div class="cartao">' +
+      '  <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px">' +
+      '    <input type="search" id="est-busca" placeholder="Buscar estimulo..." style="max-width:280px" ' +
+      '      oninput="MODULOS.programas.desenharEstimulos()">' +
+      '    <span class="selo selo-neutro" id="est-total"></span>' +
+      '  </div>' +
+      '  <div id="est-grade"></div>' +
+      '</div>';
+    this.desenharEstimulos();
+  },
+
+  async carregarEstimulos() {
+    const { data } = await sb.from('estimulos')
+      .select('*').order('categoria').order('nome');
+    this.estimulos = data || [];
+  },
+
+  desenharEstimulos() {
+    const alvo = document.getElementById('est-grade');
+    if (!alvo) return;
+    const busca = (document.getElementById('est-busca')?.value || '').toLowerCase();
+    const podeCriar = perm('evolucao') === 'E' || perm('programas') === 'E';
+
+    const lista = this.estimulos.filter(e =>
+      !busca || e.nome.toLowerCase().includes(busca) || (e.categoria || '').toLowerCase().includes(busca));
+    const totalEl = document.getElementById('est-total');
+    if (totalEl) totalEl.textContent = lista.length;
+
+    if (!lista.length) {
+      alvo.innerHTML = '<p class="sub">Nenhum estimulo ' + (busca ? 'encontrado' : 'cadastrado ainda') + '.</p>';
+      return;
+    }
+
+    const CORES = ['#0EA5E9', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#6366F1', '#14B8A6', '#F97316'];
+    const corCat = {};
+    let ci = 0;
+    alvo.innerHTML = '<div class="est-grade">' + lista.map(e => {
+      const cat = e.categoria || 'Outros';
+      if (!(cat in corCat)) corCat[cat] = CORES[ci++ % CORES.length];
+      const cor = corCat[cat];
+      return '<div class="est-cartao' + (e.ativo ? '' : ' inativo') + '"' +
+        (podeCriar ? ' onclick="MODULOS.programas.modalEstimulo(\'' + e.id + '\')"' : '') + '>' +
+        '<span class="est-inicial" style="background:' + cor + '1A; color:' + cor + '">' +
+        escaparHtml(e.nome[0].toUpperCase()) + '</span>' +
+        '<div><b>' + escaparHtml(e.nome) + '</b><small>' + escaparHtml(cat) +
+        (e.ativo ? '' : ' &middot; inativo') + '</small></div>' +
+        '</div>';
+    }).join('') + '</div>';
+  },
+
+  modalEstimulo(id) {
+    const e = id ? this.estimulos.find(x => x.id === id) : null;
+    const categorias = [...new Set(this.estimulos.map(x => x.categoria).filter(Boolean))];
+    abrirModal(e ? 'Editar estimulo' : 'Novo estimulo',
+      '<div class="grade-form">' +
+      '  <div class="campo c2"><label>Nome *</label><input id="es-nome" value="' + escaparHtml(e ? e.nome : '') + '"></div>' +
+      '  <div class="campo"><label>Categoria</label>' +
+      '    <input id="es-cat" list="es-cats" placeholder="Ex.: Objetos, Cores..." value="' + escaparHtml(e ? e.categoria || '' : '') + '">' +
+      '    <datalist id="es-cats">' + categorias.map(c => '<option value="' + escaparHtml(c) + '">').join('') + '</datalist>' +
+      '  </div>' +
+      (e ? '<div class="campo"><label>Situacao</label><select id="es-ativo">' +
+        '<option value="true"' + (e.ativo ? ' selected' : '') + '>Ativo</option>' +
+        '<option value="false"' + (!e.ativo ? ' selected' : '') + '>Inativo</option></select></div>' : '') +
+      '</div>' +
+      '<div class="mensagem-erro" id="es-erro"></div>' +
+      '<div class="barra-acoes">' +
+      '  <button class="btn btn-fantasma" onclick="fecharModal()">Cancelar</button>' +
+      '  <button class="btn btn-primario" onclick="MODULOS.programas.salvarEstimulo(' +
+      (e ? '\'' + e.id + '\'' : 'null') + ')">Salvar</button>' +
+      '</div>');
+  },
+
+  async salvarEstimulo(id) {
+    const erro = document.getElementById('es-erro');
+    erro.classList.remove('visivel');
+    const dados = {
+      nome: document.getElementById('es-nome').value.trim(),
+      categoria: document.getElementById('es-cat').value.trim() || null
+    };
+    if (id) dados.ativo = document.getElementById('es-ativo').value === 'true';
+    else dados.criado_por = window.CORTEX_SESSAO.user.id;
+    if (!dados.nome) { erro.textContent = 'Informe o nome.'; erro.classList.add('visivel'); return; }
+
+    const q = id
+      ? sb.from('estimulos').update(dados).eq('id', id)
+      : sb.from('estimulos').insert(dados);
+    const { error } = await q;
+    if (error) { erro.textContent = error.message; erro.classList.add('visivel'); return; }
+    fecharModal();
+    this.renderEstimulos();
+  },
+
+  // ═══════════════════ ABA PROGRAMAS DO PRONTUARIO ═══════════════════
 
   async htmlProgramasPaciente(pacienteId) {
     const podeE = perm('programas') === 'E';
     this._pacProgPaciente = pacienteId;
 
     const { data } = await sb.from('paciente_programas')
-      .select('id, status, programas(id, nome, area, criterio_avanco), alvos(id, descricao, status, ordem)')
+      .select('id, status, programas(id, nome, area, objetivo, procedimento, tentativas_padrao, criterio_avanco)')
       .eq('paciente_id', pacienteId)
       .order('criado_em');
     this._progLista = data || [];
     const lista = this._progLista;
 
+    // Ultimo retrato de cada programa (para a barra de progresso)
+    this._ultimoPct = {};
+    if (lista.length) {
+      const { data: fotos } = await sb.from('programa_sessao_registros')
+        .select('paciente_programa_id, pct_corretos, criado_em')
+        .in('paciente_programa_id', lista.map(p => p.id))
+        .order('criado_em');
+      (fotos || []).forEach(f => { this._ultimoPct[f.paciente_programa_id] = f.pct_corretos; });
+    }
+
     const nInt = lista.filter(p => p.status === 'em_intervencao').length;
     const nFila = lista.filter(p => p.status === 'na_fila').length;
     const nDom = lista.filter(p => p.status === 'dominado').length;
 
-    // Barra de acoes compacta
     let html = '<div class="aba-acoes">';
     if (perm('evolucao') === 'E') {
-      html += '<button class="btn btn-primario" title="Abre a folha de aplicacao por cima do prontuario. Usa a sessao de hoje ou cria uma avulsa; ao encerrar fica salva com data e detalhes." ' +
+      html += '<button class="btn btn-primario" title="Abre a ficha de aplicacao por cima do prontuario. Usa a sessao de hoje ou cria uma avulsa; ao encerrar fica salva com data e detalhes." ' +
         'onclick="MODULOS.programas.abrirFolhaProntuario(\'' + pacienteId + '\')">&#9654; Iniciar atendimento</button>';
     }
     if (podeE) {
-      html += '<button class="btn btn-fantasma" title="Escolha um programa da biblioteca e defina os alvos deste paciente." ' +
+      html += '<button class="btn btn-fantasma" title="Escolha um programa da biblioteca para este paciente." ' +
         'onclick="MODULOS.programas.modalAtribuir(\'' + pacienteId + '\')">+ Adicionar programa</button>';
     }
-
-    // Filtros interativos
     this._progFiltro = this._progFiltro || 'em_intervencao';
-    const filtros = [
-      ['em_intervencao', 'Em intervencao', nInt],
-      ['na_fila', 'Na fila', nFila],
-      ['dominado', 'Dominados', nDom]
-    ];
+    const filtros = [['em_intervencao', 'Em intervencao', nInt], ['na_fila', 'Na fila', nFila], ['dominado', 'Dominados', nDom]];
     html += '<div class="filtro-chips">' + filtros.map(([v, r, n]) =>
       '<button class="fchip' + (this._progFiltro === v ? ' ativo' : '') + '" ' +
       'onclick="MODULOS.programas.filtrarProg(\'' + v + '\')">' + r +
@@ -176,13 +367,6 @@ window.MODULOS.programas = {
     return html;
   },
 
-  CORES_AREA: {
-    'Mando': '#0EA5E9', 'Tato': '#8B5CF6', 'Ecoico': '#EC4899',
-    'Imitacao': '#F59E0B', 'Ouvinte': '#10B981', 'Brincar': '#F97316',
-    'Habilidades Sociais': '#6366F1', 'AVD': '#14B8A6',
-    'Coordenacao Motora': '#84CC16', 'Academico': '#7C3AED', 'Outros': '#64748B'
-  },
-
   filtrarProg(status) {
     this._progFiltro = status;
     document.querySelectorAll('.filtro-chips .fchip').forEach(b =>
@@ -194,9 +378,7 @@ window.MODULOS.programas = {
   },
 
   gradeProgramas() {
-    const podeE = perm('programas') === 'E';
     const doGrupo = (this._progLista || []).filter(pp => pp.status === this._progFiltro);
-
     if (!doGrupo.length) {
       const vazio = {
         em_intervencao: 'Nenhum programa em intervencao. Adicione da biblioteca ou promova um da fila.',
@@ -207,21 +389,19 @@ window.MODULOS.programas = {
     }
 
     return '<div class="prog-grade">' + doGrupo.map(pp => {
-      const alvos = (pp.alvos || []).sort((a, b) => a.ordem - b.ordem);
-      const dom = alvos.filter(a => a.status === 'dominado').length;
-      const pct = alvos.length ? Math.round(dom * 100 / alvos.length) : 0;
       const cor = this.CORES_AREA[pp.programas.area] || '#64748B';
-
-      return '<div class="prog-cartao clicavel" onclick="MODULOS.programas.modalAlvos(\'' + pp.id + '\')">' +
+      const pct = this._ultimoPct[pp.id];
+      return '<div class="prog-cartao clicavel" onclick="MODULOS.programas.modalProgramaPaciente(\'' + pp.id + '\')">' +
         '<div class="prog-cab">' +
         '  <span class="area-chip" style="background:' + cor + '1A; color:' + cor + '">' +
              escaparHtml(pp.programas.area) + '</span>' +
-        (podeE ? '<button class="btn-chip" onclick="event.stopPropagation(); MODULOS.programas.modalAlvos(\'' + pp.id + '\')">Alvos</button>' : '') +
+        '  <span class="selo selo-neutro">' + (pp.programas.tentativas_padrao || 10) + ' tentativas</span>' +
         '</div>' +
         '<b class="prog-nome">' + escaparHtml(pp.programas.nome) + '</b>' +
-        '<div class="prog-progresso"><div class="prog-preench" style="width:' + pct + '%; background:' + cor + '"></div></div>' +
-        '<small class="prog-meta">' + dom + ' de ' + alvos.length + ' alvo(s) dominado(s)' +
-        (alvos.length ? ' &middot; ' + pct + '%' : '') + '</small>' +
+        '<div class="prog-progresso"><div class="prog-preench" style="width:' + (pct || 0) + '%; background:' + cor + '"></div></div>' +
+        '<small class="prog-meta">' +
+        (pct !== undefined ? 'Ultima sessao: ' + pct + '% de corretos' : 'Sem sessoes registradas ainda') +
+        '</small>' +
         '</div>';
     }).join('') + '</div>';
   },
@@ -237,12 +417,11 @@ window.MODULOS.programas = {
     }
     abrirModal('Programa para o paciente',
       '<div class="campo"><label>Programa da biblioteca *</label><select id="at-prog">' +
-      ativos.map(p => '<option value="' + p.id + '">' + escaparHtml(p.area + ' - ' + p.nome) + '</option>').join('') +
+      ativos.map(p => '<option value="' + p.id + '">' +
+        escaparHtml(p.area + ' - ' + p.nome + ' (' + (p.tentativas_padrao || 10) + ' tentativas)') + '</option>').join('') +
       '</select></div>' +
-      '<div class="campo"><label>Alvos (um por linha) *</label>' +
-      '<textarea id="at-alvos" rows="5" placeholder="Ex.:\nbola\ncarro\ncopo"></textarea></div>' +
       '<div class="campo"><label>Situacao inicial</label><select id="at-status">' +
-      '<option value="em_intervencao">Em intervencao (entra na folha)</option>' +
+      '<option value="em_intervencao">Em intervencao (entra na ficha)</option>' +
       '<option value="na_fila">Na fila</option></select></div>' +
       '<div class="mensagem-erro" id="at-erro"></div>' +
       '<div class="barra-acoes">' +
@@ -254,114 +433,46 @@ window.MODULOS.programas = {
   async salvarAtribuicao(pacienteId) {
     const erro = document.getElementById('at-erro');
     erro.classList.remove('visivel');
-    const alvos = document.getElementById('at-alvos').value
-      .split('\n').map(t => t.trim()).filter(Boolean);
-    if (alvos.length === 0) { erro.textContent = 'Defina ao menos um alvo.'; erro.classList.add('visivel'); return; }
-
-    try {
-      const { data: pp, error: e1 } = await sb.from('paciente_programas').insert({
-        paciente_id: pacienteId,
-        programa_id: document.getElementById('at-prog').value,
-        status: document.getElementById('at-status').value,
-        criado_por: window.CORTEX_SESSAO.user.id
-      }).select('id, status').single();
-      if (e1) throw new Error(e1.message);
-
-      const statusAlvo = pp.status === 'em_intervencao' ? 'em_intervencao' : 'em_aberto';
-      const { error: e2 } = await sb.from('alvos').insert(
-        alvos.map((d, i) => ({ paciente_programa_id: pp.id, descricao: d, ordem: i + 1, status: statusAlvo })));
-      if (e2) throw new Error(e2.message);
-
-      fecharModal();
-      this.recarregarAbaProgramas();
-    } catch (e) {
-      erro.textContent = e.message; erro.classList.add('visivel');
-    }
+    const { error } = await sb.from('paciente_programas').insert({
+      paciente_id: pacienteId,
+      programa_id: document.getElementById('at-prog').value,
+      status: document.getElementById('at-status').value,
+      criado_por: window.CORTEX_SESSAO.user.id
+    });
+    if (error) { erro.textContent = error.message; erro.classList.add('visivel'); return; }
+    fecharModal();
+    this.recarregarAbaProgramas();
   },
 
-  async modalAlvos(ppId) {
-    const { data: pp } = await sb.from('paciente_programas')
-      .select('id, status, paciente_id, programas(nome), alvos(id, descricao, status, ordem, nivel_dominio)')
-      .eq('id', ppId).single();
+  modalProgramaPaciente(ppId) {
+    const pp = (this._progLista || []).find(x => x.id === ppId);
     if (!pp) return;
     this._ppAtual = pp;
+    const p = pp.programas;
+    const cor = this.CORES_AREA[p.area] || '#64748B';
 
-    const alvos = (pp.alvos || []).sort((a, b) => a.ordem - b.ordem);
-    const seloAlvo = s =>
-      s === 'em_intervencao' ? '<span class="selo selo-roxo">Intervencao</span>' :
-      s === 'dominado' ? '<span class="selo selo-ok">Dominado</span>' :
-      s === 'manutencao' ? '<span class="selo selo-warn">Manutencao</span>' :
-      '<span class="selo selo-neutro">Aberto</span>';
-
-    abrirModal('Alvos &middot; ' + escaparHtml(pp.programas.nome),
-      alvos.map(a =>
-        '<div class="linha-doc"><div><b>' + escaparHtml(a.descricao) + '</b>' +
-        (a.nivel_dominio ? '<small>Dominio: ' + a.nivel_dominio + '/10</small>' : '<small>Dominio: sem registro</small>') +
-        '</div>' +
-        '<div class="pac-selos">' +
-        (a.nivel_dominio ? '<span class="selo selo-roxo">' + a.nivel_dominio + '/10</span>' : '') +
-        '<button class="btn-chip" onclick="MODULOS.programas.historicoAlvo(\'' + a.id + '\', \'' +
-        escaparHtml(a.descricao).replace(/'/g, '') + '\')">Historico</button>' +
-        seloAlvo(a.status) +
-        '<select onchange="MODULOS.programas.mudarAlvo(\'' + a.id + '\', this.value)" ' +
-        'style="padding:5px 8px; border:1.5px solid var(--line); border-radius:8px; font:inherit; font-size:11px; background:var(--surface); color:var(--ink)">' +
-        [['em_aberto', 'Aberto'], ['em_intervencao', 'Intervencao'], ['manutencao', 'Manutencao'], ['dominado', 'Dominado']]
-          .map(([v, r]) => '<option value="' + v + '"' + (a.status === v ? ' selected' : '') + '>' + r + '</option>').join('') +
-        '</select></div></div>').join('') +
-      '<div class="grade-form" style="margin-top:12px">' +
-      '  <div class="campo c2"><label>Novo alvo</label><input id="na-desc"></div>' +
-      '  <div class="campo" style="display:flex; align-items:flex-end">' +
-      '    <button class="btn btn-fantasma" onclick="MODULOS.programas.addAlvo()">Adicionar</button></div>' +
-      '</div>' +
-      '<div class="campo"><label>Situacao do programa</label><select id="pp-status" ' +
-      'onchange="MODULOS.programas.mudarPrograma(this.value)">' +
-      [['na_fila', 'Na fila'], ['em_intervencao', 'Em intervencao'], ['dominado', 'Dominado']]
-        .map(([v, r]) => '<option value="' + v + '"' + (pp.status === v ? ' selected' : '') + '>' + r + '</option>').join('') +
-      '</select></div>');
-  },
-
-  async mudarAlvo(alvoId, status) {
-    await sb.from('alvos').update({ status: status }).eq('id', alvoId);
-    this.recarregarAbaProgramas();
+    abrirModal(escaparHtml(p.nome),
+      '<p><span class="area-chip" style="background:' + cor + '1A; color:' + cor + '">' + escaparHtml(p.area) + '</span> ' +
+      '<span class="selo selo-neutro">' + (p.tentativas_padrao || 10) + ' tentativas por sessao</span></p>' +
+      (p.objetivo ? '<div class="caixa-info larga" style="margin-top:10px"><small>Objetivo</small><b>' +
+        escaparHtml(p.objetivo) + '</b></div>' : '') +
+      (p.procedimento ? '<div class="caixa-info larga" style="margin-top:8px"><small>Procedimento</small><b>' +
+        escaparHtml(p.procedimento) + '</b></div>' : '') +
+      (p.criterio_avanco ? '<div class="caixa-info larga" style="margin-top:8px"><small>Criterio de avanco</small><b>' +
+        escaparHtml(p.criterio_avanco) + '</b></div>' : '') +
+      (perm('programas') === 'E'
+        ? '<div class="campo" style="margin-top:12px"><label>Situacao do programa</label><select ' +
+          'onchange="MODULOS.programas.mudarPrograma(this.value)">' +
+          [['na_fila', 'Na fila'], ['em_intervencao', 'Em intervencao'], ['dominado', 'Dominado']]
+            .map(([v, r]) => '<option value="' + v + '"' + (pp.status === v ? ' selected' : '') + '>' + r + '</option>').join('') +
+          '</select></div>'
+        : ''));
   },
 
   async mudarPrograma(status) {
     await sb.from('paciente_programas').update({ status: status }).eq('id', this._ppAtual.id);
+    fecharModal();
     this.recarregarAbaProgramas();
-  },
-
-  async addAlvo() {
-    const desc = document.getElementById('na-desc').value.trim();
-    if (!desc) return;
-    const ordem = (this._ppAtual.alvos || []).length + 1;
-    await sb.from('alvos').insert({
-      paciente_programa_id: this._ppAtual.id, descricao: desc, ordem: ordem,
-      status: this._ppAtual.status === 'em_intervencao' ? 'em_intervencao' : 'em_aberto'
-    });
-    this.modalAlvos(this._ppAtual.id);
-  },
-
-  async historicoAlvo(alvoId, descricao) {
-    const { data } = await sb.from('alvo_sessao_registros')
-      .select('tentativas, pct_independencia, nivel_dominio, observacao, sessoes(data, hora_inicio)')
-      .eq('alvo_id', alvoId)
-      .order('criado_em', { ascending: false })
-      .limit(40);
-    const lista = data || [];
-
-    abrirModal('Historico do alvo &middot; ' + escaparHtml(descricao),
-      (lista.length === 0
-        ? '<p class="sub">Ainda sem registros de sessao para este alvo. O retrato e gravado no encerramento de cada sessao.</p>'
-        : lista.map(r =>
-            '<div class="linha-doc" style="align-items:flex-start"><div style="flex:1">' +
-            '<b>' + (r.sessoes ? new Date(r.sessoes.data + 'T12:00:00').toLocaleDateString('pt-BR') : '-') + '</b>' +
-            '<small>' + r.tentativas + ' tentativas &middot; ' + r.pct_independencia + '% I</small>' +
-            (r.observacao
-              ? '<p style="margin-top:5px; font-size:12px; line-height:1.6; white-space:pre-wrap">' +
-                escaparHtml(r.observacao) + '</p>' : '') +
-            '</div>' +
-            '<span class="selo selo-roxo">' + r.nivel_dominio + '/10</span>' +
-            '</div>').join('')), true);
   },
 
   recarregarAbaProgramas() {
@@ -371,7 +482,7 @@ window.MODULOS.programas = {
     }
   },
 
-  // ══════════════════ FOLHA DE APLICACAO (sessao) ══════════════════
+  // ═══════════════════ FICHA DE APLICACAO (grade de tentativas) ═══════════════════
 
   elFolha() {
     return document.getElementById('folha-corpo') || this.el();
@@ -385,157 +496,8 @@ window.MODULOS.programas = {
     }
   },
 
-  async carregarAtendimentos(pacienteId) {
-    const alvo = document.getElementById('prog-atds');
-    if (!alvo) return;
-
-    const { data: ss } = await sb.from('sessoes')
-      .select('id, data, hora_inicio, evolucoes(texto)')
-      .eq('paciente_id', pacienteId).eq('status', 'concluida')
-      .order('data', { ascending: false }).order('hora_inicio', { ascending: false })
-      .limit(8);
-    const lista = ss || [];
-    if (!lista.length) {
-      alvo.innerHTML = '<p class="sub">Nenhum atendimento registrado ainda.</p>';
-      return;
-    }
-
-    const { data: fotos } = await sb.from('alvo_sessao_registros')
-      .select('sessao_id, pct_independencia')
-      .in('sessao_id', lista.map(s => s.id));
-    const porSessao = {};
-    (fotos || []).forEach(r => {
-      (porSessao[r.sessao_id] = porSessao[r.sessao_id] || []).push(r.pct_independencia || 0);
-    });
-
-    alvo.innerHTML = lista.map(s => {
-      const pcts = porSessao[s.id] || [];
-      const media = pcts.length ? Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length) : null;
-      const evo = (s.evolucoes && s.evolucoes[0] && s.evolucoes[0].texto) || '';
-      return '<div class="atd-item clicavel" onclick="MODULOS.programas.abrirRelatorioSessao(\'' + s.id + '\')">' +
-        '<div class="atd-meta"><b>' + s.data.split('-').reverse().join('/') + '</b> as ' +
-        s.hora_inicio.slice(0, 5) +
-        (pcts.length ? ' &middot; ' + pcts.length + ' alvo(s)' : '') +
-        (media !== null ? ' &middot; <span class="atd-pct">' + media + '% independente</span>' : '') +
-        ' <span class="atd-abrir">Ver relatorio &rarr;</span></div>' +
-        (evo ? '<p class="sub">' + escaparHtml(evo.length > 140 ? evo.slice(0, 140) + '...' : evo) + '</p>' : '') +
-        '</div>';
-    }).join('');
-  },
-
-  async abrirRelatorioSessao(sessaoId) {
-    const ov = document.createElement('div');
-    ov.id = 'rel-sessao-overlay';
-    ov.className = 'folha-overlay nao-imprime-fundo';
-    ov.innerHTML = '<div class="folha-pagina" id="rel-sessao-corpo"><p class="sub">Montando o relatorio...</p></div>';
-    document.body.appendChild(ov);
-
-    const [rS, rFotos, rTent, rEvo, rComp] = await Promise.all([
-      sb.from('sessoes')
-        .select('id, data, hora_inicio, duracao_min, pacientes(nome), profissional:profiles!sessoes_aplicador_id_fkey(nome)')
-        .eq('id', sessaoId).single(),
-      sb.from('alvo_sessao_registros')
-        .select('alvo_id, tentativas, pct_independencia, nivel_dominio, observacao, alvos(descricao, paciente_programas(programas(nome, area)))')
-        .eq('sessao_id', sessaoId),
-      sb.from('registros_tentativas').select('alvo_id, resposta').eq('sessao_id', sessaoId),
-      sb.from('evolucoes').select('texto, aplicador:profiles!evolucoes_aplicador_id_fkey(nome)').eq('sessao_id', sessaoId),
-      sb.from('comportamento_registros')
-        .select('quantidade, duracao_seg, antecedente, descricao, consequencia, comportamentos(nome, medida)')
-        .eq('sessao_id', sessaoId)
-    ]);
-
-    const s = rS.data;
-    if (!s) { document.getElementById('rel-sessao-overlay')?.remove(); return; }
-    const fotos = rFotos.data || [];
-    const tents = rTent.data || [];
-    const evo = (rEvo.data && rEvo.data[0]) || null;
-    const comps = rComp.data || [];
-
-    const porResp = {};
-    tents.forEach(t => {
-      porResp[t.alvo_id] = porResp[t.alvo_id] || {};
-      porResp[t.alvo_id][t.resposta] = (porResp[t.alvo_id][t.resposta] || 0) + 1;
-    });
-
-    const dataFmt = s.data.split('-').reverse().join('/');
-
-    // Grafico da sessao: uma barra por alvo (% independente)
-    let grafico = '';
-    if (fotos.length) {
-      grafico = '<div class="rel-bloco"><h4>Grafico da sessao <small>% de independencia por alvo</small></h4>' +
-        '<div class="rel-grafico">' +
-        fotos.map(fx => {
-          const area = fx.alvos && fx.alvos.paciente_programas && fx.alvos.paciente_programas.programas
-            ? fx.alvos.paciente_programas.programas.area : 'Outros';
-          const cor = this.CORES_AREA[area] || '#64748B';
-          const pct = fx.pct_independencia || 0;
-          return '<div class="rel-col" title="' + escaparHtml(fx.alvos ? fx.alvos.descricao : '') + ': ' + pct + '%">' +
-            '<span class="rel-pct">' + pct + '%</span>' +
-            '<div class="rel-trilho"><div class="rel-barra" style="height:' + pct + '%; background:' + cor + '"></div></div>' +
-            '<span class="rel-rotulo">' + escaparHtml((fx.alvos ? fx.alvos.descricao : '').slice(0, 16)) + '</span>' +
-            '</div>';
-        }).join('') + '</div></div>';
-    }
-
-    const SIGLAS = ['I', 'FT', 'FP', 'G', 'Ve', 'Vi'];
-    let tabela = '';
-    if (fotos.length) {
-      tabela = '<div class="rel-bloco"><h4>Alvos trabalhados</h4>' +
-        fotos.map(fx => {
-          const prog = fx.alvos && fx.alvos.paciente_programas && fx.alvos.paciente_programas.programas;
-          const resps = porResp[fx.alvo_id] || {};
-          const detalhe = SIGLAS.filter(x => resps[x]).map(x => x + ' ' + resps[x]).join(' &middot; ');
-          return '<div class="rel-alvo">' +
-            '<div class="rel-alvo-topo"><b>' + escaparHtml(fx.alvos ? fx.alvos.descricao : '-') + '</b>' +
-            '<span class="selo selo-neutro">N' + (fx.nivel_dominio || '-') + '/10</span></div>' +
-            '<small>' + (prog ? escaparHtml(prog.nome) + ' &middot; ' : '') +
-            (fx.tentativas || 0) + ' tentativa(s) &middot; ' + (fx.pct_independencia || 0) + '% independente' +
-            (detalhe ? ' &middot; ' + detalhe : '') + '</small>' +
-            (fx.observacao ? '<p class="sub">' + escaparHtml(fx.observacao) + '</p>' : '') +
-            '</div>';
-        }).join('') + '</div>';
-    }
-
-    let compHtml = '';
-    if (comps.length) {
-      compHtml = '<div class="rel-bloco"><h4>Comportamentos registrados</h4>' +
-        comps.map(r => {
-          const nome = r.comportamentos ? r.comportamentos.nome : '-';
-          const medida = r.comportamentos && r.comportamentos.medida === 'duracao'
-            ? Math.round((r.duracao_seg || 0) / 60) + ' min' : (r.quantidade || 0) + 'x';
-          return '<div class="rel-alvo"><div class="rel-alvo-topo"><b>' + escaparHtml(nome) + '</b>' +
-            '<span class="selo selo-st-vermelho">' + medida + '</span></div>' +
-            ((r.antecedente || r.descricao || r.consequencia)
-              ? '<small>' + ['A: ' + (r.antecedente || '-'), 'B: ' + (r.descricao || '-'), 'C: ' + (r.consequencia || '-')]
-                  .map(escaparHtml).join(' &middot; ') + '</small>'
-              : '') + '</div>';
-        }).join('') + '</div>';
-    }
-
-    document.getElementById('rel-sessao-corpo').innerHTML =
-      '<div class="pagina-cabecalho nao-imprime">' +
-      '  <div><button class="btn-voltar" onclick="document.getElementById(\'rel-sessao-overlay\').remove()">&larr; Fechar</button>' +
-      '  <h2>Relatorio da sessao</h2></div>' +
-      '  <button class="btn btn-primario" onclick="window.print()">&#128424; Imprimir / PDF</button>' +
-      '</div>' +
-      '<div class="rel-imprimivel" id="rel-imprimivel">' +
-      '  <div class="rel-cab-imp">' +
-      '    <h2>Relatorio de sessao &middot; CORTEX aba</h2>' +
-      '    <p><b>' + escaparHtml(s.pacientes.nome) + '</b> &middot; ' + dataFmt + ' as ' + s.hora_inicio.slice(0, 5) +
-      '    &middot; ' + s.duracao_min + ' min &middot; Profissional: ' +
-           escaparHtml(s.profissional ? s.profissional.nome : '-') + '</p>' +
-      '  </div>' +
-      grafico + tabela + compHtml +
-      (evo ? '<div class="rel-bloco"><h4>Evolucao</h4><p class="rel-evo">' + escaparHtml(evo.texto) + '</p>' +
-             (evo.aplicador ? '<small class="sub">Registrado por ' + escaparHtml(evo.aplicador.nome) + '</small>' : '') + '</div>'
-           : '<div class="rel-bloco"><p class="sub">Sessao sem evolucao registrada.</p></div>') +
-      '</div>';
-  },
-
   async abrirFolhaProntuario(pacienteId) {
     const hoje = new Date().toISOString().slice(0, 10);
-
-    // Usa a sessao de hoje da agenda, se existir; senao cria uma avulsa agora
     const { data: existente } = await sb.from('sessoes')
       .select('id, status')
       .eq('paciente_id', pacienteId).eq('data', hoje)
@@ -567,58 +529,67 @@ window.MODULOS.programas = {
       ov.innerHTML = '<div class="folha-pagina" id="folha-corpo"></div>';
       document.body.appendChild(ov);
     }
-    const el = this.elFolha();
-    el.innerHTML = '<div class="cartao"><p class="sub">Preparando a folha de aplicacao...</p></div>';
+    this.elFolha().innerHTML = '<div class="cartao"><p class="sub">Preparando a ficha de aplicacao...</p></div>';
 
     const { data: s } = await sb.from('sessoes')
       .select('id, data, hora_inicio, status, paciente_id, pacientes(nome)')
       .eq('id', sessaoId).single();
     if (!s) { this._overlay ? this.fecharFolha(false) : abrirModulo('agenda'); return; }
 
-    const { data: pps } = await sb.from('paciente_programas')
-      .select('id, programas(id, nome, area, procedimento), alvos(id, descricao, status, ordem, nivel_dominio)')
-      .eq('paciente_id', s.paciente_id)
-      .eq('status', 'em_intervencao');
+    const [rPps, rRegs, rEst, rRef] = await Promise.all([
+      sb.from('paciente_programas')
+        .select('id, programas(id, nome, area, procedimento, tentativas_padrao, niveis, criterio_avanco)')
+        .eq('paciente_id', s.paciente_id)
+        .eq('status', 'em_intervencao'),
+      sb.from('registros_tentativas')
+        .select('id, paciente_programa_id, ordem, resposta, estimulo_id, reforcador')
+        .eq('sessao_id', sessaoId),
+      sb.from('estimulos').select('id, nome, categoria').eq('ativo', true).order('categoria').order('nome'),
+      sb.from('reforcadores').select('nome').order('nome').limit(200)
+    ]);
 
-    const { data: regs } = await sb.from('registros_tentativas')
-      .select('id, alvo_id, resposta').eq('sessao_id', sessaoId);
+    const pps = rPps.data || [];
+    const fichas = {};
+    pps.forEach(pp => {
+      const n = pp.programas.tentativas_padrao || 10;
+      fichas[pp.id] = Array.from({ length: n }, () => ({ estimulo_id: '', resposta: '', reforcador: '' }));
+    });
+    (rRegs.data || []).forEach(r => {
+      const g = fichas[r.paciente_programa_id];
+      if (g && r.ordem >= 1 && r.ordem <= g.length) {
+        g[r.ordem - 1] = { estimulo_id: r.estimulo_id || '', resposta: r.resposta || '', reforcador: r.reforcador || '' };
+      }
+    });
 
     this._folha = {
       sessao: s,
-      programas: pps || [],
-      registros: regs || []
+      programas: pps,
+      fichas: fichas,
+      estimulos: rEst.data || [],
+      reforcadores: (rRef.data || []).map(x => x.nome)
     };
-
+    this._sujo = false;
     this._folha.faixaComp = await MODULOS.comportamentos.faixaFolha(s.paciente_id, sessaoId);
 
-    if (s.status === 'checkin') {
+    if (s.status === 'checkin' || s.status === 'agendada') {
       await sb.from('sessoes').update({ status: 'em_atendimento' }).eq('id', sessaoId);
     }
 
     this.desenharFolha();
   },
 
-  async atualizarFaixaComp() {
-    const f = this._folha;
-    if (!f || !document.getElementById('faixa-comp')) return;
-    const { data: regs } = await sb.from('comportamento_registros')
-      .select('comportamento_id, quantidade, duracao_seg')
-      .eq('sessao_id', f.sessao.id);
-    const soma = {};
-    (regs || []).forEach(r => {
-      soma[r.comportamento_id] = (soma[r.comportamento_id] || 0) +
-        (r.quantidade || Math.round((r.duracao_seg || 0) / 60) || 0);
+  opcoesEstimulo(selecionado) {
+    const porCat = {};
+    this._folha.estimulos.forEach(e => {
+      (porCat[e.categoria || 'Outros'] = porCat[e.categoria || 'Outros'] || []).push(e);
     });
-    MODULOS.comportamentos.lista.forEach(c2 => {
-      const b = document.getElementById('comp-badge-' + c2.id);
-      if (b) b.textContent = soma[c2.id] || 0;
+    let html = '<option value="">&mdash; sem estimulo &mdash;</option>';
+    Object.entries(porCat).forEach(([cat, lista]) => {
+      html += '<optgroup label="' + escaparHtml(cat) + '">' +
+        lista.map(e => '<option value="' + e.id + '"' + (e.id === selecionado ? ' selected' : '') + '>' +
+          escaparHtml(e.nome) + '</option>').join('') + '</optgroup>';
     });
-  },
-
-  contagem(alvoId) {
-    const regs = this._folha.registros.filter(r => r.alvo_id === alvoId);
-    const i = regs.filter(r => r.resposta === 'I').length;
-    return { total: regs.length, i: i, pct: regs.length ? Math.round(i * 100 / regs.length) : 0 };
+    return html;
   },
 
   desenharFolha() {
@@ -626,128 +597,233 @@ window.MODULOS.programas = {
     const s = f.sessao;
 
     let corpo = f.faixaComp || '';
-    f.programas.forEach(pp => {
-      const alvos = (pp.alvos || []).filter(a => a.status === 'em_intervencao')
-        .sort((a, b) => a.ordem - b.ordem);
-      if (alvos.length === 0) return;
-      corpo += '<div class="cartao"><h3>' + escaparHtml(pp.programas.nome) +
-        ' <span class="selo selo-neutro">' + escaparHtml(pp.programas.area) + '</span></h3>' +
-        (pp.programas.procedimento
-          ? '<p class="sub" style="margin-bottom:10px">' + escaparHtml(pp.programas.procedimento) + '</p>' : '') +
-        alvos.map(a => {
-          const ct = this.contagem(a.id);
-          return '<div class="folha-alvo" id="alvo-' + a.id + '">' +
-            '<div class="folha-alvo-topo">' +
-            '  <b>' + escaparHtml(a.descricao) + '</b>' +
-            '  <span class="folha-cont" id="cont-' + a.id + '">' +
-            ct.total + ' tentativa(s) &middot; ' + ct.pct + '% I</span>' +
-            '</div>' +
-            '<div class="folha-botoes">' +
-            this.RESPOSTAS.map(([v, rotulo]) =>
-              '<button type="button" class="btn-resposta' + (v === 'I' ? ' indep' : '') + '" ' +
-              'onclick="MODULOS.programas.registrar(\'' + a.id + '\', \'' + v + '\')">' +
-              '<span class="br-sigla">' + v + '</span>' +
-              '<span class="br-nome">' + rotulo + '</span></button>').join('') +
-            '</div></div>';
-        }).join('') +
-        '</div>';
-    });
 
-    if (!corpo) {
-      corpo = '<div class="cartao"><div class="vazio">' +
+    if (!f.programas.length) {
+      corpo += '<div class="cartao"><div class="vazio">' +
         '<div class="simbolo-vazio">&#127919;</div>' +
-        '<strong>Nenhum alvo em intervencao</strong>' +
-        'Defina os programas e alvos deste paciente na aba Programas do prontuario.' +
+        '<strong>Nenhum programa em intervencao</strong>' +
+        'Adicione programas a este paciente na aba Programas do prontuario.' +
         '</div></div>';
     }
+
+    f.programas.forEach(pp => {
+      const p = pp.programas;
+      const cor = this.CORES_AREA[p.area] || '#64748B';
+      const niveis = (p.niveis && p.niveis.length) ? p.niveis : this.NIVEIS_PADRAO;
+      const grade = f.fichas[pp.id];
+
+      corpo += '<div class="cartao ficha-prog" id="ficha-' + pp.id + '">' +
+        '<h3>' + escaparHtml(p.nome) + ' <span class="area-chip" style="background:' + cor + '1A; color:' + cor + '">' +
+          escaparHtml(p.area) + '</span></h3>' +
+        (p.procedimento ? '<p class="sub" style="margin:2px 0 10px">' + escaparHtml(p.procedimento) + '</p>' : '') +
+
+        '<div class="ficha-rapido">' +
+        '  <span class="fr-rotulo">Preencher rapido</span>' +
+        '  <label>Nivel <select id="fr-niv-' + pp.id + '">' +
+             niveis.map(v => '<option value="' + v + '">' + this.nomeNivel(v) + '</option>').join('') + '</select></label>' +
+        '  <button class="btn-chip" onclick="MODULOS.programas.aplicarATodas(\'' + pp.id + '\', \'nivel\')">Aplicar a todas</button>' +
+        '  <label>Estimulo <select id="fr-est-' + pp.id + '">' + this.opcoesEstimulo('') + '</select></label>' +
+        '  <button class="btn-chip" onclick="MODULOS.programas.aplicarATodas(\'' + pp.id + '\', \'estimulo\')">Aplicar a todas</button>' +
+        '  <button class="btn-chip" style="margin-left:auto" onclick="MODULOS.programas.limparFicha(\'' + pp.id + '\')">Limpar tudo</button>' +
+        '</div>' +
+
+        this.legendaNiveis(niveis) +
+
+        '<div class="ficha-grade-cab"><span>#</span><span>Estimulo</span>' +
+        '<span>Nivel de ajuda <small>&mdash; um por tentativa</small></span><span>Reforcador</span></div>' +
+        grade.map((linha, i) =>
+          '<div class="ficha-linha">' +
+          '  <span class="ficha-num">' + String(i + 1).padStart(2, '0') + '</span>' +
+          '  <select onchange="MODULOS.programas.mudarLinha(\'' + pp.id + '\', ' + i + ', \'estimulo_id\', this.value)">' +
+               this.opcoesEstimulo(linha.estimulo_id) + '</select>' +
+          '  <div class="ficha-niveis">' +
+               niveis.map(v =>
+                 '<button type="button" class="niv-btn' + (linha.resposta === v ? ' ativo' : '') +
+                 (v === 'C' ? ' correto' : '') + '" ' +
+                 'id="nb-' + pp.id + '-' + i + '-' + v + '" ' +
+                 'title="' + this.nomeNivel(v) + '" ' +
+                 'onclick="MODULOS.programas.marcarNivel(\'' + pp.id + '\', ' + i + ', \'' + v + '\')">' + v + '</button>').join('') +
+          '  </div>' +
+          '  <input placeholder="digitar..." list="lista-reforcadores" value="' + escaparHtml(linha.reforcador) + '" ' +
+          '    onchange="MODULOS.programas.mudarLinha(\'' + pp.id + '\', ' + i + ', \'reforcador\', this.value)">' +
+          '</div>').join('') +
+
+        '<div class="ficha-rodape" id="rodape-' + pp.id + '">' + this.rodapePrograma(pp.id) + '</div>' +
+        '</div>';
+    });
 
     this.elFolha().innerHTML =
       '<div class="pagina-cabecalho">' +
       '  <div>' +
       (this._overlay
-        ? '<button class="btn-voltar" onclick="MODULOS.programas.fecharFolha(true)">&larr; Voltar ao prontuario</button>'
+        ? '<button class="btn-voltar" onclick="MODULOS.programas.sairDaFolha()">&larr; Voltar ao prontuario</button>'
         : '<button class="btn-voltar" onclick="abrirModulo(\'agenda\')">&larr; Agenda</button>') +
-      '    <h2>Folha de aplicacao &middot; ' + escaparHtml(s.pacientes.nome) + '</h2>' +
+      '    <h2>Ficha de aplicacao &middot; ' + escaparHtml(s.pacientes.nome) + '</h2>' +
       '    <p class="sub">' + new Date(s.data + 'T12:00:00').toLocaleDateString('pt-BR') +
       ' as ' + s.hora_inicio.slice(0, 5) +
-      ' &middot; A cada apresentacao da tarefa, toque no nivel de suporte que a crianca precisou.</p>' +
+      ' &middot; Cada linha e uma tentativa completa: estimulo + nivel de ajuda + reforcador.</p>' +
       '  </div>' +
       '  <div style="display:flex; gap:8px">' +
-      '    <button class="btn btn-fantasma" onclick="MODULOS.programas.desfazer()">Desfazer ultima</button>' +
+      '    <button class="btn btn-fantasma" id="btn-rascunho" onclick="MODULOS.programas.salvarFichas(true)">Salvar rascunho</button>' +
       '    <button class="btn btn-primario" onclick="MODULOS.programas.telaFechamento()">Encerrar sessao</button>' +
       '  </div>' +
-      '</div>' + corpo;
+      '</div>' +
+      '<datalist id="lista-reforcadores">' +
+      this._folha.reforcadores.map(r => '<option value="' + escaparHtml(r) + '">').join('') +
+      '</datalist>' +
+      corpo;
   },
 
-  async registrar(alvoId, resposta) {
-    const { data, error } = await sb.from('registros_tentativas').insert({
-      sessao_id: this._folha.sessao.id,
-      alvo_id: alvoId,
-      resposta: resposta,
-      registrado_por: window.CORTEX_SESSAO.user.id
-    }).select('id, alvo_id, resposta').single();
-    if (error) { alert('Falha ao registrar: ' + error.message); return; }
-    this._folha.registros.push(data);
-    const ct = this.contagem(alvoId);
-    const cont = document.getElementById('cont-' + alvoId);
-    if (cont) cont.innerHTML = ct.total + ' tentativa(s) &middot; ' + ct.pct + '% independente';
+  rodapePrograma(ppId) {
+    const f = this._folha;
+    const pp = f.programas.find(x => x.id === ppId);
+    const grade = f.fichas[ppId];
+    const n = grade.length;
+    const preenchidas = grade.filter(l => l.resposta).length;
+    const corretos = grade.filter(l => l.resposta === 'C').length;
+    const pct = Math.round(corretos * 100 / n);
+    return '<div class="fr-indep"><small>Independencia</small><b>' + pct + '%</b></div>' +
+      '<div class="fr-meio"><span>' + corretos + '/' + n + ' corretos</span>' +
+      '<div class="fr-trilho"><div class="fr-barra" style="width:' + pct + '%"></div></div>' +
+      '<span>' + preenchidas + ' de ' + n + ' preenchidas</span></div>' +
+      (pp.programas.criterio_avanco
+        ? '<div class="fr-criterio"><small>Criterio de avanco</small><b>' +
+          escaparHtml(pp.programas.criterio_avanco) + '</b></div>' : '');
   },
 
-  async desfazer() {
-    const ultimo = this._folha.registros[this._folha.registros.length - 1];
-    if (!ultimo) return;
-    await sb.from('registros_tentativas').delete().eq('id', ultimo.id);
-    this._folha.registros.pop();
-    const ct = this.contagem(ultimo.alvo_id);
-    const cont = document.getElementById('cont-' + ultimo.alvo_id);
-    if (cont) cont.innerHTML = ct.total + ' tentativa(s) &middot; ' + ct.pct + '% independente';
+  atualizarRodape(ppId) {
+    const el = document.getElementById('rodape-' + ppId);
+    if (el) el.innerHTML = this.rodapePrograma(ppId);
   },
 
-  // ══════════════════ FECHAMENTO ══════════════════
+  mudarLinha(ppId, i, campo, valor) {
+    this._folha.fichas[ppId][i][campo] = valor;
+    this._sujo = true;
+  },
+
+  marcarNivel(ppId, i, sigla) {
+    const linha = this._folha.fichas[ppId][i];
+    const anterior = linha.resposta;
+    linha.resposta = (anterior === sigla) ? '' : sigla;
+    this._sujo = true;
+    if (anterior) {
+      document.getElementById('nb-' + ppId + '-' + i + '-' + anterior)?.classList.remove('ativo');
+    }
+    if (linha.resposta) {
+      document.getElementById('nb-' + ppId + '-' + i + '-' + sigla)?.classList.add('ativo');
+    }
+    this.atualizarRodape(ppId);
+  },
+
+  aplicarATodas(ppId, tipo) {
+    const grade = this._folha.fichas[ppId];
+    if (tipo === 'nivel') {
+      const v = document.getElementById('fr-niv-' + ppId).value;
+      grade.forEach(l => { l.resposta = v; });
+    } else {
+      const v = document.getElementById('fr-est-' + ppId).value;
+      grade.forEach(l => { l.estimulo_id = v; });
+    }
+    this._sujo = true;
+    this.desenharFolha();
+  },
+
+  limparFicha(ppId) {
+    if (!confirm('Limpar todas as tentativas deste programa nesta sessao?')) return;
+    this._folha.fichas[ppId].forEach(l => { l.estimulo_id = ''; l.resposta = ''; l.reforcador = ''; });
+    this._sujo = true;
+    this.desenharFolha();
+  },
+
+  async salvarFichas(avisar) {
+    const f = this._folha;
+    try {
+      for (const pp of f.programas) {
+        const { error: eDel } = await sb.from('registros_tentativas').delete()
+          .eq('sessao_id', f.sessao.id).eq('paciente_programa_id', pp.id);
+        if (eDel) throw new Error(eDel.message);
+
+        const linhas = f.fichas[pp.id]
+          .map((l, i) => ({ l, ordem: i + 1 }))
+          .filter(x => x.l.resposta)
+          .map(x => ({
+            sessao_id: f.sessao.id,
+            paciente_programa_id: pp.id,
+            ordem: x.ordem,
+            resposta: x.l.resposta,
+            estimulo_id: x.l.estimulo_id || null,
+            reforcador: (x.l.reforcador || '').trim() || null,
+            registrado_por: window.CORTEX_SESSAO.user.id
+          }));
+        if (linhas.length) {
+          const { error } = await sb.from('registros_tentativas').insert(linhas);
+          if (error) throw new Error(error.message);
+        }
+      }
+
+      // Banco de reforcadores (fica salvo so para sugerir depois)
+      const novos = new Set();
+      Object.values(f.fichas).forEach(g => g.forEach(l => {
+        const r = (l.reforcador || '').trim();
+        if (r && !f.reforcadores.includes(r)) novos.add(r);
+      }));
+      if (novos.size) {
+        await sb.from('reforcadores').upsert(
+          [...novos].map(nome => ({ nome })), { onConflict: 'nome', ignoreDuplicates: true });
+        f.reforcadores.push(...novos);
+      }
+
+      this._sujo = false;
+      if (avisar) {
+        const b = document.getElementById('btn-rascunho');
+        if (b) { b.textContent = 'Salvo!'; setTimeout(() => { b.textContent = 'Salvar rascunho'; }, 1200); }
+      }
+      return true;
+    } catch (e) {
+      alert('Falha ao salvar a ficha: ' + e.message);
+      return false;
+    }
+  },
+
+  sairDaFolha() {
+    if (this._sujo) {
+      this.salvarFichas(false).then(() => this.fecharFolha(true));
+    } else {
+      this.fecharFolha(true);
+    }
+  },
+
+  // ═══════════════════ FECHAMENTO ═══════════════════
 
   telaFechamento() {
     const f = this._folha;
-    const linhas = [];
-    f.programas.forEach(pp => {
-      (pp.alvos || []).filter(a => a.status === 'em_intervencao').forEach(a => {
-        const ct = this.contagem(a.id);
-        if (ct.total === 0) return;
-        linhas.push({ alvo: a, programa: pp.programas.nome, ct });
-      });
-    });
+    const linhas = f.programas.map(pp => {
+      const grade = f.fichas[pp.id];
+      const preenchidas = grade.filter(l => l.resposta).length;
+      const corretos = grade.filter(l => l.resposta === 'C').length;
+      const pct = Math.round(corretos * 100 / grade.length);
+      return { pp, preenchidas, corretos, total: grade.length, pct };
+    }).filter(l => l.preenchidas > 0);
 
-    this._fechamento = linhas;
     abrirModal('Encerrar sessao',
       (linhas.length
-        ? '<p class="sub" style="margin-bottom:10px">Para cada alvo trabalhado: nivel de dominio da sessao (1 a 10), ' +
-          'observacao (opcional) e, se atingiu criterio, a promocao a Dominado (que acontece apenas aqui, no fechamento).</p>' +
+        ? '<p class="sub" style="margin-bottom:10px">Resumo por programa. Se algum atingiu o criterio de avanco, ' +
+          'marque para promover a Dominado (decisao da coordenacao - nada vem pre-marcado).</p>' +
           linhas.map(l =>
-            '<div class="fech-alvo" data-alvo="' + l.alvo.id + '">' +
-            '  <div class="folha-alvo-topo">' +
-            '    <b>' + escaparHtml(l.alvo.descricao) + '</b>' +
-            '    <span class="folha-cont">' + escaparHtml(l.programa) + ' &middot; ' +
-                 l.ct.total + ' tentativas &middot; ' + l.ct.pct + '% I</span>' +
-            '  </div>' +
-            '  <div class="fech-linha">' +
-            '    <label class="fech-rotulo">Dominio</label>' +
-            '    <select class="fech-nivel">' +
-                 Array.from({length: 10}, (_, i) => i + 1).map(n =>
-                   '<option value="' + n + '"' +
-                   ((l.alvo.nivel_dominio || Math.max(1, Math.round(l.ct.pct / 10))) === n ? ' selected' : '') +
-                   '>' + n + '</option>').join('') +
-            '    </select><span class="fech-rotulo">/ 10</span>' +
-            '    <label class="check" style="margin-left:auto">' +
-            '      <input type="checkbox" class="promover" value="' + l.alvo.id + '"' +
-                   (l.ct.pct >= 80 ? ' checked' : '') + '> Dominado</label>' +
-            '  </div>' +
-            '  <input class="fech-obs" placeholder="Observacao deste alvo na sessao (opcional)">' +
+            '<div class="linha-doc">' +
+            '<div><b>' + escaparHtml(l.pp.programas.nome) + '</b>' +
+            '<small>' + l.preenchidas + ' de ' + l.total + ' tentativas &middot; ' +
+            l.corretos + ' corretos &middot; <b>' + l.pct + '% de independencia</b>' +
+            (l.pp.programas.criterio_avanco ? ' &middot; criterio: ' + escaparHtml(l.pp.programas.criterio_avanco) : '') +
+            '</small></div>' +
+            '<label class="check"><input type="checkbox" class="promover" value="' + l.pp.id + '"> Dominado</label>' +
             '</div>').join('')
         : '<p class="sub">Nenhuma tentativa registrada nesta sessao.</p>') +
       '<div class="campo" style="margin-top:12px"><label>Evolucao diaria *</label>' +
       '<textarea id="fe-evolucao" rows="4" placeholder="Como foi a sessao, comportamento, observacoes..."></textarea></div>' +
       '<div class="mensagem-erro" id="fe-erro"></div>' +
       '<div class="barra-acoes">' +
-      '  <button class="btn btn-fantasma" onclick="fecharModal()">Voltar a folha</button>' +
+      '  <button class="btn btn-fantasma" onclick="fecharModal()">Voltar a ficha</button>' +
       '  <button class="btn btn-primario" id="fe-salvar" onclick="MODULOS.programas.encerrarSessao()">Concluir sessao</button>' +
       '</div>', true);
   },
@@ -763,45 +839,36 @@ window.MODULOS.programas = {
       erro.classList.add('visivel');
       return;
     }
-
     botao.disabled = true;
     botao.textContent = 'Concluindo...';
 
     try {
       const f = this._folha;
 
-      const promover = Array.from(document.querySelectorAll('.promover:checked'))
-        .map(cb => cb.value);
-      if (promover.length) {
-        const { error: e1 } = await sb.from('alvos')
-          .update({ status: 'dominado' }).in('id', promover);
-        if (e1) throw new Error(e1.message);
+      const okFichas = await this.salvarFichas(false);
+      if (!okFichas) throw new Error('Nao foi possivel salvar a ficha.');
+
+      // Retrato da sessao por programa
+      for (const pp of f.programas) {
+        const grade = f.fichas[pp.id];
+        const preenchidas = grade.filter(l => l.resposta).length;
+        if (!preenchidas) continue;
+        const corretos = grade.filter(l => l.resposta === 'C').length;
+        const { error: eR } = await sb.from('programa_sessao_registros').upsert({
+          sessao_id: f.sessao.id,
+          paciente_programa_id: pp.id,
+          tentativas: preenchidas,
+          corretos: corretos,
+          pct_corretos: Math.round(corretos * 100 / grade.length)
+        }, { onConflict: 'sessao_id,paciente_programa_id' });
+        if (eR) throw new Error(eR.message);
       }
 
-      // Retrato de cada alvo trabalhado nesta sessao (nivel 1-10 + observacao)
-      const blocos = Array.from(document.querySelectorAll('.fech-alvo'));
-      if (blocos.length) {
-        const retratos = blocos.map(b => {
-          const alvoId = b.dataset.alvo;
-          const l = (this._fechamento || []).find(x => x.alvo.id === alvoId);
-          return {
-            sessao_id: f.sessao.id,
-            alvo_id: alvoId,
-            tentativas: l ? l.ct.total : 0,
-            pct_independencia: l ? l.ct.pct : 0,
-            nivel_dominio: parseInt(b.querySelector('.fech-nivel').value, 10),
-            observacao: b.querySelector('.fech-obs').value.trim() || null,
-            registrado_por: window.CORTEX_SESSAO.user.id
-          };
-        });
-        const { error: eR } = await sb.from('alvo_sessao_registros')
-          .upsert(retratos, { onConflict: 'sessao_id,alvo_id' });
-        if (eR) throw new Error(eR.message);
-
-        for (const r of retratos) {
-          await sb.from('alvos')
-            .update({ nivel_dominio: r.nivel_dominio }).eq('id', r.alvo_id);
-        }
+      const promover = Array.from(document.querySelectorAll('.promover:checked')).map(cb => cb.value);
+      if (promover.length) {
+        const { error: e1 } = await sb.from('paciente_programas')
+          .update({ status: 'dominado' }).in('id', promover);
+        if (e1) throw new Error(e1.message);
       }
 
       const { error: e2 } = await sb.from('evolucoes').insert({
@@ -827,7 +894,172 @@ window.MODULOS.programas = {
     }
   },
 
-  // ══════════════════ EVOLUCOES (aba do prontuario) ══════════════════
+  // ═══════════════════ SESSOES REALIZADAS + RELATORIO ═══════════════════
+
+  async carregarAtendimentos(pacienteId) {
+    const alvo = document.getElementById('prog-atds');
+    if (!alvo) return;
+
+    const { data: ss } = await sb.from('sessoes')
+      .select('id, data, hora_inicio, evolucoes(texto)')
+      .eq('paciente_id', pacienteId).eq('status', 'concluida')
+      .order('data', { ascending: false }).order('hora_inicio', { ascending: false })
+      .limit(8);
+    const lista = ss || [];
+    if (!lista.length) {
+      alvo.innerHTML = '<p class="sub">Nenhuma sessao registrada ainda.</p>';
+      return;
+    }
+
+    const ids = lista.map(s => s.id);
+    const [rNovo, rVelho] = await Promise.all([
+      sb.from('programa_sessao_registros').select('sessao_id, pct_corretos').in('sessao_id', ids),
+      sb.from('alvo_sessao_registros').select('sessao_id, pct_independencia').in('sessao_id', ids)
+    ]);
+    const temNovo = new Set((rNovo.data || []).map(r => r.sessao_id));
+    const porSessao = {};
+    (rNovo.data || []).forEach(r =>
+      (porSessao[r.sessao_id] = porSessao[r.sessao_id] || []).push(r.pct_corretos || 0));
+    (rVelho.data || []).forEach(r => {
+      if (!temNovo.has(r.sessao_id))
+        (porSessao[r.sessao_id] = porSessao[r.sessao_id] || []).push(r.pct_independencia || 0);
+    });
+
+    alvo.innerHTML = lista.map(s => {
+      const pcts = porSessao[s.id] || [];
+      const media = pcts.length ? Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length) : null;
+      const evo = (s.evolucoes && s.evolucoes[0] && s.evolucoes[0].texto) || '';
+      return '<div class="atd-item clicavel" onclick="MODULOS.programas.abrirRelatorioSessao(\'' + s.id + '\')">' +
+        '<div class="atd-meta"><b>' + s.data.split('-').reverse().join('/') + '</b> as ' +
+        s.hora_inicio.slice(0, 5) +
+        (pcts.length ? ' &middot; ' + pcts.length + ' programa(s)' : '') +
+        (media !== null ? ' &middot; <span class="atd-pct">' + media + '% de corretos</span>' : '') +
+        ' <span class="atd-abrir">Ver relatorio &rarr;</span></div>' +
+        (evo ? '<p class="sub">' + escaparHtml(evo.length > 140 ? evo.slice(0, 140) + '...' : evo) + '</p>' : '') +
+        '</div>';
+    }).join('');
+  },
+
+  async abrirRelatorioSessao(sessaoId) {
+    const ov = document.createElement('div');
+    ov.id = 'rel-sessao-overlay';
+    ov.className = 'folha-overlay';
+    ov.innerHTML = '<div class="folha-pagina" id="rel-sessao-corpo"><p class="sub">Montando o relatorio...</p></div>';
+    document.body.appendChild(ov);
+
+    const [rS, rFotos, rTent, rEvo, rComp, rLegado] = await Promise.all([
+      sb.from('sessoes')
+        .select('id, data, hora_inicio, duracao_min, pacientes(nome), profissional:profiles!sessoes_aplicador_id_fkey(nome)')
+        .eq('id', sessaoId).single(),
+      sb.from('programa_sessao_registros')
+        .select('paciente_programa_id, tentativas, corretos, pct_corretos, paciente_programas(programas(nome, area, tentativas_padrao))')
+        .eq('sessao_id', sessaoId),
+      sb.from('registros_tentativas')
+        .select('paciente_programa_id, ordem, resposta, reforcador, estimulos(nome)')
+        .eq('sessao_id', sessaoId).order('ordem'),
+      sb.from('evolucoes').select('texto, aplicador:profiles!evolucoes_aplicador_id_fkey(nome)').eq('sessao_id', sessaoId),
+      sb.from('comportamento_registros')
+        .select('quantidade, duracao_seg, antecedente, descricao, consequencia, comportamentos(nome, medida)')
+        .eq('sessao_id', sessaoId),
+      sb.from('alvo_sessao_registros')
+        .select('tentativas, pct_independencia, nivel_dominio, observacao, alvos(descricao)')
+        .eq('sessao_id', sessaoId)
+    ]);
+
+    const s = rS.data;
+    if (!s) { document.getElementById('rel-sessao-overlay')?.remove(); return; }
+    const fotos = rFotos.data || [];
+    const tents = rTent.data || [];
+    const evo = (rEvo.data && rEvo.data[0]) || null;
+    const comps = rComp.data || [];
+    const legado = rLegado.data || [];
+    const dataFmt = s.data.split('-').reverse().join('/');
+
+    let grafico = '', detalhe = '';
+
+    if (fotos.length) {
+      grafico = '<div class="rel-bloco"><h4>Grafico da sessao <small>% de corretos (C) por programa</small></h4>' +
+        '<div class="rel-grafico">' +
+        fotos.map(fx => {
+          const prog = fx.paciente_programas && fx.paciente_programas.programas;
+          const cor = this.CORES_AREA[prog ? prog.area : ''] || '#64748B';
+          const pct = fx.pct_corretos || 0;
+          return '<div class="rel-col" title="' + escaparHtml(prog ? prog.nome : '') + ': ' + pct + '%">' +
+            '<span class="rel-pct">' + pct + '%</span>' +
+            '<div class="rel-trilho"><div class="rel-barra" style="height:' + pct + '%; background:' + cor + '"></div></div>' +
+            '<span class="rel-rotulo">' + escaparHtml((prog ? prog.nome : '').slice(0, 16)) + '</span>' +
+            '</div>';
+        }).join('') + '</div></div>';
+
+      const porPp = {};
+      tents.forEach(t => (porPp[t.paciente_programa_id] = porPp[t.paciente_programa_id] || []).push(t));
+      detalhe = '<div class="rel-bloco"><h4>Tentativa a tentativa</h4>' +
+        this.legendaNiveis() +
+        fotos.map(fx => {
+          const prog = fx.paciente_programas && fx.paciente_programas.programas;
+          const lista = porPp[fx.paciente_programa_id] || [];
+          return '<div class="rel-alvo"><div class="rel-alvo-topo"><b>' + escaparHtml(prog ? prog.nome : '-') + '</b>' +
+            '<span class="selo selo-neutro">' + fx.corretos + '/' +
+            (prog ? (prog.tentativas_padrao || fx.tentativas) : fx.tentativas) + ' corretos &middot; ' +
+            fx.pct_corretos + '%</span></div>' +
+            '<div class="rel-tentativas">' +
+            lista.map(t =>
+              '<span class="rel-tent' + (t.resposta === 'C' ? ' correto' : '') + '" title="' + this.nomeNivel(t.resposta) +
+              (t.reforcador ? ' - reforcador: ' + escaparHtml(t.reforcador) : '') + '">' +
+              '<b>' + String(t.ordem || 0).padStart(2, '0') + '</b> ' +
+              (t.estimulos ? escaparHtml(t.estimulos.nome) + ' ' : '') +
+              '<i>' + t.resposta + '</i></span>').join('') +
+            '</div></div>';
+        }).join('') + '</div>';
+    } else if (legado.length) {
+      grafico = '<div class="rel-bloco"><h4>Grafico da sessao <small>% de independencia por alvo</small></h4>' +
+        '<p class="sub">Sessao anterior ao modelo atual (registrada por alvos). Legenda de conversao: I&rarr;C, G&rarr;GE, Ve&rarr;VE, Vi&rarr;VI.</p>' +
+        '<div class="rel-grafico">' +
+        legado.map(fx =>
+          '<div class="rel-col" title="' + escaparHtml(fx.alvos ? fx.alvos.descricao : '') + ': ' + (fx.pct_independencia || 0) + '%">' +
+          '<span class="rel-pct">' + (fx.pct_independencia || 0) + '%</span>' +
+          '<div class="rel-trilho"><div class="rel-barra" style="height:' + (fx.pct_independencia || 0) + '%; background:#7C3AED"></div></div>' +
+          '<span class="rel-rotulo">' + escaparHtml((fx.alvos ? fx.alvos.descricao : '').slice(0, 16)) + '</span>' +
+          '</div>').join('') + '</div></div>';
+    }
+
+    let compHtml = '';
+    if (comps.length) {
+      compHtml = '<div class="rel-bloco"><h4>Comportamentos registrados</h4>' +
+        comps.map(r => {
+          const nome = r.comportamentos ? r.comportamentos.nome : '-';
+          const medida = r.comportamentos && r.comportamentos.medida === 'duracao'
+            ? Math.round((r.duracao_seg || 0) / 60) + ' min' : (r.quantidade || 0) + 'x';
+          return '<div class="rel-alvo"><div class="rel-alvo-topo"><b>' + escaparHtml(nome) + '</b>' +
+            '<span class="selo selo-st-vermelho">' + medida + '</span></div>' +
+            ((r.antecedente || r.descricao || r.consequencia)
+              ? '<small>' + ['A: ' + (r.antecedente || '-'), 'B: ' + (r.descricao || '-'), 'C: ' + (r.consequencia || '-')]
+                  .map(escaparHtml).join(' &middot; ') + '</small>'
+              : '') + '</div>';
+        }).join('') + '</div>';
+    }
+
+    document.getElementById('rel-sessao-corpo').innerHTML =
+      '<div class="pagina-cabecalho nao-imprime">' +
+      '  <div><button class="btn-voltar" onclick="document.getElementById(\'rel-sessao-overlay\').remove()">&larr; Fechar</button>' +
+      '  <h2>Relatorio da sessao</h2></div>' +
+      '  <button class="btn btn-primario" onclick="window.print()">&#128424; Imprimir / PDF</button>' +
+      '</div>' +
+      '<div class="rel-imprimivel" id="rel-imprimivel">' +
+      '  <div class="rel-cab-imp">' +
+      '    <h2>Relatorio de sessao &middot; CORTEX aba</h2>' +
+      '    <p><b>' + escaparHtml(s.pacientes.nome) + '</b> &middot; ' + dataFmt + ' as ' + s.hora_inicio.slice(0, 5) +
+      '    &middot; ' + s.duracao_min + ' min &middot; Profissional: ' +
+           escaparHtml(s.profissional ? s.profissional.nome : '-') + '</p>' +
+      '  </div>' +
+      grafico + detalhe + compHtml +
+      (evo ? '<div class="rel-bloco"><h4>Evolucao</h4><p class="rel-evo">' + escaparHtml(evo.texto) + '</p>' +
+             (evo.aplicador ? '<small class="sub">Registrado por ' + escaparHtml(evo.aplicador.nome) + '</small>' : '') + '</div>'
+           : '<div class="rel-bloco"><p class="sub">Sessao sem evolucao registrada.</p></div>') +
+      '</div>';
+  },
+
+  // ═══════════════════ EVOLUCOES (aba do prontuario) ═══════════════════
 
   async htmlEvolucoes(pacienteId) {
     const { data: evs } = await sb.from('evolucoes')
@@ -843,44 +1075,62 @@ window.MODULOS.programas = {
         'As evolucoes sao escritas pelo aplicador ao encerrar cada sessao.</div></div>';
     }
 
-    // Percentual de independencia por sessao (para as barras de progresso)
     const ids = lista.map(e => e.sessao_id);
     const { data: regs } = await sb.from('registros_tentativas')
       .select('sessao_id, resposta').in('sessao_id', ids);
     const porSessao = {};
     (regs || []).forEach(r => {
-      porSessao[r.sessao_id] = porSessao[r.sessao_id] || { t: 0, i: 0 };
+      porSessao[r.sessao_id] = porSessao[r.sessao_id] || { t: 0, c: 0 };
       porSessao[r.sessao_id].t++;
-      if (r.resposta === 'I') porSessao[r.sessao_id].i++;
+      if (r.resposta === 'C') porSessao[r.sessao_id].c++;
     });
 
     const cron = lista.slice().reverse();
     const barras = cron.map(e => {
       const d = porSessao[e.sessao_id];
-      const pct = d && d.t ? Math.round(d.i * 100 / d.t) : 0;
+      const pct = d && d.t ? Math.round(d.c * 100 / d.t) : 0;
       const dia = e.sessoes ? new Date(e.sessoes.data + 'T12:00:00').toLocaleDateString('pt-BR').slice(0, 5) : '';
-      return '<div class="prog-col" title="' + dia + ': ' + pct + '% I (' + (d ? d.t : 0) + ' tentativas)">' +
+      return '<div class="prog-col" title="' + dia + ': ' + pct + '% de corretos (' + (d ? d.t : 0) + ' tentativas)">' +
         '<div class="prog-barra" style="height:' + Math.max(pct, 4) + '%"></div>' +
         '<small>' + dia + '</small></div>';
     }).join('');
 
-    return '<div class="cartao"><h3>Independencia por sessao</h3>' +
-      '<p class="sub" style="margin-bottom:10px">% de respostas independentes (I) sobre o total de tentativas.</p>' +
+    return '<div class="cartao"><h3>Corretos por sessao</h3>' +
+      '<p class="sub" style="margin-bottom:10px">% de respostas corretas (C) sobre as tentativas registradas. ' +
+      '<b>Legenda de dados antigos:</b> registros anteriores usavam I/G/Ve/Vi - convertidos para C/GE/VE/VI.</p>' +
       '<div class="prog-grafico">' + barras + '</div></div>' +
       '<div class="cartao"><h3>Evolucoes diarias</h3>' +
       lista.map(e => {
         const d = porSessao[e.sessao_id];
-        const pct = d && d.t ? Math.round(d.i * 100 / d.t) : null;
+        const pct = d && d.t ? Math.round(d.c * 100 / d.t) : null;
         return '<div class="linha-doc" style="align-items:flex-start">' +
           '<div style="flex:1"><b>' +
           (e.sessoes ? new Date(e.sessoes.data + 'T12:00:00').toLocaleDateString('pt-BR') +
             ' as ' + e.sessoes.hora_inicio.slice(0, 5) : '') + '</b>' +
           '<small>' + escaparHtml(e.aplicador ? e.aplicador.nome : '-') +
-          (pct !== null ? ' &middot; ' + pct + '% I em ' + d.t + ' tentativas' : '') + '</small>' +
+          (pct !== null ? ' &middot; ' + pct + '% de corretos em ' + d.t + ' tentativas' : '') + '</small>' +
           '<p style="margin-top:6px; font-size:12.5px; line-height:1.6; white-space:pre-wrap">' +
           escaparHtml(e.texto) + '</p></div>' +
           '</div>';
       }).join('') +
       '</div>';
+  },
+
+  // Contador da faixa de comportamentos (chamado pelo modulo comportamentos)
+  async atualizarFaixaComp() {
+    const f = this._folha;
+    if (!f || !document.getElementById('faixa-comp')) return;
+    const { data: regs } = await sb.from('comportamento_registros')
+      .select('comportamento_id, quantidade, duracao_seg')
+      .eq('sessao_id', f.sessao.id);
+    const soma = {};
+    (regs || []).forEach(r => {
+      soma[r.comportamento_id] = (soma[r.comportamento_id] || 0) +
+        (r.quantidade || Math.round((r.duracao_seg || 0) / 60) || 0);
+    });
+    MODULOS.comportamentos.lista.forEach(c2 => {
+      const b = document.getElementById('comp-badge-' + c2.id);
+      if (b) b.textContent = soma[c2.id] || 0;
+    });
   }
 };

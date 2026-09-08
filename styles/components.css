@@ -1791,3 +1791,124 @@
     .rel-trilho { border: 1px solid #ddd; }
     body > *:not(#rel-sessao-overlay):not(#folha-overlay) { display: none !important; }
 }
+
+/* ── Sprint 17: ficha de tentativas v2, niveis e estimulos ────────────── */
+.stepper { display: inline-flex; align-items: center; gap: 6px; }
+.stepper button {
+    width: 34px; height: 34px;
+    border: 1.5px solid var(--line); border-radius: 9px;
+    background: var(--surface); font: inherit; font-size: 16px; font-weight: 800;
+    cursor: pointer; color: var(--ink);
+}
+.stepper input { width: 64px; text-align: center; }
+
+.niv-escolha {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 7px; margin-top: 6px;
+}
+.niv-opcao {
+    display: flex; align-items: center; gap: 7px;
+    border: 1.5px solid var(--line); border-radius: 9px;
+    padding: 8px 10px; font-size: 12px; font-weight: 700;
+    cursor: pointer; background: var(--surface);
+}
+.niv-opcao b { color: var(--acao); min-width: 20px; }
+.niv-opcao:has(input:checked) { border-color: var(--acao); background: var(--acao-soft); }
+.niv-opcao.travado { opacity: .85; border-color: #059669; background: #ECFDF5; }
+.niv-opcao.travado b { color: #059669; }
+
+.niv-legenda {
+    display: flex; flex-wrap: wrap; gap: 5px 12px;
+    padding: 8px 10px; margin-bottom: 10px;
+    background: var(--surface-alt); border-radius: 9px;
+    font-size: 10.5px; font-weight: 600; color: var(--ink-muted);
+}
+.niv-leg-item b { color: var(--ink); }
+.niv-leg-item.correto b { color: #059669; }
+
+.est-grade {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+    gap: 9px;
+}
+.est-cartao {
+    display: flex; align-items: center; gap: 10px;
+    border: 1px solid var(--line); border-radius: var(--raio-sm);
+    padding: 9px 11px; background: var(--surface);
+    cursor: pointer;
+}
+.est-cartao:hover { border-color: var(--acao); }
+.est-cartao.inativo { opacity: .55; }
+.est-cartao b { font-size: 12.5px; display: block; }
+.est-cartao small { color: var(--ink-muted); font-weight: 600; font-size: 10.5px; }
+.est-inicial {
+    width: 34px; height: 34px; border-radius: 9px;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 15px; flex-shrink: 0;
+}
+
+.ficha-rapido {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    background: var(--surface-alt);
+    border-radius: 9px; padding: 8px 10px; margin-bottom: 10px;
+}
+.fr-rotulo { font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-muted); }
+.ficha-rapido label { font-size: 11.5px; font-weight: 700; color: var(--ink-muted); display: inline-flex; align-items: center; gap: 5px; }
+.ficha-rapido select { padding: 6px 8px; font-size: 12px; max-width: 170px; }
+
+.ficha-grade-cab, .ficha-linha {
+    display: grid;
+    grid-template-columns: 30px minmax(140px, .9fr) minmax(230px, 1.4fr) minmax(110px, .7fr);
+    gap: 8px; align-items: center;
+}
+.ficha-grade-cab {
+    font-size: 10.5px; font-weight: 800; text-transform: uppercase;
+    letter-spacing: .04em; color: var(--ink-muted);
+    padding: 4px 0 6px;
+    border-bottom: 1.5px solid var(--line);
+}
+.ficha-grade-cab small { font-weight: 600; text-transform: none; letter-spacing: 0; }
+.ficha-linha { padding: 7px 0; border-bottom: 1px dashed var(--line); }
+.ficha-linha:last-of-type { border-bottom: none; }
+.ficha-num { font-weight: 800; font-size: 12px; color: var(--ink-muted); }
+.ficha-linha select, .ficha-linha input { padding: 7px 8px; font-size: 12px; width: 100%; }
+.ficha-niveis { display: flex; flex-wrap: wrap; gap: 4px; }
+.niv-btn {
+    min-width: 34px; padding: 7px 6px;
+    border: 1.5px solid var(--line); border-radius: 8px;
+    background: var(--surface); font: inherit;
+    font-size: 11px; font-weight: 800; color: var(--ink-muted);
+    cursor: pointer;
+}
+.niv-btn:hover { border-color: var(--acao); color: var(--ink); }
+.niv-btn.ativo { border-color: var(--acao); background: var(--acao); color: #fff; }
+.niv-btn.correto.ativo { border-color: #059669; background: #059669; }
+.niv-btn.correto { color: #059669; border-color: #A7F3D0; }
+
+.ficha-rodape {
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    margin-top: 12px; padding-top: 10px;
+    border-top: 1.5px solid var(--line);
+}
+.fr-indep small, .fr-criterio small {
+    display: block; font-size: 10px; font-weight: 800;
+    text-transform: uppercase; letter-spacing: .04em; color: var(--ink-muted);
+}
+.fr-indep b { font-size: 22px; color: #059669; }
+.fr-meio { flex: 1; min-width: 180px; display: flex; align-items: center; gap: 9px; font-size: 11.5px; font-weight: 700; color: var(--ink-muted); }
+.fr-trilho { flex: 1; height: 9px; background: var(--surface-alt); border-radius: 6px; overflow: hidden; }
+.fr-barra { height: 100%; background: linear-gradient(90deg, #059669, #10B981); border-radius: 6px; transition: width .3s ease; }
+.fr-criterio b { font-size: 11.5px; }
+
+.rel-tentativas { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+.rel-tent {
+    display: inline-flex; align-items: center; gap: 5px;
+    border: 1px solid var(--line); border-radius: 8px;
+    padding: 4px 8px; font-size: 11px; font-weight: 600;
+    background: var(--surface);
+}
+.rel-tent b { color: var(--ink-muted); }
+.rel-tent i { font-style: normal; font-weight: 800; color: var(--acao); }
+.rel-tent.correto { border-color: #A7F3D0; background: #ECFDF5; }
+.rel-tent.correto i { color: #059669; }

@@ -154,3 +154,49 @@
         -webkit-print-color-adjust: exact; print-color-adjust: exact;
     }
 }
+
+/* ── Modo elaboracao: campos editaveis dentro do documento ──────────── */
+.deq-edit textarea {
+    width: 100%;
+    border: none;
+    background: transparent;
+    padding: 11px 14px;
+    font: inherit;
+    font-size: 12px;
+    line-height: 1.7;
+    color: var(--eq-tinta);
+    resize: vertical;
+    min-height: 58px;
+}
+.deq-edit textarea:focus { outline: none; }
+.deq-edit:focus-within {
+    border-color: var(--eq-azul);
+    box-shadow: 0 0 0 3px rgba(20, 104, 178, .12);
+}
+.deq-input {
+    border: 1.5px solid var(--eq-linha);
+    border-radius: 9px;
+    background: #fff;
+    padding: 7px 10px;
+    font: inherit;
+    font-size: 12.5px;
+    color: var(--eq-tinta);
+}
+.deq-input:focus {
+    outline: none;
+    border-color: var(--eq-azul);
+    box-shadow: 0 0 0 3px rgba(20, 104, 178, .12);
+}
+.deq-nivel-btn {
+    padding: 10px; text-align: center;
+    border-right: 1px solid var(--eq-linha);
+    font-size: 12.5px; font-weight: 700; color: var(--eq-cinza);
+    cursor: pointer; user-select: none;
+    transition: background .12s ease;
+}
+.deq-nivel-btn:last-child { border-right: none; }
+.deq-nivel-btn:hover { background: var(--eq-fundo); }
+.deq-nivel-btn.marcado {
+    background: #EEF5FB; color: var(--eq-azul-escuro); font-weight: 800;
+    box-shadow: inset 0 -3px 0 var(--eq-azul);
+}

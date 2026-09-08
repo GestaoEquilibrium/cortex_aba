@@ -77,11 +77,15 @@ window.MODULOS.plano = {
     const el = this.el();
     el.innerHTML = '<div class="cartao"><p class="sub">Preparando o plano...</p></div>';
 
-    const [{ data: pac }, { data: equipe }, { data: enc }] = await Promise.all([
-      sb.from('pacientes').select('id, nome, data_nascimento, nivel, convenio, aplicador_id').eq('id', pacienteId).single(),
+    const [{ data: pac }, { data: equipe }, { data: enc }, { data: resps }, { data: avs }] = await Promise.all([
+      sb.from('pacientes').select('id, nome, data_nascimento, nivel, convenio, carteirinha, aplicador_id').eq('id', pacienteId).single(),
       sb.from('profiles').select('id, nome, perfil').eq('atende_pacientes', true).eq('ativo', true).order('nome'),
-      sb.from('encaminhamentos').select('sessoes_semanais').eq('paciente_id', pacienteId)
-        .order('criado_em', { ascending: false }).limit(1)
+      sb.from('encaminhamentos').select('sessoes_semanais, medico').eq('paciente_id', pacienteId)
+        .order('criado_em', { ascending: false }).limit(1),
+      sb.from('responsaveis').select('nome, principal').eq('paciente_id', pacienteId)
+        .order('principal', { ascending: false }).limit(1),
+      sb.from('avaliacoes').select('concluido_em').eq('paciente_id', pacienteId)
+        .eq('status', 'concluida').order('concluido_em', { ascending: false }).limit(1)
     ]);
 
     let base = null;
@@ -97,62 +101,127 @@ window.MODULOS.plano = {
 
     this._ctx = { pacienteId, renovarDeId: renovarDeId || null, paciente: pac };
 
-    const campoTxt = (id, rotulo, valor, linhas) =>
-      '<div class="campo c3"><label>' + rotulo + '</label>' +
-      '<textarea id="pl-' + id + '" rows="' + (linhas || 3) + '" style="resize:vertical">' +
-      escaparHtml(valor || '') + '</textarea></div>';
+    const fmt = d => d ? new Date(d + 'T12:00:00').toLocaleDateString('pt-BR') : '&mdash;';
+    const medico = enc && enc[0] ? enc[0].medico : null;
+    const resp = resps && resps[0] ? resps[0].nome : null;
+    const dataAv = avs && avs[0] && avs[0].concluido_em
+      ? new Date(avs[0].concluido_em).toLocaleDateString('pt-BR') : '&mdash;';
+    this._nivelSel = (base && base.nivel_suporte) || null;
+
+    const caixaTxt = (id, valor, dica, linhas) =>
+      '<div class="deq-caixa deq-edit"><textarea id="pl-' + id + '" rows="' + (linhas || 4) + '" ' +
+      'placeholder="' + dica + '...">' + escaparHtml(valor || '') + '</textarea></div>';
+
+    const espec = ['Fonoaudiologia', 'Musicoterapia', 'Psicomotricidade', 'Psicopedagogia',
+      'Psicoterapia ABA', 'Psicoterapia Convencional', 'Terapia Ocupacional', 'Outras'];
 
     el.innerHTML =
       '<div class="pagina-cabecalho">' +
       '  <div>' +
       '    <button class="btn-voltar" onclick="MODULOS.pacientes.telaDetalhe(\'' + pacienteId + '\', \'plano\')">&larr; Prontuario</button>' +
-      '    <h2>' + (renovarDeId ? 'Renovacao do Plano' : 'Plano Terapeutico') + ' &middot; ' + escaparHtml(pac.nome) + '</h2>' +
-      '    <p class="sub">Formulario 01 &middot; ' + calcularIdade(pac.data_nascimento) +
-      (pac.nivel ? ' &middot; ' + (pac.nivel === 'aba1' ? 'ABA 1' : 'ABA 2') : '') + '</p>' +
+      '    <h2>' + (renovarDeId ? 'Renovacao do Plano Terapeutico' : 'Elaboracao do Plano Terapeutico') + '</h2>' +
+      '    <p class="sub">Preencha direto no documento. Os dados do beneficiario vem do cadastro; o que estiver errado ali, corrija pelo prontuario.</p>' +
       '  </div>' +
       '  <button class="btn btn-primario" onclick="MODULOS.plano.salvar()">Salvar plano</button>' +
       '</div>' +
 
-      '<div class="cartao faixa-azul"><h3>Identificacao e vigencia</h3>' +
-      '<div class="grade-form">' +
-      '  <div class="campo"><label>Diagnostico clinico</label>' +
-      '    <input id="pl-diagnostico" value="' + escaparHtml(base ? base.diagnostico || '' : '') + '"></div>' +
-      '  <div class="campo"><label>CID11</label>' +
-      '    <input id="pl-cid11" placeholder="Ex.: 6A02.0" value="' + escaparHtml(base ? base.cid11 || '' : '') + '"></div>' +
-      '  <div class="campo"><label>Nivel de suporte</label><select id="pl-nivel">' +
-      '<option value="">-</option>' +
-      [1, 2, 3].map(n => '<option value="' + n + '"' +
-        (base && base.nivel_suporte === n ? ' selected' : '') + '>Nivel ' + n + '</option>').join('') +
-      '  </select></div>' +
-      '  <div class="campo"><label>Sessoes por semana</label>' +
-      '    <input type="number" id="pl-freq" min="1" max="15" value="' + freqSugerida + '"></div>' +
-      '  <div class="campo"><label>Responsavel tecnico</label>' +
-      '    <select id="pl-prof">' +
+      '<div class="doc-eq" style="max-width:900px; margin:0 auto; border:1px solid var(--line); box-shadow:0 10px 34px rgba(21,13,32,.08)">' +
+
+      '<div class="deq-cab">' +
+      '  <img src="icones/equilibrium.png" alt="Equilibrium">' +
+      '  <div class="deq-cab-t"><h1>PLANO TERAP&Ecirc;UTICO</h1>' +
+      '  <p>Equilibrium Terapia Infantil &middot; Uberl&acirc;ndia/MG</p></div>' +
+      '  <span class="deq-pilula">' + (renovarDeId ? 'RENOVA&Ccedil;&Atilde;O' : 'ELABORA&Ccedil;&Atilde;O') + '</span>' +
+      '</div>' +
+
+      '<h2><span class="ponto deq-teal"></span>Dados do Benefici&aacute;rio <small>&middot; autom&aacute;ticos</small></h2>' +
+      '<div class="deq-caixa deq-dados" style="grid-template-columns:2fr 1fr 1fr">' +
+      '  <div style="grid-column:span 2"><small>Benefici&aacute;rio</small><b>' + escaparHtml(pac.nome) + '</b></div>' +
+      '  <div><small>Data de Nascimento</small><b>' + fmt(pac.data_nascimento) + '</b></div>' +
+      '  <div><small>Carteirinha</small><b>' + escaparHtml(pac.carteirinha || '&mdash;') +
+           (pac.convenio ? ' <span style="color:var(--eq-cinza); font-weight:600">(' + escaparHtml(pac.convenio) + ')</span>' : '') + '</b></div>' +
+      '  <div style="grid-column:span 2"><small>Respons&aacute;vel</small><b>' + escaparHtml(resp || '&mdash;') + '</b></div>' +
+      '  <div style="grid-column:span 2; border-bottom:none"><small>M&eacute;dico Requisitante</small><b>' + escaparHtml(medico || '&mdash;') + '</b></div>' +
+      '  <div style="border-bottom:none"><small>Data de Avalia&ccedil;&atilde;o</small><b>' + dataAv + '</b></div>' +
+      '</div>' +
+
+      '<h2><span class="ponto deq-amarelo"></span>Especialidade</h2>' +
+      '<div class="deq-caixa">' +
+      '  <div class="deq-chks">' +
+      espec.map(e =>
+        '<span class="deq-chk' + (e === 'Psicoterapia ABA' ? ' marcado' : '') + '"><i></i>' + e + '</span>').join('') +
+      '  </div>' +
+      '  <div class="deq-cid" style="display:flex; align-items:center; gap:8px"><small>CID11</small>' +
+      '  <input id="pl-cid11" class="deq-input" placeholder="Ex.: 6A02.0" value="' +
+           escaparHtml(base ? base.cid11 || '' : '') + '"></div>' +
+      '</div>' +
+
+      '<h2><span class="ponto"></span>N&iacute;vel de Suporte <small>&middot; toque para marcar</small></h2>' +
+      '<div class="deq-caixa deq-niveis" id="pl-niveis">' +
+      [1, 2, 3].map(n => '<div class="deq-nivel-btn' + (this._nivelSel === n ? ' marcado' : '') + '" ' +
+        'onclick="MODULOS.plano.marcarNivel(' + n + ')" id="pl-nv-' + n + '">N&iacute;vel ' + n + '</div>').join('') +
+      '</div>' +
+
+      '<h2><span class="ponto deq-rosa"></span>Diagn&oacute;stico Cl&iacute;nico</h2>' +
+      caixaTxt('diagnostico', base ? base.diagnostico : '', 'Diagnostico clinico do beneficiario', 3) +
+
+      '<h2><span class="ponto deq-teal"></span>Resultado da Avalia&ccedil;&atilde;o</h2>' +
+      caixaTxt('resultado', base ? base.resultado_avaliacao : '',
+        'Sintese do resultado da avaliacao (QADI-R): areas de defasagem, potencialidades, perfil de intervencao', 4) +
+
+      '<h2><span class="ponto deq-amarelo"></span>Plano de Cuidado</h2>' +
+      caixaTxt('cuidado', (base && base.plano_cuidado) ||
+        (freqSugerida ? 'Psicoterapia ABA em regime de ' + freqSugerida +
+          ' sessoes semanais, com Plano de Ensino Individualizado (PEI), coleta de dados por tentativas em todas as sessoes e orientacao parental.' : ''),
+        'Regime de atendimento, abordagem, supervisao e orientacao familiar', 4) +
+
+      '<div class="deq-reaval" style="gap:16px; flex-wrap:wrap">' +
+      '  <span><small>Vig&ecirc;ncia - in&iacute;cio</small><br>' +
+      '  <input type="date" id="pl-inicio" class="deq-input" value="' +
+           ((base && renovarDeId ? '' : '') || hoje.toISOString().slice(0, 10)) + '"></span>' +
+      '  <span><small>Data prevista para reavalia&ccedil;&atilde;o</small><br>' +
+      '  <input type="date" id="pl-fim" class="deq-input" value="' + fim.toISOString().slice(0, 10) + '"></span>' +
+      '  <span><small>Sess&otilde;es por semana</small><br>' +
+      '  <input type="number" id="pl-freq" class="deq-input" min="1" max="15" style="width:80px" value="' + freqSugerida + '"></span>' +
+      '  <span style="flex:1; min-width:220px"><small>Profissional respons&aacute;vel (assina o documento)</small><br>' +
+      '  <select id="pl-prof" class="deq-input" style="width:100%">' +
       (equipe || []).map(m => '<option value="' + m.id + '"' +
         ((base ? base.profissional_id : pac.aplicador_id) === m.id ? ' selected' : '') + '>' +
         escaparHtml(m.nome) + '</option>').join('') +
-      '    </select></div>' +
-      '  <div class="campo"><label>Vigencia - inicio</label>' +
-      '    <input type="date" id="pl-inicio" value="' + hoje.toISOString().slice(0, 10) + '"></div>' +
-      '  <div class="campo"><label>Vigencia - fim</label>' +
-      '    <input type="date" id="pl-fim" value="' + fim.toISOString().slice(0, 10) + '"></div>' +
-      '</div></div>' +
+      '  </select></span>' +
+      '</div>' +
+      '</div>' +
 
-      '<div class="cartao faixa-roxo"><h3>Conteudo clinico</h3>' +
+      '<div class="cartao" style="max-width:900px; margin:16px auto 0">' +
+      '<h3>Conteudo clinico interno <span class="selo selo-neutro">nao sai no documento</span></h3>' +
+      '<p class="sub" style="margin-bottom:10px">Apoio da equipe: queixa, objetivos e procedimentos detalhados.</p>' +
       '<div class="grade-form">' +
-      campoTxt('queixa', 'Queixa principal / demanda', base ? base.queixa : '', 3) +
-      campoTxt('objetivo_geral', 'Objetivo geral', base ? base.objetivo_geral : '', 2) +
-      campoTxt('objetivos', 'Objetivos especificos', base ? base.objetivos_especificos : '', 5) +
-      campoTxt('procedimentos', 'Procedimentos e tecnicas (DTT, NET, reforcamento...)', base ? base.procedimentos : '', 4) +
-      campoTxt('resultado', 'Resultado da avaliacao (sai no documento do convenio)', base ? base.resultado_avaliacao : '', 4) +
-      campoTxt('cuidado', 'Plano de cuidado (sai no documento do convenio)', base ? base.plano_cuidado : '', 4) +
+      '  <div class="campo c3"><label>Queixa principal / demanda</label>' +
+      '    <textarea id="pl-queixa" rows="2" style="resize:vertical">' + escaparHtml(base ? base.queixa || '' : '') + '</textarea></div>' +
+      '  <div class="campo c3"><label>Objetivo geral</label>' +
+      '    <textarea id="pl-objetivo_geral" rows="2" style="resize:vertical">' + escaparHtml(base ? base.objetivo_geral || '' : '') + '</textarea></div>' +
+      '  <div class="campo c3"><label>Objetivos especificos</label>' +
+      '    <textarea id="pl-objetivos" rows="4" style="resize:vertical">' + escaparHtml(base ? base.objetivos_especificos || '' : '') + '</textarea></div>' +
+      '  <div class="campo c3"><label>Procedimentos e tecnicas</label>' +
+      '    <textarea id="pl-procedimentos" rows="3" style="resize:vertical">' + escaparHtml(base ? base.procedimentos || '' : '') + '</textarea></div>' +
       '</div></div>' +
 
-      '<div class="mensagem-erro" id="pl-erro"></div>' +
-      '<div class="barra-acoes">' +
+      '<div class="mensagem-erro" id="pl-erro" style="max-width:900px; margin:10px auto 0"></div>' +
+      '<div class="barra-acoes" style="max-width:900px; margin:12px auto 0">' +
       '  <button class="btn btn-fantasma" onclick="MODULOS.pacientes.telaDetalhe(\'' + pacienteId + '\', \'plano\')">Cancelar</button>' +
       '  <button class="btn btn-primario" onclick="MODULOS.plano.salvar()">Salvar plano</button>' +
       '</div>';
+  },
+
+  marcarNivel(n) {
+    this._nivelSel = (this._nivelSel === n) ? null : n;
+    [1, 2, 3].forEach(x => {
+      const el = document.getElementById('pl-nv-' + x);
+      if (el) {
+        el.classList.toggle('marcado', this._nivelSel === x);
+        el.innerHTML = (this._nivelSel === x ? '&#10003; ' : '') + 'N&iacute;vel ' + x;
+      }
+    });
   },
 
   async salvar() {
@@ -168,7 +237,7 @@ window.MODULOS.plano = {
       objetivos_especificos: document.getElementById('pl-objetivos').value.trim() || null,
       procedimentos: document.getElementById('pl-procedimentos').value.trim() || null,
       cid11: document.getElementById('pl-cid11').value.trim() || null,
-      nivel_suporte: parseInt(document.getElementById('pl-nivel').value, 10) || null,
+      nivel_suporte: this._nivelSel || null,
       resultado_avaliacao: document.getElementById('pl-resultado').value.trim() || null,
       plano_cuidado: document.getElementById('pl-cuidado').value.trim() || null,
       frequencia_semanal: parseInt(document.getElementById('pl-freq').value, 10) || null,
@@ -178,8 +247,8 @@ window.MODULOS.plano = {
       criado_por: window.CORTEX_SESSAO.user.id
     };
 
-    if (!dados.queixa || !dados.objetivo_geral) {
-      erro.textContent = 'Preencha ao menos a queixa e o objetivo geral.';
+    if (!dados.diagnostico || !dados.plano_cuidado) {
+      erro.textContent = 'Preencha ao menos o Diagnostico Clinico e o Plano de Cuidado.';
       erro.classList.add('visivel');
       window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
       return;

@@ -74,8 +74,14 @@ window.MODULOS.plano = {
   // ─────────────── CONSTRUTOR ───────────────
 
   async abrirConstrutor(pacienteId, renovarDeId) {
-    const el = this.el();
-    el.innerHTML = '<div class="cartao"><p class="sub">Preparando o plano...</p></div>';
+    document.getElementById('plano-elab-overlay')?.remove();
+    const ov = document.createElement('div');
+    ov.id = 'plano-elab-overlay';
+    ov.className = 'folha-overlay';
+    ov.innerHTML = '<div class="folha-pagina" id="plano-elab-corpo" style="max-width:960px">' +
+      '<p class="sub">Preparando o plano...</p></div>';
+    document.body.appendChild(ov);
+    const el = document.getElementById('plano-elab-corpo');
 
     const [{ data: pac }, { data: equipe }, { data: enc }, { data: resps }, { data: avs }] = await Promise.all([
       sb.from('pacientes').select('id, nome, data_nascimento, nivel, convenio, carteirinha, aplicador_id').eq('id', pacienteId).single(),
@@ -118,7 +124,7 @@ window.MODULOS.plano = {
     el.innerHTML =
       '<div class="pagina-cabecalho">' +
       '  <div>' +
-      '    <button class="btn-voltar" onclick="MODULOS.pacientes.telaDetalhe(\'' + pacienteId + '\', \'plano\')">&larr; Prontuario</button>' +
+      '    <button class="btn-voltar" onclick="MODULOS.plano.fecharConstrutor()">&larr; Fechar</button>' +
       '    <h2>' + (renovarDeId ? 'Renovacao do Plano Terapeutico' : 'Elaboracao do Plano Terapeutico') + '</h2>' +
       '    <p class="sub">Preencha direto no documento. Os dados do beneficiario vem do cadastro; o que estiver errado ali, corrija pelo prontuario.</p>' +
       '  </div>' +
@@ -208,9 +214,17 @@ window.MODULOS.plano = {
 
       '<div class="mensagem-erro" id="pl-erro" style="max-width:900px; margin:10px auto 0"></div>' +
       '<div class="barra-acoes" style="max-width:900px; margin:12px auto 0">' +
-      '  <button class="btn btn-fantasma" onclick="MODULOS.pacientes.telaDetalhe(\'' + pacienteId + '\', \'plano\')">Cancelar</button>' +
+      '  <button class="btn btn-fantasma" onclick="MODULOS.plano.fecharConstrutor()">Cancelar</button>' +
       '  <button class="btn btn-primario" onclick="MODULOS.plano.salvar()">Salvar plano</button>' +
       '</div>';
+  },
+
+  fecharConstrutor() {
+    document.getElementById('plano-elab-overlay')?.remove();
+    const alvo = document.getElementById('pac-aba-conteudo');
+    if (alvo && this._ctx && MODULOS.pacientes.paciente) {
+      MODULOS.pacientes.abrirAba('plano');
+    }
   },
 
   marcarNivel(n) {
@@ -250,7 +264,7 @@ window.MODULOS.plano = {
     if (!dados.diagnostico || !dados.plano_cuidado) {
       erro.textContent = 'Preencha ao menos o Diagnostico Clinico e o Plano de Cuidado.';
       erro.classList.add('visivel');
-      window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+      (document.getElementById('plano-elab-corpo') || document.body).scrollIntoView({ block: 'end', behavior: 'smooth' });
       return;
     }
 
@@ -264,11 +278,12 @@ window.MODULOS.plano = {
           .update({ status: 'renovado' }).eq('id', ctx.renovarDeId);
       }
 
-      this.abrirVisual(novo.id);
+      this.fecharConstrutor();
+      this.docPT(novo.id);
     } catch (e) {
       erro.textContent = e.message;
       erro.classList.add('visivel');
-      window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+      (document.getElementById('plano-elab-corpo') || document.body).scrollIntoView({ block: 'end', behavior: 'smooth' });
     }
   },
 

@@ -23,25 +23,26 @@ window.MODULOS.pei = {
       .order('criado_em', { ascending: false });
 
     const { data: avs } = await sb.from('avaliacoes')
-      .select('id, concluido_em')
+      .select('id, protocolo, concluido_em')
       .eq('paciente_id', pacienteId).eq('status', 'concluida')
       .order('concluido_em', { ascending: false }).limit(1);
 
     const temAvaliacao = avs && avs.length > 0;
+    const nomeProt = temAvaliacao && avs[0].protocolo === 'ss' ? 'Socially Savvy' : 'QADI-R';
 
     let html = '';
     if (this.podeGerir()) {
       html += '<div class="aba-acoes">' +
         (temAvaliacao
           ? '<button class="btn btn-primario" ' +
-            'title="Gera as metas candidatas a partir dos Nao da ultima avaliacao QADI-R concluida (' +
+            'title="Gera as metas candidatas a partir da ultima avaliacao concluida (' + nomeProt + ', ' +
             new Date(avs[0].concluido_em).toLocaleDateString('pt-BR') + ')." ' +
             'onclick="MODULOS.pei.abrirConstrutor(\'' + avs[0].id + '\', \'' + pacienteId + '\')">+ Elaborar PEI</button>' +
-            '<span class="sub">A partir da avaliacao de ' +
+            '<span class="sub">A partir do ' + nomeProt + ' de ' +
             new Date(avs[0].concluido_em).toLocaleDateString('pt-BR') + '</span>'
           : '<button class="btn btn-primario" disabled ' +
-            'title="E preciso uma avaliacao QADI-R concluida para elaborar o PEI.">+ Elaborar PEI</button>' +
-            '<span class="sub">Conclua uma avaliacao QADI-R na aba Avaliacao para liberar.</span>') +
+            'title="E preciso uma avaliacao concluida (QADI-R ou Socially Savvy) para elaborar o PEI.">+ Elaborar PEI</button>' +
+            '<span class="sub">Conclua uma avaliacao na aba Avaliacao para liberar.</span>') +
         '</div>';
     }
 
@@ -67,30 +68,50 @@ window.MODULOS.pei = {
     const el = this.el();
     el.innerHTML = '<div class="cartao"><p class="sub">Preparando metas candidatas...</p></div>';
 
-    await MODULOS.avaliacoes.carregarQuestoes();
-    const questoes = MODULOS.avaliacoes.questoes;
+    const { data: avInfo } = await sb.from('avaliacoes')
+      .select('protocolo').eq('id', avaliacaoId).single();
+    const ehSS = avInfo && avInfo.protocolo === 'ss';
 
-    const [{ data: pac }, { data: resps }, { data: equipe }] = await Promise.all([
+    const [{ data: pac }, { data: equipe }] = await Promise.all([
       sb.from('pacientes').select('id, nome, data_nascimento, aplicador_id').eq('id', pacienteId).single(),
-      sb.from('avaliacao_respostas').select('questao_id, resposta').eq('avaliacao_id', avaliacaoId),
       sb.from('profiles').select('id, nome').eq('atende_pacientes', true).eq('ativo', true).order('nome')
     ]);
 
-    const mapa = {};
-    (resps || []).forEach(r => { mapa[r.questao_id] = r.resposta; });
+    let candidatas, listaAreas;
+    if (ehSS) {
+      await MODULOS.avaliacoes.carregarItensSS();
+      const { data: resps } = await sb.from('ss_respostas')
+        .select('item_id, pontos').eq('avaliacao_id', avaliacaoId);
+      const mapa = {};
+      (resps || []).forEach(r => { mapa[r.item_id] = r.pontos; });
+      candidatas = MODULOS.avaliacoes.itensSS
+        .filter(i => mapa[i.id] !== undefined && mapa[i.id] <= 2)
+        .map(i => ({ area: i.area, ss_id: i.id, meta: i.texto,
+                     marcada: mapa[i.id] === 2,
+                     origem: 'Socially Savvy &middot; ' + i.codigo +
+                       (mapa[i.id] === 2 ? ' &middot; prioritario (pontuou 2)' : ' &middot; pontuou ' + mapa[i.id]) }));
+      listaAreas = MODULOS.avaliacoes.SS_AREAS;
+    } else {
+      await MODULOS.avaliacoes.carregarQuestoes();
+      const questoes = MODULOS.avaliacoes.questoes;
+      const { data: resps } = await sb.from('avaliacao_respostas')
+        .select('questao_id, resposta').eq('avaliacao_id', avaliacaoId);
+      const mapa = {};
+      (resps || []).forEach(r => { mapa[r.questao_id] = r.resposta; });
+      candidatas = questoes
+        .filter(q => mapa[q.id] === 'N')
+        .map(q => ({ area: q.area, faixa: q.faixa, questao_id: q.id, marcada: true,
+                     meta: q.pergunta.replace(/\?$/, '').trim() }));
+      listaAreas = MODULOS.avaliacoes.AREAS;
+    }
 
-    const candidatas = questoes
-      .filter(q => mapa[q.id] === 'N')
-      .map(q => ({ area: q.area, faixa: q.faixa, questao_id: q.id,
-                   meta: q.pergunta.replace(/\?$/, '').trim() }));
-
-    this._construtor = { avaliacaoId, paciente: pac, candidatas, seq: 0 };
+    this._construtor = { avaliacaoId, paciente: pac, candidatas, seq: 0, ehSS };
 
     const hoje = new Date();
     const fim = new Date(hoje); fim.setMonth(fim.getMonth() + 6);
 
     const porArea = {};
-    MODULOS.avaliacoes.AREAS.forEach(a => { porArea[a] = candidatas.filter(c => c.area === a); });
+    listaAreas.forEach(a => { porArea[a] = candidatas.filter(c => c.area === a); });
 
     let blocos = '';
     Object.entries(porArea).forEach(([area, itens]) => {
@@ -109,7 +130,7 @@ window.MODULOS.pei = {
       '  <div>' +
       '    <button class="btn-voltar" onclick="MODULOS.pacientes.telaDetalhe(\'' + pac.id + '\', \'pei\')">&larr; Prontuario</button>' +
       '    <h2>Novo PEI &middot; ' + escaparHtml(pac.nome) + '</h2>' +
-      '    <p class="sub">' + candidatas.length + ' metas candidatas geradas dos "Nao" do QADI-R. ' +
+      '    <p class="sub">' + candidatas.length + (this._construtor.ehSS ? ' metas candidatas do Socially Savvy: itens que pontuaram 2 vem marcados (prioritarios); 0 e 1 ficam disponiveis. ' : ' metas candidatas geradas dos "Nao" do QADI-R. ') +
       'Desmarque as que nao entram, ajuste o texto e defina recurso e prazo.</p>' +
       '  </div>' +
       '  <button class="btn btn-primario" onclick="MODULOS.pei.salvarPei()">Salvar PEI</button>' +
@@ -118,7 +139,7 @@ window.MODULOS.pei = {
       '<div class="cartao faixa-azul"><h3>Identificacao (Formulario 02)</h3>' +
       '<div class="grade-form">' +
       '  <div class="campo c3"><label>Finalidade</label>' +
-      '    <textarea id="pei-finalidade" rows="2">Desenvolver habilidades essenciais identificadas na avaliacao QADI-R, promovendo autonomia, comunicacao e interacao social.</textarea></div>' +
+      '    <textarea id="pei-finalidade" rows="2">' + (this._construtor.ehSS ? 'Desenvolver habilidades sociais identificadas no Socially Savvy Checklist, promovendo participacao conjunta, linguagem social e autorregulacao.' : 'Desenvolver habilidades essenciais identificadas na avaliacao QADI-R, promovendo autonomia, comunicacao e interacao social.') + '</textarea></div>' +
       '  <div class="campo"><label>Periodo - inicio</label>' +
       '    <input type="date" id="pei-inicio" value="' + hoje.toISOString().slice(0, 10) + '"></div>' +
       '  <div class="campo"><label>Periodo - fim</label>' +
@@ -143,10 +164,12 @@ window.MODULOS.pei = {
 
   htmlMetaLinha(area, c) {
     const n = ++this._construtor.seq;
-    return '<div class="pei-meta" data-area="' + escaparHtml(area) + '" data-questao="' + (c.questao_id || '') + '">' +
-      '<label class="check pei-check"><input type="checkbox" checked></label>' +
+    return '<div class="pei-meta" data-area="' + escaparHtml(area) + '" data-questao="' + (c.questao_id || '') + '" ' +
+      'data-ss="' + (c.ss_id || '') + '">' +
+      '<label class="check pei-check"><input type="checkbox"' + (c.marcada === false ? '' : ' checked') + '></label>' +
       '<div class="pei-campos">' +
       '  <input class="pm-meta" value="' + escaparHtml(c.meta || '') + '" placeholder="Meta">' +
+      (c.origem ? '<small class="pm-origem">' + c.origem + '</small>' : '') +
       (c.faixa ? '<small class="pm-origem">QADI-R &middot; ' + escaparHtml(c.faixa) + '</small>' : '') +
       '  <div class="pei-rp">' +
       '    <input class="pm-recurso" placeholder="Recurso (ex.: pareamento com figuras, DTT)">' +
@@ -177,6 +200,7 @@ window.MODULOS.pei = {
         recurso: m.querySelector('.pm-recurso').value.trim() || null,
         prazo: m.querySelector('.pm-prazo').value.trim() || null,
         origem_questao_id: m.dataset.questao ? parseInt(m.dataset.questao, 10) : null,
+        origem_ss_id: m.dataset.ss ? parseInt(m.dataset.ss, 10) : null,
         ordem: i + 1
       });
     });

@@ -9,6 +9,23 @@ window.MODULOS = window.MODULOS || {};
 
 window.MODULOS.avaliacoes = {
 
+  SS_AREAS: ['Participacao Conjunta', 'Brincadeira Social', 'Autorregulacao',
+             'Social/Emocional', 'Linguagem Social',
+             'Comportamento de Sala de Aula/Grupo', 'Linguagem Nao-Verbal'],
+  SS_ESCALA: [
+    [0, 'Raramente ou nunca demonstra'],
+    [1, 'Demonstra em poucas situacoes'],
+    [2, 'Demonstra em algumas situacoes e pessoas'],
+    [3, 'Demonstra consistentemente entre situacoes e pessoas']
+  ],
+  itensSS: [],
+
+  async carregarItensSS() {
+    if (this.itensSS.length) return;
+    const { data } = await sb.from('ss_itens').select('*').order('ordem');
+    this.itensSS = data || [];
+  },
+
   PODE_AVALIAR: ['direcao', 'coordenador', 'terapeuta', 'suporte'],
   FAIXAS: ['0 a 1 ano', '1 a 2 anos', '2 a 3 anos', '3 a 4 anos', '4 a 5 anos', '5 a 6 anos'],
   AREAS: ['Linguagem Receptiva', 'Linguagem Expressiva', 'Cognição',
@@ -34,7 +51,7 @@ window.MODULOS.avaliacoes = {
     this.el.innerHTML =
       '<div class="pagina-cabecalho">' +
       '  <div><h2>Avaliacoes</h2>' +
-      '  <p class="sub">Protocolos aplicados e em andamento. QADI-R disponivel; SS e IPO chegam depois.</p></div>' +
+      '  <p class="sub">Protocolos aplicados e em andamento. QADI-R e Socially Savvy disponiveis; IPO chega depois.</p></div>' +
       '</div>' +
       '<div id="av-lista"><div class="cartao"><p class="sub">Carregando...</p></div></div>';
 
@@ -57,7 +74,8 @@ window.MODULOS.avaliacoes = {
       '<div class="cartao"><h3>Historico</h3>' +
       ((data && data.length) ? data.map(a =>
         '<div class="linha-doc">' +
-        '<div><b>' + escaparHtml(a.pacientes ? a.pacientes.nome : '?') + ' &middot; QADI-R</b>' +
+        '<div><b>' + escaparHtml(a.pacientes ? a.pacientes.nome : '?') + ' &middot; ' +
+        (a.protocolo === 'ss' ? 'Socially Savvy' : 'QADI-R') + '</b>' +
         '<small>' + (a.avaliador ? 'Avaliador: ' + escaparHtml(a.avaliador.nome) + ' &middot; ' : '') +
         new Date(a.iniciado_em).toLocaleDateString('pt-BR') + '</small></div>' +
         '<div class="pac-selos">' +
@@ -75,11 +93,15 @@ window.MODULOS.avaliacoes = {
     const { data: pacs } = await sb.from('pacientes')
       .select('id, nome, status').in('status', ['avaliacao', 'ativo']).order('nome');
     this._pacs = pacs || [];
-    return '<div class="cartao faixa-ambar"><h3>Nova avaliacao QADI-R</h3>' +
+    return '<div class="cartao faixa-ambar"><h3>Nova avaliacao</h3>' +
       '<div class="grade-form">' +
       '<div class="campo c2"><label>Paciente</label><select id="av-novo-pac">' +
       '<option value="">Selecione</option>' +
       this._pacs.map(p => '<option value="' + p.id + '">' + escaparHtml(p.nome) + '</option>').join('') +
+      '</select></div>' +
+      '<div class="campo"><label>Protocolo</label><select id="av-novo-prot">' +
+      '<option value="qadi">QADI-R</option>' +
+      '<option value="ss">Socially Savvy</option>' +
       '</select></div>' +
       '<div class="campo" style="display:flex; align-items:flex-end">' +
       '<button class="btn btn-primario" onclick="MODULOS.avaliacoes.criarAvaliacao()">Iniciar aplicacao</button>' +
@@ -90,8 +112,9 @@ window.MODULOS.avaliacoes = {
     const pacienteId = document.getElementById('av-novo-pac').value;
     if (!pacienteId) return;
 
+    const protocolo = document.getElementById('av-novo-prot')?.value || 'qadi';
     const { data, error } = await sb.from('avaliacoes')
-      .insert({ paciente_id: pacienteId, protocolo: 'qadi',
+      .insert({ paciente_id: pacienteId, protocolo: protocolo,
                 avaliador_id: this.sessao.user.id })
       .select('id').single();
     if (error) { alert('Erro: ' + error.message); return; }
@@ -107,8 +130,6 @@ window.MODULOS.avaliacoes = {
   },
 
   async abrirAplicacao(avaliacaoId) {
-    await this.carregarQuestoes();
-
     const { data: av, error } = await sb.from('avaliacoes')
       .select('*, pacientes(id, nome, data_nascimento)')
       .eq('id', avaliacaoId).single();
@@ -116,6 +137,9 @@ window.MODULOS.avaliacoes = {
 
     this.avaliacao = av;
     this.pacienteAtual = av.pacientes;
+
+    if (av.protocolo === 'ss') { await this.abrirAplicacaoSS(); return; }
+    await this.carregarQuestoes();
 
     this.respostas = {};
     const { data: resps } = await sb.from('avaliacao_respostas')
@@ -255,6 +279,7 @@ window.MODULOS.avaliacoes = {
       .select('*, paciente_id, pacientes(nome, data_nascimento), avaliador:profiles!avaliacoes_avaliador_id_fkey(nome)')
       .eq('id', avaliacaoId).single();
     if (!av) return '<div class="cartao"><p class="sub">Avaliacao nao encontrada.</p></div>';
+    if (av.protocolo === 'ss') return this.htmlResultadoSS(av);
 
     const { data: resps } = await sb.from('avaliacao_respostas')
       .select('questao_id, resposta').eq('avaliacao_id', avaliacaoId);
@@ -342,11 +367,231 @@ window.MODULOS.avaliacoes = {
     if (data.length > 1) {
       html += '<div class="cartao"><h3>Aplicacoes anteriores</h3>' +
         data.slice(1).map(a =>
-          '<div class="linha-doc"><b>QADI-R &middot; ' +
+          '<div class="linha-doc"><b>' + (a.protocolo === 'ss' ? 'Socially Savvy' : 'QADI-R') + ' &middot; ' +
           new Date(a.iniciado_em).toLocaleDateString('pt-BR') + '</b>' +
           '<span class="selo ' + (a.status === 'concluida' ? 'selo-ok">Concluida' : 'selo-warn">Em andamento') +
           '</span></div>').join('') + '</div>';
     }
     return html;
+  },
+
+  // ═══════════════════ SOCIALLY SAVVY ═══════════════════
+
+  async abrirAplicacaoSS() {
+    await this.carregarItensSS();
+    const av = this.avaliacao;
+
+    this.respSS = {};
+    const { data: resps } = await sb.from('ss_respostas')
+      .select('item_id, pontos').eq('avaliacao_id', av.id);
+    (resps || []).forEach(r => { this.respSS[r.item_id] = r.pontos; });
+
+    // Numero da aplicacao (AV 1..4) pela ordem de inicio
+    const { data: todas } = await sb.from('avaliacoes')
+      .select('id').eq('paciente_id', av.paciente_id).eq('protocolo', 'ss')
+      .order('iniciado_em');
+    this.numSS = Math.max(1, (todas || []).findIndex(x => x.id === av.id) + 1);
+
+    this.telaAplicacaoSS();
+  },
+
+  telaAplicacaoSS() {
+    const av = this.avaliacao;
+    const total = this.itensSS.length;
+    const feitas = Object.keys(this.respSS).length;
+
+    let corpo = '';
+    this.SS_AREAS.forEach(area => {
+      const itens = this.itensSS.filter(i => i.area === area);
+      if (!itens.length) return;
+      const feitasArea = itens.filter(i => this.respSS[i.id] !== undefined).length;
+      corpo += '<div class="cartao"><h3>' + area +
+        ' <span class="selo selo-neutro" id="ss-cont-' + this.slugSS(area) + '">' +
+        feitasArea + '/' + itens.length + '</span></h3>' +
+        itens.map(i =>
+          '<div class="campo questao"><label><b style="color:var(--ink-muted); margin-right:6px">' +
+          i.codigo + '</b>' + escaparHtml(i.texto) + '</label>' +
+          '<div class="segmento">' +
+          [0, 1, 2, 3].map(v =>
+            '<button type="button" class="seg' + (this.respSS[i.id] === v ? ' ativo' : '') + '" ' +
+            'title="' + this.SS_ESCALA[v][1] + '" ' +
+            'onclick="MODULOS.avaliacoes.responderSS(this, ' + i.id + ', ' + v + ')">' + v + '</button>'
+          ).join('') +
+          '</div></div>').join('') +
+        '</div>';
+    });
+
+    this.el.innerHTML =
+      '<div class="pagina-cabecalho">' +
+      '  <div>' +
+      '    <button class="btn-voltar" onclick="MODULOS.avaliacoes.telaLista()">&larr; Avaliacoes</button>' +
+      '    <h2>Socially Savvy &middot; ' + escaparHtml(this.pacienteAtual.nome) +
+      '    <span class="selo selo-roxo">Avaliacao ' + this.numSS + '</span></h2>' +
+      '    <p class="sub">' + calcularIdade(this.pacienteAtual.data_nascimento) +
+      ' &middot; Respostas salvas a cada toque &middot; <span id="ss-progresso">' + feitas + '</span> de ' + total + ' itens</p>' +
+      '  </div>' +
+      '  <button class="btn btn-primario" onclick="MODULOS.avaliacoes.concluirSS()">Concluir</button>' +
+      '</div>' +
+
+      '<div class="cartao"><div class="grade-form">' +
+      '  <div class="campo c2"><label>Contexto(s) da avaliacao</label>' +
+      '    <input id="ss-contexto" oninput="MODULOS.avaliacoes.salvarCabSS()" ' +
+      '      placeholder="Ex.: sala de atendimento, recreio, casa..." value="' + escaparHtml(av.contexto || '') + '"></div>' +
+      '  <div class="campo"><label>Duracao da(s) observacao(oes)</label>' +
+      '    <input id="ss-duracao" oninput="MODULOS.avaliacoes.salvarCabSS()" ' +
+      '      placeholder="Ex.: 3 sessoes de 40 min" value="' + escaparHtml(av.duracao || '') + '"></div>' +
+      '</div>' +
+      '<div class="niv-legenda" style="margin:4px 0 0">' +
+      this.SS_ESCALA.map(([v, r]) => '<span class="niv-leg-item"><b>' + v + '</b> ' + r + '</span>').join('') +
+      '</div></div>' +
+      corpo +
+      '<div class="cartao"><div class="campo" style="margin:0"><label>Observacoes</label>' +
+      '<textarea id="av-obs" rows="3" oninput="MODULOS.avaliacoes.salvarObs()" ' +
+      'style="resize:vertical">' + escaparHtml(av.observacoes || '') + '</textarea></div></div>';
+  },
+
+  slugSS(t) { return t.toLowerCase().replace(/[^a-z]/g, ''); },
+
+  async responderSS(botao, itemId, pontos) {
+    const anterior = this.respSS[itemId];
+    this.respSS[itemId] = pontos;
+    botao.parentElement.querySelectorAll('.seg').forEach(b => b.classList.remove('ativo'));
+    botao.classList.add('ativo');
+
+    const { error } = await sb.from('ss_respostas').upsert(
+      { avaliacao_id: this.avaliacao.id, item_id: itemId, pontos: pontos },
+      { onConflict: 'avaliacao_id,item_id' });
+    if (error) {
+      if (anterior === undefined) delete this.respSS[itemId];
+      else this.respSS[itemId] = anterior;
+      alert('Falha ao salvar: ' + error.message);
+      return;
+    }
+    const prog = document.getElementById('ss-progresso');
+    if (prog) prog.textContent = Object.keys(this.respSS).length;
+    const item = this.itensSS.find(i => i.id === itemId);
+    if (item) {
+      const doArea = this.itensSS.filter(i => i.area === item.area);
+      const cont = document.getElementById('ss-cont-' + this.slugSS(item.area));
+      if (cont) cont.textContent =
+        doArea.filter(i => this.respSS[i.id] !== undefined).length + '/' + doArea.length;
+    }
+  },
+
+  _cabTimer: null,
+  salvarCabSS() {
+    clearTimeout(this._cabTimer);
+    this._cabTimer = setTimeout(async () => {
+      const dados = {
+        contexto: document.getElementById('ss-contexto')?.value || null,
+        duracao: document.getElementById('ss-duracao')?.value || null
+      };
+      Object.assign(this.avaliacao, dados);
+      await sb.from('avaliacoes').update(dados).eq('id', this.avaliacao.id);
+    }, 600);
+  },
+
+  async concluirSS() {
+    const total = this.itensSS.length;
+    const feitas = Object.keys(this.respSS).length;
+    if (feitas < total) {
+      alert('Faltam ' + (total - feitas) + ' item(ns) para pontuar. O Socially Savvy e concluido com os ' +
+        total + ' itens respondidos.');
+      return;
+    }
+    if (!confirm('Concluir a Avaliacao ' + this.numSS + ' do Socially Savvy? Depois ela fica somente leitura.')) return;
+
+    const { error } = await sb.from('avaliacoes')
+      .update({ status: 'concluida', concluido_em: new Date().toISOString() })
+      .eq('id', this.avaliacao.id);
+    if (error) { alert('Erro: ' + error.message); return; }
+    this.telaResultado(this.avaliacao.id);
+  },
+
+  // ─────────────── Resultado SS + consolidado ───────────────
+
+  async htmlResultadoSS(av) {
+    await this.carregarItensSS();
+
+    const { data: resps } = await sb.from('ss_respostas')
+      .select('item_id, pontos').eq('avaliacao_id', av.id);
+    const mapa = {};
+    (resps || []).forEach(r => { mapa[r.item_id] = r.pontos; });
+
+    const porArea = this.SS_AREAS.map(area => {
+      const itens = this.itensSS.filter(i => i.area === area);
+      const realizados = itens.reduce((s, i) => s + (mapa[i.id] || 0), 0);
+      const esperados = itens.length * 3;
+      return { area, realizados, esperados,
+               pct: esperados ? Math.round(realizados * 100 / esperados) : 0 };
+    });
+    const totR = porArea.reduce((s, x) => s + x.realizados, 0);
+    const totE = porArea.reduce((s, x) => s + x.esperados, 0);
+
+    let tabela = '<table class="tabela-presenca"><thead><tr>' +
+      '<th>Area de desenvolvimento social</th><th class="centro">Realizados</th>' +
+      '<th class="centro">Esperados</th><th class="centro">%</th></tr></thead><tbody>' +
+      porArea.map(x =>
+        '<tr><td>' + x.area + '</td><td class="centro">' + x.realizados + '</td>' +
+        '<td class="centro">' + x.esperados + '</td><td class="centro"><b>' + x.pct + '%</b></td></tr>').join('') +
+      '<tr><td><b>TOTAL</b></td><td class="centro"><b>' + totR + '</b></td>' +
+      '<td class="centro"><b>' + totE + '</b></td><td class="centro"><b>' +
+      Math.round(totR * 100 / totE) + '%</b></td></tr>' +
+      '</tbody></table>';
+
+    const grafico = '<div class="rel-grafico" style="margin-top:12px">' +
+      porArea.map(x =>
+        '<div class="rel-col" title="' + x.area + ': ' + x.pct + '%">' +
+        '<span class="rel-pct">' + x.pct + '%</span>' +
+        '<div class="rel-trilho"><div class="rel-barra" style="height:' + x.pct + '%; background:#1468B2"></div></div>' +
+        '<span class="rel-rotulo">' + x.area.slice(0, 14) + '</span></div>').join('') +
+      '</div>';
+
+    // Consolidado: todas as aplicacoes concluidas do paciente
+    let consolidado = '';
+    const { data: todas } = await sb.from('avaliacoes')
+      .select('id, concluido_em').eq('paciente_id', av.paciente_id)
+      .eq('protocolo', 'ss').eq('status', 'concluida').order('concluido_em');
+    if (todas && todas.length > 1) {
+      const { data: todasResp } = await sb.from('ss_respostas')
+        .select('avaliacao_id, item_id, pontos').in('avaliacao_id', todas.map(t => t.id));
+      const porAv = {};
+      (todasResp || []).forEach(r =>
+        ((porAv[r.avaliacao_id] = porAv[r.avaliacao_id] || {})[r.item_id] = r.pontos));
+
+      consolidado = '<div class="cartao"><h3>Consolidado das aplicacoes</h3>' +
+        '<table class="tabela-presenca"><thead><tr><th>Area</th>' +
+        todas.map((t, i) => '<th class="centro">AV ' + (i + 1) + '<br><small>' +
+          new Date(t.concluido_em).toLocaleDateString('pt-BR').slice(0, 5) + '</small></th>').join('') +
+        '</tr></thead><tbody>' +
+        this.SS_AREAS.map(area => {
+          const itens = this.itensSS.filter(i => i.area === area);
+          return '<tr><td>' + area + '</td>' +
+            todas.map(t => {
+              const m = porAv[t.id] || {};
+              const r = itens.reduce((s, i) => s + (m[i.id] || 0), 0);
+              return '<td class="centro">' + Math.round(r * 100 / (itens.length * 3)) + '%</td>';
+            }).join('') + '</tr>';
+        }).join('') +
+        '</tbody></table></div>';
+    }
+
+    return '<div class="cartao faixa-azul">' +
+      '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px">' +
+      '<h3 style="margin:0">Socially Savvy &middot; ' + escaparHtml(av.pacientes.nome) + '</h3>' +
+      '<div class="pac-selos">' +
+      (av.status === 'concluida'
+        ? '<span class="selo selo-ok">Concluida em ' +
+          new Date(av.concluido_em).toLocaleDateString('pt-BR') + '</span>' : '<span class="selo selo-warn">Em andamento</span>') +
+      (av.avaliador ? '<span class="selo selo-neutro">' + escaparHtml(av.avaliador.nome) + '</span>' : '') +
+      '</div></div>' +
+      ((av.contexto || av.duracao)
+        ? '<p class="sub" style="margin-bottom:8px">' +
+          (av.contexto ? 'Contexto: ' + escaparHtml(av.contexto) : '') +
+          (av.contexto && av.duracao ? ' &middot; ' : '') +
+          (av.duracao ? 'Duracao: ' + escaparHtml(av.duracao) : '') + '</p>' : '') +
+      tabela + grafico +
+      (av.observacoes ? '<p class="sub" style="margin-top:10px">Obs.: ' + escaparHtml(av.observacoes) + '</p>' : '') +
+      '</div>' + consolidado;
   }
 };

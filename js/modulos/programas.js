@@ -820,7 +820,9 @@ window.MODULOS.programas = {
             '</div>').join('')
         : '<p class="sub">Nenhuma tentativa registrada nesta sessao.</p>') +
       '<div class="campo" style="margin-top:12px"><label>Evolucao diaria *</label>' +
-      '<textarea id="fe-evolucao" rows="4" placeholder="Como foi a sessao, comportamento, observacoes..."></textarea></div>' +
+      '<textarea id="fe-evolucao" rows="4" placeholder="Como foi a sessao, comportamento, atividades realizadas..."></textarea></div>' +
+      '<div class="campo"><label>Destinacao da crianca</label>' +
+      '<input id="fe-destinacao" placeholder="Ex.: entregue a mae as 09:50, orientada sobre a atividade de casa"></div>' +
       '<div class="mensagem-erro" id="fe-erro"></div>' +
       '<div class="barra-acoes">' +
       '  <button class="btn btn-fantasma" onclick="fecharModal()">Voltar a ficha</button>' +
@@ -875,7 +877,8 @@ window.MODULOS.programas = {
         sessao_id: f.sessao.id,
         paciente_id: f.sessao.paciente_id,
         aplicador_id: window.CORTEX_SESSAO.user.id,
-        texto: texto
+        texto: texto,
+        destinacao: document.getElementById('fe-destinacao').value.trim() || null
       });
       if (e2) throw new Error(e2.message);
 
@@ -1043,8 +1046,11 @@ window.MODULOS.programas = {
       '<div class="pagina-cabecalho nao-imprime">' +
       '  <div><button class="btn-voltar" onclick="document.getElementById(\'rel-sessao-overlay\').remove()">&larr; Fechar</button>' +
       '  <h2>Relatorio da sessao</h2></div>' +
+      '  <div style="display:flex; gap:8px">' +
+      '  <button class="btn btn-fantasma" title="Documento oficial da sessao com a identidade da clinica, pronto para PDF." ' +
+      'onclick="MODULOS.programas.docEvolucaoDiaria(\'' + sessaoId + '\')">&#128196; Evolucao Diaria</button>' +
       '  <button class="btn btn-primario" onclick="window.print()">&#128424; Imprimir / PDF</button>' +
-      '</div>' +
+      '  </div></div>' +
       '<div class="rel-imprimivel" id="rel-imprimivel">' +
       '  <div class="rel-cab-imp">' +
       '    <h2>Relatorio de sessao &middot; CORTEX aba</h2>' +
@@ -1132,5 +1138,118 @@ window.MODULOS.programas = {
       const b = document.getElementById('comp-badge-' + c2.id);
       if (b) b.textContent = soma[c2.id] || 0;
     });
+  },
+
+  // ─────────── DOCUMENTO OFICIAL: Evolucao Diaria (identidade Equilibrium) ───────────
+
+  async docEvolucaoDiaria(sessaoId) {
+    document.getElementById('rel-sessao-overlay')?.remove();
+    const ov = document.createElement('div');
+    ov.id = 'doc-eq-overlay';
+    ov.className = 'folha-overlay';
+    ov.innerHTML = '<div class="folha-pagina" id="doc-eq-corpo" style="max-width:900px">' +
+      '<p class="sub">Montando o documento...</p></div>';
+    document.body.appendChild(ov);
+
+    const [rS, rFotos, rEvo, rComp] = await Promise.all([
+      sb.from('sessoes')
+        .select('id, data, hora_inicio, duracao_min, pacientes(nome, data_nascimento, nivel), ' +
+                'profissional:profiles!sessoes_aplicador_id_fkey(nome)')
+        .eq('id', sessaoId).single(),
+      sb.from('programa_sessao_registros')
+        .select('corretos, tentativas, pct_corretos, paciente_programas(programas(nome, area, tentativas_padrao))')
+        .eq('sessao_id', sessaoId),
+      sb.from('evolucoes').select('texto, destinacao, aplicador:profiles!evolucoes_aplicador_id_fkey(nome)')
+        .eq('sessao_id', sessaoId),
+      sb.from('comportamento_registros')
+        .select('quantidade, duracao_seg, antecedente, descricao, consequencia, comportamentos(nome, medida)')
+        .eq('sessao_id', sessaoId)
+    ]);
+    const s = rS.data;
+    if (!s) { ov.remove(); return; }
+    const fotos = rFotos.data || [];
+    const evo = (rEvo.data && rEvo.data[0]) || {};
+    const comps = rComp.data || [];
+    const fmt = d => d ? new Date(d + 'T12:00:00').toLocaleDateString('pt-BR') : '&mdash;';
+
+    const progHtml = fotos.length
+      ? '<table style="width:100%; border-collapse:separate; border-spacing:0 6px; margin:-2px 0">' +
+        fotos.map(fx => {
+          const prog = fx.paciente_programas && fx.paciente_programas.programas;
+          const total = prog ? (prog.tentativas_padrao || fx.tentativas) : fx.tentativas;
+          return '<tr>' +
+            '<td style="padding:7px 11px; background:var(--eq-fundo); border-radius:9px 0 0 9px; font-weight:700; font-size:12px">' +
+            escaparHtml(prog ? prog.nome : '-') +
+            ' <span style="color:var(--eq-cinza); font-weight:600">&middot; ' + escaparHtml(prog ? prog.area : '') + '</span></td>' +
+            '<td style="padding:7px 11px; background:var(--eq-fundo); border-radius:0 9px 9px 0; text-align:right; white-space:nowrap; font-size:12px">' +
+            '<b style="color:var(--eq-azul)">' + fx.pct_corretos + '%</b> de corretos (' + fx.corretos + '/' + total + ')' +
+            '<span style="display:inline-block; vertical-align:middle; width:110px; height:7px; margin-left:8px; ' +
+            'background:#E5EDF4; border-radius:5px; overflow:hidden"><i style="display:block; height:100%; width:' +
+            fx.pct_corretos + '%; background:var(--eq-azul); border-radius:5px"></i></span></td></tr>';
+        }).join('') + '</table>'
+      : '<span style="color:var(--eq-cinza)">Sem programas registrados nesta sessao.</span>';
+
+    const compHtml = comps.length
+      ? comps.map(r => {
+          const nome = r.comportamentos ? r.comportamentos.nome : '-';
+          const medida = r.comportamentos && r.comportamentos.medida === 'duracao'
+            ? Math.round((r.duracao_seg || 0) / 60) + ' min' : (r.quantidade || 0) + 'x';
+          const abc = [r.antecedente ? 'A: ' + r.antecedente : '', r.descricao ? 'B: ' + r.descricao : '',
+                       r.consequencia ? 'C: ' + r.consequencia : ''].filter(Boolean).map(escaparHtml).join(' &middot; ');
+          return '<div style="display:flex; gap:8px; align-items:baseline; margin-bottom:4px">' +
+            '<span style="background:#FDEEF0; color:var(--eq-rosa); font-size:10.5px; font-weight:800; ' +
+            'border-radius:999px; padding:2px 9px; white-space:nowrap">' + escaparHtml(nome) + ' &middot; ' + medida + '</span>' +
+            (abc ? '<span style="font-size:12px">' + abc + '</span>' : '') + '</div>';
+        }).join('')
+      : '<span style="color:var(--eq-cinza)">Nenhum comportamento interferente registrado.</span>';
+
+    document.getElementById('doc-eq-corpo').innerHTML =
+      '<div class="pagina-cabecalho nao-imprime">' +
+      '  <div><button class="btn-voltar" onclick="document.getElementById(\'doc-eq-overlay\').remove(); ' +
+      'MODULOS.programas.abrirRelatorioSessao(\'' + sessaoId + '\')">&larr; Relatorio da sessao</button>' +
+      '  <h2>Evolucao diaria &middot; documento oficial</h2></div>' +
+      '  <button class="btn btn-primario" onclick="window.print()">&#128424; Imprimir / PDF</button>' +
+      '</div>' +
+
+      '<div class="doc-eq">' +
+      '<div class="deq-cab">' +
+      '  <img src="icones/equilibrium.png" alt="Equilibrium">' +
+      '  <div class="deq-cab-t"><h1>Evolu&ccedil;&atilde;o Di&aacute;ria</h1>' +
+      '  <p>Equilibrium Terapia Infantil &middot; Psicoterapia ABA</p></div>' +
+      '  <span class="deq-pilula">SESS&Atilde;O ' + s.data.split('-').reverse().join('/') + '</span>' +
+      '</div>' +
+
+      '<div class="deq-caixa deq-dados" style="grid-template-columns:2fr 1fr 1fr 1.4fr; margin-top:4px">' +
+      '  <div style="border-bottom:none"><small>Paciente</small><b>' + escaparHtml(s.pacientes.nome) + '</b></div>' +
+      '  <div style="border-bottom:none"><small>Idade</small><b>' + calcularIdade(s.pacientes.data_nascimento) + '</b></div>' +
+      '  <div style="border-bottom:none"><small>Hor&aacute;rio</small><b>' + s.hora_inicio.slice(0, 5) +
+           ' &middot; ' + s.duracao_min + ' min</b></div>' +
+      '  <div style="border-bottom:none"><small>Aplicador(a)</small><b>' +
+           escaparHtml(s.profissional ? s.profissional.nome : '&mdash;') + '</b></div>' +
+      '</div>' +
+
+      '<h2><span class="ponto deq-teal"></span>Programas trabalhados</h2>' +
+      '<div class="deq-caixa deq-texto" style="min-height:0">' + progHtml + '</div>' +
+
+      '<h2><span class="ponto deq-amarelo"></span>Sess&atilde;o, evolu&ccedil;&atilde;o e atividades realizadas</h2>' +
+      '<div class="deq-caixa deq-texto">' + escaparHtml(evo.texto || '') + '</div>' +
+
+      '<h2><span class="ponto deq-rosa"></span>Comportamentos interferentes</h2>' +
+      '<div class="deq-caixa deq-texto" style="min-height:0">' + compHtml + '</div>' +
+
+      '<h2><span class="ponto"></span>Destina&ccedil;&atilde;o da crian&ccedil;a</h2>' +
+      '<div class="deq-caixa deq-texto" style="min-height:34px">' + escaparHtml(evo.destinacao || '') + '</div>' +
+
+      '<div class="deq-assinatura">' +
+      escaparHtml((evo.aplicador && evo.aplicador.nome) || (s.profissional && s.profissional.nome) || '') +
+      '<br>Profissional / N&ordm; do Registro de Classe</div>' +
+
+      '<div class="deq-rodape">' +
+      '  <span>Equilibrium Terapia Infantil &middot; Uberl&acirc;ndia/MG</span>' +
+      '  <span class="pontos"><i style="background:var(--eq-teal)"></i><i style="background:var(--eq-amarelo)"></i>' +
+      '<i style="background:var(--eq-rosa)"></i><i style="background:var(--eq-azul)"></i></span>' +
+      '  <span>Documento gerado pelo CORTEX aba &middot; ' + new Date().toLocaleDateString('pt-BR') + '</span>' +
+      '</div>' +
+      '</div>';
   }
 };

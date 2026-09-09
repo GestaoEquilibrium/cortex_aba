@@ -2036,3 +2036,10 @@
 .chip-sessao.hor-livre .chip-nome { color: #15803D; font-weight: 700; }
 .chip-sessao.hor-livre.clicavel:hover { background: #DCFCE7; border-style: solid; }
 .chip-sessao.hor-ocupado { border-left: 3px solid var(--acao); }
+
+.chip-sessao.hor-reserva {
+    background: #FFFBEB;
+    border: 1.5px solid #FDE68A;
+    color: #92400E;
+}
+.chip-sessao.hor-reserva .chip-nome i { font-style: normal; font-weight: 700; color: #92400E; }

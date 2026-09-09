@@ -482,8 +482,9 @@ window.MODULOS.agenda = {
         html += '<div class="chip-sessao' + (this.gere() ? ' clicavel' : '') + '"' +
           (this.gere() ? ' onclick="MODULOS.agenda.modalHorario(\'' + h.id + '\')"' : '') + '>' +
           '<b>' + h.hora_inicio.slice(0, 5) + '</b> ' +
-          '<span class="chip-nome">' + escaparHtml(h.pacientes ?
-            h.pacientes.nome.split(' ')[0] + ' ' + (h.pacientes.nome.split(' ')[1] || '') : '?') + '</span>' +
+          '<span class="chip-nome">' + (h.pacientes
+            ? escaparHtml(h.pacientes.nome.split(' ')[0] + ' ' + (h.pacientes.nome.split(' ')[1] || ''))
+            : '<i>' + escaparHtml(h.rotulo || 'Reserva') + '</i>') + '</span>' +
           '<small>' + escaparHtml(h.profissional ? h.profissional.nome.split(' ')[0] : '-') +
           (h.salas ? ' &middot; ' + escaparHtml(h.salas.nome) : '') + '</small>' +
           '</div>';
@@ -497,16 +498,27 @@ window.MODULOS.agenda = {
   modalHorario(id) {
     const h = id ? this.grade.find(x => x.id === id) : null;
 
+    const ehReserva = h ? !h.paciente_id : false;
     abrirModal(h ? 'Editar horario' : 'Novo horario',
+      '<div class="campo"><label>Tipo</label><div class="segmento" id="h-tipo">' +
+      '<button type="button" class="seg' + (!ehReserva ? ' ativo' : '') + '" onclick="MODULOS.agenda.tipoHorario(this, false)">Paciente</button>' +
+      '<button type="button" class="seg' + (ehReserva ? ' ativo' : '') + '" onclick="MODULOS.agenda.tipoHorario(this, true)">Reserva</button>' +
+      '</div></div>' +
       '<div class="grade-form">' +
-      '  <div class="campo c3"><label>Paciente *</label>' +
-      '    <select id="h-paciente"' + (h ? ' disabled' : '') + '>' +
+      '  <div class="campo c3" id="h-campo-pac" style="' + (ehReserva ? 'display:none' : '') + '"><label>Paciente *</label>' +
+      '    <select id="h-paciente"' + (h && !ehReserva ? ' disabled' : '') + '>' +
       '      <option value="">Selecione</option>' +
       this.pacientes.map(p =>
         '<option value="' + p.id + '"' + (h && h.paciente_id === p.id ? ' selected' : '') + '>' +
         escaparHtml(p.nome) + (p.nivel ? ' (' + (p.nivel === 'aba1' ? 'ABA 1' : 'ABA 2') + ')' : '') +
         '</option>').join('') +
       '    </select></div>' +
+      '  <div class="campo c3" id="h-campo-res" style="' + (ehReserva ? '' : 'display:none') + '">' +
+      '    <label>Rotulo da reserva * <small>(preencha como quiser: Supervisao, Evolucao, Lanche...)</small></label>' +
+      '    <input id="h-rotulo" list="h-rotulos" placeholder="Ex.: Lanche / Evolucao" value="' +
+      escaparHtml(h ? h.rotulo || '' : '') + '">' +
+      '    <datalist id="h-rotulos"><option value="Supervisao"><option value="Evolucao">' +
+      '<option value="Lanche / Evolucao"><option value="Reuniao"></datalist></div>' +
       '  <div class="campo"><label>Dia da semana *</label>' +
       '    <select id="h-dia">' +
       [1, 2, 3, 4, 5].map(d =>
@@ -549,13 +561,22 @@ window.MODULOS.agenda = {
     }
   },
 
+  tipoHorario(botao, reserva) {
+    botao.parentElement.querySelectorAll('.seg').forEach(b => b.classList.remove('ativo'));
+    botao.classList.add('ativo');
+    document.getElementById('h-campo-pac').style.display = reserva ? 'none' : '';
+    document.getElementById('h-campo-res').style.display = reserva ? '' : 'none';
+  },
+
   async salvarHorario(id) {
     const erro = document.getElementById('h-erro');
     const botao = document.getElementById('h-salvar');
     erro.classList.remove('visivel');
 
+    const ehReserva = document.getElementById('h-campo-res').style.display !== 'none';
     const dados = {
-      paciente_id: document.getElementById('h-paciente').value,
+      paciente_id: ehReserva ? null : document.getElementById('h-paciente').value,
+      rotulo: ehReserva ? document.getElementById('h-rotulo').value.trim() : null,
       dia_semana: parseInt(document.getElementById('h-dia').value, 10),
       hora_inicio: document.getElementById('h-hora').value,
       duracao_min: parseInt(document.getElementById('h-dur').value, 10),
@@ -563,8 +584,11 @@ window.MODULOS.agenda = {
       sala_id: document.getElementById('h-sala').value || null
     };
 
-    if (!dados.paciente_id || !dados.hora_inicio || !dados.aplicador_id || !dados.duracao_min) {
-      erro.textContent = 'Preencha paciente, dia, hora, duracao e profissional.';
+    if (!dados.hora_inicio || !dados.aplicador_id || !dados.duracao_min ||
+        (ehReserva ? !dados.rotulo : !dados.paciente_id)) {
+      erro.textContent = ehReserva
+        ? 'Preencha o rotulo da reserva, dia, hora, duracao e profissional.'
+        : 'Preencha paciente, dia, hora, duracao e profissional.';
       erro.classList.add('visivel');
       return;
     }
@@ -576,9 +600,11 @@ window.MODULOS.agenda = {
       const anterior = id ? this.grade.find(x => x.id === id) : null;
       let salvo;
       if (id) {
-        const { paciente_id, ...semPaciente } = dados;
+        const payload = dados.paciente_id === null && !dados.rotulo ? dados : dados;
+        const { paciente_id, ...semPaciente } = payload;
+        const corpo = (this.grade.find(x => x.id === id) || {}).paciente_id ? semPaciente : payload;
         const { data, error } = await sb.from('grade_horarios')
-          .update(semPaciente).eq('id', id).select('*').single();
+          .update(corpo).eq('id', id).select('*').single();
         if (error) throw new Error(this.traduzErro(error.message));
         salvo = data;
       } else {
@@ -623,6 +649,7 @@ window.MODULOS.agenda = {
 
   async notificarMudanca(tipo, h, anterior) {
     try {
+      if (!h.paciente_id) return;  // reservas nao geram notificacao
       const pac = this.pacientes.find(p => p.id === h.paciente_id);
       const prof = this.equipe.find(m => m.id === h.aplicador_id);
       const sala = this.salas.find(s => s.id === h.sala_id);
@@ -722,7 +749,11 @@ window.MODULOS.agenda = {
   },
 
   cargaDe(profId) {
-    return this.grade.filter(g => g.aplicador_id === profId).length;
+    return this.grade.filter(g => g.aplicador_id === profId && g.paciente_id).length;
+  },
+
+  reservasDe(profId) {
+    return this.grade.filter(g => g.aplicador_id === profId && !g.paciente_id).length;
   },
 
   telaHorarios(profId) {
@@ -736,7 +767,9 @@ window.MODULOS.agenda = {
       '  <p class="sub">Jornada semanal, sessoes fixas e espacos livres. A carga e o total de sessoes fixas por semana.</p></div>' +
       '  <div style="display:flex; gap:8px; flex-wrap:wrap">' +
       (this.gere()
-        ? '<button class="btn-chip" title="Duracao padrao das sessoes, geral e por aplicador." ' +
+        ? '<button class="btn-chip" title="Visao geral da ocupacao: vagas, reservas e % por aplicador." ' +
+          'onclick="MODULOS.agenda.telaControle()">Controle</button>' +
+          '<button class="btn-chip" title="Duracao padrao das sessoes, geral e por aplicador." ' +
           'onclick="MODULOS.agenda.modalDuracoes()">Duracao</button>' +
           '<button class="btn-chip" onclick="MODULOS.agenda.modalJornada()">Jornada</button>' +
           '<button class="btn btn-primario" onclick="MODULOS.agenda.modalIndicar()">Indicar horarios</button>'
@@ -781,10 +814,12 @@ window.MODULOS.agenda = {
         if (s.ocupacao) {
           ocupadas++;
           const g = s.ocupacao;
-          html += '<div class="chip-sessao clicavel hor-ocupado"' +
+          html += '<div class="chip-sessao clicavel ' + (g.pacientes ? 'hor-ocupado' : 'hor-reserva') + '"' +
             (this.gere() ? ' onclick="MODULOS.agenda.modalHorario(\'' + g.id + '\')"' : '') + '>' +
             '<b>' + g.hora_inicio.slice(0, 5) + '</b> ' +
-            '<span class="chip-nome">' + escaparHtml(g.pacientes ? g.pacientes.nome.split(' ').slice(0, 2).join(' ') : '?') + '</span>' +
+            '<span class="chip-nome">' + (g.pacientes
+              ? escaparHtml(g.pacientes.nome.split(' ').slice(0, 2).join(' '))
+              : '<i>' + escaparHtml(g.rotulo || 'Reserva') + '</i>') + '</span>' +
             (g.salas ? '<small>' + escaparHtml(g.salas.nome) + '</small>' : '') +
             '</div>';
         } else {
@@ -1157,5 +1192,57 @@ window.MODULOS.agenda = {
     }).eq('id', id);
     fecharModal();
     this.popupIndicativos();
+  },
+
+  // ─────────────── Painel Controle (ocupacao) ───────────────
+
+  telaControle() {
+    const linhas = this.equipe.map(m => {
+      let totais = 0;
+      for (let d = 1; d <= 6; d++) totais += this.slotsDoDia(m.id, d).length;
+      const ocupadas = this.cargaDe(m.id);
+      const reservadas = this.reservasDe(m.id);
+      const livres = Math.max(0, totais - ocupadas - reservadas);
+      const uteis = ocupadas + livres;
+      const pct = uteis ? Math.round(ocupadas * 100 / uteis) : null;
+      return { m, totais, reservadas, ocupadas, livres, pct };
+    }).filter(x => x.totais > 0)
+      .sort((x, y) => (y.pct || 0) - (x.pct || 0));
+
+    const semJornada = this.equipe.filter(m =>
+      !this.jornadas.some(j => j.profissional_id === m.id));
+
+    this.el.innerHTML =
+      '<div class="pagina-cabecalho">' +
+      '  <div><button class="btn-voltar" onclick="MODULOS.agenda.telaHorarios()">&larr; Horarios</button>' +
+      '  <h2>Controle de ocupacao</h2>' +
+      '  <p class="sub">Calculado ao vivo pela jornada e pela grade fixa. Vagas uteis = totais menos reservas.</p></div>' +
+      '</div>' +
+      '<div class="cartao">' +
+      (linhas.length
+        ? '<table class="tabela-presenca"><thead><tr>' +
+          '<th>Aplicador</th><th class="centro">Vagas totais</th><th class="centro">Reservadas</th>' +
+          '<th class="centro">Ocupadas</th><th class="centro">Livres</th><th class="centro">% ocupacao</th><th></th>' +
+          '</tr></thead><tbody>' +
+          linhas.map(x =>
+            '<tr><td><b>' + escaparHtml(x.m.nome) + '</b><br><small class="sub">' +
+            this.durDe(x.m.id) + ' min por sessao</small></td>' +
+            '<td class="centro">' + x.totais + '</td>' +
+            '<td class="centro">' + x.reservadas + '</td>' +
+            '<td class="centro">' + x.ocupadas + '</td>' +
+            '<td class="centro"><b style="color:' + (x.livres > 0 ? '#15803D' : 'var(--ink-muted)') + '">' + x.livres + '</b></td>' +
+            '<td class="centro"><div style="display:flex; align-items:center; gap:8px; justify-content:center">' +
+            '<div style="width:90px; height:8px; background:var(--surface-alt); border-radius:5px; overflow:hidden">' +
+            '<div style="height:100%; width:' + (x.pct || 0) + '%; border-radius:5px; background:' +
+            ((x.pct || 0) >= 90 ? 'var(--st-bad)' : (x.pct || 0) >= 75 ? '#D97706' : '#15803D') + '"></div></div>' +
+            '<b>' + (x.pct === null ? '-' : x.pct + '%') + '</b></div></td>' +
+            '<td><button class="btn-chip" onclick="MODULOS.agenda.telaHorarios(\'' + x.m.id + '\')">Abrir</button></td></tr>'
+          ).join('') +
+          '</tbody></table>'
+        : '<p class="sub">Nenhuma jornada cadastrada ainda.</p>') +
+      (semJornada.length
+        ? '<p class="sub" style="margin-top:10px">Sem jornada cadastrada: ' +
+          semJornada.map(m => escaparHtml(m.nome.split(' ')[0])).join(', ') + '.</p>' : '') +
+      '</div>';
   }
 };

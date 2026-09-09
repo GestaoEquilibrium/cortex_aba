@@ -133,6 +133,11 @@ async function iniciarApp() {
   }
 
   abrirModulo(profile.perfil === 'familia' ? 'portal' : 'inicio');
+
+  // Indicativos de agenda aguardando confirmacao (recepcao/coordenacao)
+  if (profile.perfil !== 'familia') {
+    setTimeout(() => { MODULOS.agenda?.popupIndicativos?.(); }, 1200);
+  }
 }
 
 function montarSidebar(perfil) {

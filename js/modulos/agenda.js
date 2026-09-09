@@ -43,13 +43,25 @@ window.MODULOS.agenda = {
         .select('*, pacientes(id, nome, nivel), profissional:profiles!grade_horarios_aplicador_id_fkey(id, nome), salas(id, nome)')
         .eq('ativo', true).order('hora_inicio'),
       sb.from('pacientes').select('id, nome, nivel, aplicador_id').neq('status', 'encerrado').order('nome'),
-      sb.from('profiles').select('id, nome, perfil').eq('atende_pacientes', true).eq('ativo', true).order('nome'),
+      sb.from('profiles').select('id, nome, perfil, duracao_sessao_min').eq('atende_pacientes', true).eq('ativo', true).order('nome'),
       sb.from('salas').select('*').order('nome')
     ]);
     this.grade = g.data || [];
     this.pacientes = p.data || [];
     this.equipe = e.data || [];
     this.salas = s.data || [];
+
+    const [j, c] = await Promise.all([
+      sb.from('jornadas').select('*').order('dia_semana').order('hora_inicio'),
+      sb.from('configuracoes').select('valor').eq('chave', 'duracao_sessao_min').maybeSingle()
+    ]);
+    this.jornadas = j.data || [];
+    this._durGlobal = parseInt(c.data ? c.data.valor : '45', 10) || 45;
+  },
+
+  durDe(profId) {
+    const m = this.equipe.find(x => x.id === profId);
+    return (m && m.duracao_sessao_min) || this._durGlobal;
   },
 
   ligarTempoReal() {
@@ -70,7 +82,11 @@ window.MODULOS.agenda = {
       '    <button class="btn-chip" onclick="window.open(\'tv.html\', \'_blank\')">&#128250; TV</button>' +
       (this.gere()
         ? '<button class="btn-chip" onclick="MODULOS.agenda.telaGrade()">Grade fixa</button>' +
+          '<button class="btn-chip" title="Jornada e horarios de cada aplicador, com os espacos livres." ' +
+          'onclick="MODULOS.agenda.telaHorarios()">Horarios</button>' +
           '<button class="btn-chip" onclick="MODULOS.agenda.modalSalas()">Salas</button>' +
+          '<button class="btn-chip" title="O sistema sugere o aplicador com menor carga e horarios livres para o paciente." ' +
+          'onclick="MODULOS.agenda.modalIndicar()">Indicar</button>' +
           '<button class="btn btn-primario" onclick="MODULOS.agenda.modalHorario()">+ Novo horario</button>'
         : '') +
       '  </div>' +
@@ -500,7 +516,7 @@ window.MODULOS.agenda = {
       '  <div class="campo"><label>Hora de inicio *</label>' +
       '    <input type="time" id="h-hora" value="' + (h ? h.hora_inicio.slice(0, 5) : '08:00') + '" step="300"></div>' +
       '  <div class="campo"><label>Duracao (min) *</label>' +
-      '    <input type="number" id="h-dur" min="20" max="180" step="5" value="' + (h ? h.duracao_min : 40) + '"></div>' +
+      '    <input type="number" id="h-dur" min="20" max="180" step="5" value="' + (h ? h.duracao_min : this._durGlobal) + '"></div>' +
       '  <div class="campo c2"><label>Profissional *</label>' +
       '    <select id="h-prof">' +
       '      <option value="">Selecione</option>' +
@@ -675,5 +691,471 @@ window.MODULOS.agenda = {
     if (error) { alert('Erro: ' + error.message); return; }
     await this.carregarBase();
     this.modalSalas();
+  },
+
+  // ═══════════════════ HORARIOS DOS APLICADORES (jornada + buracos) ═══════════════════
+
+  minutos(h) { const [x, y] = h.slice(0, 5).split(':').map(Number); return x * 60 + y; },
+  horaTxt(min) {
+    return String(Math.floor(min / 60)).padStart(2, '0') + ':' + String(min % 60).padStart(2, '0');
+  },
+
+  slotsDoDia(profId, dia) {
+    const dur = this.durDe(profId);
+    const blocos = this.jornadas.filter(j => j.profissional_id === profId && j.dia_semana === dia);
+    const ocupados = this.grade.filter(g => g.aplicador_id === profId && g.dia_semana === dia);
+    const slots = [];
+    blocos.forEach(b => {
+      let ini = this.minutos(b.hora_inicio);
+      const fim = this.minutos(b.hora_fim);
+      while (ini + dur <= fim) {
+        const slotIni = ini, slotFim = ini + dur;
+        const ocup = ocupados.find(g => {
+          const gi = this.minutos(g.hora_inicio), gf = gi + g.duracao_min;
+          return gi < slotFim && slotIni < gf;
+        });
+        slots.push({ dia, hora: this.horaTxt(slotIni), ocupacao: ocup || null });
+        ini += dur;
+      }
+    });
+    return slots;
+  },
+
+  cargaDe(profId) {
+    return this.grade.filter(g => g.aplicador_id === profId).length;
+  },
+
+  telaHorarios(profId) {
+    const equipeOrd = this.equipe.slice().sort((x, y) => this.cargaDe(x.id) - this.cargaDe(y.id));
+    this._horProf = profId || this._horProf || (equipeOrd[0] && equipeOrd[0].id);
+
+    this.el.innerHTML =
+      '<div class="pagina-cabecalho">' +
+      '  <div><button class="btn-voltar" onclick="MODULOS.agenda.telaSemana()">&larr; Agenda</button>' +
+      '  <h2>Horarios dos aplicadores</h2>' +
+      '  <p class="sub">Jornada semanal, sessoes fixas e espacos livres. A carga e o total de sessoes fixas por semana.</p></div>' +
+      '  <div style="display:flex; gap:8px; flex-wrap:wrap">' +
+      (this.gere()
+        ? '<button class="btn-chip" title="Duracao padrao das sessoes, geral e por aplicador." ' +
+          'onclick="MODULOS.agenda.modalDuracoes()">Duracao</button>' +
+          '<button class="btn-chip" onclick="MODULOS.agenda.modalJornada()">Jornada</button>' +
+          '<button class="btn btn-primario" onclick="MODULOS.agenda.modalIndicar()">Indicar horarios</button>'
+        : '') +
+      '  </div>' +
+      '</div>' +
+      '<div class="toolbar">' +
+      '  <select id="hor-prof" onchange="MODULOS.agenda.telaHorarios(this.value)">' +
+      equipeOrd.map(m => '<option value="' + m.id + '"' + (m.id === this._horProf ? ' selected' : '') + '>' +
+        escaparHtml(m.nome) + ' - ' + this.cargaDe(m.id) + ' sessoes/sem</option>').join('') +
+      '  </select>' +
+      '  <span class="selo selo-neutro">' + this.durDe(this._horProf) + ' min por sessao</span>' +
+      '</div>' +
+      '<div id="hor-grade"></div>';
+
+    this.desenharHorarios();
+  },
+
+  desenharHorarios() {
+    const profId = this._horProf;
+    const alvo = document.getElementById('hor-grade');
+    if (!alvo) return;
+
+    const temJornada = this.jornadas.some(j => j.profissional_id === profId);
+    if (!temJornada) {
+      alvo.innerHTML = '<div class="cartao"><div class="vazio"><div class="simbolo-vazio">&#128336;</div>' +
+        '<strong>Sem jornada cadastrada</strong>' +
+        (this.gere() ? 'Use o botao Jornada para definir os blocos de trabalho deste aplicador.'
+          : 'A coordenacao ainda nao definiu a jornada.') + '</div></div>';
+      return;
+    }
+
+    let livres = 0, ocupadas = 0;
+    let html = '<div class="agenda-grade">';
+    for (let d = 1; d <= 6; d++) {
+      const slots = this.slotsDoDia(profId, d);
+      if (!slots.length && d === 6) continue;
+      html += '<div class="agenda-dia"><div class="agenda-dia-titulo">' + this.DIAS[d] +
+        ' <span class="selo selo-neutro">' + slots.filter(s => !s.ocupacao).length + ' livres</span></div>';
+      if (!slots.length) html += '<div class="agenda-vazio">Fora da jornada</div>';
+      slots.forEach(s => {
+        if (s.ocupacao) {
+          ocupadas++;
+          const g = s.ocupacao;
+          html += '<div class="chip-sessao clicavel hor-ocupado"' +
+            (this.gere() ? ' onclick="MODULOS.agenda.modalHorario(\'' + g.id + '\')"' : '') + '>' +
+            '<b>' + g.hora_inicio.slice(0, 5) + '</b> ' +
+            '<span class="chip-nome">' + escaparHtml(g.pacientes ? g.pacientes.nome.split(' ').slice(0, 2).join(' ') : '?') + '</span>' +
+            (g.salas ? '<small>' + escaparHtml(g.salas.nome) + '</small>' : '') +
+            '</div>';
+        } else {
+          livres++;
+          html += '<div class="chip-sessao hor-livre' + (this.gere() ? ' clicavel' : '') + '"' +
+            (this.gere() ? ' title="Toque para marcar um paciente neste espaco" ' +
+              'onclick="MODULOS.agenda.novoNoSlot(' + s.dia + ', \'' + s.hora + '\')"' : '') + '>' +
+            '<b>' + s.hora + '</b> <span class="chip-nome">livre</span></div>';
+        }
+      });
+      html += '</div>';
+    }
+    html += '</div>';
+    alvo.innerHTML = html +
+      '<div class="cartao" style="margin-top:12px"><p class="sub">' +
+      '<b>' + ocupadas + '</b> sessoes fixas na semana &middot; <b>' + livres + '</b> espacos livres dentro da jornada.</p></div>';
+  },
+
+  novoNoSlot(dia, hora) {
+    this.modalHorario();
+    setTimeout(() => {
+      const d = document.getElementById('h-dia'), h = document.getElementById('h-hora'),
+            p = document.getElementById('h-prof'), du = document.getElementById('h-dur');
+      if (d) d.value = dia;
+      if (h) h.value = hora;
+      if (p) p.value = this._horProf;
+      if (du) du.value = this.durDe(this._horProf);
+    }, 50);
+  },
+
+  // ─────────────── Jornada ───────────────
+
+  modalJornada(profId) {
+    const id = profId || this._horProf;
+    const m = this.equipe.find(x => x.id === id);
+    const blocos = this.jornadas.filter(j => j.profissional_id === id);
+
+    let corpo = '<div class="campo"><label>Aplicador</label><select onchange="MODULOS.agenda.modalJornada(this.value)">' +
+      this.equipe.map(x => '<option value="' + x.id + '"' + (x.id === id ? ' selected' : '') + '>' +
+        escaparHtml(x.nome) + '</option>').join('') + '</select></div>';
+
+    for (let d = 1; d <= 6; d++) {
+      const doDia = blocos.filter(b => b.dia_semana === d);
+      corpo += '<div class="linha-doc" style="align-items:flex-start"><div style="flex:1"><b>' + this.DIAS[d] + '</b>' +
+        (doDia.length
+          ? doDia.map(b => '<small style="display:inline-flex; align-items:center; gap:6px; margin-right:10px">' +
+              b.hora_inicio.slice(0, 5) + ' &ndash; ' + b.hora_fim.slice(0, 5) +
+              ' <button class="btn-chip" style="padding:1px 7px" ' +
+              'onclick="MODULOS.agenda.removerBloco(\'' + b.id + '\', \'' + id + '\')">&times;</button></small>').join('')
+          : '<small class="sub"> sem jornada</small>') +
+        '</div></div>';
+    }
+
+    corpo += '<div class="grade-form" style="margin-top:12px">' +
+      '<div class="campo"><label>Dia</label><select id="jr-dia">' +
+      [1, 2, 3, 4, 5, 6].map(d => '<option value="' + d + '">' + this.DIAS[d] + '</option>').join('') + '</select></div>' +
+      '<div class="campo"><label>Inicio</label><input type="time" id="jr-ini" value="08:00" step="300"></div>' +
+      '<div class="campo"><label>Fim</label><input type="time" id="jr-fim" value="12:00" step="300"></div>' +
+      '</div>' +
+      '<div class="mensagem-erro" id="jr-erro"></div>' +
+      '<div class="barra-acoes">' +
+      '  <button class="btn btn-fantasma" onclick="fecharModal()">Fechar</button>' +
+      '  <button class="btn btn-primario" onclick="MODULOS.agenda.salvarBloco(\'' + id + '\')">Adicionar bloco</button>' +
+      '</div>';
+
+    abrirModal('Jornada de ' + escaparHtml(m ? m.nome.split(' ')[0] : ''), corpo, true);
+  },
+
+  async salvarBloco(profId) {
+    const erro = document.getElementById('jr-erro');
+    erro.classList.remove('visivel');
+    const ini = document.getElementById('jr-ini').value, fim = document.getElementById('jr-fim').value;
+    if (!ini || !fim || fim <= ini) {
+      erro.textContent = 'Horario final precisa ser depois do inicial.';
+      erro.classList.add('visivel');
+      return;
+    }
+    const { error } = await sb.from('jornadas').insert({
+      profissional_id: profId,
+      dia_semana: parseInt(document.getElementById('jr-dia').value, 10),
+      hora_inicio: ini, hora_fim: fim
+    });
+    if (error) { erro.textContent = error.message; erro.classList.add('visivel'); return; }
+    await this.carregarBase();
+    this.modalJornada(profId);
+    if (document.getElementById('hor-grade')) this.desenharHorarios();
+  },
+
+  async removerBloco(id, profId) {
+    await sb.from('jornadas').delete().eq('id', id);
+    await this.carregarBase();
+    this.modalJornada(profId);
+    if (document.getElementById('hor-grade')) this.desenharHorarios();
+  },
+
+  // ─────────────── Duracao das sessoes ───────────────
+
+  modalDuracoes() {
+    abrirModal('Duracao das sessoes',
+      '<div class="campo"><label>Duracao geral (min)</label>' +
+      '<input type="number" id="du-geral" min="20" max="180" step="5" value="' + this._durGlobal + '"></div>' +
+      '<p class="sub" style="margin:8px 0">Por aplicador (vazio = usa a geral):</p>' +
+      this.equipe.map(m =>
+        '<div class="linha-doc"><b>' + escaparHtml(m.nome) + '</b>' +
+        '<input type="number" class="du-prof" data-id="' + m.id + '" min="20" max="180" step="5" ' +
+        'style="width:90px" placeholder="' + this._durGlobal + '" value="' + (m.duracao_sessao_min || '') + '">' +
+        '</div>').join('') +
+      '<div class="mensagem-erro" id="du-erro"></div>' +
+      '<div class="barra-acoes">' +
+      '  <button class="btn btn-fantasma" onclick="fecharModal()">Cancelar</button>' +
+      '  <button class="btn btn-primario" onclick="MODULOS.agenda.salvarDuracoes()">Salvar</button>' +
+      '</div>', true);
+  },
+
+  async salvarDuracoes() {
+    const erro = document.getElementById('du-erro');
+    erro.classList.remove('visivel');
+    try {
+      const geral = parseInt(document.getElementById('du-geral').value, 10) || 45;
+      const { error: e1 } = await sb.from('configuracoes')
+        .upsert({ chave: 'duracao_sessao_min', valor: String(geral) }, { onConflict: 'chave' });
+      if (e1) throw new Error(e1.message);
+      for (const inp of document.querySelectorAll('.du-prof')) {
+        const v = inp.value ? parseInt(inp.value, 10) : null;
+        const m = this.equipe.find(x => x.id === inp.dataset.id);
+        if ((m.duracao_sessao_min || null) !== v) {
+          const { error: e2 } = await sb.from('profiles')
+            .update({ duracao_sessao_min: v }).eq('id', inp.dataset.id);
+          if (e2) throw new Error(e2.message);
+        }
+      }
+      fecharModal();
+      await this.carregarBase();
+      if (document.getElementById('hor-grade')) this.telaHorarios(this._horProf);
+    } catch (e) {
+      erro.textContent = e.message;
+      erro.classList.add('visivel');
+    }
+  },
+
+  // ═══════════════════ INDICATIVO AUTOMATICO ═══════════════════
+
+  livresDe(profId) {
+    let livres = [];
+    for (let d = 1; d <= 6; d++) {
+      livres = livres.concat(this.slotsDoDia(profId, d).filter(s => !s.ocupacao));
+    }
+    return livres;
+  },
+
+  distribuir(livres, n) {
+    // Espalha pelos dias: um por dia em rodadas, do horario mais cedo
+    const porDia = {};
+    livres.forEach(s => (porDia[s.dia] = porDia[s.dia] || []).push(s));
+    Object.values(porDia).forEach(l => l.sort((a, b) => a.hora.localeCompare(b.hora)));
+    const dias = Object.keys(porDia).map(Number).sort();
+    const escolha = [];
+    while (escolha.length < n) {
+      let pegou = false;
+      for (const d of dias) {
+        if (escolha.length >= n) break;
+        if (porDia[d].length) { escolha.push(porDia[d].shift()); pegou = true; }
+      }
+      if (!pegou) break;
+    }
+    return escolha.sort((a, b) => a.dia - b.dia || a.hora.localeCompare(b.hora));
+  },
+
+  async modalIndicar() {
+    const pacs = this.pacientes;
+    abrirModal('Indicar horarios',
+      '<p class="sub" style="margin-bottom:10px">O sistema escolhe o aplicador com <b>menor carga semanal</b> que tenha ' +
+      'espacos livres na jornada, e distribui as sessoes pelos dias. Voce revisa e envia para a confirmacao da agenda.</p>' +
+      '<div class="grade-form">' +
+      '  <div class="campo c2"><label>Paciente *</label><select id="in-pac" ' +
+      '    onchange="MODULOS.agenda.preencherQtd(this.value)">' +
+      '    <option value="">Selecione</option>' +
+      pacs.map(p => '<option value="' + p.id + '">' + escaparHtml(p.nome) + '</option>').join('') +
+      '  </select></div>' +
+      '  <div class="campo"><label>Sessoes por semana *</label>' +
+      '    <input type="number" id="in-qtd" min="1" max="15" value="5"></div>' +
+      '</div>' +
+      '<div class="barra-acoes" style="margin-top:4px">' +
+      '  <button class="btn btn-primario" onclick="MODULOS.agenda.calcularIndicativo()">Calcular indicacao</button>' +
+      '</div>' +
+      '<div id="in-proposta"></div>' +
+      '<div class="mensagem-erro" id="in-erro"></div>', true);
+  },
+
+  async preencherQtd(pacId) {
+    if (!pacId) return;
+    const { data } = await sb.from('encaminhamentos').select('sessoes_semanais')
+      .eq('paciente_id', pacId).order('criado_em', { ascending: false }).limit(1);
+    if (data && data[0] && data[0].sessoes_semanais) {
+      document.getElementById('in-qtd').value = data[0].sessoes_semanais;
+    }
+  },
+
+  calcularIndicativo() {
+    const erro = document.getElementById('in-erro');
+    erro.classList.remove('visivel');
+    const pacId = document.getElementById('in-pac').value;
+    const n = parseInt(document.getElementById('in-qtd').value, 10) || 0;
+    if (!pacId || n < 1) {
+      erro.textContent = 'Escolha o paciente e o numero de sessoes.';
+      erro.classList.add('visivel');
+      return;
+    }
+
+    const ranking = this.equipe
+      .map(m => ({ m, carga: this.cargaDe(m.id), livres: this.livresDe(m.id) }))
+      .filter(x => x.livres.length > 0)
+      .sort((a, b) => (a.carga - b.carga) || (b.livres.length - a.livres.length));
+
+    if (!ranking.length) {
+      erro.textContent = 'Nenhum aplicador tem jornada com espacos livres. Cadastre as jornadas em Horarios.';
+      erro.classList.add('visivel');
+      return;
+    }
+
+    const cabem = ranking.filter(x => x.livres.length >= n);
+    const escolhido = (cabem[0] || ranking[0]);
+    this._indic = { pacId, n, ranking };
+    this.desenharProposta(escolhido.m.id);
+  },
+
+  desenharProposta(profId) {
+    const dados = this._indic.ranking.find(x => x.m.id === profId);
+    const n = this._indic.n;
+    const sugeridos = this.distribuir(dados.livres.slice(), n);
+    const chaves = new Set(sugeridos.map(s => s.dia + '|' + s.hora));
+
+    document.getElementById('in-proposta').innerHTML =
+      '<div class="cartao" style="margin-top:12px">' +
+      '<div class="campo"><label>Aplicador indicado <small>(ordenado por menor carga)</small></label>' +
+      '<select onchange="MODULOS.agenda.desenharProposta(this.value)">' +
+      this._indic.ranking.map(x =>
+        '<option value="' + x.m.id + '"' + (x.m.id === profId ? ' selected' : '') + '>' +
+        escaparHtml(x.m.nome) + ' - ' + x.carga + ' sessoes/sem, ' + x.livres.length + ' livres</option>').join('') +
+      '</select></div>' +
+      (dados.livres.length < n
+        ? '<p class="sub" style="color:var(--st-bad)">Este aplicador tem so ' + dados.livres.length +
+          ' espaco(s) livre(s) para ' + n + ' sessoes - marque o que couber ou divida com outro.</p>' : '') +
+      '<p class="sub" style="margin:6px 0">Marcados: <b id="in-cont">' + sugeridos.length + '</b> de ' + n +
+      ' &middot; ' + this.durDe(profId) + ' min cada</p>' +
+      '<div style="display:flex; flex-wrap:wrap; gap:6px">' +
+      dados.livres.map(s =>
+        '<label class="niv-opcao" style="min-width:0">' +
+        '<input type="checkbox" class="in-slot" data-dia="' + s.dia + '" data-hora="' + s.hora + '"' +
+        (chaves.has(s.dia + '|' + s.hora) ? ' checked' : '') +
+        ' onchange="document.getElementById(\'in-cont\').textContent = document.querySelectorAll(\'.in-slot:checked\').length">' +
+        '<b>' + this.DIAS[s.dia].slice(0, 3) + '</b> ' + s.hora + '</label>').join('') +
+      '</div>' +
+      '<div class="barra-acoes" style="margin-top:12px">' +
+      '  <button class="btn btn-primario" onclick="MODULOS.agenda.enviarIndicativo(\'' + profId + '\')">Enviar para confirmacao</button>' +
+      '</div></div>';
+  },
+
+  async enviarIndicativo(profId) {
+    const erro = document.getElementById('in-erro');
+    erro.classList.remove('visivel');
+    const slots = Array.from(document.querySelectorAll('.in-slot:checked'))
+      .map(cb => ({ dia: parseInt(cb.dataset.dia, 10), hora: cb.dataset.hora }));
+    if (!slots.length) {
+      erro.textContent = 'Marque ao menos um horario.';
+      erro.classList.add('visivel');
+      return;
+    }
+    const { error } = await sb.from('indicativos').insert({
+      paciente_id: this._indic.pacId,
+      aplicador_id: profId,
+      duracao_min: this.durDe(profId),
+      slots: slots,
+      criado_por: window.CORTEX_SESSAO.user.id
+    });
+    if (error) { erro.textContent = error.message; erro.classList.add('visivel'); return; }
+    fecharModal();
+    alert('Indicativo enviado. Ele aparece para a agenda/coordenacao confirmar na proxima entrada no sistema.');
+  },
+
+  // ─────────────── Confirmacao (pop-up de entrada) ───────────────
+
+  async popupIndicativos() {
+    if (perm('agenda') !== 'E' && perm('agenda_grade') !== 'E') return;
+    const { data } = await sb.from('indicativos')
+      .select('id, slots, duracao_min, criado_em, pacientes(nome), aplicador:profiles!indicativos_aplicador_id_fkey(nome), autor:profiles!indicativos_criado_por_fkey(nome)')
+      .eq('status', 'pendente').order('criado_em');
+    if (!data || !data.length) return;
+    this._pendentes = data;
+
+    abrirModal('Indicativos aguardando confirmacao',
+      '<p class="sub" style="margin-bottom:10px">Sugestoes de agenda geradas pelo sistema. ' +
+      'Confirmar grava as sessoes fixas na grade do aplicador (as sessoes do dia nascem dela sozinhas).</p>' +
+      data.map(i =>
+        '<div class="linha-doc" style="align-items:flex-start"><div style="flex:1">' +
+        '<b>' + escaparHtml(i.pacientes ? i.pacientes.nome : '?') + '</b> &rarr; ' +
+        escaparHtml(i.aplicador ? i.aplicador.nome : '?') +
+        '<small>' + i.slots.map(s => this.DIAS[s.dia].slice(0, 3) + ' ' + s.hora).join(' &middot; ') +
+        ' &middot; ' + i.duracao_min + ' min' +
+        (i.autor ? ' &middot; indicado por ' + escaparHtml(i.autor.nome.split(' ')[0]) : '') + '</small></div>' +
+        '<div class="pac-selos">' +
+        '<button class="btn-chip cheio" onclick="MODULOS.agenda.confirmarIndicativo(\'' + i.id + '\')">Confirmar</button>' +
+        '<button class="btn-chip" onclick="MODULOS.agenda.recusarIndicativo(\'' + i.id + '\')">Recusar</button>' +
+        '</div></div>').join('') +
+      '<div class="mensagem-erro" id="ind-erro"></div>' +
+      '<div class="barra-acoes"><button class="btn btn-fantasma" onclick="fecharModal()">Deixar para depois</button></div>', true);
+  },
+
+  async confirmarIndicativo(id) {
+    const erro = document.getElementById('ind-erro');
+    if (erro) erro.classList.remove('visivel');
+    const i = (this._pendentes || []).find(x => x.id === id);
+    if (!i) return;
+
+    const { data: cheio } = await sb.from('indicativos')
+      .select('*').eq('id', id).single();
+    const inseridos = [];
+    try {
+      for (const s of cheio.slots) {
+        const { data: g, error } = await sb.from('grade_horarios').insert({
+          paciente_id: cheio.paciente_id,
+          dia_semana: s.dia,
+          hora_inicio: s.hora,
+          duracao_min: cheio.duracao_min,
+          aplicador_id: cheio.aplicador_id,
+          criado_por: window.CORTEX_SESSAO.user.id
+        }).select('id').single();
+        if (error) throw new Error(this.traduzErro(error.message) + ' (' + this.DIAS[s.dia] + ' ' + s.hora + ')');
+        inseridos.push(g.id);
+      }
+      await sb.from('indicativos').update({
+        status: 'confirmado',
+        decidido_por: window.CORTEX_SESSAO.user.id,
+        decidido_em: new Date().toISOString()
+      }).eq('id', id);
+
+      try {
+        const notifs = [{
+          destinatario_id: cheio.aplicador_id,
+          titulo: 'Novos horarios: ' + (i.pacientes ? i.pacientes.nome : 'paciente'),
+          corpo: 'Sessoes fixas confirmadas: ' + cheio.slots.map(s => this.DIAS[s.dia] + ' ' + s.hora).join(', ') + '.'
+        }];
+        const { data: fams } = await sb.from('familia_pacientes')
+          .select('usuario_id').eq('paciente_id', cheio.paciente_id);
+        (fams || []).forEach(f => notifs.push({
+          destinatario_id: f.usuario_id,
+          titulo: 'Agenda definida',
+          corpo: 'Os horarios de atendimento foram confirmados: ' +
+            cheio.slots.map(s => this.DIAS[s.dia] + ' ' + s.hora).join(', ') + '.'
+        }));
+        await sb.from('notificacoes').insert(notifs);
+      } catch (e) { /* notificacao nunca trava */ }
+
+      await this.carregarBase();
+      this.popupIndicativos();
+      if (!(this._pendentes || []).some(x => x.id !== id)) fecharModal();
+    } catch (e) {
+      for (const gid of inseridos) await sb.from('grade_horarios').delete().eq('id', gid);
+      if (erro) { erro.textContent = e.message; erro.classList.add('visivel'); }
+      else alert(e.message);
+    }
+  },
+
+  async recusarIndicativo(id) {
+    if (!confirm('Recusar este indicativo? Ele some da fila (a coordenacao pode gerar outro).')) return;
+    await sb.from('indicativos').update({
+      status: 'recusado',
+      decidido_por: window.CORTEX_SESSAO.user.id,
+      decidido_em: new Date().toISOString()
+    }).eq('id', id);
+    fecharModal();
+    this.popupIndicativos();
   }
 };

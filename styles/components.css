@@ -2026,3 +2026,13 @@
         grid-template-columns: 34px minmax(140px, .8fr) minmax(240px, 1.5fr) minmax(120px, .6fr);
     }
 }
+
+/* ── Horarios dos aplicadores ─────────────────────────────────────────── */
+.chip-sessao.hor-livre {
+    background: #F0FDF4;
+    border: 1.5px dashed #86EFAC;
+    color: #15803D;
+}
+.chip-sessao.hor-livre .chip-nome { color: #15803D; font-weight: 700; }
+.chip-sessao.hor-livre.clicavel:hover { background: #DCFCE7; border-style: solid; }
+.chip-sessao.hor-ocupado { border-left: 3px solid var(--acao); }

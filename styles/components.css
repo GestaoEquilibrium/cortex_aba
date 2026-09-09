@@ -2043,3 +2043,22 @@
     color: #92400E;
 }
 .chip-sessao.hor-reserva .chip-nome i { font-style: normal; font-weight: 700; color: #92400E; }
+
+/* ── Ficha v3: nivel de ajuda + conseguiu/nao ─────────────────────────── */
+.ficha-grade-cab.ficha-v3, .ficha-linha.ficha-v3 {
+    grid-template-columns: 34px minmax(0, 1fr) 92px minmax(120px, 180px);
+}
+.ficha-result { display: inline-flex; gap: 6px; align-items: center; justify-content: center; }
+.res-btn {
+    width: 38px; height: 34px;
+    border-radius: 9px;
+    font-size: 15px; font-weight: 900;
+    cursor: pointer;
+    background: var(--surface);
+    transition: all .12s ease;
+}
+.res-btn.sim { border: 1.5px solid #86EFAC; color: #15803D; }
+.res-btn.sim.ativo, .res-btn.sim:hover { background: #15803D; border-color: #15803D; color: #fff; }
+.res-btn.nao { border: 1.5px solid #FECDD3; color: #E9586A; }
+.res-btn.nao.ativo, .res-btn.nao:hover { background: #E9586A; border-color: #E9586A; color: #fff; }
+.res-na { color: var(--ink-muted); font-weight: 800; }

@@ -74,7 +74,7 @@ window.MODULOS.pei = {
 
     const [{ data: pac }, { data: equipe }] = await Promise.all([
       sb.from('pacientes').select('id, nome, data_nascimento, aplicador_id').eq('id', pacienteId).single(),
-      sb.from('profiles').select('id, nome').eq('atende_pacientes', true).eq('ativo', true).order('nome')
+      sb.from('profiles').select('id, nome').eq('ativo', true).eq('responsavel_tecnico', true).order('nome')
     ]);
 
     let candidatas, listaAreas;

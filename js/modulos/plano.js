@@ -85,7 +85,7 @@ window.MODULOS.plano = {
 
     const [{ data: pac }, { data: equipe }, { data: enc }, { data: resps }, { data: avs }] = await Promise.all([
       sb.from('pacientes').select('id, nome, data_nascimento, nivel, convenio, carteirinha, aplicador_id').eq('id', pacienteId).single(),
-      sb.from('profiles').select('id, nome, perfil').eq('ativo', true).neq('perfil', 'familia').order('nome'),
+      sb.from('profiles').select('id, nome, perfil').eq('ativo', true).eq('responsavel_tecnico', true).order('nome'),
       sb.from('encaminhamentos').select('sessoes_semanais, medico').eq('paciente_id', pacienteId)
         .order('criado_em', { ascending: false }).limit(1),
       sb.from('responsaveis').select('nome, principal').eq('paciente_id', pacienteId)
@@ -191,6 +191,8 @@ window.MODULOS.plano = {
       '  <input type="number" id="pl-freq" class="deq-input" min="1" max="15" style="width:80px" value="' + freqSugerida + '"></span>' +
       '  <span style="flex:1; min-width:220px"><small>Profissional respons&aacute;vel (assina o documento)</small><br>' +
       '  <select id="pl-prof" class="deq-input" style="width:100%">' +
+      ((equipe || []).length === 0
+        ? '<option value="">Nenhum responsavel tecnico marcado - defina em Usuarios e Acessos</option>' : '') +
       (equipe || []).map(m => '<option value="' + m.id + '"' +
         ((base ? base.profissional_id : pac.aplicador_id) === m.id ? ' selected' : '') + '>' +
         escaparHtml(m.nome) + '</option>').join('') +
@@ -261,6 +263,12 @@ window.MODULOS.plano = {
       criado_por: window.CORTEX_SESSAO.user.id
     };
 
+    if (!dados.profissional_id) {
+      erro.textContent = 'Nenhum responsavel tecnico disponivel. A coordenacao marca quem assina em Usuarios e Acessos.';
+      erro.classList.add('visivel');
+      (document.getElementById('plano-elab-corpo') || document.body).scrollIntoView({ block: 'end', behavior: 'smooth' });
+      return;
+    }
     if (!dados.diagnostico || !dados.plano_cuidado) {
       erro.textContent = 'Preencha ao menos o Diagnostico Clinico e o Plano de Cuidado.';
       erro.classList.add('visivel');

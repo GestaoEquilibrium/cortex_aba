@@ -34,7 +34,7 @@ window.MODULOS.admin = {
 
   async carregar() {
     const { data } = await sb.from('profiles')
-      .select('id, nome, email, perfil, ativo, atende_pacientes, criado_em')
+      .select('id, nome, email, perfil, ativo, atende_pacientes, responsavel_tecnico, criado_em')
       .order('nome');
     const todos = data || [];
     this.equipe = todos.filter(p => p.perfil !== 'familia');
@@ -61,6 +61,7 @@ window.MODULOS.admin = {
       '<div class="pac-selos">' +
       '<span class="selo selo-roxo">' + (ROTULOS_PERFIL[p.perfil] || p.perfil) + '</span>' +
       (p.atende_pacientes ? '<span class="selo selo-ok">Atende</span>' : '') +
+      (p.responsavel_tecnico ? '<span class="selo selo-roxo">Assina</span>' : '') +
       (p.ativo ? '<span class="selo selo-ok">Ativo</span>' : '<span class="selo selo-bad">Inativo</span>') +
       '<button class="btn-chip" onclick="MODULOS.admin.modalUsuario(\'' + p.id + '\')">Gerenciar</button>' +
       '</div></div>';
@@ -242,7 +243,11 @@ window.MODULOS.admin = {
       (!ehFamilia && !eu
         ? '<div class="campo"><label class="check">' +
           '<input type="checkbox" id="ger-atende"' + (p.atende_pacientes ? ' checked' : '') + '> Atende pacientes ' +
-          '<small style="font-weight:600; color:var(--ink-muted)">(listas de profissional da agenda, prontuario, PEI e plano)</small>' +
+          '<small style="font-weight:600; color:var(--ink-muted)">(listas de profissional da agenda e do prontuario)</small>' +
+          '</label></div>' +
+          '<div class="campo"><label class="check">' +
+          '<input type="checkbox" id="ger-resp"' + (p.responsavel_tecnico ? ' checked' : '') + '> Responsavel tecnico ' +
+          '<small style="font-weight:600; color:var(--ink-muted)">(pode ser escolhido para assinar Plano Terapeutico e PEI)</small>' +
           '</label></div>'
         : '') +
       (eu ? '<p class="sub">Voce nao pode mudar o proprio perfil nem se inativar.</p>' : '') +
@@ -265,9 +270,10 @@ window.MODULOS.admin = {
   async salvarPerfil(id) {
     const novo = document.getElementById('ger-perfil').value;
     const atende = document.getElementById('ger-atende')?.checked || false;
+    const resp = document.getElementById('ger-resp')?.checked || false;
     const erro = document.getElementById('ger-erro');
     const { error } = await sb.from('profiles')
-      .update({ perfil: novo, atende_pacientes: atende }).eq('id', id);
+      .update({ perfil: novo, atende_pacientes: atende, responsavel_tecnico: resp }).eq('id', id);
     if (error) {
       erro.textContent = error.message;
       erro.classList.add('visivel');

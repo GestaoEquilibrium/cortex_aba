@@ -1076,9 +1076,12 @@ window.MODULOS.programas = {
 
     const lista = evs || [];
     if (lista.length === 0) {
-      return '<div class="cartao"><div class="vazio"><div class="simbolo-vazio">&#128221;</div>' +
+      return (perm('evolucao') === 'E'
+        ? '<div class="aba-acoes"><button class="btn btn-primario" ' +
+          'onclick="MODULOS.programas.modalLancarEvolucao(\'' + pacienteId + '\')">+ Lancar evolucao</button></div>' : '') +
+        '<div class="cartao"><div class="vazio"><div class="simbolo-vazio">&#128221;</div>' +
         '<strong>Nenhuma evolucao registrada</strong>' +
-        'As evolucoes sao escritas pelo aplicador ao encerrar cada sessao.</div></div>';
+        'As evolucoes sao escritas ao encerrar a sessao, ou lancadas depois pelo botao acima.</div></div>';
     }
 
     const ids = lista.map(e => e.sessao_id);
@@ -1101,7 +1104,13 @@ window.MODULOS.programas = {
         '<small>' + dia + '</small></div>';
     }).join('');
 
-    return '<div class="cartao"><h3>Corretos por sessao</h3>' +
+    const barraAcoes = perm('evolucao') === 'E'
+      ? '<div class="aba-acoes"><button class="btn btn-primario" ' +
+        'title="Lancamento retroativo: escolha a data, a sessao daquele dia, e escreva a evolucao dela." ' +
+        'onclick="MODULOS.programas.modalLancarEvolucao(\'' + pacienteId + '\')">+ Lancar evolucao</button></div>'
+      : '';
+
+    return barraAcoes + '<div class="cartao"><h3>Corretos por sessao</h3>' +
       '<p class="sub" style="margin-bottom:10px">% de respostas corretas (C) sobre as tentativas registradas. ' +
       '<b>Legenda de dados antigos:</b> registros anteriores usavam I/G/Ve/Vi - convertidos para C/GE/VE/VI.</p>' +
       '<div class="prog-grafico">' + barras + '</div></div>' +
@@ -1140,6 +1149,67 @@ window.MODULOS.programas = {
     });
   },
 
+  // Ordem canonica: da ajuda maxima (esquerda) a independencia (direita)
+  ORDEM_GRAFICO: ['FA', 'NA', 'SR', 'ER', 'FT', 'FP', 'MO', 'GE', 'VE', 'VI', 'C'],
+
+  corNivel(s) {
+    if (s === 'C') return '#15803D';
+    if (s === 'ER' || s === 'SR') return '#E9586A';
+    if (s === 'NA' || s === 'FA') return '#94A3B8';
+    return '#D97706';
+  },
+
+  graficoTentativas(niveisPrograma, tentativas) {
+    const niveis = this.ORDEM_GRAFICO.filter(n => (niveisPrograma || this.NIVEIS_PADRAO).includes(n));
+    if (!niveis.length || !tentativas.length) return '';
+
+    const ESQ = 150, DIR = 46, TOPO = 30, LINHA = 24;
+    const larguraEixo = 420;
+    const passo = larguraEixo / Math.max(1, niveis.length - 1);
+    const largura = ESQ + larguraEixo + DIR;
+    const altura = TOPO + tentativas.length * LINHA + 8;
+    const x = s => ESQ + niveis.indexOf(s) * passo;
+    const y = i => TOPO + i * LINHA + LINHA / 2;
+
+    let svg = '<svg viewBox="0 0 ' + largura + ' ' + altura + '" xmlns="http://www.w3.org/2000/svg" ' +
+      'style="width:100%; height:auto; font-family:inherit">';
+
+    // Faixa da independencia (coluna C) e grades verticais
+    const iC = niveis.indexOf('C');
+    if (iC > 0) {
+      svg += '<rect x="' + (x('C') - passo / 2) + '" y="' + (TOPO - 4) + '" width="' + (passo / 2 + 14) +
+        '" height="' + (tentativas.length * LINHA + 10) + '" fill="#ECFDF5" rx="8"/>';
+    }
+    niveis.forEach(n => {
+      svg += '<line x1="' + x(n) + '" y1="' + (TOPO - 2) + '" x2="' + x(n) + '" y2="' +
+        (TOPO + tentativas.length * LINHA + 4) + '" stroke="#DFE6EC" stroke-width="1" stroke-dasharray="3 4"/>' +
+        '<text x="' + x(n) + '" y="' + (TOPO - 10) + '" text-anchor="middle" font-size="10.5" font-weight="800" ' +
+        'fill="' + this.corNivel(n) + '">' + n + '</text>';
+    });
+
+    // Linha azul ligando as tentativas + bolinhas
+    const pontos = tentativas.filter(t => niveis.includes(t.resposta));
+    if (pontos.length > 1) {
+      svg += '<polyline fill="none" stroke="#1468B2" stroke-width="2.5" stroke-linejoin="round" points="' +
+        pontos.map(t => x(t.resposta) + ',' + y(tentativas.indexOf(t))).join(' ') + '"/>';
+    }
+    tentativas.forEach((t, i) => {
+      const rot = String(t.ordem || i + 1).padStart(2, '0');
+      const est = t.estimulos ? t.estimulos.nome : '';
+      svg += '<text x="10" y="' + (y(i) + 3.5) + '" font-size="10.5" font-weight="800" fill="#64748B">' + rot + '</text>' +
+        '<text x="34" y="' + (y(i) + 3.5) + '" font-size="10" fill="#23303C">' +
+        escaparHtml(est.length > 16 ? est.slice(0, 15) + '\u2026' : est) + '</text>';
+      if (niveis.includes(t.resposta)) {
+        svg += '<circle cx="' + x(t.resposta) + '" cy="' + y(i) + '" r="7" fill="#fff" ' +
+          'stroke="' + this.corNivel(t.resposta) + '" stroke-width="3"/>' +
+          '<text x="' + (largura - DIR + 12) + '" y="' + (y(i) + 3.5) + '" font-size="10.5" font-weight="800" ' +
+          'fill="' + this.corNivel(t.resposta) + '">' + t.resposta + '</text>';
+      }
+    });
+    svg += '</svg>';
+    return svg;
+  },
+
   // ─────────── DOCUMENTO OFICIAL: Evolucao Diaria (identidade Equilibrium) ───────────
 
   async docEvolucaoDiaria(sessaoId) {
@@ -1151,26 +1221,84 @@ window.MODULOS.programas = {
       '<p class="sub">Montando o documento...</p></div>';
     document.body.appendChild(ov);
 
-    const [rS, rFotos, rEvo, rComp] = await Promise.all([
+    const [rS, rFotos, rEvo, rComp, rTent] = await Promise.all([
       sb.from('sessoes')
-        .select('id, data, hora_inicio, duracao_min, pacientes(nome, data_nascimento, nivel), ' +
+        .select('id, data, hora_inicio, duracao_min, paciente_id, pacientes(nome, data_nascimento, nivel), ' +
                 'profissional:profiles!sessoes_aplicador_id_fkey(nome)')
         .eq('id', sessaoId).single(),
       sb.from('programa_sessao_registros')
-        .select('corretos, tentativas, pct_corretos, paciente_programas(programas(nome, area, tentativas_padrao))')
+        .select('paciente_programa_id, corretos, tentativas, pct_corretos, paciente_programas(programas(nome, area, tentativas_padrao, niveis))')
         .eq('sessao_id', sessaoId),
       sb.from('evolucoes').select('texto, destinacao, aplicador:profiles!evolucoes_aplicador_id_fkey(nome)')
         .eq('sessao_id', sessaoId),
       sb.from('comportamento_registros')
         .select('quantidade, duracao_seg, antecedente, descricao, consequencia, comportamentos(nome, medida)')
-        .eq('sessao_id', sessaoId)
+        .eq('sessao_id', sessaoId),
+      sb.from('registros_tentativas')
+        .select('paciente_programa_id, ordem, resposta, estimulos(nome)')
+        .eq('sessao_id', sessaoId).order('ordem')
     ]);
     const s = rS.data;
     if (!s) { ov.remove(); return; }
     const fotos = rFotos.data || [];
     const evo = (rEvo.data && rEvo.data[0]) || {};
     const comps = rComp.data || [];
+    const tentPorPp = {};
+    (rTent.data || []).forEach(t =>
+      (tentPorPp[t.paciente_programa_id] = tentPorPp[t.paciente_programa_id] || []).push(t));
+
+    // Avaliacoes concluidas na data da sessao (SS ganha mini-quadro por area)
+    const { data: avsDia } = await sb.from('avaliacoes')
+      .select('id, protocolo, concluido_em')
+      .eq('paciente_id', s.paciente_id).eq('status', 'concluida');
+    const doDia = (avsDia || []).filter(a =>
+      a.concluido_em && a.concluido_em.slice(0, 10) === s.data);
+    let avalHtml = '';
+    for (const av of doDia) {
+      if (av.protocolo === 'ss') {
+        await MODULOS.avaliacoes.carregarItensSS();
+        const { data: resps } = await sb.from('ss_respostas')
+          .select('item_id, pontos').eq('avaliacao_id', av.id);
+        const mapa = {};
+        (resps || []).forEach(r => { mapa[r.item_id] = r.pontos; });
+        avalHtml += '<div style="margin-bottom:6px"><b style="font-size:12px">Socially Savvy concluido nesta data</b>' +
+          MODULOS.avaliacoes.SS_AREAS.map(area => {
+            const itens = MODULOS.avaliacoes.itensSS.filter(i => i.area === area);
+            const r = itens.reduce((sm, i) => sm + (mapa[i.id] || 0), 0);
+            const pct = itens.length ? Math.round(r * 100 / (itens.length * 3)) : 0;
+            return '<div style="display:flex; align-items:center; gap:8px; font-size:11px; margin-top:3px">' +
+              '<span style="width:210px">' + area + '</span>' +
+              '<span style="flex:1; height:7px; background:#E5EDF4; border-radius:5px; overflow:hidden">' +
+              '<i style="display:block; height:100%; width:' + pct + '%; background:var(--eq-azul); border-radius:5px"></i></span>' +
+              '<b style="width:36px; text-align:right; color:var(--eq-azul)">' + pct + '%</b></div>';
+          }).join('') + '</div>';
+      } else {
+        avalHtml += '<div style="font-size:12px"><b>QADI-R concluido nesta data</b> ' +
+          '<span style="color:var(--eq-cinza)">&middot; resultado completo na aba Avaliacao do prontuario</span></div>';
+      }
+    }
     const fmt = d => d ? new Date(d + 'T12:00:00').toLocaleDateString('pt-BR') : '&mdash;';
+
+    const graficos = fotos.map(fx => {
+      const prog = fx.paciente_programas && fx.paciente_programas.programas;
+      const lista = tentPorPp[fx.paciente_programa_id] || [];
+      if (!lista.length) return '';
+      return '<div style="margin-top:10px; border:1px solid var(--eq-linha); border-radius:12px; padding:10px 8px 4px">' +
+        '<div style="font-size:11px; font-weight:800; color:var(--eq-azul-escuro); margin:0 0 2px 10px">' +
+        escaparHtml(prog ? prog.nome : '') + ' &middot; tentativa a tentativa (nivel de ajuda)</div>' +
+        this.graficoTentativas(prog ? prog.niveis : null, lista) +
+        '</div>';
+    }).join('');
+
+    const legendaGraf = fotos.length
+      ? '<div style="display:flex; gap:14px; flex-wrap:wrap; font-size:10px; font-weight:700; ' +
+        'color:var(--eq-cinza); margin-top:8px; padding-left:4px">' +
+        '<span><i style="display:inline-block; width:9px; height:9px; border-radius:50%; border:2.5px solid #15803D; margin-right:4px"></i>Correto (independente)</span>' +
+        '<span><i style="display:inline-block; width:9px; height:9px; border-radius:50%; border:2.5px solid #D97706; margin-right:4px"></i>Com ajuda (FT&rarr;VI)</span>' +
+        '<span><i style="display:inline-block; width:9px; height:9px; border-radius:50%; border:2.5px solid #E9586A; margin-right:4px"></i>Erro / sem resposta</span>' +
+        '<span><i style="display:inline-block; width:9px; height:9px; border-radius:50%; border:2.5px solid #94A3B8; margin-right:4px"></i>Nao aplicado / falta</span>' +
+        '</div>'
+      : '';
 
     const progHtml = fotos.length
       ? '<table style="width:100%; border-collapse:separate; border-spacing:0 6px; margin:-2px 0">' +
@@ -1186,7 +1314,7 @@ window.MODULOS.programas = {
             '<span style="display:inline-block; vertical-align:middle; width:110px; height:7px; margin-left:8px; ' +
             'background:#E5EDF4; border-radius:5px; overflow:hidden"><i style="display:block; height:100%; width:' +
             fx.pct_corretos + '%; background:var(--eq-azul); border-radius:5px"></i></span></td></tr>';
-        }).join('') + '</table>'
+        }).join('') + '</table>' + graficos + legendaGraf
       : '<span style="color:var(--eq-cinza)">Sem programas registrados nesta sessao.</span>';
 
     const compHtml = comps.length
@@ -1231,6 +1359,10 @@ window.MODULOS.programas = {
       '<h2><span class="ponto deq-teal"></span>Programas trabalhados</h2>' +
       '<div class="deq-caixa deq-texto" style="min-height:0">' + progHtml + '</div>' +
 
+      (avalHtml
+        ? '<h2><span class="ponto deq-teal"></span>Avalia&ccedil;&otilde;es do dia</h2>' +
+          '<div class="deq-caixa deq-texto" style="min-height:0">' + avalHtml + '</div>'
+        : '') +
       '<h2><span class="ponto deq-amarelo"></span>Sess&atilde;o, evolu&ccedil;&atilde;o e atividades realizadas</h2>' +
       '<div class="deq-caixa deq-texto">' + escaparHtml(evo.texto || '') + '</div>' +
 
@@ -1251,5 +1383,126 @@ window.MODULOS.programas = {
       '  <span>Documento gerado pelo CORTEX aba &middot; ' + new Date().toLocaleDateString('pt-BR') + '</span>' +
       '</div>' +
       '</div>';
+  },
+
+  // ─────────── LANCAMENTO RETROATIVO DE EVOLUCAO ───────────
+
+  modalLancarEvolucao(pacienteId) {
+    this._retroPac = pacienteId;
+    abrirModal('Lancar evolucao',
+      '<p class="sub" style="margin-bottom:10px">Primeiro a data: o sistema mostra as sessoes daquele dia ' +
+      'para voce escolher qual recebe a evolucao (as meninas lancam retroativo, entao a data manda).</p>' +
+      '<div class="grade-form">' +
+      '  <div class="campo"><label>Data da sessao *</label>' +
+      '    <input type="date" id="re-data" value="' + new Date().toISOString().slice(0, 10) + '" ' +
+      '      max="' + new Date().toISOString().slice(0, 10) + '" ' +
+      '      onchange="MODULOS.programas.buscarSessoesDoDia()"></div>' +
+      '</div>' +
+      '<div id="re-lista"><p class="sub">Escolha a data.</p></div>' +
+      '<div id="re-form"></div>' +
+      '<div class="mensagem-erro" id="re-erro"></div>', true);
+    this.buscarSessoesDoDia();
+  },
+
+  async buscarSessoesDoDia() {
+    const data = document.getElementById('re-data').value;
+    const alvo = document.getElementById('re-lista');
+    document.getElementById('re-form').innerHTML = '';
+    if (!data) { alvo.innerHTML = ''; return; }
+    alvo.innerHTML = '<p class="sub">Buscando...</p>';
+
+    const [rS, rE] = await Promise.all([
+      sb.from('sessoes')
+        .select('id, hora_inicio, status, profissional:profiles!sessoes_aplicador_id_fkey(nome)')
+        .eq('paciente_id', this._retroPac).eq('data', data).order('hora_inicio'),
+      sb.from('evolucoes').select('sessao_id').eq('paciente_id', this._retroPac)
+    ]);
+    const comEvo = new Set((rE.data || []).map(e => e.sessao_id));
+    const sessoes = rS.data || [];
+
+    const rot = { agendada: 'Agendada', checkin: 'Check-in', em_atendimento: 'Em atendimento',
+                  concluida: 'Concluida', falta: 'Falta', cancelada: 'Cancelada' };
+    alvo.innerHTML =
+      (sessoes.length
+        ? sessoes.map(s =>
+            '<label class="linha-doc" style="cursor:pointer">' +
+            '<span><input type="radio" name="re-sessao" value="' + s.id + '"' +
+            (comEvo.has(s.id) ? ' disabled' : '') +
+            ' onchange="MODULOS.programas.formEvolucaoRetro()"> ' +
+            '<b>' + s.hora_inicio.slice(0, 5) + '</b> &middot; ' +
+            escaparHtml(s.profissional ? s.profissional.nome : '-') +
+            ' &middot; ' + (rot[s.status] || s.status) + '</span>' +
+            (comEvo.has(s.id) ? '<span class="selo selo-ok">Ja tem evolucao</span>' : '') +
+            '</label>').join('')
+        : '<p class="sub">Nenhuma sessao nesta data.</p>') +
+      '<label class="linha-doc" style="cursor:pointer"><span>' +
+      '<input type="radio" name="re-sessao" value="nova" onchange="MODULOS.programas.formEvolucaoRetro()"> ' +
+      '<b>Criar sessao retroativa</b> nesta data &middot; hora: </span>' +
+      '<input type="time" id="re-hora" value="08:00" step="300" style="width:110px"></label>';
+  },
+
+  formEvolucaoRetro() {
+    document.getElementById('re-form').innerHTML =
+      '<div class="campo" style="margin-top:10px"><label>Evolucao da sessao *</label>' +
+      '<textarea id="re-texto" rows="4" placeholder="Como foi a sessao, comportamento, atividades realizadas..."></textarea></div>' +
+      '<div class="campo"><label>Destinacao da crianca</label>' +
+      '<input id="re-dest" placeholder="Ex.: entregue a mae, orientada sobre a atividade de casa"></div>' +
+      '<label class="check" style="margin:4px 0 8px"><input type="checkbox" id="re-concluir" checked> ' +
+      'Marcar a sessao como concluida</label>' +
+      '<div class="barra-acoes">' +
+      '  <button class="btn btn-fantasma" onclick="fecharModal()">Cancelar</button>' +
+      '  <button class="btn btn-primario" id="re-salvar" onclick="MODULOS.programas.salvarEvolucaoRetro()">Lancar</button>' +
+      '</div>';
+  },
+
+  async salvarEvolucaoRetro() {
+    const erro = document.getElementById('re-erro');
+    const botao = document.getElementById('re-salvar');
+    erro.classList.remove('visivel');
+
+    const escolha = document.querySelector('input[name="re-sessao"]:checked');
+    const texto = document.getElementById('re-texto').value.trim();
+    if (!escolha) { erro.textContent = 'Escolha a sessao (ou crie a retroativa).'; erro.classList.add('visivel'); return; }
+    if (!texto) { erro.textContent = 'Escreva a evolucao.'; erro.classList.add('visivel'); return; }
+
+    botao.disabled = true;
+    botao.textContent = 'Lancando...';
+    try {
+      let sessaoId = escolha.value;
+      if (sessaoId === 'nova') {
+        const { data: nova, error: eN } = await sb.from('sessoes').insert({
+          paciente_id: this._retroPac,
+          data: document.getElementById('re-data').value,
+          hora_inicio: (document.getElementById('re-hora').value || '08:00') + ':00',
+          aplicador_id: window.CORTEX_SESSAO.user.id,
+          status: 'concluida'
+        }).select('id').single();
+        if (eN) throw new Error(eN.message);
+        sessaoId = nova.id;
+      }
+
+      const { error: e1 } = await sb.from('evolucoes').insert({
+        sessao_id: sessaoId,
+        paciente_id: this._retroPac,
+        aplicador_id: window.CORTEX_SESSAO.user.id,
+        texto: texto,
+        destinacao: document.getElementById('re-dest').value.trim() || null
+      });
+      if (e1) throw new Error(e1.message);
+
+      if (escolha.value !== 'nova' && document.getElementById('re-concluir').checked) {
+        await sb.from('sessoes').update({ status: 'concluida' }).eq('id', sessaoId);
+      }
+
+      fecharModal();
+      if (this._pacProgPaciente && MODULOS.pacientes.paciente) {
+        MODULOS.pacientes.abrirAba('evolucoes');
+      }
+    } catch (e) {
+      erro.textContent = e.message;
+      erro.classList.add('visivel');
+      botao.disabled = false;
+      botao.textContent = 'Lancar';
+    }
   }
 };

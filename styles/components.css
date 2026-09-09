@@ -2062,3 +2062,19 @@
 .res-btn.nao { border: 1.5px solid #FECDD3; color: #E9586A; }
 .res-btn.nao.ativo, .res-btn.nao:hover { background: #E9586A; border-color: #E9586A; color: #fff; }
 .res-na { color: var(--ink-muted); font-weight: 800; }
+
+/* Botao de relatorio nas sessoes realizadas */
+.atd-topo {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; flex-wrap: wrap;
+}
+.atd-btn {
+    padding: 8px 16px;
+    font-size: 13px;
+    flex: none;
+    white-space: nowrap;
+}
+@media (max-width: 640px) {
+    .atd-topo { align-items: flex-start; }
+    .atd-btn { width: 100%; justify-content: center; }
+}

@@ -995,11 +995,16 @@ window.MODULOS.programas = {
       const media = pcts.length ? Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length) : null;
       const evo = (s.evolucoes && s.evolucoes[0] && s.evolucoes[0].texto) || '';
       return '<div class="atd-item clicavel" onclick="MODULOS.programas.abrirRelatorioSessao(\'' + s.id + '\')">' +
+        '<div class="atd-topo">' +
         '<div class="atd-meta"><b>' + s.data.split('-').reverse().join('/') + '</b> as ' +
         s.hora_inicio.slice(0, 5) +
         (pcts.length ? ' &middot; ' + pcts.length + ' programa(s)' : '') +
-        (media !== null ? ' &middot; <span class="atd-pct">' + media + '% de corretos</span>' : '') +
-        ' <span class="atd-abrir">Ver relatorio &rarr;</span></div>' +
+        (media !== null ? ' &middot; <span class="atd-pct">' + media + '% de acertos</span>' : '') +
+        '</div>' +
+        '<button type="button" class="btn btn-primario atd-btn" ' +
+        'onclick="event.stopPropagation(); MODULOS.programas.abrirRelatorioSessao(\'' + s.id + '\')">' +
+        '&#128202; Ver relatorio</button>' +
+        '</div>' +
         (evo ? '<p class="sub">' + escaparHtml(evo.length > 140 ? evo.slice(0, 140) + '...' : evo) + '</p>' : '') +
         '</div>';
     }).join('');

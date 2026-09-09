@@ -29,12 +29,22 @@ window.MODULOS.admin = {
       '<div id="adm-corpo"><div class="cartao"><p class="sub">Carregando...</p></div></div>';
 
     await this.carregar();
+    await this.assinarFotos();
     this.desenhar();
+  },
+
+  async assinarFotos() {
+    this._fotos = {};
+    const caminhos = (this.equipe || []).concat(this.familias || [])
+      .map(p => p.foto_path).filter(Boolean);
+    if (!caminhos.length) return;
+    const { data } = await sb.storage.from('documentos').createSignedUrls(caminhos, 3600);
+    (data || []).forEach(d => { if (d.signedUrl) this._fotos[d.path] = d.signedUrl; });
   },
 
   async carregar() {
     const { data } = await sb.from('profiles')
-      .select('id, nome, email, perfil, ativo, atende_pacientes, responsavel_tecnico, criado_em')
+      .select('id, nome, email, perfil, ativo, atende_pacientes, responsavel_tecnico, foto_path, criado_em')
       .order('nome');
     const todos = data || [];
     this.equipe = todos.filter(p => p.perfil !== 'familia');
@@ -54,10 +64,18 @@ window.MODULOS.admin = {
   desenhar() {
     const eu = this.sessao.user.id;
 
+    const fotoDe = p => {
+      const url = this._fotos && this._fotos[p.foto_path];
+      return '<div class="avatar" style="width:38px; height:38px; font-size:13px; flex:none">' +
+        (url ? '<img src="' + url + '" style="width:100%; height:100%; object-fit:cover; border-radius:inherit">'
+             : iniciais(p.nome)) + '</div>';
+    };
+
     const linhaEquipe = p =>
       '<div class="linha-doc">' +
+      '<div style="display:flex; gap:10px; align-items:center">' + fotoDe(p) +
       '<div><b>' + escaparHtml(p.nome) + (p.id === eu ? ' (voce)' : '') + '</b>' +
-      '<small>' + escaparHtml(p.email || 'e-mail nao registrado') + '</small></div>' +
+      '<small>' + escaparHtml(p.email || 'e-mail nao registrado') + '</small></div></div>' +
       '<div class="pac-selos">' +
       '<span class="selo selo-roxo">' + (ROTULOS_PERFIL[p.perfil] || p.perfil) + '</span>' +
       (p.atende_pacientes ? '<span class="selo selo-ok">Atende</span>' : '') +
@@ -281,6 +299,7 @@ window.MODULOS.admin = {
     }
     fecharModal();
     await this.carregar();
+    await this.assinarFotos();
     this.desenhar();
   },
 

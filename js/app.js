@@ -89,6 +89,18 @@ async function iniciarApp() {
     (profile.perfil_real === 'suporte' && profile.perfil !== 'suporte'
       ? ' <span class="ver-como-selo">ver como</span>' : '');
   document.getElementById('avatar').textContent = iniciais(profile.nome);
+  if (profile.perfil !== 'familia') {
+    const av = document.getElementById('avatar');
+    av.style.cursor = 'pointer';
+    av.title = 'Meu perfil: dados pessoais e foto';
+    av.onclick = () => MODULOS.perfil?.abrir?.();
+    if (profile.perfil_real !== 'suporte') {
+      const quem = document.getElementById('usuario-cartao');
+      quem.style.cursor = 'pointer';
+      quem.title = 'Meu perfil: dados pessoais e foto';
+      quem.onclick = () => MODULOS.perfil?.abrir?.();
+    }
+  }
 
   if (profile.perfil_real === 'suporte') {
     const cartao = document.getElementById('usuario-cartao');

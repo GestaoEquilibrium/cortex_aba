@@ -2078,3 +2078,12 @@
     .atd-topo { align-items: flex-start; }
     .atd-btn { width: 100%; justify-content: center; }
 }
+
+/* Selo de paciente novo (primeiro mes apos o cadastro) */
+.selo-novo {
+    background: linear-gradient(120deg, #F59E0B, #F97316);
+    color: #fff;
+    font-weight: 800;
+    letter-spacing: .04em;
+    box-shadow: 0 2px 8px rgba(249, 115, 22, .35);
+}

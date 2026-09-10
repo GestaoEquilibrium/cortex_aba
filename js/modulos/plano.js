@@ -189,7 +189,7 @@ window.MODULOS.plano = {
       '  <input type="date" id="pl-fim" class="deq-input" value="' + fim.toISOString().slice(0, 10) + '"></span>' +
       '  <span><small>Sess&otilde;es por semana</small><br>' +
       '  <input type="number" id="pl-freq" class="deq-input" min="1" max="15" style="width:80px" value="' + freqSugerida + '"></span>' +
-      '  <span style="flex:1; min-width:220px"><small>Profissional respons&aacute;vel (assina o documento)</small><br>' +
+      '  <span style="flex:1; min-width:220px"><small>Respons&aacute;vel t&eacute;cnico (assina o documento)</small><br>' +
       '  <select id="pl-prof" class="deq-input" style="width:100%">' +
       ((equipe || []).length === 0
         ? '<option value="">Nenhum responsavel tecnico marcado - defina em Usuarios e Acessos</option>' : '') +
@@ -487,7 +487,7 @@ window.MODULOS.plano = {
       '<b>' + fmt(pl.vigencia_fim) + '</b></div>' +
 
       '<div class="deq-assinatura">' + escaparHtml(pl.profissional ? pl.profissional.nome : '') +
-      '<br>Profissional / N&ordm; do Registro de Classe</div>' +
+      '<br>Respons&aacute;vel T&eacute;cnico / N&ordm; do Registro de Classe</div>' +
 
       '<div class="deq-rodape">' +
       '  <span>Equilibrium Terapia Infantil &middot; Uberl&acirc;ndia/MG</span>' +

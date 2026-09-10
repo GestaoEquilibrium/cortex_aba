@@ -1127,7 +1127,7 @@ window.MODULOS.programas = {
       '  <div class="rel-cab-imp">' +
       '    <h2>Relatorio de sessao &middot; CORTEX aba</h2>' +
       '    <p><b>' + escaparHtml(s.pacientes.nome) + '</b> &middot; ' + dataFmt + ' as ' + s.hora_inicio.slice(0, 5) +
-      '    &middot; ' + s.duracao_min + ' min &middot; Profissional: ' +
+      '    &middot; ' + s.duracao_min + ' min &middot; Aplicador: ' +
            escaparHtml(s.profissional ? s.profissional.nome : '-') + '</p>' +
       '  </div>' +
       grafico + detalhe + compHtml +
@@ -1457,7 +1457,7 @@ window.MODULOS.programas = {
 
       '<div class="deq-assinatura">' +
       escaparHtml((evo.aplicador && evo.aplicador.nome) || (s.profissional && s.profissional.nome) || '') +
-      '<br>Profissional / N&ordm; do Registro de Classe</div>' +
+      '<br>Aplicador(a) / N&ordm; do Registro de Classe</div>' +
 
       '<div class="deq-rodape">' +
       '  <span>Equilibrium Terapia Infantil &middot; Uberl&acirc;ndia/MG</span>' +

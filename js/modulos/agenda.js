@@ -388,7 +388,7 @@ window.MODULOS.agenda = {
       '      <div><b>' + dExt.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' }) + '</b>' +
       '      <p class="sub">' + s.hora_inicio.slice(0, 5) + ' &middot; ' + s.duracao_min + ' min</p></div>' +
       '    </div>' +
-      '    <div class="caixa-info"><small>Profissional</small><b>' +
+      '    <div class="caixa-info"><small>Aplicador</small><b>' +
              escaparHtml(s.profissional ? s.profissional.nome : '-') + '</b></div>' +
       '    <div class="caixa-info"><small>Sala</small><b>' + escaparHtml(s.salas ? s.salas.nome : '-') + '</b></div>' +
       whats +
@@ -529,7 +529,7 @@ window.MODULOS.agenda = {
       '    <input type="time" id="h-hora" value="' + (h ? h.hora_inicio.slice(0, 5) : '08:00') + '" step="300"></div>' +
       '  <div class="campo"><label>Duracao (min) *</label>' +
       '    <input type="number" id="h-dur" min="20" max="180" step="5" value="' + (h ? h.duracao_min : this._durGlobal) + '"></div>' +
-      '  <div class="campo c2"><label>Profissional *</label>' +
+      '  <div class="campo c2"><label>Aplicador *</label>' +
       '    <select id="h-prof">' +
       '      <option value="">Selecione</option>' +
       this.equipe.map(m =>

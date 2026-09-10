@@ -33,6 +33,11 @@ window.MODULOS.admin = {
     this.desenhar();
   },
 
+  nomeCoord(id) {
+    const m = (this.equipe || []).find(x => x.id === id);
+    return m ? escaparHtml(m.nome.split(' ')[0]) : '';
+  },
+
   async assinarFotos() {
     this._fotos = {};
     const caminhos = (this.equipe || []).concat(this.familias || [])
@@ -44,7 +49,7 @@ window.MODULOS.admin = {
 
   async carregar() {
     const { data } = await sb.from('profiles')
-      .select('id, nome, email, perfil, ativo, atende_pacientes, responsavel_tecnico, foto_path, criado_em')
+      .select('id, nome, email, perfil, ativo, atende_pacientes, responsavel_tecnico, coordenador_id, foto_path, criado_em')
       .order('nome');
     const todos = data || [];
     this.equipe = todos.filter(p => p.perfil !== 'familia');
@@ -80,6 +85,8 @@ window.MODULOS.admin = {
       '<span class="selo selo-roxo">' + (ROTULOS_PERFIL[p.perfil] || p.perfil) + '</span>' +
       (p.atende_pacientes ? '<span class="selo selo-ok">Atende</span>' : '') +
       (p.responsavel_tecnico ? '<span class="selo selo-roxo">Assina</span>' : '') +
+      (p.coordenador_id && this.nomeCoord(p.coordenador_id)
+        ? '<span class="selo selo-neutro">Equipe ' + this.nomeCoord(p.coordenador_id) + '</span>' : '') +
       (p.ativo ? '<span class="selo selo-ok">Ativo</span>' : '<span class="selo selo-bad">Inativo</span>') +
       '<button class="btn-chip" onclick="MODULOS.admin.modalUsuario(\'' + p.id + '\')">Gerenciar</button>' +
       '</div></div>';
@@ -266,7 +273,14 @@ window.MODULOS.admin = {
           '<div class="campo"><label class="check">' +
           '<input type="checkbox" id="ger-resp"' + (p.responsavel_tecnico ? ' checked' : '') + '> Responsavel tecnico ' +
           '<small style="font-weight:600; color:var(--ink-muted)">(pode ser escolhido para assinar Plano Terapeutico e PEI)</small>' +
-          '</label></div>'
+          '</label></div>' +
+          '<div class="campo"><label>Coordenadora da equipe ' +
+          '<small>(todo aplicador responde a uma coordenadora)</small></label>' +
+          '<select id="ger-coord"><option value="">Sem equipe definida</option>' +
+          this.equipe.filter(m => ['coordenador', 'direcao'].includes(m.perfil) && m.ativo && m.id !== p.id)
+            .map(m => '<option value="' + m.id + '"' + (p.coordenador_id === m.id ? ' selected' : '') + '>' +
+              escaparHtml(m.nome) + '</option>').join('') +
+          '</select></div>'
         : '') +
       (eu ? '<p class="sub">Voce nao pode mudar o proprio perfil nem se inativar.</p>' : '') +
 
@@ -289,9 +303,11 @@ window.MODULOS.admin = {
     const novo = document.getElementById('ger-perfil').value;
     const atende = document.getElementById('ger-atende')?.checked || false;
     const resp = document.getElementById('ger-resp')?.checked || false;
+    const coord = document.getElementById('ger-coord')?.value || null;
     const erro = document.getElementById('ger-erro');
     const { error } = await sb.from('profiles')
-      .update({ perfil: novo, atende_pacientes: atende, responsavel_tecnico: resp }).eq('id', id);
+      .update({ perfil: novo, atende_pacientes: atende, responsavel_tecnico: resp,
+                coordenador_id: coord }).eq('id', id);
     if (error) {
       erro.textContent = error.message;
       erro.classList.add('visivel');

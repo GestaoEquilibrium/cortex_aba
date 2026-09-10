@@ -55,7 +55,7 @@ window.MODULOS.pacientes = {
 
     let consulta = sb
       .from('pacientes')
-      .select('id, nome, data_nascimento, nivel, status, convenio, aplicador_id, foto_path, ' +
+      .select('id, nome, data_nascimento, nivel, status, convenio, aplicador_id, foto_path, criado_em, ' +
               'aplicador:profiles!pacientes_aplicador_id_fkey(nome), ' +
               'responsaveis(nome, telefone, principal)')
       .order('nome');
@@ -190,7 +190,7 @@ window.MODULOS.pacientes = {
         '</span>' +
         '    </div>' +
         '    <div class="pac-selos" style="margin-left:auto">' +
-             this.seloNivel(p.nivel) + this.seloStatus(p.status) + '</div>' +
+             this.seloNovo(p) + this.seloNivel(p.nivel) + this.seloStatus(p.status) + '</div>' +
         '  </div>';
 
       if (modo === 'simples') {
@@ -206,7 +206,7 @@ window.MODULOS.pacientes = {
             (p._respObj.telefone ? ' &middot; ' + escaparHtml(p._respObj.telefone) : '')
           : '&mdash;') +
         infoItem('Convenio', escaparHtml(p.convenio || '') || '&mdash;') +
-        infoItem('Profissional', p.aplicador ? escaparHtml(p.aplicador.nome.split(' ')[0]) : '&mdash;') +
+        infoItem('Aplicador', p.aplicador ? escaparHtml(p.aplicador.nome.split(' ')[0]) : '&mdash;') +
         infoItem('Proxima sessao', proxima) +
         '  </div>' +
         this.barraJornada(p) +
@@ -250,6 +250,14 @@ window.MODULOS.pacientes = {
     if (nivel === 'aba1') return '<span class="selo selo-roxo">ABA 1</span>';
     if (nivel === 'aba2') return '<span class="selo selo-roxo">ABA 2</span>';
     return '<span class="selo selo-neutro">Nivel a definir</span>';
+  },
+
+  seloNovo(p) {
+    if (!p.criado_em) return '';
+    const dias = Math.floor((Date.now() - new Date(p.criado_em)) / 86400000);
+    if (dias > 30) return '';
+    return '<span class="selo selo-novo" title="Cadastrado ha ' + dias +
+      ' dia(s). O selo NOVO acompanha o paciente no primeiro mes.">&#10024; NOVO</span>';
   },
 
   seloStatus(status) {
@@ -329,12 +337,12 @@ window.MODULOS.pacientes = {
       '        <div><span>Nascimento</span><b>' +
                new Date(p.data_nascimento + 'T12:00:00').toLocaleDateString('pt-BR') + '</b></div>' +
       (p.convenio ? '<div><span>Convenio</span><b>' + escaparHtml(p.convenio) + '</b></div>' : '') +
-      '<div><span>Profissional</span><b>' +
+      '<div><span>Aplicador</span><b>' +
       (p.aplicador ? escaparHtml(p.aplicador.nome) : '<span style="color:var(--ink-soft)">Nao designado</span>') +
       '</b></div>' +
       '      </div>' +
       '      <div class="capa-acoes">' +
-               this.seloNivel(p.nivel) + this.seloStatus(p.status) +
+               this.seloNovo(p) + this.seloNivel(p.nivel) + this.seloStatus(p.status) +
       (podeAdmitir
         ? '<button class="btn-chip" onclick="MODULOS.pacientes.telaEditar()">&#9998; Editar dados</button>' +
           '<button class="btn-chip" onclick="MODULOS.pacientes.modalFoto()">&#128247; ' +
@@ -558,7 +566,7 @@ window.MODULOS.pacientes = {
         await sb.from('notificacoes').insert({
           destinatario_id: novoId,
           titulo: 'Voce foi designado(a): ' + this.paciente.nome,
-          corpo: 'A coordenacao designou voce como profissional responsavel. ' +
+          corpo: 'A coordenacao designou voce como aplicador responsavel. ' +
                  'Consulte o prontuario para conhecer o caso.'
         });
       }

@@ -144,7 +144,7 @@ window.MODULOS.pei = {
       '    <input type="date" id="pei-inicio" value="' + hoje.toISOString().slice(0, 10) + '"></div>' +
       '  <div class="campo"><label>Periodo - fim</label>' +
       '    <input type="date" id="pei-fim" value="' + fim.toISOString().slice(0, 10) + '"></div>' +
-      '  <div class="campo"><label>Profissional responsavel</label>' +
+      '  <div class="campo"><label>Responsavel tecnico (assina)</label>' +
       '    <select id="pei-prof">' +
       (equipe || []).map(m => '<option value="' + m.id + '"' +
         (m.id === pac.aplicador_id ? ' selected' : '') + '>' + escaparHtml(m.nome) + '</option>').join('') +
@@ -288,7 +288,7 @@ window.MODULOS.pei = {
       '    <div class="caixa-info"><small>Periodo</small><b>' +
         (pei.periodo_inicio ? new Date(pei.periodo_inicio + 'T12:00:00').toLocaleDateString('pt-BR') : '-') + ' a ' +
         (pei.periodo_fim ? new Date(pei.periodo_fim + 'T12:00:00').toLocaleDateString('pt-BR') : '-') + '</b></div>' +
-      '    <div class="caixa-info"><small>Profissional responsavel</small><b>' +
+      '    <div class="caixa-info"><small>Responsavel tecnico</small><b>' +
         escaparHtml(pei.profissional ? pei.profissional.nome : '-') + '</b></div>' +
       (pei.finalidade ? '<div class="caixa-info larga"><small>Finalidade</small><b>' +
         escaparHtml(pei.finalidade) + '</b></div>' : '') +
@@ -590,7 +590,7 @@ window.MODULOS.pei = {
       '<div class="deq-caixa deq-dados" style="grid-template-columns:2fr 1fr 1.4fr">' +
       '  <div style="border-bottom:none"><small>Paciente</small><b>' + escaparHtml(pei.pacientes.nome) + '</b></div>' +
       '  <div style="border-bottom:none"><small>Nascimento</small><b>' + fmt(pei.pacientes.data_nascimento) + '</b></div>' +
-      '  <div style="border-bottom:none"><small>Profissional respons&aacute;vel</small><b>' +
+      '  <div style="border-bottom:none"><small>Respons&aacute;vel T&eacute;cnico</small><b>' +
            escaparHtml(pei.profissional ? pei.profissional.nome : '&mdash;') + '</b></div>' +
       '</div>' +
 
@@ -601,7 +601,7 @@ window.MODULOS.pei = {
       blocos +
 
       '<div class="deq-assinatura">' + escaparHtml(pei.profissional ? pei.profissional.nome : '') +
-      '<br>Profissional / N&ordm; do Registro de Classe</div>' +
+      '<br>Respons&aacute;vel T&eacute;cnico / N&ordm; do Registro de Classe</div>' +
 
       '<div class="deq-rodape">' +
       '  <span>Equilibrium Terapia Infantil &middot; Uberl&acirc;ndia/MG</span>' +

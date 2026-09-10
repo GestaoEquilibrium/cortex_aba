@@ -55,7 +55,7 @@ window.MODULOS.pacientes = {
 
     let consulta = sb
       .from('pacientes')
-      .select('id, nome, data_nascimento, nivel, status, convenio, aplicador_id, foto_path, criado_em, ' +
+      .select('id, nome, data_nascimento, nivel, status, convenio, aplicador_id, foto_path, admitido_em, ' +
               'aplicador:profiles!pacientes_aplicador_id_fkey(nome), ' +
               'responsaveis(nome, telefone, principal)')
       .order('nome');
@@ -253,10 +253,10 @@ window.MODULOS.pacientes = {
   },
 
   seloNovo(p) {
-    if (!p.criado_em) return '';
-    const dias = Math.floor((Date.now() - new Date(p.criado_em)) / 86400000);
-    if (dias > 30) return '';
-    return '<span class="selo selo-novo" title="Cadastrado ha ' + dias +
+    if (!p.admitido_em) return '';
+    const dias = Math.floor((Date.now() - new Date(p.admitido_em + 'T12:00:00')) / 86400000);
+    if (dias < 0 || dias > 30) return '';
+    return '<span class="selo selo-novo" title="Admitido ha ' + dias +
       ' dia(s). O selo NOVO acompanha o paciente no primeiro mes.">&#10024; NOVO</span>';
   },
 
@@ -697,6 +697,8 @@ window.MODULOS.pacientes = {
       '<div class="grade-form">' +
       '  <div class="campo c2"><label>Nome completo *</label><input id="e-nome" required value="' + escaparHtml(p.nome) + '"></div>' +
       '  <div class="campo"><label>Data de nascimento *</label><input type="date" id="e-nasc" required value="' + p.data_nascimento + '"></div>' +
+      '  <div class="campo"><label>Data de admissao <small>(controla o selo NOVO)</small></label>' +
+      '<input type="date" id="e-admitido" value="' + (p.admitido_em || '') + '"></div>' +
       '  <div class="campo"><label>CPF</label><input id="e-cpf" value="' + (p.cpf ? formatarCPF(p.cpf) : '') + '" onblur="MODULOS.pacientes.checarCpf(this)"></div>' +
       '  <div class="campo"><label>Sexo *</label><select id="e-sexo" required>' +
       '    <option value="M"' + (p.sexo === 'M' ? ' selected' : '') + '>Masculino</option>' +
@@ -754,7 +756,8 @@ window.MODULOS.pacientes = {
         bairro: document.getElementById('e-bairro').value.trim() || null,
         cidade: document.getElementById('e-cidade').value.trim() || null,
         uf: document.getElementById('e-uf').value.trim().toUpperCase() || null,
-        observacoes: document.getElementById('e-obs').value.trim() || null
+        observacoes: document.getElementById('e-obs').value.trim() || null,
+        admitido_em: document.getElementById('e-admitido')?.value || null
       }).eq('id', this.paciente.id);
       if (error) throw new Error(error.message);
 
@@ -980,6 +983,7 @@ window.MODULOS.pacientes = {
       // 1. Paciente
       passo('Salvando paciente...');
       const { data: pac, error: e1 } = await sb.from('pacientes').insert({
+        admitido_em: new Date().toISOString().slice(0, 10),
         nome: document.getElementById('f-nome').value.trim(),
         data_nascimento: document.getElementById('f-nasc').value,
         cpf: cpfPaciente || null,

@@ -58,6 +58,7 @@ const NAVEGACAO = [
       { id: 'admin',      rotulo: 'Usuarios e Acessos', perfis: ['direcao','suporte'] },
       { id: 'permissoes', rotulo: 'Permissoes',         perfis: ['suporte'] },
       { id: 'guias',      rotulo: 'Guias',      chave: 'guias' },
+      { id: 'gerencial',  rotulo: 'Relatorios G.', chave: 'gerencial' },
       { id: 'auditoria',  rotulo: 'Auditoria',          chave: 'auditoria' },
       { id: 'diagnostico', rotulo: 'Diagnostico',        perfis: ['suporte'] }
     ]

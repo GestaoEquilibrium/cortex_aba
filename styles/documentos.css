@@ -201,12 +201,30 @@
     box-shadow: inset 0 -3px 0 var(--eq-azul);
 }
 
-/* ── Margens e respiro do modelo de impressao ─────────────────────────── */
-@page { margin: 13mm 12mm; }
-.doc-eq { padding: 6px 10px 2px; }
+/* ── Modelo de impressao: margens curtas, cabecalho e rodape travados ── */
+/* Laterais curtas; topo e base reservam a faixa do cabecalho/rodape fixos */
+@page { margin: 30mm 7mm 17mm; }
+
+.doc-eq { padding: 6px 8px 2px; }
 .doc-eq .deq-caixa { padding: 12px 14px; }
+
 @media print {
-    .doc-eq { padding: 0 4px; }
+    .doc-eq { padding: 0; }
     .doc-eq h2 { break-after: avoid; }
     .doc-eq .deq-caixa { break-inside: avoid; }
+
+    /* Cabecalho fixo no topo de TODAS as paginas, colado na margem */
+    .doc-eq .deq-cab {
+        position: fixed;
+        top: 4mm; left: 7mm; right: 7mm;
+        margin: 0;
+        background: #fff;
+    }
+    /* Rodape fixo na base de TODAS as paginas */
+    .doc-eq .deq-rodape {
+        position: fixed;
+        bottom: 4mm; left: 7mm; right: 7mm;
+        margin: 0;
+        background: #fff;
+    }
 }

@@ -462,21 +462,234 @@ window.MODULOS.avaliacoes = {
           '</div>').join('') + '</div>';
     }
 
-    const concluida = data.find(x => x.status === 'concluida');
+    const concluidas = data.filter(x => x.status === 'concluida');
     let html = acoes;
-    if (concluida) html += await this.htmlResultado(concluida.id);
-    const demais = data.filter(x => !concluida || x.id !== concluida.id)
-      .filter(x => x.status === 'concluida');
-    if (demais.length) {
-      html += '<div class="cartao"><h3>Aplicacoes anteriores</h3>' +
-        demais.map(a =>
-          '<div class="linha-doc"><div><b>' + (a.protocolo === 'ss' ? 'Socially Savvy' : 'QADI-R') + ' &middot; ' +
-          new Date(a.iniciado_em).toLocaleDateString('pt-BR') + '</b></div>' +
-          '<div class="pac-selos"><span class="selo selo-ok">Concluida</span>' +
-          '<button class="btn-chip" onclick="MODULOS.avaliacoes.abrirJanela(\'' + a.id + '\', true)">Resultado</button>' +
-          '</div></div>').join('') + '</div>';
+    if (concluidas.length) {
+      const temSS = concluidas.some(x => x.protocolo === 'ss');
+      const nSS = concluidas.filter(x => x.protocolo === 'ss').length;
+      html += '<div class="cartao"><h3>Concluidas <span class="selo selo-neutro">' + concluidas.length + '</span></h3>' +
+        '<p class="sub" style="margin-bottom:8px">Os resultados vivem nos documentos oficiais: gere e imprima ou envie ao portal.</p>' +
+        (temSS
+          ? '<div class="linha-doc"><div><b>Socially Savvy &middot; consolidado</b>' +
+            '<small>' + nSS + ' aplicacao(oes) (AV1' + (nSS > 1 ? '-AV' + Math.min(nSS, 9) : '') + ') com datas, areas e graficos</small></div>' +
+            '<button class="btn btn-primario" onclick="MODULOS.avaliacoes.docSS(\'' + pacienteId + '\')">&#128196; Ver documento</button>' +
+            '</div>'
+          : '') +
+        concluidas.filter(a => a.protocolo !== 'ss').map(a =>
+          '<div class="linha-doc"><div><b>QADI-R</b>' +
+          '<small>Concluida em ' + new Date(a.concluido_em).toLocaleDateString('pt-BR') + '</small></div>' +
+          '<div class="pac-selos">' +
+          '<button class="btn btn-primario" onclick="MODULOS.avaliacoes.docQADI(\'' + a.id + '\')">&#128196; Ver documento</button>' +
+          (perm('pei') === 'E'
+            ? '<button class="btn-chip" onclick="MODULOS.pei.abrirDevolutiva(\'' + a.id + '\')">Devolutiva</button>' : '') +
+          '</div></div>').join('') +
+        '</div>';
     }
     return html;
+  },
+
+  // ═══════════ DOCUMENTOS OFICIAIS DAS AVALIACOES (identidade Equilibrium) ═══════════
+
+  cabecalhoDoc(titulo, sub) {
+    return '<div class="deq-cab">' +
+      '  <img src="icones/equilibrium.png" alt="Equilibrium">' +
+      '  <div class="deq-cab-t"><h1>' + titulo + '</h1><p>Equilibrium Terapia Infantil &middot; ' + sub + '</p></div>' +
+      '</div>';
+  },
+
+  rodapeDoc() {
+    return '<div class="deq-rodape">' +
+      '  <span>Equilibrium Terapia Infantil &middot; Uberl&acirc;ndia/MG</span>' +
+      '  <span class="pontos"><i style="background:var(--eq-teal)"></i><i style="background:var(--eq-amarelo)"></i>' +
+      '<i style="background:var(--eq-rosa)"></i><i style="background:var(--eq-azul)"></i></span>' +
+      '  <span>Gerado pelo CORTEX aba &middot; ' + new Date().toLocaleDateString('pt-BR') + '</span>' +
+      '</div>';
+  },
+
+  abrirDocOverlay(titulo) {
+    document.getElementById('doc-eq-overlay')?.remove();
+    const ov = document.createElement('div');
+    ov.id = 'doc-eq-overlay';
+    ov.className = 'folha-overlay';
+    ov.innerHTML = '<div class="folha-pagina" id="doc-eq-corpo" style="max-width:960px">' +
+      '<p class="sub">Montando o documento...</p></div>';
+    document.body.appendChild(ov);
+    return ov;
+  },
+
+  // Cores do catavento para as aplicacoes AV1..AV4+
+  COR_AV: ['#1468B2', '#56C4CF', '#F3B63D', '#E9586A', '#7C6FD0', '#3E9C6E'],
+
+  async docSS(pacienteId) {
+    await this.carregarItensSS();
+    const ov = this.abrirDocOverlay();
+
+    const [rAvs, rPac] = await Promise.all([
+      sb.from('avaliacoes').select('id, concluido_em, contexto, duracao_min, avaliador:profiles!avaliacoes_avaliador_id_fkey(nome)')
+        .eq('paciente_id', pacienteId).eq('protocolo', 'ss').eq('status', 'concluida')
+        .order('concluido_em'),
+      sb.from('pacientes').select('nome, data_nascimento').eq('id', pacienteId).single()
+    ]);
+    const avs = rAvs.data || [];
+    const pac = rPac.data;
+    if (!avs.length || !pac) { ov.remove(); return; }
+
+    const { data: resps } = await sb.from('ss_respostas')
+      .select('avaliacao_id, item_id, pontos').in('avaliacao_id', avs.map(a => a.id));
+    const mapa = {};
+    (resps || []).forEach(r => { mapa[r.avaliacao_id + '|' + r.item_id] = r.pontos; });
+
+    // % por area em cada AV + total
+    const dados = avs.map(av => {
+      const porArea = this.SS_AREAS.map(area => {
+        const itens = this.itensSS.filter(i => i.area === area);
+        const r = itens.reduce((s, i) => s + (mapa[av.id + '|' + i.id] || 0), 0);
+        return { area, pct: itens.length ? Math.round(r * 100 / (itens.length * 3)) : 0, r, max: itens.length * 3 };
+      });
+      const totR = porArea.reduce((s, x) => s + x.r, 0);
+      const totM = porArea.reduce((s, x) => s + x.max, 0);
+      return { av, porArea, total: totM ? Math.round(totR * 100 / totM) : 0 };
+    });
+
+    const fmtD = d => new Date(d).toLocaleDateString('pt-BR');
+
+    // Grafico 1: barras horizontais por area, uma cor por AV (estilo GRAFICO-1 da pasta)
+    const grafAreas = '<div style="display:grid; gap:10px">' +
+      this.SS_AREAS.map(area =>
+        '<div><div style="font-size:11px; font-weight:800; color:var(--eq-azul-escuro); margin-bottom:3px">' + area + '</div>' +
+        dados.map((d, i) => {
+          const x = d.porArea.find(p => p.area === area);
+          return '<div style="display:flex; align-items:center; gap:8px; margin-top:2px">' +
+            '<small style="width:34px; font-weight:800; color:' + this.COR_AV[i % 6] + '">AV' + (i + 1) + '</small>' +
+            '<div style="flex:1; height:9px; background:#EFF4F8; border-radius:5px; overflow:hidden">' +
+            '<i style="display:block; height:100%; width:' + x.pct + '%; background:' + this.COR_AV[i % 6] + '; border-radius:5px"></i></div>' +
+            '<b style="width:40px; text-align:right; font-size:11px">' + x.pct + '%</b></div>';
+        }).join('') + '</div>').join('') + '</div>';
+
+    // Grafico 2: evolucao do total (bolinhas ligadas, nosso estilo)
+    let grafTotal = '';
+    if (dados.length > 1) {
+      const W = 640, H = 150, ESQ = 46, DIR = 20, TOPO = 18, BASE = H - 30;
+      const passo = (W - ESQ - DIR) / (dados.length - 1);
+      const y = pct => BASE - (pct / 100) * (BASE - TOPO);
+      grafTotal = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%; height:auto">' +
+        [0, 25, 50, 75, 100].map(g =>
+          '<line x1="' + ESQ + '" y1="' + y(g) + '" x2="' + (W - DIR) + '" y2="' + y(g) +
+          '" stroke="#DFE6EC" stroke-dasharray="3 4"/>' +
+          '<text x="' + (ESQ - 8) + '" y="' + (y(g) + 3) + '" text-anchor="end" font-size="9" fill="#94A3B8">' + g + '%</text>').join('') +
+        '<polyline fill="none" stroke="#1468B2" stroke-width="2.5" points="' +
+        dados.map((d, i) => (ESQ + i * passo) + ',' + y(d.total)).join(' ') + '"/>' +
+        dados.map((d, i) =>
+          '<circle cx="' + (ESQ + i * passo) + '" cy="' + y(d.total) + '" r="7" fill="#fff" stroke="' +
+          this.COR_AV[i % 6] + '" stroke-width="3"/>' +
+          '<text x="' + (ESQ + i * passo) + '" y="' + (y(d.total) - 12) + '" text-anchor="middle" font-size="11" font-weight="800" fill="' +
+          this.COR_AV[i % 6] + '">' + d.total + '%</text>' +
+          '<text x="' + (ESQ + i * passo) + '" y="' + (H - 8) + '" text-anchor="middle" font-size="9.5" font-weight="700" fill="#64748B">AV' +
+          (i + 1) + ' &middot; ' + fmtD(d.av.concluido_em) + '</text>').join('') +
+        '</svg>';
+    }
+
+    window._docPortal = { paciente_id: pacienteId, tipo: 'avaliacao', titulo: 'Socially Savvy - Consolidado' };
+    document.getElementById('doc-eq-corpo').innerHTML =
+      '<div class="pagina-cabecalho nao-imprime">' +
+      '  <div><button class="btn-voltar" onclick="document.getElementById(\'doc-eq-overlay\').remove()">&larr; Fechar</button>' +
+      '  <h2>Socially Savvy &middot; documento oficial</h2></div>' +
+      '  <button class="btn btn-primario" onclick="window.print()">&#128424; Imprimir / PDF</button>' +
+      portalBtn() +
+      '</div>' +
+      '<div class="doc-eq">' +
+      this.cabecalhoDoc('SOCIALLY SAVVY &middot; CONSOLIDADO', 'Avalia&ccedil;&atilde;o de habilidades sociais &middot; 110 itens em 7 &aacute;reas') +
+      '<div class="deq-caixa deq-dados" style="grid-template-columns:1fr 1fr; margin-top:8px">' +
+      '  <div><small>Paciente</small><b>' + escaparHtml(pac.nome) + '</b></div>' +
+      '  <div><small>Nascimento</small><b>' + (pac.data_nascimento ? pac.data_nascimento.split('-').reverse().join('/') : '-') + '</b></div>' +
+      '</div>' +
+      '<h2 style="margin-top:12px"><span class="ponto deq-azul"></span>Aplica&ccedil;&otilde;es realizadas</h2>' +
+      '<div class="deq-caixa deq-dados" style="grid-template-columns:repeat(' + Math.min(dados.length, 4) + ', 1fr)">' +
+      dados.map((d, i) =>
+        '<div' + (i === dados.length - 1 ? ' style="border-bottom:none"' : '') + '><small style="color:' + this.COR_AV[i % 6] + '">AV' + (i + 1) + '</small>' +
+        '<b>' + fmtD(d.av.concluido_em) + '<br><span style="font-size:10px; font-weight:600">' +
+        escaparHtml(d.av.avaliador ? d.av.avaliador.nome.split(' ')[0] : '-') +
+        ' &middot; ' + d.total + '%</span></b></div>').join('') +
+      '</div>' +
+      '<h2 style="margin-top:14px"><span class="ponto deq-teal"></span>Resultado por &aacute;rea</h2>' +
+      '<div class="deq-caixa">' + grafAreas + '</div>' +
+      (grafTotal
+        ? '<h2 style="margin-top:14px"><span class="ponto deq-amarelo"></span>Evolu&ccedil;&atilde;o entre aplica&ccedil;&otilde;es</h2>' +
+          '<div class="deq-caixa">' + grafTotal + '</div>'
+        : '') +
+      '<p style="font-size:10px; color:var(--eq-cinza); margin-top:10px">Pontua&ccedil;&atilde;o 0&ndash;3 por item; percentual = pontos obtidos sobre o m&aacute;ximo da &aacute;rea. O PEI derivado desta avalia&ccedil;&atilde;o &eacute; elaborado na aba PEI e possui documento pr&oacute;prio.</p>' +
+      this.rodapeDoc() +
+      '</div>';
+  },
+
+  async docQADI(avaliacaoId) {
+    await this.carregarQuestoes();
+    const ov = this.abrirDocOverlay();
+
+    const { data: av } = await sb.from('avaliacoes')
+      .select('*, paciente_id, pacientes(nome, data_nascimento), avaliador:profiles!avaliacoes_avaliador_id_fkey(nome)')
+      .eq('id', avaliacaoId).single();
+    if (!av) { ov.remove(); return; }
+    const { data: resps } = await sb.from('avaliacao_respostas')
+      .select('questao_id, resposta').eq('avaliacao_id', avaliacaoId);
+    const mapa = {};
+    (resps || []).forEach(r => { mapa[r.questao_id] = r.resposta; });
+
+    const faixas = this.FAIXAS.filter(f => this.questoes.some(q => q.faixa === f && mapa[q.id]));
+    const linhas = this.AREAS.map(area => {
+      let gs = 0, gv = 0;
+      const cels = faixas.map(f => {
+        const qs = this.questoes.filter(q => q.faixa === f && q.area === area);
+        const sim = qs.filter(q => mapa[q.id] === 'S').length;
+        const val = qs.filter(q => ['S', 'N'].includes(mapa[q.id])).length;
+        gs += sim; gv += val;
+        return val ? Math.round(sim * 100 / val) + '%' : '&mdash;';
+      });
+      return { area, cels, geral: gv ? Math.round(gs * 100 / gv) : null };
+    });
+
+    window._docPortal = { paciente_id: av.paciente_id, tipo: 'avaliacao', titulo: 'QADI-R' };
+    document.getElementById('doc-eq-corpo').innerHTML =
+      '<div class="pagina-cabecalho nao-imprime">' +
+      '  <div><button class="btn-voltar" onclick="document.getElementById(\'doc-eq-overlay\').remove()">&larr; Fechar</button>' +
+      '  <h2>QADI-R &middot; documento oficial</h2></div>' +
+      '  <button class="btn btn-primario" onclick="window.print()">&#128424; Imprimir / PDF</button>' +
+      portalBtn() +
+      '</div>' +
+      '<div class="doc-eq">' +
+      this.cabecalhoDoc('QADI-R', 'Question&aacute;rio de Avalia&ccedil;&atilde;o do Desenvolvimento Infantil') +
+      '<div class="deq-caixa deq-dados" style="grid-template-columns:repeat(4, 1fr); margin-top:8px">' +
+      '  <div><small>Paciente</small><b>' + escaparHtml(av.pacientes.nome) + '</b></div>' +
+      '  <div><small>Avaliador</small><b>' + escaparHtml(av.avaliador ? av.avaliador.nome : '-') + '</b></div>' +
+      '  <div><small>Conclu&iacute;da em</small><b>' + new Date(av.concluido_em).toLocaleDateString('pt-BR') + '</b></div>' +
+      '  <div style="border-bottom:none"><small>Comunica&ccedil;&atilde;o</small><b>' +
+           (av.oral === true ? 'Oral' : av.oral === false ? 'N&atilde;o oral' : '-') + '</b></div>' +
+      '</div>' +
+      '<h2 style="margin-top:12px"><span class="ponto deq-azul"></span>Resultado por &aacute;rea e faixa</h2>' +
+      '<p style="font-size:10.5px; color:var(--eq-cinza); margin:2px 0 6px">Percentual de SIM sobre respostas v&aacute;lidas (NA exclu&iacute;do). Faixas aplicadas: ' +
+      faixas.join(' &middot; ') + '.</p>' +
+      '<table class="deq-freq"><tr><th style="text-align:left; padding-left:10px">&Aacute;rea</th>' +
+      faixas.map(f => '<th>' + f.replace(' anos', '').replace(' ano', '').replace(' a ', '&ndash;') + 'a</th>').join('') +
+      '<th>Geral</th></tr>' +
+      linhas.map(l =>
+        '<tr><td style="text-align:left; padding:6px 10px; width:auto">' + l.area + '</td>' +
+        l.cels.map(c => '<td style="width:auto">' + c + '</td>').join('') +
+        '<td style="width:auto"><b>' + (l.geral === null ? '&mdash;' : l.geral + '%') + '</b></td></tr>').join('') +
+      '</table>' +
+      '<h2 style="margin-top:14px"><span class="ponto deq-teal"></span>Perfil geral</h2>' +
+      '<div class="deq-caixa" style="display:grid; gap:8px">' +
+      linhas.map(l =>
+        '<div style="display:flex; align-items:center; gap:8px">' +
+        '<small style="width:170px; font-weight:700">' + l.area + '</small>' +
+        '<div style="flex:1; height:9px; background:#EFF4F8; border-radius:5px; overflow:hidden">' +
+        '<i style="display:block; height:100%; width:' + (l.geral || 0) + '%; background:var(--eq-azul); border-radius:5px"></i></div>' +
+        '<b style="width:44px; text-align:right; font-size:11px">' + (l.geral === null ? '&mdash;' : l.geral + '%') + '</b></div>').join('') +
+      '</div>' +
+      (av.observacoes
+        ? '<h2 style="margin-top:14px"><span class="ponto deq-amarelo"></span>Observa&ccedil;&otilde;es</h2>' +
+          '<div class="deq-caixa deq-texto">' + escaparHtml(av.observacoes) + '</div>' : '') +
+      this.rodapeDoc() +
+      '</div>';
   },
 
   // ═══════════════════ SOCIALLY SAVVY ═══════════════════

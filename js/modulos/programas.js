@@ -1900,10 +1900,16 @@ window.MODULOS.programas = {
     if (!confirm(aviso)) return;
     if (count && !confirm('Confirmacao final: apagar o historico de ' + count + ' tentativa(s) de "' + nome + '"?')) return;
 
-    await sb.from('registros_tentativas').delete().eq('paciente_programa_id', ppId);
-    await sb.from('programa_sessao_registros').delete().eq('paciente_programa_id', ppId);
+    const d1 = await sb.from('registros_tentativas').delete().eq('paciente_programa_id', ppId);
+    if (d1.error) { alert('Tentativas: ' + d1.error.message); return; }
+    const d2 = await sb.from('programa_sessao_registros').delete().eq('paciente_programa_id', ppId);
+    if (d2.error) { alert('Fechamentos: ' + d2.error.message); return; }
     const { error } = await sb.from('paciente_programas').delete().eq('id', ppId);
-    if (error) { alert(error.message); return; }
+    if (error) {
+      alert('Nao consegui remover: ' + error.message +
+        '\n\nSe a mensagem falar de violacao/policy, rode o SQL de permissoes de exclusao que enviei junto com este patch.');
+      return;
+    }
     if (this._pacProgPaciente && window.MODULOS.pacientes) MODULOS.pacientes.telaDetalhe(this._pacProgPaciente, 'programas');
   }
 };

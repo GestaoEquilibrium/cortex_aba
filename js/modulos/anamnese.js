@@ -361,5 +361,72 @@ window.MODULOS.anamnese = {
       '<h3 style="margin:0">Anamnese Global</h3>' + status + '</div>' +
       nivelHtml + '</div>' +
       '<div class="cartao">' + secoes + '</div>';
+  },
+
+  // ─────────────── Documento oficial da anamnese ───────────────
+
+  async docAnamnese(pacienteId) {
+    await this.carregarQuestoes?.();
+    document.getElementById('doc-eq-overlay')?.remove();
+    const ov = document.createElement('div');
+    ov.id = 'doc-eq-overlay';
+    ov.className = 'folha-overlay';
+    ov.innerHTML = '<div class="folha-pagina" id="doc-eq-corpo" style="max-width:900px"><p class="sub">Montando...</p></div>';
+    document.body.appendChild(ov);
+
+    const [rAn, rPac] = await Promise.all([
+      sb.from('anamneses').select('id, status, atualizado_em').eq('paciente_id', pacienteId).maybeSingle(),
+      sb.from('pacientes').select('nome, data_nascimento').eq('id', pacienteId).single()
+    ]);
+    const an = rAn.data, pac = rPac.data;
+    if (!an || !pac) { ov.remove(); return; }
+    const { data: resps } = await sb.from('anamnese_respostas')
+      .select('questao_id, resposta').eq('anamnese_id', an.id);
+    const mapa = {};
+    (resps || []).forEach(r => { mapa[r.questao_id] = r.resposta; });
+
+    const CORES_SEC = ['azul', 'teal', 'amarelo', 'rosa', 'azul', 'teal'];
+    const corpo = this.SECOES.map((sec, si) => {
+      const qs = (this.questoes || []).filter(q => q.secao === sec.id && mapa[q.id] !== undefined && mapa[q.id] !== null && mapa[q.id] !== '');
+      if (!qs.length) return '';
+      return '<h2 style="margin-top:14px"><span class="ponto deq-' + CORES_SEC[si % 6] + '"></span>' +
+        escaparHtml(sec.rotulo) + '</h2>' +
+        '<div class="deq-caixa" style="display:grid; gap:6px">' +
+        qs.map(q => {
+          let r = mapa[q.id];
+          if (r === 'S') r = 'Sim'; else if (r === 'N') r = 'Nao'; else if (r === 'NA') r = 'Nao se aplica';
+          return '<div style="font-size:11px; border-bottom:1px dashed var(--eq-linha); padding-bottom:4px">' +
+            '<span style="color:var(--eq-cinza)">' + escaparHtml(q.pergunta) + '</span><br>' +
+            '<b>' + escaparHtml(String(r)) + '</b></div>';
+        }).join('') + '</div>';
+    }).join('');
+
+    window._docPortal = { paciente_id: pacienteId, tipo: 'anamnese', titulo: 'Anamnese Global' };
+    document.getElementById('doc-eq-corpo').innerHTML =
+      '<div class="pagina-cabecalho nao-imprime">' +
+      '  <div><button class="btn-voltar" onclick="document.getElementById(\'doc-eq-overlay\').remove()">&larr; Fechar</button>' +
+      '  <h2>Anamnese &middot; documento oficial</h2></div>' +
+      '  <button class="btn btn-primario" onclick="window.print()">&#128424; Imprimir / PDF</button>' +
+      (typeof portalBtn === 'function' ? portalBtn() : '') +
+      '</div>' +
+      '<div class="doc-eq">' +
+      '<div class="deq-cab">' +
+      '  <img src="icones/equilibrium.png" alt="Equilibrium">' +
+      '  <div class="deq-cab-t"><h1>ANAMNESE GLOBAL</h1>' +
+      '  <p>Equilibrium Terapia Infantil &middot; respondida pela familia no portal</p></div>' +
+      '</div>' +
+      '<div class="deq-caixa deq-dados" style="grid-template-columns:1fr 1fr 1fr; margin-top:8px">' +
+      '  <div><small>Paciente</small><b>' + escaparHtml(pac.nome) + '</b></div>' +
+      '  <div><small>Nascimento</small><b>' + (pac.data_nascimento ? pac.data_nascimento.split('-').reverse().join('/') : '-') + '</b></div>' +
+      '  <div style="border-bottom:none"><small>Situacao</small><b>' +
+      (an.status === 'concluida' ? 'Concluida' : 'Em preenchimento') + '</b></div>' +
+      '</div>' + corpo +
+      '<div class="deq-rodape">' +
+      '  <span>Equilibrium Terapia Infantil &middot; Uberl&acirc;ndia/MG</span>' +
+      '  <span class="pontos"><i style="background:var(--eq-teal)"></i><i style="background:var(--eq-amarelo)"></i>' +
+      '<i style="background:var(--eq-rosa)"></i><i style="background:var(--eq-azul)"></i></span>' +
+      '  <span>Gerado pelo CORTEX aba &middot; ' + new Date().toLocaleDateString('pt-BR') + '</span>' +
+      '</div>' +
+      '</div>';
   }
 };

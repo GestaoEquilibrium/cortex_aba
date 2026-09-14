@@ -259,7 +259,12 @@ window.MODULOS.pei = {
       lista.forEach((m, i) => {
         tabela += '<tr>' +
           (i === 0 ? '<td rowspan="' + lista.length + '" style="vertical-align:top"><b>' + escaparHtml(area) + '</b></td>' : '') +
-          '<td>' + escaparHtml(m.meta) + '</td>' +
+          '<td>' + escaparHtml(m.meta) +
+          (perm('programas') === 'E'
+            ? ' <button class="btn-chip nao-imprime" style="margin-left:6px" ' +
+              'title="Cria um programa na biblioteca a partir desta meta e coloca na fila do paciente." ' +
+              'onclick="MODULOS.pei.lancarPrograma(\'' + m.id + '\')">&#9654; Lancar programa</button>'
+            : '') + '</td>' +
           '<td>' + escaparHtml(m.recurso || '-') + '</td>' +
           '<td>' + escaparHtml(m.prazo || '-') + '</td></tr>';
       });
@@ -614,5 +619,33 @@ window.MODULOS.pei = {
       '  <span>Documento gerado pelo CORTEX aba &middot; ' + new Date().toLocaleDateString('pt-BR') + '</span>' +
       '</div>' +
       '</div>';
+  },
+
+  // ─────────────── Meta do PEI vira programa na fila ───────────────
+
+  async lancarPrograma(metaId) {
+    const { data: m } = await sb.from('pei_metas')
+      .select('*, peis(paciente_id)').eq('id', metaId).single();
+    if (!m) return;
+    if (!confirm('Criar o programa "' + (m.meta || '').slice(0, 60) +
+        '" na biblioteca e coloca-lo NA FILA deste paciente?')) return;
+
+    const { data: prog, error: e1 } = await sb.from('programas').insert({
+      nome: (m.meta || '').slice(0, 120),
+      area: m.area || 'Habilidades Sociais',
+      objetivo: m.meta,
+      procedimento: m.recurso || null,
+      criterio_avanco: m.prazo ? 'Prazo do PEI: ' + m.prazo : null,
+      ativo: true
+    }).select('id').single();
+    if (e1) { alert(e1.message); return; }
+
+    const { error: e2 } = await sb.from('paciente_programas').insert({
+      paciente_id: m.peis.paciente_id,
+      programa_id: prog.id,
+      status: 'na_fila'
+    });
+    if (e2) { alert(e2.message); return; }
+    alert('Programa criado e colocado na fila. Ajuste niveis e tentativas no menu Programas se precisar.');
   }
 };

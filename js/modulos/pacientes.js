@@ -426,7 +426,11 @@ window.MODULOS.pacientes = {
     }
     if (id === 'anamnese') {
       alvo.innerHTML = '<div class="cartao"><p class="sub">Carregando anamnese...</p></div>';
-      MODULOS.anamnese.htmlResumoInterno(p.id).then(html => { alvo.innerHTML = html; });
+      MODULOS.anamnese.htmlResumoInterno(p.id).then(html => {
+        alvo.innerHTML =
+          '<div class="aba-acoes"><button class="btn btn-primario" ' +
+          'onclick="MODULOS.anamnese.docAnamnese(\'' + p.id + '\')">&#128196; Ver documento</button></div>' + html;
+      });
       return;
     }
 

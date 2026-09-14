@@ -126,8 +126,8 @@ window.MODULOS.avaliacoes = {
           ultima: conc.length ? conc[0].concluido_em : null,
           dias: aberta ? Math.floor((Date.now() - new Date(aberta.iniciado_em)) / 86400000) : null };
       };
-      const ss = resumo('ss'), qadi = resumo('qadi');
-      return { p, ss, qadi, pendente: !!(ss.aberta || qadi.aberta),
+      const ss = resumo('ss'), qadi = resumo('qadi'), por = resumo('portage');
+      return { p, ss, qadi, por, pendente: !!(ss.aberta || qadi.aberta || por.aberta),
         semNada: !avs.length };
     });
     this.filtrarQuadro();
@@ -140,7 +140,7 @@ window.MODULOS.avaliacoes = {
         'Continuar' + (r.dias >= 7 ? ' &middot; <b>' + r.dias + 'd</b>' : '') + '</button>';
     }
     if (r.n) {
-      const fn = prot === 'ss' ? 'docSS' : 'docQADI';
+      const fn = prot === 'ss' ? 'docSS' : prot === 'portage' ? 'docPortage' : 'docQADI';
       return '<button class="btn-chip" title="Documento consolidado (' + r.n + ' aplicacao(oes))" ' +
         'onclick="MODULOS.avaliacoes.' + fn + '(\'' + pacId + '\')">' +
         r.n + ' AV &middot; ' + new Date(r.ultima).toLocaleDateString('pt-BR').slice(0, 5) + ' &#128196;</button>';
@@ -169,13 +169,14 @@ window.MODULOS.avaliacoes = {
       '</div>' +
       '<div class="cartao">' +
       '<table class="tabela-presenca"><thead><tr>' +
-      '<th>Paciente</th><th>Socially Savvy</th><th>QADI-R</th><th></th></tr></thead><tbody>' +
+      '<th>Paciente</th><th>Socially Savvy</th><th>QADI-R</th><th>Portage</th><th></th></tr></thead><tbody>' +
       lista.map(x =>
         '<tr' + (x.pendente ? ' style="background:#FFFBEB"' : '') + '>' +
         '<td><b>' + escaparHtml(x.p.nome) + '</b>' +
         (x.semNada ? ' <span class="selo selo-neutro">sem avaliacoes</span>' : '') + '</td>' +
         '<td>' + this.seloProt(x.ss, 'ss', x.p.id) + '</td>' +
         '<td>' + this.seloProt(x.qadi, 'qadi', x.p.id) + '</td>' +
+        '<td>' + this.seloProt(x.por, 'portage', x.p.id) + '</td>' +
         '<td><button class="btn-chip" onclick="MODULOS.pacientes.telaDetalhe(\'' + x.p.id + '\', \'avaliacao\')">Abrir pasta</button></td>' +
         '</tr>').join('') +
       '</tbody></table>' +
@@ -231,6 +232,7 @@ window.MODULOS.avaliacoes = {
     this.pacienteAtual = av.pacientes;
 
     if (av.protocolo === 'ss') { await this.abrirAplicacaoSS(); return; }
+    if (av.protocolo === 'portage') { await this.abrirAplicacaoPortage(); return; }
     await this.carregarQuestoes();
 
     this.respostas = {};
@@ -461,6 +463,9 @@ window.MODULOS.avaliacoes = {
           ? '<button class="btn ' + (podeQadi ? 'btn-fantasma' : 'btn-primario') + '" ' +
             'title="Inicia uma aplicacao Socially Savvy deste paciente, em janela por cima do prontuario." ' +
             'onclick="MODULOS.avaliacoes.iniciarDoProntuario(\'' + pacienteId + '\', \'ss\')">+ Socially Savvy</button>' : '') +
+        (podeQadi
+          ? '<button class="btn btn-fantasma" title="Guia Portage: 479 itens em 5 areas por faixa etaria (Sim / As vezes / Nao / NA)." ' +
+            'onclick="MODULOS.avaliacoes.iniciarDoProntuario(\'' + pacienteId + '\', \'portage\')">+ Portage</button>' : '') +
         '</div>';
     }
 
@@ -475,7 +480,7 @@ window.MODULOS.avaliacoes = {
     if (abertas.length) {
       acoes += '<div class="cartao faixa-ambar"><h3>Em andamento</h3>' +
         abertas.map(x =>
-          '<div class="linha-doc"><div><b>' + (x.protocolo === 'ss' ? 'Socially Savvy' : 'QADI-R') + '</b>' +
+          '<div class="linha-doc"><div><b>' + (x.protocolo === 'ss' ? 'Socially Savvy' : x.protocolo === 'portage' ? 'Portage' : 'QADI-R') + '</b>' +
           '<small>Iniciada em ' + new Date(x.iniciado_em).toLocaleDateString('pt-BR') + '</small></div>' +
           '<button class="btn-chip cheio" onclick="MODULOS.avaliacoes.abrirJanela(\'' + x.id + '\')">Continuar</button>' +
           '</div>').join('') + '</div>';
@@ -492,6 +497,13 @@ window.MODULOS.avaliacoes = {
           ? '<div class="linha-doc"><div><b>Socially Savvy &middot; consolidado</b>' +
             '<small>' + nSS + ' aplicacao(oes) (AV1' + (nSS > 1 ? '-AV' + Math.min(nSS, 9) : '') + ') com datas, areas e graficos</small></div>' +
             '<button class="btn btn-primario" onclick="MODULOS.avaliacoes.docSS(\'' + pacienteId + '\')">&#128196; Ver documento</button>' +
+            '</div>'
+          : '') +
+        (concluidas.some(a => a.protocolo === 'portage')
+          ? '<div class="linha-doc"><div><b>Portage &middot; consolidado</b>' +
+            '<small>' + concluidas.filter(a => a.protocolo === 'portage').length +
+            ' aplicacao(oes) &middot; % por faixa etaria e idades de desenvolvimento</small></div>' +
+            '<button class="btn btn-primario" onclick="MODULOS.avaliacoes.docPortage(\'' + pacienteId + '\')">&#128196; Ver documento</button>' +
             '</div>'
           : '') +
         (concluidas.some(a => a.protocolo === 'qadi')
@@ -1021,6 +1033,205 @@ window.MODULOS.avaliacoes = {
             (x.dias < 0 ? 'Vencida ha ' + (-x.dias) + ' dia(s)' : 'Vence em ' + x.dias + ' dia(s)') +
             '</span></div>').join('')
         : '<p class="sub">Nenhuma avaliacao vencendo nos proximos 30 dias. Tudo em dia.</p>') +
+      '</div>';
+  },
+
+  // ═══════════════════ PORTAGE ═══════════════════
+
+  P_AREAS: ['Socializacao', 'Linguagem', 'Cognicao', 'Autocuidados', 'Desenvolvimento Motor'],
+  P_FAIXAS: ['0-1 ano', '1-2 anos', '2-3 anos', '3-4 anos', '4-5 anos', '5-6 anos'],
+  P_VAL: [['S', 'Sim', 1], ['AV', 'As vezes', 0.5], ['N', 'Nao', 0], ['NA', 'NA', null]],
+
+  async carregarItensPortage() {
+    if (this.itensPortage) return;
+    const { data } = await sb.from('portage_itens').select('*').order('area').order('faixa').order('ordem');
+    this.itensPortage = data || [];
+  },
+
+  async abrirAplicacaoPortage() {
+    await this.carregarItensPortage();
+    const av = this.avaliacao;
+    const { data: resps } = await sb.from('portage_respostas')
+      .select('item_id, valor').eq('avaliacao_id', av.id);
+    this._pResp = {};
+    (resps || []).forEach(r => { this._pResp[r.item_id] = r.valor; });
+    this._pArea = this._pArea || this.P_AREAS[0];
+    this._pFaixa = this._pFaixa === undefined ? 0 : this._pFaixa;
+    this.desenharPortage();
+  },
+
+  desenharPortage() {
+    const alvo = document.getElementById('aval-corpo');
+    if (!alvo) return;
+    const av = this.avaliacao;
+    const respondidos = Object.keys(this._pResp).length;
+    const itens = this.itensPortage.filter(i => i.area === this._pArea && i.faixa === this._pFaixa);
+
+    alvo.innerHTML =
+      '<div class="cartao"><div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; align-items:center">' +
+      '<h3 style="margin:0">Portage &middot; ' + escaparHtml(av.pacientes ? av.pacientes.nome : '') + '</h3>' +
+      '<div class="pac-selos"><span class="selo selo-neutro">' + respondidos + '/' + this.itensPortage.length + ' respondidos</span>' +
+      '<button class="btn btn-primario" onclick="MODULOS.avaliacoes.concluirPortage()">Concluir aplicacao</button></div></div>' +
+      '<p class="sub" style="margin:6px 0 10px">Sim = 1 &middot; As vezes = 0,5 &middot; Nao = 0 &middot; NA fora da conta. Aplique as faixas proximas da idade da crianca; salva sozinho.</p>' +
+      '<div class="filtro-chips" style="margin-bottom:6px">' + this.P_AREAS.map(a =>
+        '<button class="fchip' + (a === this._pArea ? ' ativo' : '') + '" ' +
+        'onclick="MODULOS.avaliacoes._pArea = \'' + a + '\'; MODULOS.avaliacoes.desenharPortage()">' + a + '</button>').join('') + '</div>' +
+      '<div class="filtro-chips" style="margin-bottom:10px">' + this.P_FAIXAS.map((f, i) => {
+        const doF = this.itensPortage.filter(x => x.area === this._pArea && x.faixa === i);
+        if (!doF.length) return '';
+        const resp = doF.filter(x => this._pResp[x.id]).length;
+        return '<button class="fchip' + (i === this._pFaixa ? ' ativo' : '') + '" ' +
+          'onclick="MODULOS.avaliacoes._pFaixa = ' + i + '; MODULOS.avaliacoes.desenharPortage()">' + f +
+          ' <span class="fchip-n">' + resp + '/' + doF.length + '</span></button>';
+      }).join('') + '</div>' +
+      itens.map(it =>
+        '<div class="linha-doc" style="align-items:center"><div style="flex:1"><small style="color:var(--ink-muted)">' +
+        String(it.ordem).padStart(2, '0') + '</small> ' + escaparHtml(it.texto) + '</div>' +
+        '<div style="display:flex; gap:5px; flex:none">' +
+        this.P_VAL.map(([sig, rot]) =>
+          '<button class="niv-btn' + (this._pResp[it.id] === sig ? ' ativo' : '') + (sig === 'S' ? ' correto' : '') + '" ' +
+          'style="min-width:' + (sig === 'AV' ? '64px' : '44px') + '" ' +
+          'onclick="MODULOS.avaliacoes.marcarPortage(' + it.id + ', \'' + sig + '\', this)">' + rot + '</button>').join('') +
+        '</div></div>').join('');
+  },
+
+  async marcarPortage(itemId, valor, botao) {
+    const anterior = this._pResp[itemId];
+    this._pResp[itemId] = valor;
+    botao.parentElement.querySelectorAll('.niv-btn').forEach(b => b.classList.remove('ativo'));
+    botao.classList.add('ativo');
+    const { error } = await sb.from('portage_respostas').upsert({
+      avaliacao_id: this.avaliacao.id, item_id: itemId, valor: valor
+    }, { onConflict: 'avaliacao_id,item_id' });
+    if (error) { this._pResp[itemId] = anterior; alert(error.message); this.desenharPortage(); }
+  },
+
+  async concluirPortage() {
+    const n = Object.keys(this._pResp).length;
+    if (!confirm('Concluir a aplicacao com ' + n + ' item(ns) respondido(s)? Itens em branco contam como nao alcancados nas faixas aplicadas.')) return;
+    await sb.from('avaliacoes').update({ status: 'concluida', concluido_em: new Date().toISOString() })
+      .eq('id', this.avaliacao.id);
+    this.fecharJanela();
+    this.docPortage(this.avaliacao.paciente_id);
+  },
+
+  // % por faixa: pontos / itens da faixa (faixa entra se tiver ao menos 1 resposta)
+  calcPortage(mapa) {
+    const PTS = { S: 1, AV: 0.5, N: 0, NA: 0 };
+    return this.P_AREAS.map(area => {
+      const faixas = [];
+      for (let f = 0; f < 6; f++) {
+        const itens = this.itensPortage.filter(i => i.area === area && i.faixa === f);
+        if (!itens.length) { faixas.push(null); continue; }
+        const aplicada = itens.some(i => mapa[i.id] !== undefined);
+        if (!aplicada) { faixas.push(null); continue; }
+        const pts = itens.reduce((s, i) => s + (PTS[mapa[i.id]] || 0), 0);
+        faixas.push({ pts, n: itens.length, pct: Math.round(pts * 100 / itens.length) });
+      }
+      const idade = faixas.reduce((s, x) => s + (x ? x.pts / x.n : 0), 0);
+      const soma = faixas.reduce((s, x) => s + (x ? x.pts : 0), 0);
+      const tot = faixas.reduce((s, x) => s + (x ? x.n : 0), 0);
+      return { area, faixas, idade,
+        total: tot ? Math.round(soma * 100 / tot) : null };
+    });
+  },
+
+  fmtIdade(anos) {
+    const m = Math.round(anos * 12);
+    return Math.floor(m / 12) + 'a ' + (m % 12) + 'm';
+  },
+
+  async docPortage(pacienteId) {
+    await this.carregarItensPortage();
+    const ov = this.abrirDocOverlay();
+    const [rAvs, rPac] = await Promise.all([
+      sb.from('avaliacoes').select('id, concluido_em, avaliador:profiles!avaliacoes_avaliador_id_fkey(nome)')
+        .eq('paciente_id', pacienteId).eq('protocolo', 'portage').eq('status', 'concluida')
+        .order('concluido_em'),
+      sb.from('pacientes').select('nome, data_nascimento').eq('id', pacienteId).single()
+    ]);
+    const avs = (rAvs.data || []).slice(0, 4);
+    const pac = rPac.data;
+    if (!avs.length || !pac) { ov.remove(); return; }
+    const { data: resps } = await sb.from('portage_respostas')
+      .select('avaliacao_id, item_id, valor').in('avaliacao_id', avs.map(a => a.id));
+    const porAv = {};
+    (resps || []).forEach(r => { (porAv[r.avaliacao_id] = porAv[r.avaliacao_id] || {})[r.item_id] = r.valor; });
+
+    const calc = avs.map(av => ({ av, areas: this.calcPortage(porAv[av.id] || {}) }));
+    const fmtD = d => new Date(d).toLocaleDateString('pt-BR');
+    const ult = calc[calc.length - 1];
+    const idadeGlobal = ult.areas.reduce((s, a) => s + a.idade, 0) / this.P_AREAS.length;
+
+    const tabela = '<table class="deq-freq"><tr><th style="text-align:left; padding-left:10px">&Aacute;rea</th>' +
+      this.P_FAIXAS.map(f => '<th>' + f.split(' ')[0] + '</th>').join('') +
+      '<th>Total</th><th>Idade desenv.</th></tr>' +
+      ult.areas.map(a =>
+        '<tr><td style="text-align:left; padding:6px 10px; width:auto">' + a.area + '</td>' +
+        a.faixas.map(x => '<td style="width:auto">' + (x === null ? '&mdash;' : x.pct + '%') + '</td>').join('') +
+        '<td style="width:auto"><b>' + (a.total === null ? '&mdash;' : a.total + '%') + '</b></td>' +
+        '<td style="width:auto"><b>' + this.fmtIdade(a.idade) + '</b></td></tr>').join('') +
+      '</table>';
+
+    const barras = '<div style="display:grid; gap:14px; padding:4px 6px">' +
+      this.P_AREAS.map(area => {
+        const linhas = calc.map((c, i) => {
+          const a = c.areas.find(x => x.area === area);
+          if (!a || a.total === null) return '';
+          return '<div style="display:flex; align-items:center; gap:10px; margin-top:4px">' +
+            '<small style="width:36px; font-weight:800; color:' + this.COR_AV[i % 6] + '">AV' + (i + 1) + '</small>' +
+            '<div style="flex:1; height:10px; background:#EFF4F8; border-radius:6px; overflow:hidden">' +
+            '<i style="display:block; height:100%; width:' + a.total + '%; background:' + this.COR_AV[i % 6] + '; border-radius:6px"></i></div>' +
+            '<b style="width:96px; text-align:right; font-size:11px; white-space:nowrap">' + a.total + '% &middot; ' + this.fmtIdade(a.idade) + '</b></div>';
+        }).join('');
+        return linhas ? '<div><div style="font-size:11.5px; font-weight:800; color:var(--eq-azul-escuro)">' + area + '</div>' + linhas + '</div>' : '';
+      }).join('') + '</div>';
+
+    const ordenadas = ult.areas.filter(a => a.total !== null).sort((a, b) => b.total - a.total);
+    let analise = 'Na aplica&ccedil;&atilde;o mais recente (' + fmtD(ult.av.concluido_em) + '), a idade de desenvolvimento global estimada &eacute; de <b>' +
+      this.fmtIdade(idadeGlobal) + '</b>. ';
+    if (ordenadas.length) {
+      analise += 'A &aacute;rea mais desenvolvida &eacute; ' + ordenadas[0].area + ' (' + this.fmtIdade(ordenadas[0].idade) +
+        '), e a de maior necessidade de est&iacute;mulo &eacute; ' + ordenadas[ordenadas.length - 1].area +
+        ' (' + this.fmtIdade(ordenadas[ordenadas.length - 1].idade) + '). ';
+    }
+    if (calc.length > 1) {
+      const g0 = calc[0].areas.reduce((s, a) => s + a.idade, 0) / this.P_AREAS.length;
+      const dif = Math.round((idadeGlobal - g0) * 12);
+      analise += 'Entre a AV1 e a AV' + calc.length + ', a idade de desenvolvimento global ' +
+        (dif > 0 ? 'avan&ccedil;ou <b>' + dif + ' mes(es)</b>.' : dif < 0 ? 'recuou ' + (-dif) + ' mes(es).' : 'manteve-se estavel.');
+    }
+
+    window._docPortal = { paciente_id: pacienteId, tipo: 'avaliacao', titulo: 'Portage - Consolidado' };
+    document.getElementById('doc-eq-corpo').innerHTML =
+      '<div class="pagina-cabecalho nao-imprime">' +
+      '  <div><button class="btn-voltar" onclick="document.getElementById(\'doc-eq-overlay\').remove()">&larr; Fechar</button>' +
+      '  <h2>Portage &middot; documento oficial</h2></div>' +
+      '  <button class="btn btn-primario" onclick="window.print()">&#128424; Imprimir / PDF</button>' +
+      portalBtn() +
+      '</div>' +
+      '<div class="doc-eq">' +
+      this.cabecalhoDoc('GUIA PORTAGE', 'Avalia&ccedil;&atilde;o do desenvolvimento &middot; 5 &aacute;reas por faixa et&aacute;ria') +
+      '<div class="deq-caixa deq-dados" style="grid-template-columns:1fr 1fr 1fr; margin-top:8px">' +
+      '  <div><small>Paciente</small><b>' + escaparHtml(pac.nome) + '</b></div>' +
+      '  <div><small>Nascimento</small><b>' + (pac.data_nascimento ? pac.data_nascimento.split('-').reverse().join('/') : '-') + '</b></div>' +
+      '  <div style="border-bottom:none"><small>Idade de desenvolvimento global</small><b>' + this.fmtIdade(idadeGlobal) + '</b></div>' +
+      '</div>' +
+      '<h2 style="margin-top:12px"><span class="ponto deq-azul"></span>Aplica&ccedil;&otilde;es</h2>' +
+      '<div class="deq-caixa deq-dados" style="grid-template-columns:repeat(' + calc.length + ', 1fr)">' +
+      calc.map((c, i) =>
+        '<div' + (i === calc.length - 1 ? ' style="border-bottom:none"' : '') + '><small style="color:' + this.COR_AV[i % 6] + '">AV' + (i + 1) + '</small>' +
+        '<b>' + fmtD(c.av.concluido_em) + '<br><span style="font-size:10px; font-weight:600">' +
+        escaparHtml(c.av.avaliador ? c.av.avaliador.nome.split(' ')[0] : '-') + '</span></b></div>').join('') +
+      '</div>' +
+      '<h2 style="margin-top:14px"><span class="ponto deq-teal"></span>% de acertos por faixa et&aacute;ria (AV' + calc.length + ')</h2>' +
+      tabela +
+      '<h2 style="margin-top:14px"><span class="ponto deq-amarelo"></span>Comparativo entre aplica&ccedil;&otilde;es</h2>' +
+      '<div class="deq-caixa">' + barras + '</div>' +
+      '<h2 style="margin-top:14px"><span class="ponto deq-rosa"></span>An&aacute;lise</h2>' +
+      '<div class="deq-caixa deq-texto">' + analise +
+      '<br><small style="color:var(--eq-cinza)">Regra: Sim = 1 &middot; As vezes = 0,5 &middot; Nao/NA/em branco = 0; % da faixa = pontos &divide; itens da faixa; idade de desenvolvimento = soma das fra&ccedil;&otilde;es das faixas aplicadas. Texto de apoio gerado automaticamente; a leitura cl&iacute;nica cabe &agrave; equipe.</small></div>' +
+      this.rodapeDoc() +
       '</div>';
   }
 };

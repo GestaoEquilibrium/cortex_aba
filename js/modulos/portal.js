@@ -288,6 +288,8 @@ window.MODULOS.portal = {
       '    value="' + new Date().toISOString().slice(0, 10) + '" max="' + new Date().toISOString().slice(0, 10) + '"></div>' +
       '  <div class="campo c2"><label>O que aconteceu?</label>' +
       '    <input id="cad-texto" placeholder="Ex.: comeu sozinho com a colher no almoco"></div>' +
+      '  <div class="campo c2"><label>Foto (opcional)</label>' +
+      '    <input type="file" id="cad-foto" accept="image/*"></div>' +
       '</div>' +
       '<div class="barra-acoes"><button class="btn btn-primario" onclick="MODULOS.portal.salvarCaderninho()">Registrar</button></div>' +
       '<div class="mensagem-erro" id="cad-erro"></div>' +
@@ -297,14 +299,17 @@ window.MODULOS.portal = {
 
   async listarCaderninho() {
     const { data } = await sb.from('caderninho')
-      .select('data, texto, criado_em')
+      .select('data, texto, criado_em, foto_path')
       .eq('paciente_id', this._cadPac).order('data', { ascending: false }).limit(60);
     const alvo = document.getElementById('cad-lista');
     if (!alvo) return;
     alvo.innerHTML = (data && data.length
-      ? data.map(r => '<div class="linha-doc"><div><b>' +
-          r.data.split('-').reverse().join('/') + '</b><small>' + escaparHtml(r.texto) + '</small></div></div>').join('')
+      ? data.map(r => '<div class="linha-doc" style="align-items:flex-start"><div><b>' +
+          r.data.split('-').reverse().join('/') + '</b><small>' + escaparHtml(r.texto) + '</small>' +
+          (r.foto_path ? '<div class="cad-foto" data-foto="' + r.foto_path + '"></div>' : '') +
+          '</div></div>').join('')
       : '<p class="sub">Nenhum registro ainda. O primeiro e por sua conta!</p>');
+    this.pendurarFotos(alvo);
   },
 
   async salvarCaderninho() {
@@ -313,10 +318,21 @@ window.MODULOS.portal = {
     const texto = document.getElementById('cad-texto').value.trim();
     const data = document.getElementById('cad-data').value;
     if (!texto || !data) { erro.textContent = 'Preencha o dia e o que aconteceu.'; erro.classList.add('visivel'); return; }
+    let foto_path = null;
+    const arq = document.getElementById('cad-foto');
+    if (arq && arq.files && arq.files[0]) {
+      const f = arq.files[0];
+      if (f.size > 8 * 1024 * 1024) { erro.textContent = 'Foto muito grande (max 8 MB).'; erro.classList.add('visivel'); return; }
+      const ext = (f.name.split('.').pop() || 'jpg').toLowerCase();
+      foto_path = 'caderninho/' + this._cadPac + '/' + Date.now() + '.' + ext;
+      const up = await sb.storage.from('documentos').upload(foto_path, f, { upsert: false });
+      if (up.error) { erro.textContent = 'Foto: ' + up.error.message; erro.classList.add('visivel'); return; }
+    }
     const { error } = await sb.from('caderninho').insert({
-      paciente_id: this._cadPac, autor_id: this.sessao.user.id, data: data, texto: texto });
+      paciente_id: this._cadPac, autor_id: this.sessao.user.id, data: data, texto: texto, foto_path: foto_path });
     if (error) { erro.textContent = error.message; erro.classList.add('visivel'); return; }
     document.getElementById('cad-texto').value = '';
+    if (arq) arq.value = '';
     this.listarCaderninho();
   },
 
@@ -377,5 +393,18 @@ window.MODULOS.portal = {
       '<div id="portal-jan-corpo"></div></div>';
     document.body.appendChild(ov);
     return ov;
+  },
+
+  async pendurarFotos(raiz) {
+    const alvos = raiz.querySelectorAll('.cad-foto[data-foto]');
+    for (const el of alvos) {
+      const { data } = await sb.storage.from('documentos')
+        .createSignedUrl(el.getAttribute('data-foto'), 3600);
+      if (data && data.signedUrl) {
+        el.innerHTML = '<a href="' + data.signedUrl + '" target="_blank">' +
+          '<img src="' + data.signedUrl + '" alt="foto" ' +
+          'style="max-width:220px; max-height:160px; border-radius:10px; margin-top:6px; display:block"></a>';
+      }
+    }
   }
 };

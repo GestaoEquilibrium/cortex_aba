@@ -1171,6 +1171,7 @@ window.MODULOS.pacientes = {
     const cad = rCad.data || [];
     const msgs = rMsg.data || [];
     const podeEnviar = ['direcao', 'coordenador'].includes(window.CORTEX_SESSAO.profile.perfil);
+    setTimeout(() => { window.MODULOS.portal?.pendurarFotos?.(alvo); }, 50);
 
     alvo.innerHTML =
       '<div class="cartao"><h3>&#128228; No portal da familia <span class="selo selo-neutro">' + docs.length + ' documento(s)</span></h3>' +
@@ -1184,8 +1185,10 @@ window.MODULOS.pacientes = {
 
       '<div class="cartao"><h3>&#128211; Caderninho da familia</h3>' +
       (cad.length
-        ? cad.map(r => '<div class="linha-doc"><div><b>' + r.data.split('-').reverse().join('/') +
-            '</b><small>' + escaparHtml(r.texto) + '</small></div></div>').join('')
+        ? cad.map(r => '<div class="linha-doc" style="align-items:flex-start"><div><b>' + r.data.split('-').reverse().join('/') +
+            '</b><small>' + escaparHtml(r.texto) + '</small>' +
+            (r.foto_path ? '<div class="cad-foto" data-foto="' + r.foto_path + '"></div>' : '') +
+            '</div></div>').join('')
         : '<p class="sub">A familia ainda nao registrou conquistas do dia a dia.</p>') +
       '</div>' +
 

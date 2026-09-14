@@ -996,6 +996,11 @@ window.MODULOS.programas = {
         '<button type="button" class="btn btn-primario atd-btn" ' +
         'onclick="event.stopPropagation(); MODULOS.programas.docEvolucaoDiaria(\'' + s.id + '\')">' +
         '&#128202; Ver relatorio</button>' +
+        (['direcao', 'coordenador', 'suporte'].includes(window.CORTEX_SESSAO.profile.perfil)
+          ? '<button class="btn-chip" style="color:#E9586A; border-color:#F5C2C9" title="Apagar esta sessao e todos os registros dela (gestao)" ' +
+            'onclick="event.stopPropagation(); MODULOS.programas.apagarSessao(\'' + s.id + '\', \'' +
+            (s.data || '') + '\')">&#10005;</button>'
+          : '') +
         '</div>' +
         (evo ? '<p class="sub">' + escaparHtml(evo.length > 140 ? evo.slice(0, 140) + '...' : evo) + '</p>' : '') +
         '</div>';
@@ -1911,5 +1916,35 @@ window.MODULOS.programas = {
       return;
     }
     if (this._pacProgPaciente && window.MODULOS.pacientes) MODULOS.pacientes.telaDetalhe(this._pacProgPaciente, 'programas');
+  },
+
+  // ─────────────── Gestao apaga sessao realizada ───────────────
+
+  async apagarSessao(sessaoId, data) {
+    const { count } = await sb.from('registros_tentativas')
+      .select('sessao_id', { count: 'exact', head: true }).eq('sessao_id', sessaoId);
+    const rotulo = data ? data.split('-').reverse().join('/') : 'esta sessao';
+    if (!confirm('Apagar a sessao de ' + rotulo + '?' +
+        (count ? '\n\nEla tem ' + count + ' tentativa(s) registrada(s). Apagar remove a sessao, as tentativas, os fechamentos e a evolucao dela. PDFs ja gerados nao mudam.' : ''))) return;
+    if (count && !confirm('Confirmacao final: apagar de vez a sessao de ' + rotulo + ' com todo o historico?')) return;
+
+    const passos = [
+      ['Evolucao', sb.from('evolucoes').delete().eq('sessao_id', sessaoId)],
+      ['Tentativas', sb.from('registros_tentativas').delete().eq('sessao_id', sessaoId)],
+      ['Fechamentos', sb.from('programa_sessao_registros').delete().eq('sessao_id', sessaoId)]
+    ];
+    for (const [nome, q] of passos) {
+      const { error } = await q;
+      if (error) { alert(nome + ': ' + error.message); return; }
+    }
+    const { error } = await sb.from('sessoes').delete().eq('id', sessaoId);
+    if (error) {
+      alert('Nao consegui apagar a sessao: ' + error.message +
+        '\n\nSe falar de policy, rode o SQL de exclusao de sessoes que mandei com este patch.');
+      return;
+    }
+    if (this._pacProgPaciente && window.MODULOS.pacientes) {
+      MODULOS.pacientes.telaDetalhe(this._pacProgPaciente, 'programas');
+    }
   }
 };

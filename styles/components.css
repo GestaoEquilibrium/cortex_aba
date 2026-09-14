@@ -2196,3 +2196,31 @@
 .prof-barra.pb-cor3 { background: #E9586A !important; }
 .prof-barra.pb-cor4 { background: #7C6FD0 !important; }
 .prof-barra.pb-cor5 { background: #3E9C6E !important; }
+
+/* ── Quadro de avaliacoes: colunas alinhadas e enxutas ────────────────── */
+.tabela-quadro { table-layout: fixed; }
+.tabela-quadro th {
+    font-size: 10.5px; letter-spacing: .06em;
+    color: var(--ink-muted);
+    padding: 8px 10px;
+}
+.tabela-quadro th:first-child, .tabela-quadro td:first-child {
+    width: auto; text-align: left; padding-left: 4px;
+}
+.tabela-quadro th:not(:first-child):not(:last-child),
+.tabela-quadro td:not(:first-child):not(:last-child) {
+    width: 168px; text-align: center;
+}
+.tabela-quadro th:last-child, .tabela-quadro td:last-child {
+    width: 118px; text-align: right; padding-right: 4px;
+}
+.tabela-quadro td { padding: 9px 10px; vertical-align: middle; }
+.tabela-quadro td:first-child b { font-size: 13.5px; }
+.tabela-quadro td:first-child .selo { margin-left: 8px; }
+.tabela-quadro td .btn-chip { white-space: nowrap; }
+.tabela-quadro tbody tr { transition: background .12s ease; }
+.tabela-quadro tbody tr:hover { background: var(--surface-alt); }
+@media (max-width: 900px) {
+    .tabela-quadro th:not(:first-child):not(:last-child),
+    .tabela-quadro td:not(:first-child):not(:last-child) { width: 118px; }
+}

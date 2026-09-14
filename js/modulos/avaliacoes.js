@@ -168,7 +168,7 @@ window.MODULOS.avaliacoes = {
       '  <div class="caixa-info"><small>Socially Savvy &middot; catalogo</small><b>' + this.itensSS.length + '</b></div>' +
       '</div>' +
       '<div class="cartao">' +
-      '<table class="tabela-presenca"><thead><tr>' +
+      '<table class="tabela-presenca tabela-quadro"><thead><tr>' +
       '<th>Paciente</th><th>Socially Savvy</th><th>QADI-R</th><th>Portage</th><th></th></tr></thead><tbody>' +
       lista.map(x =>
         '<tr' + (x.pendente ? ' style="background:#FFFBEB"' : '') + '>' +

@@ -412,7 +412,7 @@ window.MODULOS.programas = {
         (perm('programas') === 'E' ? '. Toque no cartao e ajuste em Tentativas.' : '') + '">' +
         (pp.tentativas || pp.programas.tentativas_padrao || 10) + ' tentativas' + (pp.tentativas ? ' *' : '') + '</span>' +
         '</div>' +
-        (['direcao', 'coordenador'].includes(window.CORTEX_SESSAO.profile.perfil)
+        (['direcao', 'coordenador', 'suporte'].includes(window.CORTEX_SESSAO.profile.perfil)
           ? '<button class="prog-apagar" title="Remover este programa do paciente (coordenacao)" ' +
             'onclick="event.stopPropagation(); MODULOS.programas.apagarDoPaciente(\'' + pp.id + '\', \'' +
             escaparHtml(pp.programas.nome).replace(/'/g, '') + '\')">&#10005;</button>'

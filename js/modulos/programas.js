@@ -435,7 +435,7 @@ window.MODULOS.programas = {
         '<div class="barra-acoes"><button class="btn btn-primario" onclick="fecharModal()">Ok</button></div>');
       return;
     }
-    abrirModal('Programa para o paciente',
+    abrirModal('Adicionar programa a este paciente',
       '<div class="campo"><label>Programa da biblioteca *</label><select id="at-prog">' +
       ativos.map(p => '<option value="' + p.id + '">' +
         escaparHtml(p.area + ' - ' + p.nome + ' (' + (p.tentativas_padrao || 10) + ' tentativas)') + '</option>').join('') +
@@ -443,6 +443,9 @@ window.MODULOS.programas = {
       '<div class="campo"><label>Situacao inicial</label><select id="at-status">' +
       '<option value="em_intervencao">Em intervencao (entra na ficha)</option>' +
       '<option value="na_fila">Na fila</option></select></div>' +
+      '<div class="campo"><label>Tentativas por sessao para ESTE paciente</label>' +
+      '<input type="number" id="at-tent" min="1" max="40" placeholder="vazio = padrao do programa">' +
+      '<small class="sub">So preencha se este paciente usar um numero diferente do padrao.</small></div>' +
       '<div class="mensagem-erro" id="at-erro"></div>' +
       '<div class="barra-acoes">' +
       '  <button class="btn btn-fantasma" onclick="fecharModal()">Cancelar</button>' +
@@ -453,10 +456,12 @@ window.MODULOS.programas = {
   async salvarAtribuicao(pacienteId) {
     const erro = document.getElementById('at-erro');
     erro.classList.remove('visivel');
+    const tent = parseInt(document.getElementById('at-tent').value, 10);
     const { error } = await sb.from('paciente_programas').insert({
       paciente_id: pacienteId,
       programa_id: document.getElementById('at-prog').value,
       status: document.getElementById('at-status').value,
+      tentativas: (tent >= 1 && tent <= 40) ? tent : null,
       criado_por: window.CORTEX_SESSAO.user.id
     });
     if (error) { erro.textContent = error.message; erro.classList.add('visivel'); return; }

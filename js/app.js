@@ -150,6 +150,8 @@ async function iniciarApp() {
 
   abrirModulo(profile.perfil === 'familia' ? 'portal' : 'inicio');
 
+  festejarAniversario(profile);
+
   // Indicativos de agenda aguardando confirmacao (recepcao/coordenacao)
   if (profile.perfil !== 'familia') {
     setTimeout(() => { MODULOS.agenda?.popupIndicativos?.(); }, 1200);
@@ -333,6 +335,48 @@ function fecharModal() {
 }
 
 document.addEventListener('keydown', e => { if (e.key === 'Escape') fecharModal(); });
+
+// Clicar no fundo escurecido fecha a janela suspensa (com o fechamento certo de cada uma)
+document.addEventListener('click', e => {
+  const alvo = e.target;
+  if (!alvo.classList || !alvo.classList.contains('folha-overlay')) return;
+  if (alvo.id === 'plano-elab-overlay' && window.MODULOS?.plano?.fecharConstrutor) {
+    MODULOS.plano.fecharConstrutor();
+  } else if (alvo.id === 'aval-overlay' && window.MODULOS?.avaliacoes?.fecharJanela) {
+    MODULOS.avaliacoes.fecharJanela();
+  } else {
+    alvo.remove();
+  }
+});
+
+// Aniversario do usuario: foguetinhos e baloes na primeira entrada do dia
+function festejarAniversario(profile) {
+  if (!profile.data_nascimento) return;
+  const hoje = new Date();
+  const hojeMD = String(hoje.getMonth() + 1).padStart(2, '0') + '-' + String(hoje.getDate()).padStart(2, '0');
+  if (profile.data_nascimento.slice(5) !== hojeMD) return;
+  const chave = 'cortex_niver_' + profile.id + '_' + hoje.getFullYear();
+  try { if (localStorage.getItem(chave)) return; localStorage.setItem(chave, '1'); } catch (e) {}
+
+  const festa = document.createElement('div');
+  festa.className = 'festa-niver';
+  const itens = ['\u{1F388}', '\u{1F389}', '\u{1F38A}', '\u{2728}', '\u{1F388}', '\u{1F386}'];
+  let spans = '';
+  for (let i = 0; i < 36; i++) {
+    spans += '<span style="left:' + Math.round(Math.random() * 96) + '%; ' +
+      'animation-delay:' + (Math.random() * 2.2).toFixed(2) + 's; ' +
+      'animation-duration:' + (3 + Math.random() * 3).toFixed(2) + 's; ' +
+      'font-size:' + (18 + Math.round(Math.random() * 22)) + 'px">' +
+      itens[i % itens.length] + '</span>';
+  }
+  festa.innerHTML = spans +
+    '<div class="festa-cartao">\u{1F382} <b>Feliz aniversario, ' +
+    escaparHtml(profile.nome.split(' ')[0]) + '!</b><br>' +
+    '<small>A equipe Equilibrium te deseja um dia incrivel.</small></div>';
+  festa.addEventListener('click', () => festa.remove());
+  document.body.appendChild(festa);
+  setTimeout(() => festa.remove(), 9000);
+}
 
 function abrirModalPdf(titulo, url) {
   // #toolbar=0 esconde a barra de impressao/download; navpanes=0 esconde as miniaturas

@@ -2046,7 +2046,7 @@
 
 /* ── Ficha v3: nivel de ajuda + conseguiu/nao ─────────────────────────── */
 .ficha-grade-cab.ficha-v3, .ficha-linha.ficha-v3 {
-    grid-template-columns: 34px minmax(0, 1fr) 92px minmax(120px, 180px);
+    grid-template-columns: 34px minmax(0, 1fr) minmax(120px, 180px);
 }
 .ficha-result { display: inline-flex; gap: 6px; align-items: center; justify-content: center; }
 .res-btn {
@@ -2086,4 +2086,36 @@
     font-weight: 800;
     letter-spacing: .04em;
     box-shadow: 0 2px 8px rgba(249, 115, 22, .35);
+}
+
+/* ── Festa de aniversario ─────────────────────────────────────────────── */
+.festa-niver {
+    position: fixed; inset: 0; z-index: 240;
+    pointer-events: auto; cursor: pointer;
+    overflow: hidden;
+}
+.festa-niver span {
+    position: absolute; top: -50px;
+    animation: festa-cair linear forwards;
+}
+@keyframes festa-cair {
+    0%   { transform: translateY(-60px) rotate(-12deg); opacity: 0; }
+    8%   { opacity: 1; }
+    100% { transform: translateY(110vh) rotate(14deg); opacity: .9; }
+}
+.festa-cartao {
+    position: absolute; left: 50%; top: 34%;
+    transform: translateX(-50%);
+    background: #fff;
+    border-radius: 18px;
+    padding: 22px 34px;
+    text-align: center;
+    font-size: 19px;
+    box-shadow: 0 18px 60px rgba(21, 13, 32, .3);
+    animation: festa-pulo .5s ease;
+}
+.festa-cartao small { color: var(--ink-muted); font-size: 13px; }
+@keyframes festa-pulo {
+    from { transform: translateX(-50%) scale(.7); opacity: 0; }
+    to   { transform: translateX(-50%) scale(1); opacity: 1; }
 }

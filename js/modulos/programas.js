@@ -22,19 +22,20 @@ window.MODULOS.programas = {
     ['GE', 'Gestual'],
     ['VE', 'Verbal'],
     ['VI', 'Visual'],
+    ['ER', 'Erro'],
+    ['SR', 'Sem resposta'],
     ['NA', 'Nao aplicado'],
     ['FA', 'Falta'],
-    ['I',  'Independente (sem ajuda)']
+    ['C',  'Correto (independente)']
   ],
-  NIVEIS_PADRAO: ['FT', 'FP', 'MO', 'GE', 'VE', 'VI', 'NA', 'FA', 'I'],
-  SEM_RESULTADO: ['NA', 'FA'],
+  NIVEIS_PADRAO: ['FT', 'FP', 'MO', 'GE', 'VE', 'VI', 'ER', 'SR', 'NA', 'FA', 'C'],
 
-  // Programas salvos antes desta versao podem trazer C/ER/SR na lista
+  // 'I' (do modelo antigo de duas marcas) volta a ser C
   normalizarNiveis(lista) {
     const l = (lista && lista.length ? lista : this.NIVEIS_PADRAO)
-      .map(n => n === 'C' ? 'I' : n)
+      .map(n => n === 'I' ? 'C' : n)
       .filter(n => this.NIVEIS_PADRAO.includes(n));
-    if (!l.includes('I')) l.push('I');
+    if (!l.includes('C')) l.push('C');
     return [...new Set(l)];
   },
 
@@ -57,11 +58,8 @@ window.MODULOS.programas = {
 
   legendaNiveis(siglas) {
     return '<div class="niv-legenda">' + (siglas || this.NIVEIS_PADRAO).map(s =>
-      '<span class="niv-leg-item' + (s === 'I' ? ' correto' : '') + '">' +
-      '<b>' + s + '</b> ' + this.nomeNivel(s) + '</span>').join('') +
-      '<span class="niv-leg-item correto"><b>&#10003;</b> Conseguiu realizar</span>' +
-      '<span class="niv-leg-item"><b>&#10007;</b> Nao conseguiu</span>' +
-      '</div>';
+      '<span class="niv-leg-item' + (s === 'C' ? ' correto' : '') + '">' +
+      '<b>' + s + '</b> ' + this.nomeNivel(s) + '</span>').join('') + '</div>';
   },
 
   // ═══════════════════ MENU PROGRAMAS (Biblioteca | Estimulos) ═══════════════════
@@ -166,14 +164,14 @@ window.MODULOS.programas = {
       '</div>' +
 
       '<div class="campo" style="margin-top:12px"><label>Niveis de ajuda deste programa ' +
-      '<small>(marque os que a aplicadora vera na ficha; I - Independente e sempre incluido. ' +
-      'Em cada tentativa ela marca o nivel usado E se a crianca conseguiu realizar.)</small></label>' +
+      '<small>(marque os que a aplicadora vera na ficha; C - Correto e sempre incluido. ' +
+      'Marcar um nivel de ajuda significa que a crianca realizou com aquela ajuda; o erro tem o proprio ER.)</small></label>' +
       '<div class="niv-escolha">' +
       this.NIVEIS.map(([v, r]) =>
-        '<label class="niv-opcao' + (v === 'I' ? ' travado' : '') + '">' +
+        '<label class="niv-opcao' + (v === 'C' ? ' travado' : '') + '">' +
         '<input type="checkbox" class="bp-nivel" value="' + v + '"' +
-        (niveisAtuais.includes(v) || v === 'I' ? ' checked' : '') +
-        (v === 'I' ? ' disabled' : '') + '>' +
+        (niveisAtuais.includes(v) || v === 'C' ? ' checked' : '') +
+        (v === 'C' ? ' disabled' : '') + '>' +
         '<b>' + v + '</b> ' + r + '</label>').join('') +
       '</div></div>' +
 
@@ -195,7 +193,7 @@ window.MODULOS.programas = {
     erro.classList.remove('visivel');
 
     const niveis = Array.from(document.querySelectorAll('.bp-nivel:checked')).map(cb => cb.value);
-    if (!niveis.includes('I')) niveis.push('I');
+    if (!niveis.includes('C')) niveis.push('C');
 
     const dados = {
       nome: document.getElementById('bp-nome').value.trim(),
@@ -208,7 +206,7 @@ window.MODULOS.programas = {
     };
     if (id) dados.ativo = document.getElementById('bp-ativo').value === 'true';
     if (!dados.nome) { erro.textContent = 'Informe o nome.'; erro.classList.add('visivel'); return; }
-    if (niveis.length < 2) { erro.textContent = 'Marque ao menos um nivel de ajuda alem do I.'; erro.classList.add('visivel'); return; }
+    if (niveis.length < 2) { erro.textContent = 'Marque ao menos um nivel de ajuda alem do C.'; erro.classList.add('visivel'); return; }
 
     const q = id
       ? sb.from('programas').update(dados).eq('id', id)
@@ -332,7 +330,7 @@ window.MODULOS.programas = {
     this._pacProgPaciente = pacienteId;
 
     const { data } = await sb.from('paciente_programas')
-      .select('id, status, programas(id, nome, area, objetivo, procedimento, tentativas_padrao, criterio_avanco)')
+      .select('id, status, tentativas, programas(id, nome, area, objetivo, procedimento, tentativas_padrao, criterio_avanco)')
       .eq('paciente_id', pacienteId)
       .order('criado_em');
     this._progLista = data || [];
@@ -407,7 +405,10 @@ window.MODULOS.programas = {
         '<div class="prog-cab">' +
         '  <span class="area-chip" style="background:' + cor + '1A; color:' + cor + '">' +
              escaparHtml(pp.programas.area) + '</span>' +
-        '  <span class="selo selo-neutro">' + (pp.programas.tentativas_padrao || 10) + ' tentativas</span>' +
+        '  <span class="selo ' + (pp.tentativas ? 'selo-roxo' : 'selo-neutro') + '" ' +
+        'title="' + (pp.tentativas ? 'Ajustado para este paciente (padrao do programa: ' + (pp.programas.tentativas_padrao || 10) + ')' : 'Padrao do programa') +
+        (perm('programas') === 'E' ? '. Toque no cartao e ajuste em Tentativas.' : '') + '">' +
+        (pp.tentativas || pp.programas.tentativas_padrao || 10) + ' tentativas' + (pp.tentativas ? ' *' : '') + '</span>' +
         '</div>' +
         '<b class="prog-nome">' + escaparHtml(pp.programas.nome) + '</b>' +
         '<div class="prog-progresso"><div class="prog-preench" style="width:' + (pct || 0) + '%; background:' + cor + '"></div></div>' +
@@ -477,8 +478,26 @@ window.MODULOS.programas = {
           'onchange="MODULOS.programas.mudarPrograma(this.value)">' +
           [['na_fila', 'Na fila'], ['em_intervencao', 'Em intervencao'], ['dominado', 'Dominado']]
             .map(([v, r]) => '<option value="' + v + '"' + (pp.status === v ? ' selected' : '') + '>' + r + '</option>').join('') +
-          '</select></div>'
+          '</select></div>' +
+          '<div class="campo" style="margin-top:10px"><label>Tentativas por sessao <b>para este paciente</b> ' +
+          '<small>(vazio = padrao do programa, ' + (p.tentativas_padrao || 10) + '. Vale a partir da proxima ficha.)</small></label>' +
+          '<div style="display:flex; gap:8px; align-items:center">' +
+          '<input type="number" id="ppt-tent" min="1" max="40" style="width:110px" ' +
+          'placeholder="' + (p.tentativas_padrao || 10) + '" value="' + (pp.tentativas || '') + '">' +
+          '<button class="btn btn-chip" onclick="MODULOS.programas.salvarTentativasPaciente()">Salvar tentativas</button>' +
+          '</div></div>'
         : ''));
+  },
+
+  async salvarTentativasPaciente() {
+    const v = document.getElementById('ppt-tent').value;
+    const n = v ? parseInt(v, 10) : null;
+    if (v && (!n || n < 1 || n > 40)) { alert('Entre 1 e 40 (ou vazio para o padrao).'); return; }
+    const { error } = await sb.from('paciente_programas')
+      .update({ tentativas: n }).eq('id', this._ppAtual.id);
+    if (error) { alert(error.message); return; }
+    fecharModal();
+    this.recarregarAbaProgramas();
   },
 
   async mudarPrograma(status) {
@@ -564,17 +583,15 @@ window.MODULOS.programas = {
     const fichas = {};
     const estimuloProg = {};
     pps.forEach(pp => {
-      const n = pp.programas.tentativas_padrao || 10;
-      fichas[pp.id] = Array.from({ length: n }, () => ({ resposta: '', acertou: null, reforcador: '' }));
+      const n = pp.tentativas || pp.programas.tentativas_padrao || 10;
+      fichas[pp.id] = Array.from({ length: n }, () => ({ resposta: '', reforcador: '' }));
       estimuloProg[pp.id] = '';
     });
     (rRegs.data || []).forEach(r => {
       const g = fichas[r.paciente_programa_id];
       if (g && r.ordem >= 1 && r.ordem <= g.length) {
-        const niv = r.resposta === 'C' ? 'I' : r.resposta;
         g[r.ordem - 1] = {
-          resposta: niv || '',
-          acertou: r.acertou !== null && r.acertou !== undefined ? r.acertou : (r.resposta === 'C' ? true : null),
+          resposta: (r.resposta === 'I' ? 'C' : r.resposta) || '',
           reforcador: r.reforcador || ''
         };
         if (r.estimulo_id) estimuloProg[r.paciente_programa_id] = r.estimulo_id;
@@ -645,27 +662,26 @@ window.MODULOS.programas = {
         '  <span class="fr-rotulo" style="margin-left:auto">Preencher rapido</span>' +
         '  <label>Nivel <select id="fr-niv-' + pp.id + '">' +
              niveis.map(v => '<option value="' + v + '">' + this.nomeNivel(v) + '</option>').join('') + '</select></label>' +
-        '  <button class="btn-chip" onclick="MODULOS.programas.aplicarATodas(\'' + pp.id + '\', \'nivel\')">Aplicar</button>' +
+        '  <button class="btn-chip" onclick="MODULOS.programas.aplicarATodas(\'' + pp.id + '\')">Aplicar</button>' +
         '  <button class="btn-chip" onclick="MODULOS.programas.limparFicha(\'' + pp.id + '\')">Limpar tudo</button>' +
         '</div>' +
 
         this.legendaNiveis(niveis) +
 
         '<div class="ficha-grade-cab ficha-v3"><span>#</span>' +
-        '<span>Nivel de ajuda <small>&mdash; um por tentativa</small></span>' +
-        '<span>Conseguiu?</span><span>Reforcador</span></div>' +
+        '<span>Nivel de ajuda <small>&mdash; um por tentativa; o nivel ja diz que realizou (erro = ER)</small></span>' +
+        '<span>Reforcador</span></div>' +
         grade.map((linha, i) =>
           '<div class="ficha-linha ficha-v3">' +
           '  <span class="ficha-num">' + String(i + 1).padStart(2, '0') + '</span>' +
           '  <div class="ficha-niveis">' +
                niveis.map(v =>
                  '<button type="button" class="niv-btn' + (linha.resposta === v ? ' ativo' : '') +
-                 (v === 'I' ? ' correto' : '') + '" ' +
+                 (v === 'C' ? ' correto' : '') + '" ' +
                  'id="nb-' + pp.id + '-' + i + '-' + v + '" ' +
                  'title="' + this.nomeNivel(v) + '" ' +
                  'onclick="MODULOS.programas.marcarNivel(\'' + pp.id + '\', ' + i + ', \'' + v + '\')">' + v + '</button>').join('') +
           '  </div>' +
-          '  <div class="ficha-result" id="res-' + pp.id + '-' + i + '">' + this.botoesResultado(pp.id, i, linha) + '</div>' +
           '  <input placeholder="digitar..." list="lista-reforcadores" value="' + escaparHtml(linha.reforcador) + '" ' +
           '    onchange="MODULOS.programas.mudarLinha(\'' + pp.id + '\', ' + i + ', \'reforcador\', this.value)">' +
           '</div>').join('') +
@@ -698,25 +714,18 @@ window.MODULOS.programas = {
 
   contarFicha(grade) {
     const n = grade.length;
-    const realizadas = grade.filter(l => l.resposta && !this.SEM_RESULTADO.includes(l.resposta)).length;
-    const acertos = grade.filter(l => l.acertou === true).length;
-    const independentes = grade.filter(l => l.resposta === 'I' && l.acertou === true).length;
+    const corretos = grade.filter(l => l.resposta === 'C').length;
     const preenchidas = grade.filter(l => l.resposta).length;
-    return {
-      n, realizadas, acertos, independentes, preenchidas,
-      pctAcertos: realizadas ? Math.round(acertos * 100 / realizadas) : 0,
-      pctIndep: n ? Math.round(independentes * 100 / n) : 0
-    };
+    return { n, corretos, preenchidas, pct: n ? Math.round(corretos * 100 / n) : 0 };
   },
 
   rodapePrograma(ppId) {
     const f = this._folha;
     const pp = f.programas.find(x => x.id === ppId);
     const c = this.contarFicha(f.fichas[ppId]);
-    return '<div class="fr-indep"><small>Acertos</small><b>' + c.pctAcertos + '%</b></div>' +
-      '<div class="fr-indep"><small>Independencia</small><b>' + c.pctIndep + '%</b></div>' +
-      '<div class="fr-meio"><span>' + c.acertos + '/' + c.realizadas + ' com &#10003;</span>' +
-      '<div class="fr-trilho"><div class="fr-barra" style="width:' + c.pctAcertos + '%"></div></div>' +
+    return '<div class="fr-indep"><small>Independencia</small><b>' + c.pct + '%</b></div>' +
+      '<div class="fr-meio"><span>' + c.corretos + '/' + c.n + ' corretos</span>' +
+      '<div class="fr-trilho"><div class="fr-barra" style="width:' + c.pct + '%"></div></div>' +
       '<span>' + c.preenchidas + ' de ' + c.n + ' preenchidas</span></div>' +
       (pp.programas.criterio_avanco
         ? '<div class="fr-criterio"><small>Criterio de avanco</small><b>' +
@@ -726,18 +735,6 @@ window.MODULOS.programas = {
   atualizarRodape(ppId) {
     const el = document.getElementById('rodape-' + ppId);
     if (el) el.innerHTML = this.rodapePrograma(ppId);
-  },
-
-  botoesResultado(ppId, i, linha) {
-    if (this.SEM_RESULTADO.includes(linha.resposta)) {
-      return '<span class="res-na">&mdash;</span>';
-    }
-    return '<button type="button" class="res-btn sim' + (linha.acertou === true ? ' ativo' : '') + '" ' +
-      'title="Conseguiu realizar com este nivel de ajuda" ' +
-      'onclick="MODULOS.programas.marcarResultado(\'' + ppId + '\', ' + i + ', true)">&#10003;</button>' +
-      '<button type="button" class="res-btn nao' + (linha.acertou === false ? ' ativo' : '') + '" ' +
-      'title="Nao conseguiu realizar" ' +
-      'onclick="MODULOS.programas.marcarResultado(\'' + ppId + '\', ' + i + ', false)">&#10007;</button>';
   },
 
   mudarLinha(ppId, i, campo, valor) {
@@ -754,7 +751,6 @@ window.MODULOS.programas = {
     const linha = this._folha.fichas[ppId][i];
     const anterior = linha.resposta;
     linha.resposta = (anterior === sigla) ? '' : sigla;
-    if (this.SEM_RESULTADO.includes(linha.resposta) || !linha.resposta) linha.acertou = null;
     this._sujo = true;
     if (anterior) {
       document.getElementById('nb-' + ppId + '-' + i + '-' + anterior)?.classList.remove('ativo');
@@ -762,34 +758,19 @@ window.MODULOS.programas = {
     if (linha.resposta) {
       document.getElementById('nb-' + ppId + '-' + i + '-' + sigla)?.classList.add('ativo');
     }
-    const res = document.getElementById('res-' + ppId + '-' + i);
-    if (res) res.innerHTML = this.botoesResultado(ppId, i, linha);
     this.atualizarRodape(ppId);
   },
 
-  marcarResultado(ppId, i, valor) {
-    const linha = this._folha.fichas[ppId][i];
-    linha.acertou = (linha.acertou === valor) ? null : valor;
-    this._sujo = true;
-    const res = document.getElementById('res-' + ppId + '-' + i);
-    if (res) res.innerHTML = this.botoesResultado(ppId, i, linha);
-    this.atualizarRodape(ppId);
-  },
-
-  aplicarATodas(ppId, tipo) {
-    const grade = this._folha.fichas[ppId];
+  aplicarATodas(ppId) {
     const v = document.getElementById('fr-niv-' + ppId).value;
-    grade.forEach(l => {
-      l.resposta = v;
-      if (this.SEM_RESULTADO.includes(v)) l.acertou = null;
-    });
+    this._folha.fichas[ppId].forEach(l => { l.resposta = v; });
     this._sujo = true;
     this.desenharFolha();
   },
 
   limparFicha(ppId) {
     if (!confirm('Limpar todas as tentativas deste programa nesta sessao?')) return;
-    this._folha.fichas[ppId].forEach(l => { l.resposta = ''; l.acertou = null; l.reforcador = ''; });
+    this._folha.fichas[ppId].forEach(l => { l.resposta = ''; l.reforcador = ''; });
     this._sujo = true;
     this.desenharFolha();
   },
@@ -810,7 +791,7 @@ window.MODULOS.programas = {
             paciente_programa_id: pp.id,
             ordem: x.ordem,
             resposta: x.l.resposta,
-            acertou: this.SEM_RESULTADO.includes(x.l.resposta) ? null : x.l.acertou,
+            acertou: null,
             estimulo_id: f.estimuloProg[pp.id] || null,
             reforcador: (x.l.reforcador || '').trim() || null,
             registrado_por: window.CORTEX_SESSAO.user.id
@@ -861,8 +842,7 @@ window.MODULOS.programas = {
       const grade = f.fichas[pp.id];
       const preenchidas = grade.filter(l => l.resposta).length;
       const c = this.contarFicha(grade);
-      return { pp, preenchidas: c.preenchidas, acertos: c.acertos, realizadas: c.realizadas,
-               independentes: c.independentes, total: c.n, pct: c.pctAcertos, pctIndep: c.pctIndep };
+      return { pp, preenchidas: c.preenchidas, corretos: c.corretos, total: c.n, pct: c.pct };
     }).filter(l => l.preenchidas > 0);
 
     abrirModal('Encerrar sessao',
@@ -873,8 +853,7 @@ window.MODULOS.programas = {
             '<div class="linha-doc">' +
             '<div><b>' + escaparHtml(l.pp.programas.nome) + '</b>' +
             '<small>' + l.preenchidas + ' de ' + l.total + ' tentativas &middot; ' +
-            l.acertos + '/' + l.realizadas + ' com &#10003; &middot; <b>' + l.pct + '% de acertos</b> &middot; ' +
-            l.pctIndep + '% de independencia' +
+            l.corretos + ' corretos &middot; <b>' + l.pct + '% de independencia</b>' +
             (l.pp.programas.criterio_avanco ? ' &middot; criterio: ' + escaparHtml(l.pp.programas.criterio_avanco) : '') +
             '</small></div>' +
             '<label class="check"><input type="checkbox" class="promover" value="' + l.pp.id + '"> Dominado</label>' +
@@ -920,10 +899,10 @@ window.MODULOS.programas = {
           sessao_id: f.sessao.id,
           paciente_programa_id: pp.id,
           tentativas: c.preenchidas,
-          corretos: c.independentes,
-          pct_corretos: c.pctIndep,
-          acertos: c.acertos,
-          pct_acertos: c.pctAcertos
+          corretos: c.corretos,
+          pct_corretos: c.pct,
+          acertos: c.corretos,
+          pct_acertos: c.pct
         }, { onConflict: 'sessao_id,paciente_programa_id' });
         if (eR) throw new Error(eR.message);
       }
@@ -1048,12 +1027,12 @@ window.MODULOS.programas = {
     let grafico = '', detalhe = '';
 
     if (fotos.length) {
-      grafico = '<div class="rel-bloco"><h4>Grafico da sessao <small>% de acertos por programa (com ou sem ajuda)</small></h4>' +
+      grafico = '<div class="rel-bloco"><h4>Grafico da sessao <small>% de corretos (C) por programa</small></h4>' +
         '<div class="rel-grafico">' +
         fotos.map(fx => {
           const prog = fx.paciente_programas && fx.paciente_programas.programas;
           const cor = this.CORES_AREA[prog ? prog.area : ''] || '#64748B';
-          const pct = fx.pct_acertos !== null && fx.pct_acertos !== undefined ? fx.pct_acertos : (fx.pct_corretos || 0);
+          const pct = fx.pct_corretos || 0;
           return '<div class="rel-col" title="' + escaparHtml(prog ? prog.nome : '') + ': ' + pct + '%">' +
             '<span class="rel-pct">' + pct + '%</span>' +
             '<div class="rel-trilho"><div class="rel-barra" style="height:' + pct + '%; background:' + cor + '"></div></div>' +
@@ -1069,20 +1048,16 @@ window.MODULOS.programas = {
           const prog = fx.paciente_programas && fx.paciente_programas.programas;
           const lista = porPp[fx.paciente_programa_id] || [];
           return '<div class="rel-alvo"><div class="rel-alvo-topo"><b>' + escaparHtml(prog ? prog.nome : '-') + '</b>' +
-            '<span class="selo selo-neutro">' +
-            (fx.acertos !== null && fx.acertos !== undefined ? fx.acertos : fx.corretos) + ' com &#10003; &middot; ' +
-            (fx.pct_acertos !== null && fx.pct_acertos !== undefined ? fx.pct_acertos : fx.pct_corretos) + '% de acertos &middot; ' +
-            fx.pct_corretos + '% independente</span></div>' +
+            '<span class="selo selo-neutro">' + fx.corretos + '/' +
+            fx.tentativas + ' corretos &middot; ' + fx.pct_corretos + '%</span></div>' +
             '<div class="rel-tentativas">' +
             lista.map(t => {
-              const ok = t.acertou === true || t.resposta === 'C';
-              return '<span class="rel-tent' + (ok ? ' correto' : '') + '" title="' + this.nomeNivel(t.resposta === 'C' ? 'I' : t.resposta) +
-                (t.acertou === true ? ' - conseguiu' : t.acertou === false ? ' - nao conseguiu' : '') +
+              const sig = t.resposta === 'I' ? 'C' : t.resposta;
+              return '<span class="rel-tent' + (sig === 'C' ? ' correto' : '') + '" title="' + this.nomeNivel(sig) +
                 (t.reforcador ? ' - reforcador: ' + escaparHtml(t.reforcador) : '') + '">' +
                 '<b>' + String(t.ordem || 0).padStart(2, '0') + '</b> ' +
                 (t.estimulos ? escaparHtml(t.estimulos.nome) + ' ' : '') +
-                '<i>' + (t.resposta === 'C' ? 'I' : t.resposta) +
-                (t.acertou === true ? ' &#10003;' : t.acertou === false ? ' &#10007;' : '') + '</i></span>';
+                '<i>' + sig + '</i></span>';
             }).join('') +
             '</div></div>';
         }).join('') + '</div>';
@@ -1163,7 +1138,7 @@ window.MODULOS.programas = {
     (regs || []).forEach(r => {
       porSessao[r.sessao_id] = porSessao[r.sessao_id] || { t: 0, c: 0 };
       porSessao[r.sessao_id].t++;
-      if (r.acertou === true || r.resposta === 'C') porSessao[r.sessao_id].c++;
+      if (r.resposta === 'C' || r.resposta === 'I') porSessao[r.sessao_id].c++;
     });
 
     const cron = lista.slice().reverse();
@@ -1171,7 +1146,7 @@ window.MODULOS.programas = {
       const d = porSessao[e.sessao_id];
       const pct = d && d.t ? Math.round(d.c * 100 / d.t) : 0;
       const dia = e.sessoes ? new Date(e.sessoes.data + 'T12:00:00').toLocaleDateString('pt-BR').slice(0, 5) : '';
-      return '<div class="prog-col" title="' + dia + ': ' + pct + '% de acertos (' + (d ? d.t : 0) + ' tentativas)">' +
+      return '<div class="prog-col" title="' + dia + ': ' + pct + '% de corretos (' + (d ? d.t : 0) + ' tentativas)">' +
         '<div class="prog-barra" style="height:' + Math.max(pct, 4) + '%"></div>' +
         '<small>' + dia + '</small></div>';
     }).join('');
@@ -1222,7 +1197,7 @@ window.MODULOS.programas = {
   },
 
   // Ordem canonica: da ajuda maxima (esquerda) a independencia (direita)
-  ORDEM_GRAFICO: ['FA', 'NA', 'SR', 'ER', 'FT', 'FP', 'MO', 'GE', 'VE', 'VI', 'I', 'C'],
+  ORDEM_GRAFICO: ['FA', 'NA', 'SR', 'ER', 'FT', 'FP', 'MO', 'GE', 'VE', 'VI', 'C'],
 
   corNivel(s) {
     if (s === 'C' || s === 'I') return '#15803D';
@@ -1231,13 +1206,7 @@ window.MODULOS.programas = {
     return '#D97706';
   },
 
-  corPonto(t) {
-    // Anel da bolinha: resultado manda (verde conseguiu / rosa nao); NA-FA cinza
-    if (this.SEM_RESULTADO.includes(t.resposta)) return '#94A3B8';
-    if (t.acertou === true || t.resposta === 'C') return '#15803D';
-    if (t.acertou === false || t.resposta === 'ER' || t.resposta === 'SR') return '#E9586A';
-    return this.corNivel(t.resposta);
-  },
+
 
   graficoTentativas(niveisPrograma, tentativas) {
     const niveis = this.ORDEM_GRAFICO.filter(n => (niveisPrograma || this.NIVEIS_PADRAO).includes(n));
@@ -1255,9 +1224,8 @@ window.MODULOS.programas = {
       'style="width:100%; height:auto; font-family:inherit">';
 
     // Faixa da independencia (coluna C) e grades verticais
-    const alvoIndep = niveis.includes('I') ? 'I' : (niveis.includes('C') ? 'C' : null);
-    if (alvoIndep && niveis.indexOf(alvoIndep) > 0) {
-      svg += '<rect x="' + (x(alvoIndep) - passo / 2) + '" y="' + (TOPO - 4) + '" width="' + (passo / 2 + 14) +
+    if (niveis.includes('C') && niveis.indexOf('C') > 0) {
+      svg += '<rect x="' + (x('C') - passo / 2) + '" y="' + (TOPO - 4) + '" width="' + (passo / 2 + 14) +
         '" height="' + (tentativas.length * LINHA + 10) + '" fill="#ECFDF5" rx="8"/>';
     }
     niveis.forEach(n => {
@@ -1280,12 +1248,11 @@ window.MODULOS.programas = {
         '<text x="34" y="' + (y(i) + 3.5) + '" font-size="10" fill="#23303C">' +
         escaparHtml(est.length > 16 ? est.slice(0, 15) + '\u2026' : est) + '</text>';
       if (niveis.includes(t.resposta)) {
-        const corP = this.corPonto(t);
+        const corP = this.corNivel(t.resposta);
         svg += '<circle cx="' + x(t.resposta) + '" cy="' + y(i) + '" r="7" fill="#fff" ' +
           'stroke="' + corP + '" stroke-width="3"/>' +
           '<text x="' + (largura - DIR + 12) + '" y="' + (y(i) + 3.5) + '" font-size="10.5" font-weight="800" ' +
-          'fill="' + corP + '">' + (t.resposta === 'C' ? 'I' : t.resposta) +
-          (t.acertou === false ? ' \u2717' : '') + '</text>';
+          'fill="' + corP + '">' + t.resposta + '</text>';
       }
     });
     svg += '</svg>';
@@ -1326,8 +1293,10 @@ window.MODULOS.programas = {
     const evo = (rEvo.data && rEvo.data[0]) || {};
     const comps = rComp.data || [];
     const tentPorPp = {};
-    (rTent.data || []).forEach(t =>
-      (tentPorPp[t.paciente_programa_id] = tentPorPp[t.paciente_programa_id] || []).push(t));
+    (rTent.data || []).forEach(t => {
+      if (t.resposta === 'I') t.resposta = 'C';
+      (tentPorPp[t.paciente_programa_id] = tentPorPp[t.paciente_programa_id] || []).push(t);
+    });
 
     // Avaliacoes concluidas na data da sessao (SS ganha mini-quadro por area)
     const { data: avsDia } = await sb.from('avaliacoes')
@@ -1375,8 +1344,9 @@ window.MODULOS.programas = {
     const legendaGraf = fotos.length
       ? '<div style="display:flex; gap:14px; flex-wrap:wrap; font-size:10px; font-weight:700; ' +
         'color:var(--eq-cinza); margin-top:8px; padding-left:4px">' +
-        '<span><i style="display:inline-block; width:9px; height:9px; border-radius:50%; border:2.5px solid #15803D; margin-right:4px"></i>Conseguiu realizar</span>' +
-        '<span><i style="display:inline-block; width:9px; height:9px; border-radius:50%; border:2.5px solid #E9586A; margin-right:4px"></i>Nao conseguiu</span>' +
+        '<span><i style="display:inline-block; width:9px; height:9px; border-radius:50%; border:2.5px solid #15803D; margin-right:4px"></i>Correto (independente)</span>' +
+        '<span><i style="display:inline-block; width:9px; height:9px; border-radius:50%; border:2.5px solid #D97706; margin-right:4px"></i>Com ajuda (FT&rarr;VI)</span>' +
+        '<span><i style="display:inline-block; width:9px; height:9px; border-radius:50%; border:2.5px solid #E9586A; margin-right:4px"></i>Erro / sem resposta</span>' +
         '<span><i style="display:inline-block; width:9px; height:9px; border-radius:50%; border:2.5px solid #94A3B8; margin-right:4px"></i>Nao aplicado / falta</span>' +
         '</div>'
       : '';
@@ -1391,9 +1361,7 @@ window.MODULOS.programas = {
             escaparHtml(prog ? prog.nome : '-') +
             ' <span style="color:var(--eq-cinza); font-weight:600">&middot; ' + escaparHtml(prog ? prog.area : '') + '</span></td>' +
             '<td style="padding:7px 11px; background:var(--eq-fundo); border-radius:0 9px 9px 0; text-align:right; white-space:nowrap; font-size:12px">' +
-            '<b style="color:var(--eq-azul)">' +
-            (fx.pct_acertos !== null && fx.pct_acertos !== undefined ? fx.pct_acertos : fx.pct_corretos) +
-            '%</b> de acertos &middot; ' + fx.pct_corretos + '% independente' +
+            '<b style="color:var(--eq-azul)">' + fx.pct_corretos + '%</b> de corretos (' + fx.corretos + '/' + total + ')' +
             '<span style="display:inline-block; vertical-align:middle; width:110px; height:7px; margin-left:8px; ' +
             'background:#E5EDF4; border-radius:5px; overflow:hidden"><i style="display:block; height:100%; width:' +
             fx.pct_corretos + '%; background:var(--eq-azul); border-radius:5px"></i></span></td></tr>';

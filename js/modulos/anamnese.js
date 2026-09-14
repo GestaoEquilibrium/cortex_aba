@@ -366,7 +366,10 @@ window.MODULOS.anamnese = {
   // ─────────────── Documento oficial da anamnese ───────────────
 
   async docAnamnese(pacienteId) {
-    await this.carregarQuestoes?.();
+    if (!this.questoes || !this.questoes.length) {
+      const { data: qs } = await sb.from('anamnese_questoes').select('*').order('ordem');
+      this.questoes = qs || [];
+    }
     document.getElementById('doc-eq-overlay')?.remove();
     const ov = document.createElement('div');
     ov.id = 'doc-eq-overlay';
@@ -375,7 +378,7 @@ window.MODULOS.anamnese = {
     document.body.appendChild(ov);
 
     const [rAn, rPac] = await Promise.all([
-      sb.from('anamneses').select('id, status, atualizado_em').eq('paciente_id', pacienteId).maybeSingle(),
+      sb.from('anamneses').select('id, status').eq('paciente_id', pacienteId).maybeSingle(),
       sb.from('pacientes').select('nome, data_nascimento').eq('id', pacienteId).single()
     ]);
     const an = rAn.data, pac = rPac.data;

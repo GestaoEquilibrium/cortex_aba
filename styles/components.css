@@ -2129,3 +2129,26 @@
 .modal.pop-evolucao .modal-topo h3 .pop-icone { color: #E9586A; }
 .modal.pop-agenda .modal-topo h3 .pop-icone   { color: #1468B2; }
 .modal.pop-aviso .modal-topo h3 .pop-icone    { color: #D97706; }
+
+/* ── Portal: recursos, conversa e caderninho ─────────────────────────── */
+.portal-recursos {
+    display: flex; gap: 8px; flex-wrap: wrap;
+    margin: 10px 0 2px;
+}
+.conv-lista {
+    max-height: 46vh; overflow: auto;
+    display: flex; flex-direction: column; gap: 8px;
+    padding: 6px 2px;
+}
+.conv-msg {
+    max-width: 78%;
+    padding: 8px 12px;
+    border-radius: 14px;
+    font-size: 13.5px;
+    line-height: 1.45;
+}
+.conv-msg small { display: block; font-size: 10.5px; color: var(--ink-muted); margin-bottom: 2px; }
+.conv-msg.minha { align-self: flex-end; background: #E8F1FA; border: 1px solid #C9DFF2; border-bottom-right-radius: 4px; }
+.conv-msg.deles { align-self: flex-start; background: var(--surface-alt); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+.conv-envio { display: flex; gap: 8px; margin-top: 10px; }
+.conv-envio input { flex: 1; }

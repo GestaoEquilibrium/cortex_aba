@@ -310,6 +310,41 @@ function perm(chave) {
 }
 
 // ── Modais (janela suspensa) ────────────────────────────────────────────
+// ── Envio de documentos ao portal da familia ──
+const ROTULO_DOC_PORTAL = {
+  pt: 'Plano Terapeutico', relatorio_mensal: 'Relatorio Mensal',
+  avaliacao: 'Relatorio de Avaliacao', pei: 'PEI',
+  evolucao_diaria: 'Evolucao Diaria', anamnese: 'Anamnese', outro: 'Documento'
+};
+
+function podeEnviarPortal() {
+  const p = window.CORTEX_SESSAO?.profile;
+  return p && (p.perfil === 'direcao' || p.perfil === 'coordenador');
+}
+
+function portalBtn() {
+  if (!podeEnviarPortal() || !window._docPortal) return '';
+  return '  <button class="btn btn-fantasma" id="btn-enviar-portal" ' +
+    'title="Disponibiliza este documento, exatamente como esta, para a familia ver no portal." ' +
+    'onclick="enviarDocPortal(this)">&#128228; Enviar ao portal</button>';
+}
+
+async function enviarDocPortal(botao) {
+  const ctx = window._docPortal;
+  const doc = document.querySelector('#doc-eq-overlay .doc-eq, .folha-overlay .doc-eq');
+  if (!ctx || !doc) { alert('Documento nao encontrado.'); return; }
+  botao.disabled = true; botao.textContent = 'Enviando...';
+  const { error } = await sb.from('portal_documentos').insert({
+    paciente_id: ctx.paciente_id,
+    tipo: ctx.tipo,
+    titulo: ctx.titulo,
+    html: doc.outerHTML,
+    enviado_por: window.CORTEX_SESSAO.user.id
+  });
+  if (error) { alert(error.message); botao.disabled = false; botao.textContent = '\u{1F4E4} Enviar ao portal'; return; }
+  botao.textContent = '\u2713 No portal';
+}
+
 const TIPOS_POP = {
   evolucao: { classe: 'pop-evolucao', icone: '&#9998;' },
   agenda:   { classe: 'pop-agenda',   icone: '&#128197;' },

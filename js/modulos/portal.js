@@ -76,6 +76,19 @@ window.MODULOS.portal = {
       let termos = '';
       try { termos = await this.htmlTermos(p.id); } catch (e) {}
 
+      const { count: nDocs } = await sb.from('portal_documentos')
+        .select('id', { count: 'exact', head: true }).eq('paciente_id', p.id);
+      const recursos =
+        '<div class="portal-recursos">' +
+        '<button class="btn btn-fantasma" onclick="MODULOS.portal.docsPortal(\'' + p.id + '\', \'' +
+          escaparHtml(p.nome.split(' ')[0]) + '\')">&#128196; Documentos' +
+          (nDocs ? ' <span class="fchip-n">' + nDocs + '</span>' : '') + '</button>' +
+        '<button class="btn btn-fantasma" onclick="MODULOS.portal.caderninho(\'' + p.id + '\', \'' +
+          escaparHtml(p.nome.split(' ')[0]) + '\')">&#128211; Caderninho</button>' +
+        '<button class="btn btn-fantasma" onclick="MODULOS.portal.conversa(\'' + p.id + '\', \'' +
+          escaparHtml(p.nome.split(' ')[0]) + '\')">&#128172; Conversar com a coordenacao</button>' +
+        '</div>';
+
       html +=
         '<div class="cartao faixa-azul">' +
         '  <div class="pac-topo" style="margin-bottom:14px">' +
@@ -83,7 +96,7 @@ window.MODULOS.portal = {
         '    <div class="pac-quem"><strong>' + escaparHtml(p.nome) + '</strong>' +
         '    <span>' + calcularIdade(p.data_nascimento) + '</span></div>' +
         '  </div>' +
-        pendencia +
+        pendencia + recursos +
         termos +
         agenda +
         relatorios +
@@ -231,5 +244,138 @@ window.MODULOS.portal = {
   iniciais(nome) {
     const p = nome.trim().split(/\s+/);
     return ((p[0] ? p[0][0] : '') + (p.length > 1 ? p[p.length - 1][0] : '')).toUpperCase();
+  },
+
+  // ─────────────── Documentos enviados pela coordenacao ───────────────
+
+  async docsPortal(pacId, nome) {
+    const ov = this.novaJanela('Documentos de ' + nome);
+    const { data } = await sb.from('portal_documentos')
+      .select('id, tipo, titulo, enviado_em')
+      .eq('paciente_id', pacId).order('enviado_em', { ascending: false });
+    const lista = data || [];
+    document.getElementById('portal-jan-corpo').innerHTML =
+      (lista.length
+        ? lista.map(d =>
+            '<div class="linha-doc"><div><b>' + escaparHtml(d.titulo) + '</b>' +
+            '<small>Enviado em ' + new Date(d.enviado_em).toLocaleDateString('pt-BR') + '</small></div>' +
+            '<button class="btn btn-primario" onclick="MODULOS.portal.verDoc(\'' + d.id + '\')">Ver documento</button>' +
+            '</div>').join('')
+        : '<p class="sub">A coordenacao ainda nao enviou documentos. Eles aparecem aqui assim que forem liberados.</p>');
+  },
+
+  async verDoc(id) {
+    const { data: d } = await sb.from('portal_documentos')
+      .select('titulo, html').eq('id', id).single();
+    if (!d) return;
+    const ov = this.novaJanela(d.titulo, true);
+    document.getElementById('portal-jan-corpo').innerHTML =
+      '<div class="barra-acoes nao-imprime" style="justify-content:flex-end; margin-bottom:8px">' +
+      '<button class="btn btn-primario" onclick="window.print()">&#128424; Imprimir / PDF</button></div>' + d.html;
+    ov.id = 'doc-eq-overlay';  // entra na regra de impressao dos documentos
+  },
+
+  // ─────────────── Caderninho de realizacoes ───────────────
+
+  async caderninho(pacId, nome) {
+    this._cadPac = pacId; this._cadNome = nome;
+    this.novaJanela('Caderninho de ' + nome);
+    document.getElementById('portal-jan-corpo').innerHTML =
+      '<p class="sub" style="margin-bottom:10px">Registre aqui as conquistas de ' + escaparHtml(nome) +
+      ' fora da clinica: algo que conseguiu fazer, uma palavra nova, uma refeicao... A equipe acompanha tudo.</p>' +
+      '<div class="grade-form">' +
+      '  <div class="campo"><label>Dia</label><input type="date" id="cad-data" ' +
+      '    value="' + new Date().toISOString().slice(0, 10) + '" max="' + new Date().toISOString().slice(0, 10) + '"></div>' +
+      '  <div class="campo c2"><label>O que aconteceu?</label>' +
+      '    <input id="cad-texto" placeholder="Ex.: comeu sozinho com a colher no almoco"></div>' +
+      '</div>' +
+      '<div class="barra-acoes"><button class="btn btn-primario" onclick="MODULOS.portal.salvarCaderninho()">Registrar</button></div>' +
+      '<div class="mensagem-erro" id="cad-erro"></div>' +
+      '<div id="cad-lista" style="margin-top:14px"><p class="sub">Carregando...</p></div>';
+    this.listarCaderninho();
+  },
+
+  async listarCaderninho() {
+    const { data } = await sb.from('caderninho')
+      .select('data, texto, criado_em')
+      .eq('paciente_id', this._cadPac).order('data', { ascending: false }).limit(60);
+    const alvo = document.getElementById('cad-lista');
+    if (!alvo) return;
+    alvo.innerHTML = (data && data.length
+      ? data.map(r => '<div class="linha-doc"><div><b>' +
+          r.data.split('-').reverse().join('/') + '</b><small>' + escaparHtml(r.texto) + '</small></div></div>').join('')
+      : '<p class="sub">Nenhum registro ainda. O primeiro e por sua conta!</p>');
+  },
+
+  async salvarCaderninho() {
+    const erro = document.getElementById('cad-erro');
+    erro.classList.remove('visivel');
+    const texto = document.getElementById('cad-texto').value.trim();
+    const data = document.getElementById('cad-data').value;
+    if (!texto || !data) { erro.textContent = 'Preencha o dia e o que aconteceu.'; erro.classList.add('visivel'); return; }
+    const { error } = await sb.from('caderninho').insert({
+      paciente_id: this._cadPac, autor_id: this.sessao.user.id, data: data, texto: texto });
+    if (error) { erro.textContent = error.message; erro.classList.add('visivel'); return; }
+    document.getElementById('cad-texto').value = '';
+    this.listarCaderninho();
+  },
+
+  // ─────────────── Conversa com a coordenacao ───────────────
+
+  async conversa(pacId, nome) {
+    this._convPac = pacId;
+    this.novaJanela('Conversa sobre ' + nome);
+    document.getElementById('portal-jan-corpo').innerHTML =
+      '<div id="conv-lista" class="conv-lista"><p class="sub">Carregando...</p></div>' +
+      '<div class="conv-envio">' +
+      '  <input id="conv-texto" placeholder="Escreva sua mensagem..." ' +
+      '    onkeydown="if(event.key===\'Enter\') MODULOS.portal.enviarMensagem()">' +
+      '  <button class="btn btn-primario" onclick="MODULOS.portal.enviarMensagem()">Enviar</button>' +
+      '</div>';
+    await this.listarConversa();
+    sb.from('portal_mensagens').update({ lida_familia: true })
+      .eq('paciente_id', pacId).eq('origem', 'clinica').eq('lida_familia', false).then(() => {});
+  },
+
+  async listarConversa() {
+    const { data } = await sb.from('portal_mensagens')
+      .select('origem, texto, criado_em, autor:profiles!portal_mensagens_autor_id_fkey(nome)')
+      .eq('paciente_id', this._convPac).order('criado_em').limit(200);
+    const alvo = document.getElementById('conv-lista');
+    if (!alvo) return;
+    alvo.innerHTML = (data && data.length
+      ? data.map(m =>
+          '<div class="conv-msg ' + (m.origem === 'familia' ? 'minha' : 'deles') + '">' +
+          '<small>' + (m.origem === 'familia' ? 'Voce' : 'Coordenacao') + ' &middot; ' +
+          new Date(m.criado_em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) + '</small>' +
+          escaparHtml(m.texto) + '</div>').join('')
+      : '<p class="sub">Nenhuma mensagem ainda. Escreva abaixo: a coordenacao recebe e responde por aqui.</p>');
+    alvo.scrollTop = alvo.scrollHeight;
+  },
+
+  async enviarMensagem() {
+    const campo = document.getElementById('conv-texto');
+    const texto = campo.value.trim();
+    if (!texto) return;
+    campo.value = '';
+    const { error } = await sb.from('portal_mensagens').insert({
+      paciente_id: this._convPac, autor_id: this.sessao.user.id, origem: 'familia', texto: texto });
+    if (error) { alert(error.message); return; }
+    this.listarConversa();
+  },
+
+  novaJanela(titulo, larga) {
+    document.getElementById('portal-jan')?.remove();
+    document.getElementById('doc-eq-overlay')?.remove();
+    const ov = document.createElement('div');
+    ov.id = 'portal-jan';
+    ov.className = 'folha-overlay';
+    ov.innerHTML = '<div class="folha-pagina" style="max-width:' + (larga ? '960px' : '640px') + '">' +
+      '<div class="pagina-cabecalho nao-imprime">' +
+      '  <div><button class="btn-voltar" onclick="document.getElementById(\'' + 'portal-jan' + '\')?.remove(); document.getElementById(\'doc-eq-overlay\')?.remove()">&larr; Fechar</button>' +
+      '  <h2>' + titulo + '</h2></div></div>' +
+      '<div id="portal-jan-corpo"></div></div>';
+    document.body.appendChild(ov);
+    return ov;
   }
 };

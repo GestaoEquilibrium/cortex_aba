@@ -138,6 +138,55 @@ window.MODULOS.termos = {
             '<div class="linha-doc"><div><b>' + escaparHtml(nomePac(a.paciente_id)) + '</b>' +
             '<small>Assinado por ' + escaparHtml(a.nome_confirmado || '-') + ' em ' +
             new Date(a.aceito_em).toLocaleString('pt-BR') + '</small></div>' +
+            '<button class="btn-chip" onclick="MODULOS.termos.imprimirAceite(\'' + termoId + '\', \'' +
+            a.paciente_id + '\')">&#128424; Imprimir</button>' +
             '<span class="selo selo-ok">Aceito</span></div>').join('')), true);
+  },
+
+  // ─────────────── Impressao do termo aceito (aceite digital) ───────────────
+
+  imprimirAceite(termoId, pacienteId) {
+    const termo = this.lista.find(x => x.id === termoId);
+    const aceite = this.aceites.find(a => a.termo_id === termoId && a.paciente_id === pacienteId);
+    const pac = this.pacientes.find(p => p.id === pacienteId);
+    if (!termo || !aceite) return;
+
+    document.getElementById('doc-eq-overlay')?.remove();
+    const ov = document.createElement('div');
+    ov.id = 'doc-eq-overlay';
+    ov.className = 'folha-overlay';
+    ov.innerHTML = '<div class="folha-pagina" style="max-width:860px">' +
+      '<div class="pagina-cabecalho nao-imprime">' +
+      '  <div><button class="btn-voltar" onclick="document.getElementById(\'doc-eq-overlay\').remove()">&larr; Fechar</button>' +
+      '  <h2>Termo aceito</h2></div>' +
+      '  <button class="btn btn-primario" onclick="window.print()">&#128424; Imprimir / PDF</button>' +
+      '</div>' +
+      '<div class="doc-eq">' +
+      '<div class="deq-cab">' +
+      '  <img src="icones/equilibrium.png" alt="Equilibrium">' +
+      '  <div class="deq-cab-t"><h1>' + escaparHtml(termo.titulo).toUpperCase() + '</h1>' +
+      '  <p>Equilibrium Terapia Infantil &middot; Documento aceito digitalmente pelo portal da familia</p></div>' +
+      '</div>' +
+      '<div class="deq-caixa deq-dados" style="grid-template-columns:1fr 1fr; margin-top:8px">' +
+      '  <div><small>Paciente</small><b>' + escaparHtml(pac ? pac.nome : '-') + '</b></div>' +
+      '  <div><small>Data do aceite</small><b>' + new Date(aceite.aceito_em).toLocaleString('pt-BR') + '</b></div>' +
+      '</div>' +
+      '<h2 style="margin-top:14px"><span class="ponto deq-azul"></span>Texto do termo</h2>' +
+      '<div class="deq-caixa deq-texto">' +
+      escaparHtml(termo.texto || '').replace(/\n/g, '<br>') + '</div>' +
+      '<div class="deq-caixa" style="margin-top:14px; background:#F0FDF4; border-color:#86EFAC">' +
+      '  <b style="color:#15803D">&#10003; ACEITO DIGITALMENTE</b><br>' +
+      '  <span style="font-size:12px">Aceito por <b>' + escaparHtml(aceite.nome_confirmado) + '</b> em <b>' +
+      new Date(aceite.aceito_em).toLocaleString('pt-BR') + '</b>, mediante confirmacao do nome completo no portal da familia ' +
+      'do CORTEX aba, com registro de data e hora. Este aceite fica guardado no sistema e vale como concordancia da familia.</span>' +
+      '</div>' +
+      '<div class="deq-rodape">' +
+      '  <span>Equilibrium Terapia Infantil &middot; Uberl&acirc;ndia/MG</span>' +
+      '  <span class="pontos"><i style="background:var(--eq-teal)"></i><i style="background:var(--eq-amarelo)"></i>' +
+      '<i style="background:var(--eq-rosa)"></i><i style="background:var(--eq-azul)"></i></span>' +
+      '  <span>Gerado pelo CORTEX aba &middot; ' + new Date().toLocaleDateString('pt-BR') + '</span>' +
+      '</div>' +
+      '</div></div>';
+    document.body.appendChild(ov);
   }
 };

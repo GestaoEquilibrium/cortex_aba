@@ -1388,12 +1388,14 @@ window.MODULOS.programas = {
         }).join('')
       : '<span style="color:var(--eq-cinza)">Nenhum comportamento interferente registrado.</span>';
 
+    window._docPortal = { paciente_id: s.paciente_id, tipo: 'evolucao_diaria', titulo: 'Evolucao Diaria' };
     document.getElementById('doc-eq-corpo').innerHTML =
       '<div class="pagina-cabecalho nao-imprime">' +
       '  <div><button class="btn-voltar" onclick="document.getElementById(\'doc-eq-overlay\').remove(); ' +
       'MODULOS.programas.abrirRelatorioSessao(\'' + sessaoId + '\')">&larr; Relatorio da sessao</button>' +
       '  <h2>Evolucao diaria &middot; documento oficial</h2></div>' +
       '  <button class="btn btn-primario" onclick="window.print()">&#128424; Imprimir / PDF</button>' +
+      portalBtn() +
       '</div>' +
 
       '<div class="doc-eq">' +

@@ -387,11 +387,13 @@ window.MODULOS.relatorios = {
       '<div class="deq-caixa deq-texto">' +
       escaparHtml(valor || (!tem4 && titulo === 'Progresso' ? rel.texto || '' : '')) + '</div>';
 
+    window._docPortal = { paciente_id: rel.paciente_id, tipo: 'relatorio_mensal', titulo: 'Relatorio Mensal' };
     document.getElementById('doc-eq-corpo').innerHTML =
       '<div class="pagina-cabecalho nao-imprime">' +
       '  <div><button class="btn-voltar" onclick="document.getElementById(\'doc-eq-overlay\').remove()">&larr; Fechar</button>' +
       '  <h2>Relatorio mensal &middot; documento oficial</h2></div>' +
       '  <button class="btn btn-primario" onclick="window.print()">&#128424; Imprimir / PDF</button>' +
+      portalBtn() +
       '</div>' +
 
       '<div class="doc-eq">' +

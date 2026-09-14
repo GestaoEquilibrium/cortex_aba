@@ -488,11 +488,13 @@ window.MODULOS.pei = {
         '</div>';
     }).join('');
 
+    window._docPortal = { paciente_id: rel.paciente_id, tipo: 'avaliacao', titulo: 'Relatorio de Avaliacao' };
     document.getElementById('doc-eq-corpo').innerHTML =
       '<div class="pagina-cabecalho nao-imprime">' +
       '  <div><button class="btn-voltar" onclick="document.getElementById(\'doc-eq-overlay\').remove()">&larr; Fechar</button>' +
       '  <h2>Relatorio de avaliacao &middot; documento oficial</h2></div>' +
       '  <button class="btn btn-primario" onclick="window.print()">&#128424; Imprimir / PDF</button>' +
+      portalBtn() +
       '</div>' +
 
       '<div class="doc-eq">' +
@@ -571,11 +573,13 @@ window.MODULOS.pei = {
         '<td style="padding:7px 12px; border-top:1px solid var(--eq-linha)">' + escaparHtml(m.prazo || '&mdash;') + '</td></tr>').join('') +
       '</table></div>').join('');
 
+    window._docPortal = { paciente_id: pei.paciente_id, tipo: 'pei', titulo: 'PEI' };
     document.getElementById('doc-eq-corpo').innerHTML =
       '<div class="pagina-cabecalho nao-imprime">' +
       '  <div><button class="btn-voltar" onclick="document.getElementById(\'doc-eq-overlay\').remove()">&larr; Fechar</button>' +
       '  <h2>PEI &middot; documento oficial</h2></div>' +
       '  <button class="btn btn-primario" onclick="window.print()">&#128424; Imprimir / PDF</button>' +
+      portalBtn() +
       '</div>' +
 
       '<div class="doc-eq">' +

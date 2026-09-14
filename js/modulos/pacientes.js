@@ -382,7 +382,11 @@ window.MODULOS.pacientes = {
     const aba = this.ABAS.find(a => a.id === id);
 
     if (id === 'visao') { alvo.innerHTML = this.htmlVisaoGeral(p); return; }
-    if (id === 'documentos') { alvo.innerHTML = this.htmlDocumentos(p); return; }
+    if (id === 'documentos') {
+      alvo.innerHTML = this.htmlDocumentos(p) + '<div id="pac-portal"><div class="cartao"><p class="sub">Carregando portal...</p></div></div>';
+      this.blocoPortal(p.id);
+      return;
+    }
     if (id === 'relatorios') {
       alvo.innerHTML = '<div class="cartao"><p class="sub">Carregando relatorios...</p></div>';
       MODULOS.relatorios.htmlDoPaciente(p.id).then(html => { alvo.innerHTML = html; });
@@ -1143,5 +1147,81 @@ window.MODULOS.pacientes = {
       document.execCommand('copy');
       alert('Mensagem copiada!');
     }
+  },
+
+  // ─────────────── Portal da familia (lado interno) ───────────────
+
+  async blocoPortal(pacId) {
+    this._portalPac = pacId;
+    const [rDocs, rCad, rMsg] = await Promise.all([
+      sb.from('portal_documentos').select('id, titulo, enviado_em, enviado_por_perfil:profiles!portal_documentos_enviado_por_fkey(nome)')
+        .eq('paciente_id', pacId).order('enviado_em', { ascending: false }),
+      sb.from('caderninho').select('data, texto').eq('paciente_id', pacId)
+        .order('data', { ascending: false }).limit(20),
+      sb.from('portal_mensagens').select('id, origem, texto, criado_em, lida_clinica')
+        .eq('paciente_id', pacId).order('criado_em').limit(200)
+    ]);
+    const alvo = document.getElementById('pac-portal');
+    if (!alvo) return;
+    const docs = rDocs.data || [];
+    const cad = rCad.data || [];
+    const msgs = rMsg.data || [];
+    const podeEnviar = ['direcao', 'coordenador'].includes(window.CORTEX_SESSAO.profile.perfil);
+
+    alvo.innerHTML =
+      '<div class="cartao"><h3>&#128228; No portal da familia <span class="selo selo-neutro">' + docs.length + ' documento(s)</span></h3>' +
+      (docs.length
+        ? docs.map(d => '<div class="linha-doc"><div><b>' + escaparHtml(d.titulo) + '</b>' +
+            '<small>' + new Date(d.enviado_em).toLocaleDateString('pt-BR') + '</small></div>' +
+            (podeEnviar ? '<button class="btn-chip" onclick="MODULOS.pacientes.removerDocPortal(\'' + d.id + '\')">Remover do portal</button>' : '') +
+            '</div>').join('')
+        : '<p class="sub">Nada enviado ainda. Abra qualquer documento oficial e use "Enviar ao portal".</p>') +
+      '</div>' +
+
+      '<div class="cartao"><h3>&#128211; Caderninho da familia</h3>' +
+      (cad.length
+        ? cad.map(r => '<div class="linha-doc"><div><b>' + r.data.split('-').reverse().join('/') +
+            '</b><small>' + escaparHtml(r.texto) + '</small></div></div>').join('')
+        : '<p class="sub">A familia ainda nao registrou conquistas do dia a dia.</p>') +
+      '</div>' +
+
+      '<div class="cartao"><h3>&#128172; Conversa com a familia' +
+      (msgs.some(m => m.origem === 'familia' && !m.lida_clinica)
+        ? ' <span class="selo selo-warn">novas mensagens</span>' : '') + '</h3>' +
+      '<div class="conv-lista" id="pconv-lista">' +
+      (msgs.length
+        ? msgs.map(m => '<div class="conv-msg ' + (m.origem === 'familia' ? 'deles' : 'minha') + '">' +
+            '<small>' + (m.origem === 'familia' ? 'Familia' : 'Clinica') + ' &middot; ' +
+            new Date(m.criado_em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) +
+            '</small>' + escaparHtml(m.texto) + '</div>').join('')
+        : '<p class="sub">Sem mensagens.</p>') +
+      '</div>' +
+      '<div class="conv-envio">' +
+      '  <input id="pconv-texto" placeholder="Responder a familia..." ' +
+      '    onkeydown="if(event.key===\'Enter\') MODULOS.pacientes.responderFamilia()">' +
+      '  <button class="btn btn-primario" onclick="MODULOS.pacientes.responderFamilia()">Enviar</button>' +
+      '</div></div>';
+
+    sb.from('portal_mensagens').update({ lida_clinica: true })
+      .eq('paciente_id', pacId).eq('origem', 'familia').eq('lida_clinica', false).then(() => {});
+  },
+
+  async responderFamilia() {
+    const campo = document.getElementById('pconv-texto');
+    const texto = campo.value.trim();
+    if (!texto) return;
+    campo.value = '';
+    const { error } = await sb.from('portal_mensagens').insert({
+      paciente_id: this._portalPac, autor_id: window.CORTEX_SESSAO.user.id,
+      origem: 'clinica', texto: texto });
+    if (error) { alert(error.message); return; }
+    this.blocoPortal(this._portalPac);
+  },
+
+  async removerDocPortal(id) {
+    if (!confirm('Remover este documento do portal? A familia deixa de ve-lo (o documento original continua no sistema).')) return;
+    const { error } = await sb.from('portal_documentos').delete().eq('id', id);
+    if (error) { alert(error.message); return; }
+    this.blocoPortal(this._portalPac);
   }
 };

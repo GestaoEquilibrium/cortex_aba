@@ -432,11 +432,13 @@ window.MODULOS.plano = {
     const espec = ['Fonoaudiologia', 'Musicoterapia', 'Psicomotricidade', 'Psicopedagogia',
       'Psicoterapia ABA', 'Psicoterapia Convencional', 'Terapia Ocupacional', 'Outras: ____________'];
 
+    window._docPortal = { paciente_id: pl.paciente_id, tipo: 'pt', titulo: 'Plano Terapeutico' };
     document.getElementById('doc-eq-corpo').innerHTML =
       '<div class="pagina-cabecalho nao-imprime">' +
       '  <div><button class="btn-voltar" onclick="document.getElementById(\'doc-eq-overlay\').remove()">&larr; Fechar</button>' +
       '  <h2>Plano Terapeutico &middot; documento oficial</h2></div>' +
       '  <button class="btn btn-primario" onclick="window.print()">&#128424; Imprimir / PDF</button>' +
+      portalBtn() +
       '</div>' +
 
       '<div class="doc-eq">' +

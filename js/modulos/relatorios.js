@@ -20,7 +20,7 @@ window.MODULOS.relatorios = {
 
   // ─────────────── ABA RELATORIOS DO PRONTUARIO ───────────────
 
-  async htmlDoPaciente(pacienteId) {
+  async htmlDoPacienteBase(pacienteId) {
     this._pacienteId = pacienteId;
     const { data } = await sb.from('relatorios_mensais')
       .select('id, mes, status, liberado_em, elaborado:profiles!relatorios_mensais_elaborado_por_fkey(nome)')
@@ -439,5 +439,40 @@ window.MODULOS.relatorios = {
       '  <span>Documento gerado pelo CORTEX aba &middot; ' + new Date().toLocaleDateString('pt-BR') + '</span>' +
       '</div>' +
       '</div>';
+  },
+
+  // ─────────────── Balcao da aba Relatorios ───────────────
+
+  async htmlDoPaciente(pacienteId) {
+    this._pacRel = pacienteId;
+    const base = await this.htmlDoPacienteBase(pacienteId);
+    const barra =
+      '<div class="aba-acoes">' +
+      '<button class="btn btn-primario" onclick="MODULOS.relatorios.escolherSessao(\'' + pacienteId + '\')">&#128196; Relatorio da sessao</button>' +
+      '<button class="btn btn-fantasma" onclick="MODULOS.programas.modalCompilado(\'' + pacienteId + '\')">&#128200; Relatorio do mes (compilado)</button>' +
+      '</div>' +
+      '<p class="sub" style="margin:-4px 0 10px">Relatorio da sessao junta tudo daquele dia: programas, tentativas, grafico e evolucao. O do mes compila todas as sessoes do periodo.</p>';
+    return barra + base;
+  },
+
+  async escolherSessao(pacienteId) {
+    const { data } = await sb.from('sessoes')
+      .select('id, data, hora_inicio, status')
+      .eq('paciente_id', pacienteId)
+      .not('status', 'in', '("falta","cancelada")')
+      .lte('data', new Date().toISOString().slice(0, 10))
+      .order('data', { ascending: false }).order('hora_inicio', { ascending: false })
+      .limit(20);
+    const lista = data || [];
+    if (!lista.length) { alert('Nenhuma sessao realizada ainda.'); return; }
+    abrirModal('Relatorio da sessao',
+      '<p class="sub" style="margin-bottom:8px">Escolha a sessao (20 mais recentes):</p>' +
+      lista.map(s =>
+        '<div class="linha-doc clicavel" onclick="fecharModal(); MODULOS.programas.docEvolucaoDiaria(\'' + s.id + '\')">' +
+        '<div><b>' + s.data.split('-').reverse().join('/') + '</b>' +
+        '<small>' + (s.hora_inicio ? 'as ' + s.hora_inicio.slice(0, 5) : '') +
+        (s.status === 'concluida' ? ' &middot; concluida' : ' &middot; ' + s.status.replace('_', ' ')) + '</small></div>' +
+        '<span class="selo ' + (s.status === 'concluida' ? 'selo-ok' : 'selo-warn') + '">Abrir</span>' +
+        '</div>').join(''));
   }
 };

@@ -542,18 +542,12 @@ window.MODULOS.programas = {
       .in('status', ['agendada', 'checkin', 'em_atendimento'])
       .order('hora_inicio').limit(1);
 
-    let sessaoId = existente && existente[0] ? existente[0].id : null;
+    const sessaoId = existente && existente[0] ? existente[0].id : null;
     if (!sessaoId) {
-      const agora = new Date().toTimeString().slice(0, 5) + ':00';
-      const { data: nova, error } = await sb.from('sessoes').insert({
-        paciente_id: pacienteId,
-        data: hoje,
-        hora_inicio: agora,
-        aplicador_id: window.CORTEX_SESSAO.user.id,
-        status: 'em_atendimento'
-      }).select('id').single();
-      if (error) { alert('Nao foi possivel iniciar o atendimento: ' + error.message); return; }
-      sessaoId = nova.id;
+      alert('Nenhuma sessao agendada para este paciente hoje.\n\n' +
+        'O atendimento e sempre vinculado a uma sessao da Agenda: agende (ou peca a recepcao) e volte aqui. ' +
+        'Assim os programas e a evolucao ficam presos a data e ao horario certos.');
+      return;
     }
     this.abrirFolha(sessaoId, true);
   },

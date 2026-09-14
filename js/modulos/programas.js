@@ -359,6 +359,8 @@ window.MODULOS.programas = {
       html += '<button class="btn btn-fantasma" title="Escolha um programa da biblioteca para este paciente." ' +
         'onclick="MODULOS.programas.modalAtribuir(\'' + pacienteId + '\')">+ Adicionar programa</button>';
     }
+    html += '<button class="btn btn-fantasma" title="Relatorio compilado: um grafico por programa juntando todas as sessoes do periodo, dias por cores." ' +
+      'onclick="MODULOS.programas.modalCompilado(\'' + pacienteId + '\')">&#128200; Compilado</button>';
     this._progFiltro = this._progFiltro || 'em_intervencao';
     const filtros = [['em_intervencao', 'Em intervencao', nInt], ['na_fila', 'Na fila', nFila], ['dominado', 'Dominados', nDom]];
     html += '<div class="filtro-chips">' + filtros.map(([v, r, n]) =>
@@ -1641,5 +1643,241 @@ window.MODULOS.programas = {
       botao.disabled = false;
       botao.textContent = 'Lancar';
     }
+  },
+
+  // ═══════════ RELATORIO COMPILADO (mensal / semestral) ═══════════
+
+  COR_DIA: ['#1468B2', '#56C4CF', '#F3B63D', '#E9586A', '#7C6FD0', '#3E9C6E',
+            '#0E4E86', '#2AA7B5', '#D9930D', '#BE123C', '#5B4FB0', '#2F7A55'],
+
+  modalCompilado(pacienteId) {
+    const mes = new Date().toISOString().slice(0, 7);
+    abrirModal('Relatorio compilado',
+      '<p class="sub" style="margin-bottom:10px">Um grafico por programa com todas as tentativas de todas as sessoes do periodo, cada dia numa cor.</p>' +
+      '<div class="grade-form">' +
+      '<div class="campo"><label>Tipo</label><select id="rc-tipo">' +
+      '<option value="mensal">Mensal (mes escolhido)</option>' +
+      '<option value="semestral">Semestral (evolucao por meses)</option></select></div>' +
+      '<div class="campo"><label>Mes de referencia</label><input type="month" id="rc-mes" value="' + mes + '"></div>' +
+      '</div>' +
+      '<div class="barra-acoes"><button class="btn btn-primario" ' +
+      'onclick="fecharModal(); MODULOS.programas.docCompilado(\'' + pacienteId + '\', ' +
+      'document.getElementById(\'rc-tipo\') ? null : null)">Gerar</button></div>');
+    // ligar o gerar com os valores lidos na hora
+    setTimeout(() => {
+      const btn = document.querySelector('#modal-fundo .btn-primario');
+      if (btn) btn.onclick = () => {
+        const tipo = document.getElementById('rc-tipo').value;
+        const m = document.getElementById('rc-mes').value;
+        fecharModal();
+        this.docCompilado(pacienteId, tipo, m);
+      };
+    }, 30);
+  },
+
+  async docCompilado(pacienteId, tipo, mesRef) {
+    tipo = tipo || 'mensal';
+    mesRef = mesRef || new Date().toISOString().slice(0, 7);
+    const fimD = new Date(mesRef + '-01T12:00:00');
+    fimD.setMonth(fimD.getMonth() + 1); fimD.setDate(0);
+    const fim = fimD.toISOString().slice(0, 10);
+    const iniD = new Date(mesRef + '-01T12:00:00');
+    if (tipo === 'semestral') iniD.setMonth(iniD.getMonth() - 5);
+    const ini = iniD.toISOString().slice(0, 10);
+
+    document.getElementById('doc-eq-overlay')?.remove();
+    const ov = document.createElement('div');
+    ov.id = 'doc-eq-overlay';
+    ov.className = 'folha-overlay';
+    ov.innerHTML = '<div class="folha-pagina" id="doc-eq-corpo" style="max-width:980px"><p class="sub">Compilando as sessoes...</p></div>';
+    document.body.appendChild(ov);
+
+    const [rPac, rSes, rPei] = await Promise.all([
+      sb.from('pacientes').select('nome, data_nascimento').eq('id', pacienteId).single(),
+      sb.from('sessoes').select('id, data').eq('paciente_id', pacienteId)
+        .eq('status', 'concluida').gte('data', ini).lte('data', fim).order('data'),
+      sb.from('peis').select('id, pei_metas(area, meta, prazo)').eq('paciente_id', pacienteId)
+        .eq('status', 'ativo').maybeSingle()
+    ]);
+    const pac = rPac.data;
+    const sessoes = rSes.data || [];
+    if (!pac || !sessoes.length) {
+      document.getElementById('doc-eq-corpo').innerHTML =
+        '<div class="pagina-cabecalho"><div><button class="btn-voltar" onclick="document.getElementById(\'doc-eq-overlay\').remove()">&larr; Fechar</button>' +
+        '<h2>Relatorio compilado</h2></div></div><div class="cartao"><p class="sub">Nenhuma sessao concluida no periodo.</p></div>';
+      return;
+    }
+    const ids = sessoes.map(s => s.id);
+    const dataDe = {};
+    sessoes.forEach(s => { dataDe[s.id] = s.data; });
+
+    const [rTent, rPsr, rPP] = await Promise.all([
+      sb.from('registros_tentativas')
+        .select('sessao_id, paciente_programa_id, ordem, resposta').in('sessao_id', ids).order('ordem'),
+      sb.from('programa_sessao_registros')
+        .select('sessao_id, paciente_programa_id, pct_corretos').in('sessao_id', ids),
+      sb.from('paciente_programas').select('id, status, programas(nome, area, niveis)')
+        .eq('paciente_id', pacienteId)
+    ]);
+    const ppDe = {};
+    (rPP.data || []).forEach(x => { ppDe[x.id] = x; });
+
+    // Agrupar tentativas: programa -> sessao(data) -> lista
+    const porProg = {};
+    (rTent.data || []).forEach(t => {
+      if (t.resposta === 'I') t.resposta = 'C';
+      const d = dataDe[t.sessao_id];
+      if (!d) return;
+      const P = porProg[t.paciente_programa_id] = porProg[t.paciente_programa_id] || {};
+      (P[t.sessao_id] = P[t.sessao_id] || { data: d, lista: [] }).lista.push(t);
+    });
+
+    const fmtD = d => d.split('-').reverse().join('/');
+    let corpo = '';
+
+    if (tipo === 'mensal') {
+      Object.entries(porProg).forEach(([ppId, sesMap]) => {
+        const pp = ppDe[ppId];
+        if (!pp) return;
+        const blocos = Object.entries(sesMap)
+          .sort((a, b) => a[1].data.localeCompare(b[1].data) || a[0].localeCompare(b[0]));
+        corpo += '<h2 style="margin-top:16px"><span class="ponto deq-azul"></span>' +
+          escaparHtml(pp.programas.nome) + '</h2>' +
+          '<div class="deq-caixa" style="padding:12px 8px">' +
+          this.graficoCompilado(pp.programas.niveis, blocos) + '</div>';
+      });
+      // Metas do PEI e andamento
+      const metas = rPei.data ? (rPei.data.pei_metas || []) : [];
+      if (metas.length) {
+        const andamento = m => {
+          const pp = (rPP.data || []).find(x =>
+            x.programas && x.programas.nome.toLowerCase() === (m.meta || '').slice(0, 120).toLowerCase());
+          if (!pp) return '<span style="color:var(--eq-cinza)">meta clinica (sem programa vinculado)</span>';
+          const rot = { na_fila: 'Na fila', em_intervencao: 'Em intervencao', dominado: '<b style="color:#15803D">Dominado</b>' };
+          return rot[pp.status] || pp.status;
+        };
+        corpo += '<h2 style="margin-top:16px"><span class="ponto deq-teal"></span>Metas do PEI e andamento</h2>' +
+          '<table class="deq-freq"><tr><th style="text-align:left; padding-left:10px">Area</th>' +
+          '<th style="text-align:left">Meta</th><th>Prazo</th><th>Andamento</th></tr>' +
+          metas.map(m => '<tr><td style="width:auto; text-align:left; padding:6px 10px">' + escaparHtml(m.area || '-') + '</td>' +
+            '<td style="width:auto; text-align:left; padding:6px 10px">' + escaparHtml(m.meta || '') + '</td>' +
+            '<td style="width:auto">' + escaparHtml(m.prazo || '-') + '</td>' +
+            '<td style="width:auto">' + andamento(m) + '</td></tr>').join('') +
+          '</table>';
+      }
+    } else {
+      // Semestral: % de corretos por mes, por programa
+      const porMes = {};
+      (rPsr.data || []).forEach(f => {
+        const mes = (dataDe[f.sessao_id] || '').slice(0, 7);
+        if (!mes) return;
+        const P = porMes[f.paciente_programa_id] = porMes[f.paciente_programa_id] || {};
+        (P[mes] = P[mes] || []).push(f.pct_corretos || 0);
+      });
+      const meses = [];
+      const c = new Date(ini + 'T12:00:00');
+      for (let i = 0; i < 6; i++) { meses.push(c.toISOString().slice(0, 7)); c.setMonth(c.getMonth() + 1); }
+      const ROT_MES = m => m.slice(5) + '/' + m.slice(2, 4);
+
+      Object.entries(porMes).forEach(([ppId, mm]) => {
+        const pp = ppDe[ppId];
+        if (!pp) return;
+        const medias = meses.map(m => {
+          const l = mm[m];
+          return l ? Math.round(l.reduce((s, x) => s + x, 0) / l.length) : null;
+        });
+        const W = 640, H = 150, ESQ = 44, TOPO = 16, BASE = H - 28;
+        const passo = (W - ESQ - 20) / 5;
+        const y = pct => BASE - (pct / 100) * (BASE - TOPO);
+        const pontos = medias.map((v, i) => v === null ? null : (ESQ + i * passo) + ',' + y(v)).filter(Boolean);
+        corpo += '<h2 style="margin-top:16px"><span class="ponto deq-azul"></span>' +
+          escaparHtml(pp.programas.nome) + ' <small style="font-weight:600">&middot; % de corretos por mes</small></h2>' +
+          '<div class="deq-caixa"><svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%; height:auto">' +
+          [0, 50, 100].map(g => '<line x1="' + ESQ + '" y1="' + y(g) + '" x2="' + (W - 16) + '" y2="' + y(g) +
+            '" stroke="#DFE6EC" stroke-dasharray="3 4"/><text x="' + (ESQ - 6) + '" y="' + (y(g) + 3) +
+            '" text-anchor="end" font-size="9" fill="#94A3B8">' + g + '%</text>').join('') +
+          (pontos.length > 1 ? '<polyline fill="none" stroke="#1468B2" stroke-width="2.5" points="' + pontos.join(' ') + '"/>' : '') +
+          medias.map((v, i) => {
+            const x = ESQ + i * passo;
+            return '<text x="' + x + '" y="' + (H - 8) + '" text-anchor="middle" font-size="9.5" font-weight="700" fill="#64748B">' +
+              ROT_MES(meses[i]) + '</text>' +
+              (v === null ? '' :
+                '<circle cx="' + x + '" cy="' + y(v) + '" r="7" fill="#fff" stroke="' + this.COR_DIA[i] + '" stroke-width="3"/>' +
+                '<text x="' + x + '" y="' + (y(v) - 11) + '" text-anchor="middle" font-size="10.5" font-weight="800" fill="' +
+                this.COR_DIA[i] + '">' + v + '%</text>');
+          }).join('') +
+          '</svg></div>';
+      });
+    }
+
+    window._docPortal = { paciente_id: pacienteId, tipo: 'outro',
+      titulo: 'Relatorio Compilado ' + (tipo === 'mensal' ? 'Mensal' : 'Semestral') };
+    document.getElementById('doc-eq-corpo').innerHTML =
+      '<div class="pagina-cabecalho nao-imprime">' +
+      '  <div><button class="btn-voltar" onclick="document.getElementById(\'doc-eq-overlay\').remove()">&larr; Fechar</button>' +
+      '  <h2>Relatorio compilado &middot; ' + (tipo === 'mensal' ? 'mensal' : 'semestral') + '</h2></div>' +
+      '  <button class="btn btn-primario" onclick="window.print()">&#128424; Imprimir / PDF</button>' +
+      portalBtn() +
+      '</div>' +
+      '<div class="doc-eq">' +
+      '<div class="deq-cab"><img src="icones/equilibrium.png" alt="Equilibrium">' +
+      '<div class="deq-cab-t"><h1>RELAT&Oacute;RIO COMPILADO &middot; ' + (tipo === 'mensal' ? 'MENSAL' : 'SEMESTRAL') + '</h1>' +
+      '<p>Equilibrium Terapia Infantil &middot; ' + fmtD(ini) + ' a ' + fmtD(fim) + ' &middot; ' +
+      sessoes.length + ' sessao(oes) concluida(s)</p></div></div>' +
+      '<div class="deq-caixa deq-dados" style="grid-template-columns:1fr 1fr; margin-top:8px">' +
+      '<div><small>Paciente</small><b>' + escaparHtml(pac.nome) + '</b></div>' +
+      '<div><small>Nascimento</small><b>' + (pac.data_nascimento ? fmtD(pac.data_nascimento) : '-') + '</b></div>' +
+      '</div>' +
+      (corpo || '<p class="sub" style="margin-top:14px">Sem tentativas registradas no periodo.</p>') +
+      '<div class="deq-rodape"><span>Equilibrium Terapia Infantil &middot; Uberl&acirc;ndia/MG</span>' +
+      '<span class="pontos"><i style="background:var(--eq-teal)"></i><i style="background:var(--eq-amarelo)"></i>' +
+      '<i style="background:var(--eq-rosa)"></i><i style="background:var(--eq-azul)"></i></span>' +
+      '<span>Gerado pelo CORTEX aba &middot; ' + new Date().toLocaleDateString('pt-BR') + '</span></div>' +
+      '</div>';
+  },
+
+  // Grafico compilado: X = tentativas em blocos por sessao (cor do dia), Y = niveis
+  graficoCompilado(niveisPrograma, blocos) {
+    const niveis = this.ORDEM_GRAFICO.filter(n => this.normalizarNiveis(niveisPrograma).includes(n));
+    const total = blocos.reduce((s, [, b]) => s + b.lista.length, 0);
+    if (!total) return '<p class="sub">Sem tentativas.</p>';
+    const PX = Math.max(11, Math.min(18, Math.floor(560 / total)));
+    const ESQ = 34, TOPO = 12, LIN = 15, BASE = TOPO + niveis.length * LIN;
+    const W = ESQ + total * PX + blocos.length * 10 + 16;
+    const H = BASE + 30;
+    const yDe = s => TOPO + (niveis.length - 1 - niveis.indexOf(s)) * LIN + LIN / 2;
+
+    let svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%; height:auto">';
+    niveis.forEach(n => {
+      svg += '<line x1="' + ESQ + '" y1="' + yDe(n) + '" x2="' + (W - 8) + '" y2="' + yDe(n) +
+        '" stroke="#EDF2F6"/>' +
+        '<text x="' + (ESQ - 6) + '" y="' + (yDe(n) + 3) + '" text-anchor="end" font-size="8.5" font-weight="800" fill="' +
+        this.corNivel(n) + '">' + n + '</text>';
+    });
+    let x = ESQ + 6;
+    blocos.forEach(([, b], bi) => {
+      const cor = this.COR_DIA[bi % this.COR_DIA.length];
+      const pts = [];
+      b.lista.forEach(t => {
+        if (niveis.includes(t.resposta)) {
+          pts.push(x + ',' + yDe(t.resposta));
+          svg += '<circle cx="' + x + '" cy="' + yDe(t.resposta) + '" r="4.5" fill="#fff" stroke="' + cor + '" stroke-width="2.4"/>';
+        }
+        x += PX;
+      });
+      if (pts.length > 1) svg = svg.replace('<circle cx="' + pts[0].split(',')[0] + '"',
+        '<polyline fill="none" stroke="' + cor + '" stroke-width="1.8" opacity=".75" points="' + pts.join(' ') + '"/>' +
+        '<circle cx="' + pts[0].split(',')[0] + '"');
+      const meioX = x - (b.lista.length * PX) / 2 - PX / 2;
+      svg += '<text x="' + meioX + '" y="' + (BASE + 14) + '" text-anchor="middle" font-size="9" font-weight="800" fill="' + cor + '">' +
+        b.data.slice(8, 10) + '/' + b.data.slice(5, 7) + '</text>' +
+        '<text x="' + meioX + '" y="' + (BASE + 24) + '" text-anchor="middle" font-size="8" fill="#94A3B8">' +
+        b.lista.filter(t => t.resposta === 'C').length + '/' + b.lista.length + ' C</text>';
+      x += 10;
+      if (bi < blocos.length - 1) svg += '<line x1="' + (x - 5) + '" y1="' + TOPO + '" x2="' + (x - 5) + '" y2="' + BASE +
+        '" stroke="#DFE6EC" stroke-dasharray="2 4"/>';
+    });
+    svg += '</svg>';
+    return svg;
   }
 };

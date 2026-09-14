@@ -2224,3 +2224,17 @@
     .tabela-quadro th:not(:first-child):not(:last-child),
     .tabela-quadro td:not(:first-child):not(:last-child) { width: 118px; }
 }
+
+/* ── Cartao de programa: apagar (coordenacao) ─────────────────────────── */
+.prog-cartao { position: relative; }
+.prog-apagar {
+    position: absolute; top: 8px; right: 8px;
+    width: 22px; height: 22px; border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--ink-muted);
+    font-size: 11px; line-height: 1; cursor: pointer;
+    display: none; align-items: center; justify-content: center;
+}
+.prog-cartao:hover .prog-apagar { display: inline-flex; }
+.prog-apagar:hover { background: #FEF2F2; border-color: #E9586A; color: #E9586A; }

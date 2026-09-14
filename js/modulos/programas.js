@@ -412,6 +412,11 @@ window.MODULOS.programas = {
         (perm('programas') === 'E' ? '. Toque no cartao e ajuste em Tentativas.' : '') + '">' +
         (pp.tentativas || pp.programas.tentativas_padrao || 10) + ' tentativas' + (pp.tentativas ? ' *' : '') + '</span>' +
         '</div>' +
+        (['direcao', 'coordenador'].includes(window.CORTEX_SESSAO.profile.perfil)
+          ? '<button class="prog-apagar" title="Remover este programa do paciente (coordenacao)" ' +
+            'onclick="event.stopPropagation(); MODULOS.programas.apagarDoPaciente(\'' + pp.id + '\', \'' +
+            escaparHtml(pp.programas.nome).replace(/'/g, '') + '\')">&#10005;</button>'
+          : '') +
         '<b class="prog-nome">' + escaparHtml(pp.programas.nome) + '</b>' +
         '<div class="prog-progresso"><div class="prog-preench" style="width:' + (pct || 0) + '%; background:' + cor + '"></div></div>' +
         '<small class="prog-meta">' +
@@ -1879,5 +1884,26 @@ window.MODULOS.programas = {
     });
     svg += '</svg>';
     return svg;
+  },
+
+  // ─────────────── Coordenacao remove programa do paciente ───────────────
+
+  async apagarDoPaciente(ppId, nome) {
+    const { count } = await sb.from('registros_tentativas')
+      .select('sessao_id', { count: 'exact', head: true })
+      .eq('paciente_programa_id', ppId);
+    const aviso = count
+      ? 'O programa "' + nome + '" tem ' + count + ' tentativa(s) registrada(s) em sessoes.\n\n' +
+        'Apagar remove o programa DESTE paciente e TODO o historico dele (tentativas e fechamentos por sessao). ' +
+        'Os relatorios ja gerados em PDF nao mudam.\n\nApagar mesmo assim?'
+      : 'Remover o programa "' + nome + '" deste paciente?';
+    if (!confirm(aviso)) return;
+    if (count && !confirm('Confirmacao final: apagar o historico de ' + count + ' tentativa(s) de "' + nome + '"?')) return;
+
+    await sb.from('registros_tentativas').delete().eq('paciente_programa_id', ppId);
+    await sb.from('programa_sessao_registros').delete().eq('paciente_programa_id', ppId);
+    const { error } = await sb.from('paciente_programas').delete().eq('id', ppId);
+    if (error) { alert(error.message); return; }
+    if (this._pacProgPaciente && window.MODULOS.pacientes) MODULOS.pacientes.telaDetalhe(this._pacProgPaciente, 'programas');
   }
 };

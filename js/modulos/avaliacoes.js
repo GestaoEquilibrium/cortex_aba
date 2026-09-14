@@ -475,14 +475,17 @@ window.MODULOS.avaliacoes = {
             '<button class="btn btn-primario" onclick="MODULOS.avaliacoes.docSS(\'' + pacienteId + '\')">&#128196; Ver documento</button>' +
             '</div>'
           : '') +
-        concluidas.filter(a => a.protocolo !== 'ss').map(a =>
-          '<div class="linha-doc"><div><b>QADI-R</b>' +
-          '<small>Concluida em ' + new Date(a.concluido_em).toLocaleDateString('pt-BR') + '</small></div>' +
-          '<div class="pac-selos">' +
-          '<button class="btn btn-primario" onclick="MODULOS.avaliacoes.docQADI(\'' + a.id + '\')">&#128196; Ver documento</button>' +
-          (perm('pei') === 'E'
-            ? '<button class="btn-chip" onclick="MODULOS.pei.abrirDevolutiva(\'' + a.id + '\')">Devolutiva</button>' : '') +
-          '</div></div>').join('') +
+        (concluidas.some(a => a.protocolo === 'qadi')
+          ? '<div class="linha-doc"><div><b>QADI-R &middot; consolidado</b>' +
+            '<small>' + concluidas.filter(a => a.protocolo === 'qadi').length +
+            ' aplicacao(oes) &middot; pontuacao adquirida x esperada por area (regra Equilibrium)</small></div>' +
+            '<div class="pac-selos">' +
+            '<button class="btn btn-primario" onclick="MODULOS.avaliacoes.docQADI(\'' + pacienteId + '\')">&#128196; Ver documento</button>' +
+            (perm('pei') === 'E'
+              ? '<button class="btn-chip" onclick="MODULOS.pei.abrirDevolutiva(\'' +
+                concluidas.filter(a => a.protocolo === 'qadi')[0].id + '\')">Devolutiva</button>' : '') +
+            '</div></div>'
+          : '') +
         '</div>';
     }
     return html;
@@ -622,33 +625,58 @@ window.MODULOS.avaliacoes = {
       '</div>';
   },
 
-  async docQADI(avaliacaoId) {
+  async docQADI(pacienteId) {
     await this.carregarQuestoes();
     const ov = this.abrirDocOverlay();
 
-    const { data: av } = await sb.from('avaliacoes')
-      .select('*, paciente_id, pacientes(nome, data_nascimento), avaliador:profiles!avaliacoes_avaliador_id_fkey(nome)')
-      .eq('id', avaliacaoId).single();
-    if (!av) { ov.remove(); return; }
-    const { data: resps } = await sb.from('avaliacao_respostas')
-      .select('questao_id, resposta').eq('avaliacao_id', avaliacaoId);
-    const mapa = {};
-    (resps || []).forEach(r => { mapa[r.questao_id] = r.resposta; });
+    const [rAvs, rPac] = await Promise.all([
+      sb.from('avaliacoes').select('id, concluido_em, oral, observacoes, avaliador:profiles!avaliacoes_avaliador_id_fkey(nome)')
+        .eq('paciente_id', pacienteId).eq('protocolo', 'qadi').eq('status', 'concluida')
+        .order('concluido_em'),
+      sb.from('pacientes').select('nome, data_nascimento').eq('id', pacienteId).single()
+    ]);
+    const avs = (rAvs.data || []).slice(0, 4);
+    const pac = rPac.data;
+    if (!avs.length || !pac) { ov.remove(); return; }
 
-    const faixas = this.FAIXAS.filter(f => this.questoes.some(q => q.faixa === f && mapa[q.id]));
-    const linhas = this.AREAS.map(area => {
-      let gs = 0, gv = 0;
-      const cels = faixas.map(f => {
-        const qs = this.questoes.filter(q => q.faixa === f && q.area === area);
-        const sim = qs.filter(q => mapa[q.id] === 'S').length;
-        const val = qs.filter(q => ['S', 'N'].includes(mapa[q.id])).length;
-        gs += sim; gv += val;
-        return val ? Math.round(sim * 100 / val) + '%' : '&mdash;';
-      });
-      return { area, cels, geral: gv ? Math.round(gs * 100 / gv) : null };
+    const { data: resps } = await sb.from('avaliacao_respostas')
+      .select('avaliacao_id, questao_id, resposta').in('avaliacao_id', avs.map(a => a.id));
+    const porAv = {};
+    (resps || []).forEach(r => {
+      (porAv[r.avaliacao_id] = porAv[r.avaliacao_id] || {})[r.questao_id] = r.resposta;
     });
 
-    window._docPortal = { paciente_id: av.paciente_id, tipo: 'avaliacao', titulo: 'QADI-R' };
+    // Regra Equilibrium (planilha PONTUACAO): por area, Adquirida = SIM nas
+    // faixas aplicadas da AV; Esperada = total de itens dessas faixas.
+    const calc = avs.map(av => {
+      const mapa = porAv[av.id] || {};
+      const faixas = this.FAIXAS.filter(f => this.questoes.some(q => q.faixa === f && mapa[q.id]));
+      const areas = this.AREAS.map(area => {
+        const qs = this.questoes.filter(q => faixas.includes(q.faixa) && q.area === area);
+        const adq = qs.filter(q => mapa[q.id] === 'S').length;
+        return { area, adq, esp: qs.length, pct: qs.length ? Math.round(adq * 100 / qs.length) : null };
+      });
+      const tAdq = areas.reduce((s, x) => s + x.adq, 0);
+      const tEsp = areas.reduce((s, x) => s + x.esp, 0);
+      return { av, faixas, areas, tAdq, tEsp, tPct: tEsp ? Math.round(tAdq * 100 / tEsp) : 0 };
+    });
+
+    const fmtD = d => new Date(d).toLocaleDateString('pt-BR');
+
+    const grafico = '<div style="display:grid; gap:10px">' +
+      this.AREAS.map(area =>
+        '<div><div style="font-size:11px; font-weight:800; color:var(--eq-azul-escuro); margin-bottom:3px">' + area + '</div>' +
+        calc.map((c, i) => {
+          const x = c.areas.find(p => p.area === area);
+          if (x.pct === null) return '';
+          return '<div style="display:flex; align-items:center; gap:8px; margin-top:2px">' +
+            '<small style="width:34px; font-weight:800; color:' + this.COR_AV[i % 6] + '">AV' + (i + 1) + '</small>' +
+            '<div style="flex:1; height:9px; background:#EFF4F8; border-radius:5px; overflow:hidden">' +
+            '<i style="display:block; height:100%; width:' + x.pct + '%; background:' + this.COR_AV[i % 6] + '; border-radius:5px"></i></div>' +
+            '<b style="width:70px; text-align:right; font-size:11px">' + x.adq + '/' + x.esp + ' &middot; ' + x.pct + '%</b></div>';
+        }).join('') + '</div>').join('') + '</div>';
+
+    window._docPortal = { paciente_id: pacienteId, tipo: 'avaliacao', titulo: 'QADI-R - Consolidado' };
     document.getElementById('doc-eq-corpo').innerHTML =
       '<div class="pagina-cabecalho nao-imprime">' +
       '  <div><button class="btn-voltar" onclick="document.getElementById(\'doc-eq-overlay\').remove()">&larr; Fechar</button>' +
@@ -657,37 +685,48 @@ window.MODULOS.avaliacoes = {
       portalBtn() +
       '</div>' +
       '<div class="doc-eq">' +
-      this.cabecalhoDoc('QADI-R', 'Question&aacute;rio de Avalia&ccedil;&atilde;o do Desenvolvimento Infantil') +
-      '<div class="deq-caixa deq-dados" style="grid-template-columns:repeat(4, 1fr); margin-top:8px">' +
-      '  <div><small>Paciente</small><b>' + escaparHtml(av.pacientes.nome) + '</b></div>' +
-      '  <div><small>Avaliador</small><b>' + escaparHtml(av.avaliador ? av.avaliador.nome : '-') + '</b></div>' +
-      '  <div><small>Conclu&iacute;da em</small><b>' + new Date(av.concluido_em).toLocaleDateString('pt-BR') + '</b></div>' +
-      '  <div style="border-bottom:none"><small>Comunica&ccedil;&atilde;o</small><b>' +
-           (av.oral === true ? 'Oral' : av.oral === false ? 'N&atilde;o oral' : '-') + '</b></div>' +
+      this.cabecalhoDoc('QADI-R &middot; PONTUA&Ccedil;&Atilde;O', 'Question&aacute;rio de Avalia&ccedil;&atilde;o do Desenvolvimento Infantil &middot; regra Equilibrium') +
+      '<div class="deq-caixa deq-dados" style="grid-template-columns:1fr 1fr; margin-top:8px">' +
+      '  <div><small>Paciente</small><b>' + escaparHtml(pac.nome) + '</b></div>' +
+      '  <div><small>Nascimento</small><b>' + (pac.data_nascimento ? pac.data_nascimento.split('-').reverse().join('/') : '-') + '</b></div>' +
       '</div>' +
-      '<h2 style="margin-top:12px"><span class="ponto deq-azul"></span>Resultado por &aacute;rea e faixa</h2>' +
-      '<p style="font-size:10.5px; color:var(--eq-cinza); margin:2px 0 6px">Percentual de SIM sobre respostas v&aacute;lidas (NA exclu&iacute;do). Faixas aplicadas: ' +
-      faixas.join(' &middot; ') + '.</p>' +
+      '<h2 style="margin-top:12px"><span class="ponto deq-azul"></span>Aplica&ccedil;&otilde;es</h2>' +
+      '<div class="deq-caixa deq-dados" style="grid-template-columns:repeat(' + calc.length + ', 1fr)">' +
+      calc.map((c, i) =>
+        '<div' + (i === calc.length - 1 ? ' style="border-bottom:none"' : '') + '><small style="color:' + this.COR_AV[i % 6] + '">AV' + (i + 1) + '</small>' +
+        '<b>' + fmtD(c.av.concluido_em) + '<br><span style="font-size:10px; font-weight:600">' +
+        escaparHtml(c.av.avaliador ? c.av.avaliador.nome.split(' ')[0] : '-') +
+        (c.av.oral === true ? ' &middot; Oral' : c.av.oral === false ? ' &middot; N&atilde;o oral' : '') +
+        ' &middot; faixas ' + c.faixas.map(f => f.split(' ')[0] + '-' + f.split(' ')[2]).join(', ') +
+        '</span></b></div>').join('') +
+      '</div>' +
+      '<h2 style="margin-top:14px"><span class="ponto deq-teal"></span>Pontua&ccedil;&atilde;o adquirida &times; esperada</h2>' +
       '<table class="deq-freq"><tr><th style="text-align:left; padding-left:10px">&Aacute;rea</th>' +
-      faixas.map(f => '<th>' + f.replace(' anos', '').replace(' ano', '').replace(' a ', '&ndash;') + 'a</th>').join('') +
-      '<th>Geral</th></tr>' +
-      linhas.map(l =>
-        '<tr><td style="text-align:left; padding:6px 10px; width:auto">' + l.area + '</td>' +
-        l.cels.map(c => '<td style="width:auto">' + c + '</td>').join('') +
-        '<td style="width:auto"><b>' + (l.geral === null ? '&mdash;' : l.geral + '%') + '</b></td></tr>').join('') +
-      '</table>' +
-      '<h2 style="margin-top:14px"><span class="ponto deq-teal"></span>Perfil geral</h2>' +
-      '<div class="deq-caixa" style="display:grid; gap:8px">' +
-      linhas.map(l =>
-        '<div style="display:flex; align-items:center; gap:8px">' +
-        '<small style="width:170px; font-weight:700">' + l.area + '</small>' +
-        '<div style="flex:1; height:9px; background:#EFF4F8; border-radius:5px; overflow:hidden">' +
-        '<i style="display:block; height:100%; width:' + (l.geral || 0) + '%; background:var(--eq-azul); border-radius:5px"></i></div>' +
-        '<b style="width:44px; text-align:right; font-size:11px">' + (l.geral === null ? '&mdash;' : l.geral + '%') + '</b></div>').join('') +
-      '</div>' +
-      (av.observacoes
-        ? '<h2 style="margin-top:14px"><span class="ponto deq-amarelo"></span>Observa&ccedil;&otilde;es</h2>' +
-          '<div class="deq-caixa deq-texto">' + escaparHtml(av.observacoes) + '</div>' : '') +
+      calc.map((c, i) => '<th style="color:' + this.COR_AV[i % 6] + '">AV' + (i + 1) + ' adq.</th>').join('') +
+      '<th>Esperada</th>' +
+      calc.map((c, i) => '<th style="color:' + this.COR_AV[i % 6] + '">AV' + (i + 1) + ' %</th>').join('') +
+      '</tr>' +
+      this.AREAS.map(area => {
+        const cel = calc.map(c => c.areas.find(p => p.area === area));
+        const esp = Math.max(...cel.map(x => x.esp));
+        if (!esp) return '';
+        return '<tr><td style="text-align:left; padding:6px 10px; width:auto">' + area + '</td>' +
+          cel.map(x => '<td style="width:auto">' + (x.pct === null ? '&mdash;' : x.adq) + '</td>').join('') +
+          '<td style="width:auto"><b>' + esp + '</b></td>' +
+          cel.map(x => '<td style="width:auto">' + (x.pct === null ? '&mdash;' : '<b>' + x.pct + '%</b>') + '</td>').join('') +
+          '</tr>';
+      }).join('') +
+      '<tr style="background:#EFF6FC"><td style="text-align:left; padding:6px 10px; width:auto"><b>TOTAL</b></td>' +
+      calc.map(c => '<td style="width:auto"><b>' + c.tAdq + '</b></td>').join('') +
+      '<td style="width:auto"><b>' + Math.max(...calc.map(c => c.tEsp)) + '</b></td>' +
+      calc.map(c => '<td style="width:auto"><b>' + c.tPct + '%</b></td>').join('') +
+      '</tr></table>' +
+      '<h2 style="margin-top:14px"><span class="ponto deq-amarelo"></span>Perfil por &aacute;rea</h2>' +
+      '<div class="deq-caixa">' + grafico + '</div>' +
+      calc.filter(c => c.av.observacoes).map((c, i) =>
+        '<div class="deq-caixa deq-texto" style="margin-top:8px"><b style="font-size:11px">Observa&ccedil;&otilde;es AV' +
+        (i + 1) + ':</b> ' + escaparHtml(c.av.observacoes) + '</div>').join('') +
+      '<p style="font-size:10px; color:var(--eq-cinza); margin-top:10px">Regra de corre&ccedil;&atilde;o Equilibrium: pontua&ccedil;&atilde;o adquirida = respostas SIM nas faixas aplicadas; esperada = total de itens dessas faixas. Percentual = adquirida &divide; esperada.</p>' +
       this.rodapeDoc() +
       '</div>';
   },

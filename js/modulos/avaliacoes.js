@@ -639,6 +639,29 @@ window.MODULOS.avaliacoes = {
         ? '<h2 style="margin-top:14px"><span class="ponto deq-amarelo"></span>Evolu&ccedil;&atilde;o entre aplica&ccedil;&otilde;es</h2>' +
           '<div class="deq-caixa">' + grafTotal + '</div>'
         : '') +
+      (function () {
+        const u = dados[dados.length - 1];
+        const ordenadas = u.porArea.slice().sort((a, b) => b.pct - a.pct);
+        let t = 'Na aplica&ccedil;&atilde;o mais recente (' + fmtD(u.av.concluido_em) + '), o total geral foi de <b>' +
+          u.total + '%</b> das habilidades sociais avaliadas. A &aacute;rea mais desenvolvida &eacute; ' +
+          ordenadas[0].area + ' (' + ordenadas[0].pct + '%), e a de maior necessidade de est&iacute;mulo &eacute; ' +
+          ordenadas[ordenadas.length - 1].area + ' (' + ordenadas[ordenadas.length - 1].pct + '%). ';
+        if (dados.length > 1) {
+          const dif = u.total - dados[0].total;
+          t += 'Entre a AV1 e a AV' + dados.length + ', o total ' +
+            (dif > 0 ? 'evoluiu <b>+' + dif + ' pontos percentuais</b>' :
+             dif < 0 ? 'recuou ' + dif + ' pontos percentuais' : 'manteve-se estavel') + '. ';
+          const ganhos = u.porArea.map(a => {
+            const antes = dados[0].porArea.find(x => x.area === a.area);
+            return { area: a.area, g: a.pct - (antes ? antes.pct : 0) };
+          }).filter(x => x.g > 0).sort((a, b) => b.g - a.g).slice(0, 3);
+          if (ganhos.length) t += 'Maiores ganhos: ' + ganhos.map(x => x.area + ' (+' + x.g + 'pp)').join(', ') + '. ';
+        }
+        t += 'Os itens com menor pontua&ccedil;&atilde;o orientam a prioriza&ccedil;&atilde;o de metas no PEI.';
+        return '<h2 style="margin-top:14px"><span class="ponto deq-rosa"></span>An&aacute;lise</h2>' +
+          '<div class="deq-caixa deq-texto">' + t +
+          '<br><small style="color:var(--eq-cinza)">Texto de apoio gerado automaticamente a partir das pontua&ccedil;&otilde;es; a leitura cl&iacute;nica cabe &agrave; equipe.</small></div>';
+      })() +
       '<p style="font-size:10px; color:var(--eq-cinza); margin-top:10px">Pontua&ccedil;&atilde;o 0&ndash;3 por item; percentual = pontos obtidos sobre o m&aacute;ximo da &aacute;rea. O PEI derivado desta avalia&ccedil;&atilde;o &eacute; elaborado na aba PEI e possui documento pr&oacute;prio.</p>' +
       this.rodapeDoc() +
       '</div>';
@@ -682,18 +705,45 @@ window.MODULOS.avaliacoes = {
 
     const fmtD = d => new Date(d).toLocaleDateString('pt-BR');
 
-    const grafico = '<div style="display:grid; gap:10px">' +
-      this.AREAS.map(area =>
-        '<div><div style="font-size:11px; font-weight:800; color:var(--eq-azul-escuro); margin-bottom:3px">' + area + '</div>' +
-        calc.map((c, i) => {
+    const grafico = '<div style="display:grid; gap:14px; padding:4px 6px">' +
+      this.AREAS.map(area => {
+        const linhas = calc.map((c, i) => {
           const x = c.areas.find(p => p.area === area);
-          if (x.pct === null) return '';
-          return '<div style="display:flex; align-items:center; gap:8px; margin-top:2px">' +
-            '<small style="width:34px; font-weight:800; color:' + this.COR_AV[i % 6] + '">AV' + (i + 1) + '</small>' +
-            '<div style="flex:1; height:9px; background:#EFF4F8; border-radius:5px; overflow:hidden">' +
-            '<i style="display:block; height:100%; width:' + x.pct + '%; background:' + this.COR_AV[i % 6] + '; border-radius:5px"></i></div>' +
-            '<b style="width:70px; text-align:right; font-size:11px">' + x.adq + '/' + x.esp + ' &middot; ' + x.pct + '%</b></div>';
-        }).join('') + '</div>').join('') + '</div>';
+          if (!x || x.pct === null) return '';
+          return '<div style="display:flex; align-items:center; gap:10px; margin-top:4px">' +
+            '<small style="width:36px; font-weight:800; color:' + this.COR_AV[i % 6] + '">AV' + (i + 1) + '</small>' +
+            '<div style="flex:1; height:10px; background:#EFF4F8; border-radius:6px; overflow:hidden">' +
+            '<i style="display:block; height:100%; width:' + x.pct + '%; background:' + this.COR_AV[i % 6] + '; border-radius:6px"></i></div>' +
+            '<b style="width:86px; text-align:right; font-size:11px; white-space:nowrap">' + x.adq + '/' + x.esp + ' &middot; ' + x.pct + '%</b></div>';
+        }).join('');
+        if (!linhas) return '';
+        return '<div><div style="font-size:11.5px; font-weight:800; color:var(--eq-azul-escuro)">' + area + '</div>' + linhas + '</div>';
+      }).join('') + '</div>';
+
+    // Texto de apoio gerado pelo sistema (simples por ora)
+    const ult = calc[calc.length - 1];
+    const comDado = ult.areas.filter(a => a.pct !== null);
+    const fortes = comDado.filter(a => a.pct >= 85).map(a => a.area);
+    const atencao = comDado.filter(a => a.pct < 70).sort((a, b) => a.pct - b.pct);
+    let analise = 'Na aplica&ccedil;&atilde;o mais recente (' + fmtD(ult.av.concluido_em) + '), ' +
+      escaparHtml(pac.nome.split(' ')[0]) + ' alcan&ccedil;ou <b>' + ult.tAdq + ' de ' + ult.tEsp +
+      ' pontos esperados (' + ult.tPct + '%)</b> nas faixas aplicadas. ';
+    if (ult.tPct >= 85) analise += 'O desempenho global mostra-se compat&iacute;vel com o esperado para as faixas avaliadas. ';
+    else if (ult.tPct >= 60) analise += 'O desempenho global indica desenvolvimento em aquisi&ccedil;&atilde;o, com defasagens localizadas. ';
+    else analise += 'O desempenho global indica defasagens importantes, sugerindo prioriza&ccedil;&atilde;o no plano de interven&ccedil;&atilde;o. ';
+    if (fortes.length) analise += 'Destacam-se como pontos fortes: ' + fortes.join(', ') + '. ';
+    if (atencao.length) analise += 'Pontos de aten&ccedil;&atilde;o: ' +
+      atencao.map(a => a.area + ' (' + a.pct + '%)').join(', ') + '. ';
+    if (calc.length > 1) {
+      const dif = ult.tPct - calc[0].tPct;
+      analise += 'Entre a AV1 e a AV' + calc.length + ', o total geral ' +
+        (dif > 0 ? 'evoluiu <b>+' + dif + ' pontos percentuais</b>.' :
+         dif < 0 ? 'recuou ' + dif + ' pontos percentuais.' : 'manteve-se estavel.');
+    }
+    const secAnalise =
+      '<h2 style="margin-top:14px"><span class="ponto deq-rosa"></span>An&aacute;lise</h2>' +
+      '<div class="deq-caixa deq-texto">' + analise +
+      '<br><small style="color:var(--eq-cinza)">Texto de apoio gerado automaticamente a partir das pontua&ccedil;&otilde;es; a leitura cl&iacute;nica cabe &agrave; equipe.</small></div>';
 
     window._docPortal = { paciente_id: pacienteId, tipo: 'avaliacao', titulo: 'QADI-R - Consolidado' };
     document.getElementById('doc-eq-corpo').innerHTML =
@@ -719,29 +769,10 @@ window.MODULOS.avaliacoes = {
         ' &middot; faixas ' + c.faixas.map(f => f.split(' ')[0] + '-' + f.split(' ')[2]).join(', ') +
         '</span></b></div>').join('') +
       '</div>' +
-      '<h2 style="margin-top:14px"><span class="ponto deq-teal"></span>Pontua&ccedil;&atilde;o adquirida &times; esperada</h2>' +
-      '<table class="deq-freq"><tr><th style="text-align:left; padding-left:10px">&Aacute;rea</th>' +
-      calc.map((c, i) => '<th style="color:' + this.COR_AV[i % 6] + '">AV' + (i + 1) + ' adq.</th>').join('') +
-      '<th>Esperada</th>' +
-      calc.map((c, i) => '<th style="color:' + this.COR_AV[i % 6] + '">AV' + (i + 1) + ' %</th>').join('') +
-      '</tr>' +
-      this.AREAS.map(area => {
-        const cel = calc.map(c => c.areas.find(p => p.area === area));
-        const esp = Math.max(...cel.map(x => x.esp));
-        if (!esp) return '';
-        return '<tr><td style="text-align:left; padding:6px 10px; width:auto">' + area + '</td>' +
-          cel.map(x => '<td style="width:auto">' + (x.pct === null ? '&mdash;' : x.adq) + '</td>').join('') +
-          '<td style="width:auto"><b>' + esp + '</b></td>' +
-          cel.map(x => '<td style="width:auto">' + (x.pct === null ? '&mdash;' : '<b>' + x.pct + '%</b>') + '</td>').join('') +
-          '</tr>';
-      }).join('') +
-      '<tr style="background:#EFF6FC"><td style="text-align:left; padding:6px 10px; width:auto"><b>TOTAL</b></td>' +
-      calc.map(c => '<td style="width:auto"><b>' + c.tAdq + '</b></td>').join('') +
-      '<td style="width:auto"><b>' + Math.max(...calc.map(c => c.tEsp)) + '</b></td>' +
-      calc.map(c => '<td style="width:auto"><b>' + c.tPct + '%</b></td>').join('') +
-      '</tr></table>' +
-      '<h2 style="margin-top:14px"><span class="ponto deq-amarelo"></span>Perfil por &aacute;rea</h2>' +
+      
+      '<h2 style="margin-top:14px"><span class="ponto deq-amarelo"></span>Perfil por &aacute;rea &middot; adquirida/esperada</h2>' +
       '<div class="deq-caixa">' + grafico + '</div>' +
+      secAnalise +
       calc.filter(c => c.av.observacoes).map((c, i) =>
         '<div class="deq-caixa deq-texto" style="margin-top:8px"><b style="font-size:11px">Observa&ccedil;&otilde;es AV' +
         (i + 1) + ':</b> ' + escaparHtml(c.av.observacoes) + '</div>').join('') +

@@ -10,6 +10,7 @@ window.CORTEX_SESSAO = null;
 const SVG_ATTR = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"';
 
 const ICONES = {
+  eventos:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3.5 19c.6-3 2.8-4.5 5.5-4.5S13.9 16 14.5 19"/><path d="M16 8.5l1.5 1.5L20.5 7"/></svg>',
   guias:      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l4 4v14H6z"/><path d="M14.5 3v4.5H19"/><path d="M9 14l2 2 4-4.5"/></svg>',
   gerencial:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16"/><rect x="6" y="11" width="3" height="6" rx="1"/><rect x="11" y="7" width="3" height="10" rx="1"/><rect x="16" y="13" width="3" height="4" rx="1"/></svg>',
   checkin:    '<svg ' + 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"' + '><circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.5 2.5 5-5.5"/></svg>',
@@ -59,6 +60,7 @@ const NAVEGACAO = [
       { id: 'chat',       rotulo: 'Suporte',            chave: 'chat' },
       { id: 'admin',      rotulo: 'Usuarios e Acessos', perfis: ['direcao','suporte'] },
       { id: 'permissoes', rotulo: 'Permissoes',         perfis: ['suporte'] },
+      { id: 'eventos',    rotulo: 'Supervisao', chave: 'eventos' },
       { id: 'guias',      rotulo: 'Guias',      chave: 'guias' },
       { id: 'gerencial',  rotulo: 'Relatorios G.', chave: 'gerencial' },
       { id: 'auditoria',  rotulo: 'Auditoria',          chave: 'auditoria' },
@@ -155,6 +157,7 @@ async function iniciarApp() {
   if (profile.perfil !== 'familia') {
     setTimeout(() => { MODULOS.programas?.popupEvolucoesPendentes?.(); }, 900);
     setTimeout(() => { MODULOS.agenda?.popupIndicativos?.(); }, 2200);
+    setTimeout(() => { MODULOS.eventos?.popupAvisos?.(); }, 3400);
   }
 }
 

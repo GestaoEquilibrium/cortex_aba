@@ -92,7 +92,9 @@ window.MODULOS.avaliacoes = {
       '  <div><h2>Avaliacoes &middot; administracao</h2>' +
       '  <p class="sub">Visao da coordenacao. As aplicacoes acontecem na pasta de cada paciente (aba Avaliacao do prontuario).</p></div>' +
       '</div>' +
-      '<div id="av-lista"><div class="cartao"><p class="sub">Carregando...</p></div></div>';
+      '<div id="av-lista"><div class="cartao"><p class="sub">Carregando...</p></div></div>' +
+      '<div id="av-venc"></div>';
+    this.quadroVencimentos();
 
     const { data, error } = await sb
       .from('avaliacoes')
@@ -695,5 +697,28 @@ window.MODULOS.avaliacoes = {
       tabela + grafico +
       (av.observacoes ? '<p class="sub" style="margin-top:10px">Obs.: ' + escaparHtml(av.observacoes) + '</p>' : '') +
       '</div>' + consolidado;
+  },
+
+  // ─────────────── Quadro de vencimentos (validade das avaliacoes) ───────────────
+
+  async quadroVencimentos() {
+    const alvo = document.getElementById('av-venc');
+    if (!alvo || !window.MODULOS.eventos) return;
+    const venc = await MODULOS.eventos.avaliacoesVencendo();
+    const { data: cfg } = await sb.from('configuracoes')
+      .select('valor').eq('chave', 'validade_avaliacao_meses').maybeSingle();
+    const meses = parseInt(cfg ? cfg.valor : '6', 10) || 6;
+    alvo.innerHTML =
+      '<div class="cartao"><h3>&#9200; Vencimentos ' +
+      '<small class="sub">&middot; validade de ' + meses + ' meses por aplicacao</small></h3>' +
+      (venc.length
+        ? venc.map(x =>
+            '<div class="linha-doc"><div><b>' + escaparHtml(x.nome) + '</b>' +
+            '<small>' + x.protocolo.toUpperCase() + ' &middot; ' + x.rotulo + '</small></div>' +
+            '<span class="selo ' + (x.dias < 0 ? 'selo-bad' : 'selo-warn') + '">' +
+            (x.dias < 0 ? 'Vencida ha ' + (-x.dias) + ' dia(s)' : 'Vence em ' + x.dias + ' dia(s)') +
+            '</span></div>').join('')
+        : '<p class="sub">Nenhuma avaliacao vencendo nos proximos 30 dias. Tudo em dia.</p>') +
+      '</div>';
   }
 };

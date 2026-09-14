@@ -30,6 +30,8 @@ window.MODULOS.permissoes = {
       dica: 'V: visualiza. E: check-in, iniciar, finalizar, falta e WhatsApp.' },
     { chave: 'agenda_grade', rotulo: 'Grade fixa e salas',
       dica: 'E: cria/edita horarios recorrentes e salas.' },
+    { chave: 'eventos', rotulo: 'Supervisao e reunioes',
+      dica: 'E: agenda supervisoes/reunioes e lavra ATAs. Os avisos do dia chegam a todos os participantes.' },
     { chave: 'gerencial', rotulo: 'Relatorios gerenciais',
       dica: 'E: gera e exporta relatorios (atendimentos, pacientes, guias) em planilha e PDF.' },
     { chave: 'guias', rotulo: 'Guias (convenio)',

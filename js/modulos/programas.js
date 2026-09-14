@@ -974,7 +974,7 @@ window.MODULOS.programas = {
       const pcts = porSessao[s.id] || [];
       const media = pcts.length ? Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length) : null;
       const evo = (s.evolucoes && s.evolucoes[0] && s.evolucoes[0].texto) || '';
-      return '<div class="atd-item clicavel" onclick="MODULOS.programas.abrirRelatorioSessao(\'' + s.id + '\')">' +
+      return '<div class="atd-item clicavel" onclick="MODULOS.programas.docEvolucaoDiaria(\'' + s.id + '\')">' +
         '<div class="atd-topo">' +
         '<div class="atd-meta"><b>' + s.data.split('-').reverse().join('/') + '</b> as ' +
         s.hora_inicio.slice(0, 5) +
@@ -987,7 +987,7 @@ window.MODULOS.programas = {
             'onclick="event.stopPropagation(); MODULOS.programas.concluirSessaoLista(\'' + s.id + '\')">Concluir sessao</button>'
           : '') +
         '<button type="button" class="btn btn-primario atd-btn" ' +
-        'onclick="event.stopPropagation(); MODULOS.programas.abrirRelatorioSessao(\'' + s.id + '\')">' +
+        'onclick="event.stopPropagation(); MODULOS.programas.docEvolucaoDiaria(\'' + s.id + '\')">' +
         '&#128202; Ver relatorio</button>' +
         '</div>' +
         (evo ? '<p class="sub">' + escaparHtml(evo.length > 140 ? evo.slice(0, 140) + '...' : evo) + '</p>' : '') +
@@ -1391,8 +1391,7 @@ window.MODULOS.programas = {
     window._docPortal = { paciente_id: s.paciente_id, tipo: 'evolucao_diaria', titulo: 'Evolucao Diaria' };
     document.getElementById('doc-eq-corpo').innerHTML =
       '<div class="pagina-cabecalho nao-imprime">' +
-      '  <div><button class="btn-voltar" onclick="document.getElementById(\'doc-eq-overlay\').remove(); ' +
-      'MODULOS.programas.abrirRelatorioSessao(\'' + sessaoId + '\')">&larr; Relatorio da sessao</button>' +
+      '  <div><button class="btn-voltar" onclick="document.getElementById(\'doc-eq-overlay\').remove()">&larr; Fechar</button>' +
       '  <h2>Evolucao diaria &middot; documento oficial</h2></div>' +
       '  <button class="btn btn-primario" onclick="window.print()">&#128424; Imprimir / PDF</button>' +
       portalBtn() +

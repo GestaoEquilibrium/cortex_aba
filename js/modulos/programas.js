@@ -945,8 +945,9 @@ window.MODULOS.programas = {
     if (!alvo) return;
 
     const { data: ss } = await sb.from('sessoes')
-      .select('id, data, hora_inicio, evolucoes(texto)')
-      .eq('paciente_id', pacienteId).eq('status', 'concluida')
+      .select('id, data, hora_inicio, status, evolucoes(texto)')
+      .eq('paciente_id', pacienteId).lte('data', new Date().toISOString().slice(0, 10))
+      .not('status', 'in', '("falta","cancelada")')
       .order('data', { ascending: false }).order('hora_inicio', { ascending: false })
       .limit(8);
     const lista = ss || [];
@@ -978,8 +979,13 @@ window.MODULOS.programas = {
         '<div class="atd-meta"><b>' + s.data.split('-').reverse().join('/') + '</b> as ' +
         s.hora_inicio.slice(0, 5) +
         (pcts.length ? ' &middot; ' + pcts.length + ' programa(s)' : '') +
-        (media !== null ? ' &middot; <span class="atd-pct">' + media + '% de acertos</span>' : '') +
+        (media !== null ? ' &middot; <span class="atd-pct">' + media + '% de corretos</span>' : '') +
+        (s.status !== 'concluida' ? ' <span class="selo selo-warn">Nao concluida</span>' : '') +
         '</div>' +
+        (s.status !== 'concluida' && perm('evolucao') === 'E'
+          ? '<button type="button" class="btn btn-fantasma atd-btn" ' +
+            'onclick="event.stopPropagation(); MODULOS.programas.concluirSessaoLista(\'' + s.id + '\')">Concluir sessao</button>'
+          : '') +
         '<button type="button" class="btn btn-primario atd-btn" ' +
         'onclick="event.stopPropagation(); MODULOS.programas.abrirRelatorioSessao(\'' + s.id + '\')">' +
         '&#128202; Ver relatorio</button>' +
@@ -1434,6 +1440,85 @@ window.MODULOS.programas = {
       '  <span>Documento gerado pelo CORTEX aba &middot; ' + new Date().toLocaleDateString('pt-BR') + '</span>' +
       '</div>' +
       '</div>';
+  },
+
+  async concluirSessaoLista(sessaoId) {
+    const { error } = await sb.from('sessoes').update({ status: 'concluida' }).eq('id', sessaoId);
+    if (error) { alert(error.message); return; }
+    this.carregarAtendimentos(this._pacProgPaciente);
+  },
+
+  // ─────────── PENDENCIAS DE EVOLUCAO (pop-up do login) ───────────
+
+  async popupEvolucoesPendentes() {
+    const eu = window.CORTEX_SESSAO.user.id;
+    const hoje = new Date().toISOString().slice(0, 10);
+    const { data: ss } = await sb.from('sessoes')
+      .select('id, data, hora_inicio, status, paciente_id, pacientes(nome)')
+      .eq('aplicador_id', eu).lte('data', hoje)
+      .not('status', 'in', '("falta","cancelada")')
+      .order('data', { ascending: false }).limit(60);
+    const passadas = (ss || []).filter(s =>
+      s.status === 'concluida' || s.data < hoje);
+    if (!passadas.length) return;
+
+    const { data: evs } = await sb.from('evolucoes')
+      .select('sessao_id').in('sessao_id', passadas.map(s => s.id));
+    const comEvo = new Set((evs || []).map(e => e.sessao_id));
+    const pend = passadas.filter(s => !comEvo.has(s.id)).slice(0, 20);
+    if (!pend.length) return;
+
+    abrirModal('Sessoes sem evolucao',
+      '<p class="sub" style="margin-bottom:10px">Voce tem <b>' + pend.length +
+      '</b> sessao(oes) aguardando evolucao. Toque para escrever agora:</p>' +
+      pend.map(s =>
+        '<div class="linha-doc"><span><b>' + escaparHtml(s.pacientes ? s.pacientes.nome : '?') +
+        '</b><small>' + s.data.split('-').reverse().join('/') + ' as ' + s.hora_inicio.slice(0, 5) + '</small></span>' +
+        '<button class="btn-chip cheio" onclick="MODULOS.programas.evolucaoRapida(\'' + s.id + '\', \'' +
+        s.paciente_id + '\', \'' + escaparHtml((s.pacientes ? s.pacientes.nome : '').split(' ')[0]) + '\', \'' +
+        s.data + '\')">Lancar evolucao</button></div>').join(''),
+      false, 'evolucao');
+  },
+
+  evolucaoRapida(sessaoId, pacienteId, nome, data) {
+    abrirModal('Evolucao \u00b7 ' + nome + ' \u00b7 ' + data.split('-').reverse().join('/'),
+      '<div class="campo"><label>Evolucao da sessao *</label>' +
+      '<textarea id="er-texto" rows="4" placeholder="Como foi a sessao..."></textarea></div>' +
+      '<div class="campo"><label>Destinacao da crianca</label>' +
+      '<input id="er-dest" placeholder="Ex.: entregue a mae"></div>' +
+      '<label class="check" style="margin:4px 0 8px"><input type="checkbox" id="er-concluir" checked> ' +
+      'Marcar a sessao como concluida</label>' +
+      '<div class="mensagem-erro" id="er-erro"></div>' +
+      '<div class="barra-acoes">' +
+      '  <button class="btn btn-fantasma" onclick="MODULOS.programas.popupEvolucoesPendentes()">Voltar</button>' +
+      '  <button class="btn btn-primario" id="er-salvar" onclick="MODULOS.programas.salvarEvolucaoRapida(\'' +
+      sessaoId + '\', \'' + pacienteId + '\')">Lancar</button>' +
+      '</div>', false, 'evolucao');
+  },
+
+  async salvarEvolucaoRapida(sessaoId, pacienteId) {
+    const erro = document.getElementById('er-erro');
+    const texto = document.getElementById('er-texto').value.trim();
+    if (!texto) { erro.textContent = 'Escreva a evolucao.'; erro.classList.add('visivel'); return; }
+    const botao = document.getElementById('er-salvar');
+    botao.disabled = true; botao.textContent = 'Lancando...';
+    try {
+      const { error: e1 } = await sb.from('evolucoes').insert({
+        sessao_id: sessaoId, paciente_id: pacienteId,
+        aplicador_id: window.CORTEX_SESSAO.user.id,
+        texto: texto,
+        destinacao: document.getElementById('er-dest').value.trim() || null
+      });
+      if (e1) throw new Error(e1.message);
+      if (document.getElementById('er-concluir').checked) {
+        await sb.from('sessoes').update({ status: 'concluida' }).eq('id', sessaoId);
+      }
+      fecharModal();
+      this.popupEvolucoesPendentes();
+    } catch (e) {
+      erro.textContent = e.message; erro.classList.add('visivel');
+      botao.disabled = false; botao.textContent = 'Lancar';
+    }
   },
 
   // ─────────── LANCAMENTO RETROATIVO DE EVOLUCAO ───────────

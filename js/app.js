@@ -152,9 +152,9 @@ async function iniciarApp() {
 
   festejarAniversario(profile);
 
-  // Indicativos de agenda aguardando confirmacao (recepcao/coordenacao)
   if (profile.perfil !== 'familia') {
-    setTimeout(() => { MODULOS.agenda?.popupIndicativos?.(); }, 1200);
+    setTimeout(() => { MODULOS.programas?.popupEvolucoesPendentes?.(); }, 900);
+    setTimeout(() => { MODULOS.agenda?.popupIndicativos?.(); }, 2200);
   }
 }
 
@@ -310,15 +310,22 @@ function perm(chave) {
 }
 
 // ── Modais (janela suspensa) ────────────────────────────────────────────
-function abrirModal(titulo, html, larga) {
+const TIPOS_POP = {
+  evolucao: { classe: 'pop-evolucao', icone: '&#9998;' },
+  agenda:   { classe: 'pop-agenda',   icone: '&#128197;' },
+  aviso:    { classe: 'pop-aviso',    icone: '&#128276;' }
+};
+
+function abrirModal(titulo, html, larga, tipo) {
   fecharModal();
+  const t = TIPOS_POP[tipo];
   const fundo = document.createElement('div');
   fundo.className = 'modal-fundo';
   fundo.id = 'modal-fundo';
   fundo.innerHTML =
-    '<div class="modal' + (larga ? ' modal-larga' : '') + '" role="dialog" aria-modal="true">' +
+    '<div class="modal' + (larga ? ' modal-larga' : '') + (t ? ' ' + t.classe : '') + '" role="dialog" aria-modal="true">' +
     '  <div class="modal-topo">' +
-    '    <h3>' + titulo + '</h3>' +
+    '    <h3>' + (t ? '<span class="pop-icone">' + t.icone + '</span> ' : '') + titulo + '</h3>' +
     '    <button type="button" class="modal-fechar" onclick="fecharModal()" title="Fechar">&times;</button>' +
     '  </div>' +
     '  <div class="modal-corpo">' + html + '</div>' +

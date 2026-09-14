@@ -174,6 +174,14 @@ window.MODULOS.agenda = {
       .select('*, pacientes(nome), profissional:profiles!sessoes_aplicador_id_fkey(nome), salas(nome)')
       .eq('data', this.dataRef).order('hora_inicio');
 
+    const comEvo = new Set();
+    if (sessoes && sessoes.length) {
+      const { data: evs } = await sb.from('evolucoes')
+        .select('sessao_id').in('sessao_id', sessoes.map(s => s.id));
+      (evs || []).forEach(e => comEvo.add(e.sessao_id));
+    }
+    this._comEvoDia = comEvo;
+
     const alvo = document.getElementById('ag-corpo');
     if (!alvo) return;
     if (error) { alvo.innerHTML = '<div class="cartao"><div class="mensagem-erro visivel">' + escaparHtml(error.message) + '</div></div>'; return; }
@@ -196,7 +204,10 @@ window.MODULOS.agenda = {
         '  <b>' + escaparHtml(s.pacientes ? s.pacientes.nome : '?') + '</b>' +
         '  <span class="ck-prof">&#128100; ' + escaparHtml(prof) +
         (s.salas ? ' <small>&middot; ' + escaparHtml(s.salas.nome) + '</small>' : '') + '</span>' +
-        '  <div class="pac-selos">' + this.selosSessao(s) + '</div>' +
+        '  <div class="pac-selos">' + this.selosSessao(s) +
+        (s.status === 'concluida' && !this._comEvoDia.has(s.id)
+          ? '<span class="selo selo-sem-evo" title="A sessao foi concluida mas a evolucao ainda nao foi escrita.">&#9998; sem evolucao</span>' : '') +
+        '</div>' +
         '</div></div>';
     }).join('') + '</div>';
   },
@@ -1125,7 +1136,7 @@ window.MODULOS.agenda = {
         '<button class="btn-chip" onclick="MODULOS.agenda.recusarIndicativo(\'' + i.id + '\')">Recusar</button>' +
         '</div></div>').join('') +
       '<div class="mensagem-erro" id="ind-erro"></div>' +
-      '<div class="barra-acoes"><button class="btn btn-fantasma" onclick="fecharModal()">Deixar para depois</button></div>', true);
+      '<div class="barra-acoes"><button class="btn btn-fantasma" onclick="fecharModal()">Deixar para depois</button></div>', true, 'agenda');
   },
 
   async confirmarIndicativo(id) {

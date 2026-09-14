@@ -2119,3 +2119,13 @@
     from { transform: translateX(-50%) scale(.7); opacity: 0; }
     to   { transform: translateX(-50%) scale(1); opacity: 1; }
 }
+
+/* ── Pop-ups por tipo + selo de evolucao pendente ─────────────────────── */
+.selo-sem-evo { background: #FFE4E6; color: #BE123C; font-weight: 800; }
+.modal.pop-evolucao { border-top: 6px solid #E9586A; }
+.modal.pop-agenda   { border-top: 6px solid #1468B2; }
+.modal.pop-aviso    { border-top: 6px solid #D97706; }
+.pop-icone { margin-right: 4px; }
+.modal.pop-evolucao .modal-topo h3 .pop-icone { color: #E9586A; }
+.modal.pop-agenda .modal-topo h3 .pop-icone   { color: #1468B2; }
+.modal.pop-aviso .modal-topo h3 .pop-icone    { color: #D97706; }

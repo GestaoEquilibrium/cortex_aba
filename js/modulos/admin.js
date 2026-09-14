@@ -88,7 +88,8 @@ window.MODULOS.admin = {
       (p.coordenador_id && this.nomeCoord(p.coordenador_id)
         ? '<span class="selo selo-neutro">Equipe ' + this.nomeCoord(p.coordenador_id) + '</span>' : '') +
       (p.ativo ? '<span class="selo selo-ok">Ativo</span>' : '<span class="selo selo-bad">Inativo</span>') +
-      '<button class="btn-chip" onclick="MODULOS.admin.modalUsuario(\'' + p.id + '\')">Gerenciar</button>' +
+      '<button class="btn-chip" title="Alterar o e-mail de login desta pessoa" onclick="MODULOS.admin.modalEmail(\'' + p.id + '\', \'' + escaparHtml(p.email || '') + '\', \'' + escaparHtml(p.nome).replace(/'/g, '') + '\')">&#9993; E-mail</button>' +
+        '<button class="btn-chip" onclick="MODULOS.admin.modalUsuario(\'' + p.id + '\')">Gerenciar</button>' +
       '</div></div>';
 
     const linhaFamilia = p => {
@@ -99,6 +100,7 @@ window.MODULOS.admin = {
         (criancas ? ' &middot; responsavel por ' + escaparHtml(criancas) : '') + '</small></div>' +
         '<div class="pac-selos">' +
         (p.ativo ? '<span class="selo selo-ok">Ativo</span>' : '<span class="selo selo-bad">Inativo</span>') +
+        '<button class="btn-chip" title="Alterar o e-mail de login desta pessoa" onclick="MODULOS.admin.modalEmail(\'' + p.id + '\', \'' + escaparHtml(p.email || '') + '\', \'' + escaparHtml(p.nome).replace(/'/g, '') + '\')">&#9993; E-mail</button>' +
         '<button class="btn-chip" onclick="MODULOS.admin.modalUsuario(\'' + p.id + '\')">Gerenciar</button>' +
         '</div></div>';
     };
@@ -364,5 +366,45 @@ window.MODULOS.admin = {
     } catch (e) {
       alert('Erro: ' + e.message);
     }
+  },
+
+  // ─────────────── Alterar e-mail de login (via Edge Function) ───────────────
+
+  modalEmail(userId, emailAtual, nome) {
+    abrirModal('Alterar e-mail de login',
+      '<p class="sub" style="margin-bottom:10px"><b>' + escaparHtml(nome) + '</b> &middot; e-mail atual: ' +
+      (emailAtual ? escaparHtml(emailAtual) : '<i>nao registrado</i>') + '</p>' +
+      '<div class="campo"><label>Novo e-mail *</label>' +
+      '<input type="email" id="em-novo" placeholder="nome@equilibrium.com.br"></div>' +
+      '<p class="sub" style="margin-top:6px">A troca vale na hora: a pessoa passa a entrar com o novo e-mail e a mesma senha.</p>' +
+      '<div class="mensagem-erro" id="em-erro"></div>' +
+      '<div class="barra-acoes">' +
+      '<button class="btn btn-fantasma" onclick="fecharModal()">Cancelar</button>' +
+      '<button class="btn btn-primario" onclick="MODULOS.admin.salvarEmail(\'' + userId + '\')">Alterar</button>' +
+      '</div>');
+  },
+
+  async salvarEmail(userId) {
+    const erro = document.getElementById('em-erro');
+    erro.classList.remove('visivel');
+    const novo = (document.getElementById('em-novo').value || '').trim().toLowerCase();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(novo)) {
+      erro.textContent = 'Digite um e-mail valido.'; erro.classList.add('visivel'); return;
+    }
+    const { data, error } = await sb.functions.invoke('alterar-email', {
+      body: { user_id: userId, novo_email: novo }
+    });
+    if (error || (data && data.erro)) {
+      const msg = (data && data.erro) || error.message || '';
+      erro.textContent = /not found|404|Failed to send|fetch/i.test(msg)
+        ? 'A funcao "alterar-email" ainda nao foi publicada no Supabase. Siga o passo a passo que mandei junto com este patch.'
+        : msg;
+      erro.classList.add('visivel');
+      return;
+    }
+    await sb.from('profiles').update({ email: novo }).eq('id', userId);
+    fecharModal();
+    alert('E-mail alterado. A pessoa ja entra com o novo endereco.');
+    this.render(this.el);
   }
 };

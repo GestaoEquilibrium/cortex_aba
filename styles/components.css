@@ -2152,3 +2152,47 @@
 .conv-msg.deles { align-self: flex-start; background: var(--surface-alt); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
 .conv-envio { display: flex; gap: 8px; margin-top: 10px; }
 .conv-envio input { flex: 1; }
+
+/* ── Inicio: acoes rapidas e cartoes de pendencia ────────────────────── */
+.ini-acoes { display: flex; gap: 10px; flex-wrap: wrap; margin: 2px 0 12px; }
+.ini-acao {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 11px 18px; border-radius: 14px;
+    font-weight: 800; font-size: 13.5px; cursor: pointer;
+    border: 1.5px solid transparent; color: #fff;
+    transition: transform .12s ease, box-shadow .12s ease;
+}
+.ini-acao:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(21,13,32,.18); }
+.ini-acao span { font-size: 16px; }
+.ia-azul    { background: #1468B2; }
+.ia-verde   { background: #3E9C6E; }
+.ia-rosa    { background: #E9586A; }
+.ia-roxo    { background: #7C6FD0; }
+.ia-teal    { background: #2AA7B5; }
+.ia-amarelo { background: #D9930D; }
+
+.ini-pend { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+.ini-card {
+    flex: 1; min-width: 190px;
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 16px; border-radius: 14px; cursor: pointer;
+    background: var(--surface); border: 1.5px solid var(--border);
+    border-left-width: 6px;
+    transition: transform .12s ease, box-shadow .12s ease;
+}
+.ini-card:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(21,13,32,.12); }
+.ini-card b { font-size: 22px; }
+.ini-card small { color: var(--ink-muted); font-weight: 700; }
+.ic-rosa    { border-left-color: #E9586A; } .ic-rosa .ic-icone    { color: #E9586A; }
+.ic-amarelo { border-left-color: #F3B63D; } .ic-amarelo .ic-icone { color: #D9930D; }
+.ic-teal    { border-left-color: #56C4CF; } .ic-teal .ic-icone    { color: #2AA7B5; }
+.ic-azul    { border-left-color: #1468B2; } .ic-azul .ic-icone    { color: #1468B2; }
+.ic-icone { font-size: 20px; }
+
+/* Barras de produtividade: rotacao do catavento */
+.prof-barra.pb-cor0 { background: #1468B2 !important; }
+.prof-barra.pb-cor1 { background: #56C4CF !important; }
+.prof-barra.pb-cor2 { background: #F3B63D !important; }
+.prof-barra.pb-cor3 { background: #E9586A !important; }
+.prof-barra.pb-cor4 { background: #7C6FD0 !important; }
+.prof-barra.pb-cor5 { background: #3E9C6E !important; }

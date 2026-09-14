@@ -173,7 +173,7 @@ window.MODULOS.painel = {
         const nomeCurto = r.nome.split(' ').slice(0, 2).join(' ');
         html += '<div class="funil-linha" title="' + escaparHtml(r.nome) + ': ' + r.n + ' sessao(oes)">' +
           '<span class="funil-rotulo">' + escaparHtml(nomeCurto) + '</span>' +
-          '<span class="funil-trilho"><span class="funil-barra prof-barra' + (i === 0 ? ' lider' : '') +
+          '<span class="funil-trilho"><span class="funil-barra prof-barra pb-cor' + (i % 6) + (i === 0 ? ' lider' : '') +
           '" style="width:' + Math.round(r.n * 100 / maxProf) + '%"></span></span>' +
           '<span class="funil-valor">' + r.n + '</span></div>';
       });

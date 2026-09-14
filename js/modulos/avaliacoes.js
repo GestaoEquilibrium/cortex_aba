@@ -90,77 +90,96 @@ window.MODULOS.avaliacoes = {
     this.el.innerHTML =
       '<div class="pagina-cabecalho">' +
       '  <div><h2>Avaliacoes &middot; administracao</h2>' +
-      '  <p class="sub">Visao da coordenacao. As aplicacoes acontecem na pasta de cada paciente (aba Avaliacao do prontuario).</p></div>' +
+      '  <p class="sub">Uma linha por paciente: situacao de cada protocolo, atrasos e documentos. As aplicacoes acontecem no prontuario.</p></div>' +
       '</div>' +
-      '<div id="av-lista"><div class="cartao"><p class="sub">Carregando...</p></div></div>' +
-      '<div id="av-venc"></div>';
+      '<div id="av-venc"></div>' +
+      '<div class="toolbar" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center">' +
+      '  <input id="av-busca" placeholder="&#128269; Buscar paciente..." style="flex:1; min-width:220px" ' +
+      '    oninput="MODULOS.avaliacoes.filtrarQuadro()">' +
+      '  <label class="check" style="margin:0"><input type="checkbox" id="av-so-pend" onchange="MODULOS.avaliacoes.filtrarQuadro()"> So com pendencia</label>' +
+      '  <button class="btn-chip" onclick="MODULOS.avaliacoes.verCatalogo(\'qadi\')">Itens QADI-R</button>' +
+      '  <button class="btn-chip" onclick="MODULOS.avaliacoes.verCatalogo(\'ss\')">Itens Socially Savvy</button>' +
+      '</div>' +
+      '<div id="av-lista"><div class="cartao"><p class="sub">Carregando...</p></div></div>';
     this.quadroVencimentos();
 
-    const { data, error } = await sb
-      .from('avaliacoes')
-      .select('id, protocolo, status, iniciado_em, concluido_em, pacientes(id, nome), avaliador:profiles!avaliacoes_avaliador_id_fkey(nome)')
-      .order('iniciado_em', { ascending: false })
-      .limit(60);
-
-    const alvo = document.getElementById('av-lista');
-    if (error) {
-      alvo.innerHTML = '<div class="cartao"><div class="mensagem-erro visivel">' +
-        escaparHtml(error.message) + '</div></div>';
-      return;
-    }
-
+    const [rAv, rPac] = await Promise.all([
+      sb.from('avaliacoes')
+        .select('id, paciente_id, protocolo, status, iniciado_em, concluido_em')
+        .order('iniciado_em', { ascending: false }).limit(1000),
+      sb.from('pacientes').select('id, nome').neq('status', 'encerrado').order('nome')
+    ]);
     await Promise.all([this.carregarQuestoes(), this.carregarItensSS()]);
-    const lista = data || [];
-    const abertas = lista.filter(x => x.status !== 'concluida');
-    const concluidas = lista.filter(x => x.status === 'concluida');
-    const nomeProt = x => x.protocolo === 'ss' ? 'Socially Savvy' : 'QADI-R';
-    const diasAberta = x => Math.floor((Date.now() - new Date(x.iniciado_em)) / 86400000);
+
+    const porPac = {};
+    (rAv.data || []).forEach(a => {
+      (porPac[a.paciente_id] = porPac[a.paciente_id] || []).push(a);
+    });
+
+    this._quadro = (rPac.data || []).map(p => {
+      const avs = porPac[p.id] || [];
+      const resumo = prot => {
+        const doProt = avs.filter(a => a.protocolo === prot);
+        const aberta = doProt.find(a => a.status !== 'concluida');
+        const conc = doProt.filter(a => a.status === 'concluida');
+        return { aberta, n: conc.length,
+          ultima: conc.length ? conc[0].concluido_em : null,
+          dias: aberta ? Math.floor((Date.now() - new Date(aberta.iniciado_em)) / 86400000) : null };
+      };
+      const ss = resumo('ss'), qadi = resumo('qadi');
+      return { p, ss, qadi, pendente: !!(ss.aberta || qadi.aberta),
+        semNada: !avs.length };
+    });
+    this.filtrarQuadro();
+  },
+
+  seloProt(r, prot, pacId) {
+    if (r.aberta) {
+      return '<button class="btn-chip cheio" ' +
+        'onclick="MODULOS.avaliacoes.abrirJanela(\'' + r.aberta.id + '\')">' +
+        'Continuar' + (r.dias >= 7 ? ' &middot; <b>' + r.dias + 'd</b>' : '') + '</button>';
+    }
+    if (r.n) {
+      const fn = prot === 'ss' ? 'docSS' : 'docQADI';
+      return '<button class="btn-chip" title="Documento consolidado (' + r.n + ' aplicacao(oes))" ' +
+        'onclick="MODULOS.avaliacoes.' + fn + '(\'' + pacId + '\')">' +
+        r.n + ' AV &middot; ' + new Date(r.ultima).toLocaleDateString('pt-BR').slice(0, 5) + ' &#128196;</button>';
+    }
+    return '<span class="selo selo-neutro">&mdash;</span>';
+  },
+
+  filtrarQuadro() {
+    const alvo = document.getElementById('av-lista');
+    if (!alvo || !this._quadro) return;
+    const termo = (document.getElementById('av-busca')?.value || '').toLowerCase();
+    const soPend = document.getElementById('av-so-pend')?.checked;
+    let lista = this._quadro.filter(x =>
+      (!termo || x.p.nome.toLowerCase().includes(termo)) &&
+      (!soPend || x.pendente));
+    const total = lista.length;
+    const pendentes = this._quadro.filter(x => x.pendente).length;
+    lista = lista.slice(0, 40);
 
     alvo.innerHTML =
-      '<div class="grade-visao" style="margin-bottom:14px">' +
-      '  <div class="caixa-info"><small>Em andamento</small><b>' + abertas.length + '</b></div>' +
-      '  <div class="caixa-info"><small>Concluidas (60 recentes)</small><b>' + concluidas.length + '</b></div>' +
-      '  <div class="caixa-info"><small>QADI-R &middot; catalogo</small><b>' + this.questoes.length + ' questoes</b></div>' +
-      '  <div class="caixa-info"><small>Socially Savvy &middot; catalogo</small><b>' + this.itensSS.length + ' itens</b></div>' +
+      '<div class="grade-visao" style="margin-bottom:12px">' +
+      '  <div class="caixa-info"><small>Pacientes</small><b>' + this._quadro.length + '</b></div>' +
+      '  <div class="caixa-info"><small>Com aplicacao aberta</small><b style="color:' + (pendentes ? '#D97706' : 'inherit') + '">' + pendentes + '</b></div>' +
+      '  <div class="caixa-info"><small>QADI-R &middot; catalogo</small><b>' + this.questoes.length + '</b></div>' +
+      '  <div class="caixa-info"><small>Socially Savvy &middot; catalogo</small><b>' + this.itensSS.length + '</b></div>' +
       '</div>' +
-
-      '<div class="cartao faixa-ambar"><h3>Em andamento <span class="selo selo-neutro">' + abertas.length + '</span></h3>' +
-      (abertas.length ? abertas.map(x =>
-        '<div class="linha-doc"><div><b>' + escaparHtml(x.pacientes ? x.pacientes.nome : '?') +
-        ' &middot; ' + nomeProt(x) + '</b>' +
-        '<small>' + (x.avaliador ? escaparHtml(x.avaliador.nome) + ' &middot; ' : '') +
-        'iniciada em ' + new Date(x.iniciado_em).toLocaleDateString('pt-BR') +
-        (diasAberta(x) >= 7 ? ' &middot; <b style="color:var(--acao)">' + diasAberta(x) + ' dias aberta</b>' : '') +
-        '</small></div>' +
-        '<div class="pac-selos">' +
-        '<button class="btn-chip cheio" onclick="MODULOS.avaliacoes.abrirJanela(\'' + x.id + '\')">Abrir</button>' +
-        '<button class="btn-chip" title="Cancela e apaga esta aplicacao aberta por engano. As respostas ja registradas vao junto." ' +
-        'onclick="MODULOS.avaliacoes.cancelarAvaliacao(\'' + x.id + '\', \'' +
-        escaparHtml((x.pacientes ? x.pacientes.nome : '') + ' - ' + nomeProt(x)) + '\')">Cancelar</button>' +
-        '</div></div>').join('')
-      : '<p class="sub">Nenhuma aplicacao em aberto.</p>') +
-      '</div>' +
-
-      '<div class="cartao"><h3>Concluidas recentes</h3>' +
-      (concluidas.length ? concluidas.map(x =>
-        '<div class="linha-doc"><div><b>' + escaparHtml(x.pacientes ? x.pacientes.nome : '?') +
-        ' &middot; ' + nomeProt(x) + '</b>' +
-        '<small>' + (x.avaliador ? escaparHtml(x.avaliador.nome) + ' &middot; ' : '') +
-        'concluida em ' + new Date(x.concluido_em).toLocaleDateString('pt-BR') + '</small></div>' +
-        '<button class="btn-chip" onclick="MODULOS.avaliacoes.abrirJanela(\'' + x.id + '\', true)">Resultado</button>' +
-        '</div>').join('')
-      : '<p class="sub">Nenhuma avaliacao concluida.</p>') +
-      '</div>' +
-
-      '<div class="cartao"><h3>Protocolos</h3>' +
-      '<div class="linha-doc"><div><b>QADI-R</b><small>' + this.questoes.length +
-      ' questoes por faixa etaria e area &middot; aplicado pela coordenacao e terapeutas</small></div>' +
-      '<button class="btn-chip" onclick="MODULOS.avaliacoes.verCatalogo(\'qadi\')">Ver itens</button></div>' +
-      '<div class="linha-doc"><div><b>Socially Savvy</b><small>' + this.itensSS.length +
-      ' itens em 7 areas, escala 0-3 &middot; aplicadores tambem aplicam</small></div>' +
-      '<button class="btn-chip" onclick="MODULOS.avaliacoes.verCatalogo(\'ss\')">Ver itens</button></div>' +
-      '<div class="linha-doc"><div><b>IPO</b><small>Aguardando criterios para entrar no sistema</small></div>' +
-      '<span class="selo selo-neutro">Em breve</span></div>' +
+      '<div class="cartao">' +
+      '<table class="tabela-presenca"><thead><tr>' +
+      '<th>Paciente</th><th>Socially Savvy</th><th>QADI-R</th><th></th></tr></thead><tbody>' +
+      lista.map(x =>
+        '<tr' + (x.pendente ? ' style="background:#FFFBEB"' : '') + '>' +
+        '<td><b>' + escaparHtml(x.p.nome) + '</b>' +
+        (x.semNada ? ' <span class="selo selo-neutro">sem avaliacoes</span>' : '') + '</td>' +
+        '<td>' + this.seloProt(x.ss, 'ss', x.p.id) + '</td>' +
+        '<td>' + this.seloProt(x.qadi, 'qadi', x.p.id) + '</td>' +
+        '<td><button class="btn-chip" onclick="MODULOS.pacientes.telaDetalhe(\'' + x.p.id + '\', \'avaliacao\')">Abrir pasta</button></td>' +
+        '</tr>').join('') +
+      '</tbody></table>' +
+      (total > 40 ? '<p class="sub" style="margin-top:8px">Mostrando 40 de ' + total + ' &mdash; refine pela busca.</p>' : '') +
       '</div>';
   },
 

@@ -547,12 +547,28 @@ window.MODULOS.programas = {
       .in('status', ['agendada', 'checkin', 'em_atendimento'])
       .order('hora_inicio').limit(1);
 
-    const sessaoId = existente && existente[0] ? existente[0].id : null;
+    let sessaoId = existente && existente[0] ? existente[0].id : null;
     if (!sessaoId) {
-      alert('Nenhuma sessao agendada para este paciente hoje.\n\n' +
-        'O atendimento e sempre vinculado a uma sessao da Agenda: agende (ou peca a recepcao) e volte aqui. ' +
-        'Assim os programas e a evolucao ficam presos a data e ao horario certos.');
-      return;
+      const gestao = ['direcao', 'coordenador', 'suporte'].includes(window.CORTEX_SESSAO.profile.perfil);
+      if (!gestao) {
+        alert('Nenhuma sessao agendada para este paciente hoje.\n\n' +
+          'O atendimento e sempre vinculado a uma sessao da Agenda: peca a coordenacao para agendar ' +
+          '(ou criar um encaixe) e volte aqui. Assim os programas e a evolucao ficam presos a data e ao horario certos.');
+        return;
+      }
+      if (!confirm('Nenhuma sessao agendada hoje para este paciente.\n\n' +
+        'Criar um ENCAIXE agora? Ele entra na Agenda de hoje com o horario atual, vinculado a voce, ' +
+        'e a folha de atendimento abre em seguida.')) return;
+      const agora = new Date().toTimeString().slice(0, 5) + ':00';
+      const { data: nova, error } = await sb.from('sessoes').insert({
+        paciente_id: pacienteId,
+        data: hoje,
+        hora_inicio: agora,
+        aplicador_id: window.CORTEX_SESSAO.user.id,
+        status: 'em_atendimento'
+      }).select('id').single();
+      if (error) { alert('Nao consegui criar o encaixe: ' + error.message); return; }
+      sessaoId = nova.id;
     }
     this.abrirFolha(sessaoId, true);
   },

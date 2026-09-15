@@ -23,7 +23,9 @@ window.MODULOS.eventos = {
       (this.podeE()
         ? '<button class="btn btn-primario" onclick="MODULOS.eventos.modalEvento()">+ Agendar</button>' : '') +
       '</div>' +
-      '<div id="ev-lista"><div class="cartao"><p class="sub">Carregando...</p></div></div>';
+      '<div id="ev-lista"><div class="cartao"><p class="sub">Carregando...</p></div></div>' +
+      '<div id="dem-lista"></div>';
+    this.carregarDemandas();
     await this.carregar();
     this.desenhar();
   },
@@ -47,7 +49,7 @@ window.MODULOS.eventos = {
 
     const linha = e =>
       '<div class="linha-doc"><div><b>' +
-      (e.tipo === 'supervisao' ? '&#128204; Supervisao' : '&#128101; Reuniao') +
+      (e.tipo === 'supervisao' ? '&#128204; Supervisao' : e.tipo === 'reuniao_pais' ? '&#128106; Reuniao com pais' : '&#128101; Reuniao') +
       ' &middot; ' + escaparHtml(e.titulo) + '</b>' +
       '<small>' + e.data.split('-').reverse().join('/') + (e.hora ? ' as ' + e.hora.slice(0, 5) : '') +
       ' &middot; ' + (e.profissional ? escaparHtml(e.profissional.nome) : 'Equipe toda') +
@@ -75,7 +77,8 @@ window.MODULOS.eventos = {
       '<div class="grade-form">' +
       '  <div class="campo"><label>Tipo</label><select id="ev-tipo">' +
       '    <option value="supervisao"' + (!e || e.tipo === 'supervisao' ? ' selected' : '') + '>Supervisao</option>' +
-      '    <option value="reuniao"' + (e && e.tipo === 'reuniao' ? ' selected' : '') + '>Reuniao</option>' +
+      '    <option value="reuniao"' + (e && e.tipo === 'reuniao' ? ' selected' : '') + '>Reuniao de equipe</option>' +
+      '    <option value="reuniao_pais"' + (e && e.tipo === 'reuniao_pais' ? ' selected' : '') + '>Reuniao com pais</option>' +
       '  </select></div>' +
       '  <div class="campo c2"><label>Assunto *</label>' +
       '    <input id="ev-titulo" placeholder="Ex.: Supervisao dos programas do Miguel" value="' +
@@ -236,14 +239,44 @@ window.MODULOS.eventos = {
     let venc = [];
     if (['direcao', 'coordenador'].includes(perfil)) {
       venc = await this.avaliacoesVencendo();
+    } else if (perfil === 'aplicador') {
+      venc = (await this.avaliacoesVencendo()).filter(v => v.aplicador_id === eu);
     }
-    if (!meus.length && !venc.length) return;
+    const { data: dems } = await sb.from('demandas')
+      .select('id, tipo, titulo, detalhe, prazo, criador:profiles!demandas_criado_por_fkey(nome)')
+      .eq('profissional_id', eu).is('feita_em', null).order('criado_em');
+    const minhasDem = (dems || []).filter(d => d.tipo === 'demanda');
+    const parabens = (dems || []).filter(d => d.tipo === 'parabens');
+
+    for (const pb of parabens) {
+      abrirModal('&#127881; Parabens!',
+        '<div style="text-align:center; padding:6px 4px">' +
+        '<div style="font-size:40px">&#127882;&#127881;&#127882;</div>' +
+        '<h3 style="margin:8px 0">' + escaparHtml(pb.titulo) + '</h3>' +
+        (pb.detalhe ? '<p class="sub">' + escaparHtml(pb.detalhe) + '</p>' : '') +
+        '<p class="sub" style="margin-top:8px">&mdash; ' + escaparHtml(pb.criador ? pb.criador.nome : 'Coordenacao') + '</p>' +
+        '<button class="btn btn-primario" style="margin-top:10px" ' +
+        'onclick="sb.from(\'demandas\').update({ feita_em: new Date().toISOString() }).eq(\'id\', \'' + pb.id + '\').then(() => fecharModal())">Obrigado(a)!</button>' +
+        '</div>', false, 'evolucao');
+      return; // um festejo por login; demandas ficam para o proximo popup
+    }
+    if (!meus.length && !venc.length && !minhasDem.length) return;
 
     let html = '';
+    if (minhasDem.length) {
+      html += '<p class="sub" style="margin-bottom:6px"><b>Demandas para voce (' + minhasDem.length + '):</b></p>' +
+        minhasDem.map(d =>
+          '<div class="linha-doc"><div><b>' + escaparHtml(d.titulo) + '</b><small>' +
+          (d.detalhe ? escaparHtml(d.detalhe) + ' &middot; ' : '') +
+          'de ' + escaparHtml(d.criador ? d.criador.nome.split(' ')[0] : '-') +
+          (d.prazo ? ' &middot; ate ' + d.prazo.split('-').reverse().join('/') : '') + '</small></div>' +
+          '<button class="btn-chip" onclick="MODULOS.eventos.concluirDemanda(\'' + d.id + '\', this)">Feita &#10003;</button>' +
+          '</div>').join('') + '<div style="height:8px"></div>';
+    }
     if (meus.length) {
       html += '<p class="sub" style="margin-bottom:6px"><b>Supervisoes e reunioes:</b></p>' +
         meus.map(e =>
-          '<div class="linha-doc"><span><b>' + (e.tipo === 'supervisao' ? '&#128204;' : '&#128101;') + ' ' +
+          '<div class="linha-doc"><span><b>' + (e.tipo === 'supervisao' ? '&#128204;' : e.tipo === 'reuniao_pais' ? '&#128106;' : '&#128101;') + ' ' +
           escaparHtml(e.titulo) + '</b><small>' +
           (e.data === hoje ? 'HOJE' : 'Amanha') + (e.hora ? ' as ' + e.hora.slice(0, 5) : '') +
           '</small></span></div>').join('');
@@ -264,11 +297,11 @@ window.MODULOS.eventos = {
     const [rCfg, rAv, rPac] = await Promise.all([
       sb.from('configuracoes').select('valor').eq('chave', 'validade_avaliacao_meses').maybeSingle(),
       sb.from('avaliacoes').select('paciente_id, protocolo, concluido_em').eq('status', 'concluida'),
-      sb.from('pacientes').select('id, nome').eq('status', 'ativo')
+      sb.from('pacientes').select('id, nome, aplicador_id').eq('status', 'ativo')
     ]);
     const meses = parseInt(rCfg.data ? rCfg.data.valor : '6', 10) || 6;
-    const nomes = {};
-    (rPac.data || []).forEach(p => { nomes[p.id] = p.nome; });
+    const nomes = {}, aplics = {};
+    (rPac.data || []).forEach(p => { nomes[p.id] = p.nome; aplics[p.id] = p.aplicador_id; });
 
     const ultima = {};
     (rAv.data || []).forEach(a => {
@@ -284,11 +317,104 @@ window.MODULOS.eventos = {
       vence.setMonth(vence.getMonth() + meses);
       const dias = Math.floor((vence - Date.now()) / 86400000);
       if (dias <= 30) {
-        saida.push({ nome: nomes[pac], protocolo: proto, dias: dias,
+        saida.push({ nome: nomes[pac], protocolo: proto, dias: dias, aplicador_id: aplics[pac],
           rotulo: 'ultima em ' + new Date(quando).toLocaleDateString('pt-BR') +
             ' &middot; validade ' + meses + ' meses' });
       }
     });
     return saida.sort((a, b) => a.dias - b.dias);
+  },
+
+  // ─────────────── Demandas e parabens ───────────────
+
+  async carregarDemandas() {
+    const alvo = document.getElementById('dem-lista');
+    if (!alvo) return;
+    const { data } = await sb.from('demandas')
+      .select('*, prof:profiles!demandas_profissional_id_fkey(nome), criador:profiles!demandas_criado_por_fkey(nome)')
+      .order('criado_em', { ascending: false }).limit(60);
+    const lista = data || [];
+    const abertas = lista.filter(d => d.tipo === 'demanda' && !d.feita_em);
+    const feitas = lista.filter(d => d.tipo === 'demanda' && d.feita_em).slice(0, 10);
+    const pbs = lista.filter(d => d.tipo === 'parabens').slice(0, 10);
+
+    alvo.innerHTML =
+      '<div class="cartao"><div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px">' +
+      '<h3 style="margin:0">Demandas <span class="selo selo-neutro">' + abertas.length + ' aberta(s)</span></h3>' +
+      (this.podeE()
+        ? '<div class="pac-selos">' +
+          '<button class="btn btn-fantasma" onclick="MODULOS.eventos.modalDemanda(\'demanda\')">+ Demanda</button>' +
+          '<button class="btn btn-primario" onclick="MODULOS.eventos.modalDemanda(\'parabens\')">&#127881; Parabens pro AT</button>' +
+          '</div>' : '') +
+      '</div>' +
+      (abertas.length
+        ? abertas.map(d =>
+            '<div class="linha-doc"><div><b>' + escaparHtml(d.titulo) + '</b><small>' +
+            escaparHtml(d.prof ? d.prof.nome : '-') +
+            (d.prazo ? ' &middot; ate ' + d.prazo.split('-').reverse().join('/') : '') +
+            (d.detalhe ? ' &middot; ' + escaparHtml(d.detalhe) : '') + '</small></div>' +
+            '<span class="selo selo-warn">Aberta</span></div>').join('')
+        : '<p class="sub">Nenhuma demanda aberta.</p>') +
+      (feitas.length
+        ? '<h3 style="margin-top:12px">Concluidas recentes</h3>' +
+          feitas.map(d =>
+            '<div class="linha-doc"><div><b>' + escaparHtml(d.titulo) + '</b><small>' +
+            escaparHtml(d.prof ? d.prof.nome : '-') + ' &middot; feita em ' +
+            new Date(d.feita_em).toLocaleDateString('pt-BR') + '</small></div>' +
+            '<span class="selo selo-ok">Feita</span></div>').join('')
+        : '') +
+      (pbs.length
+        ? '<h3 style="margin-top:12px">&#127881; Parabens enviados</h3>' +
+          pbs.map(d =>
+            '<div class="linha-doc"><div><b>' + escaparHtml(d.titulo) + '</b><small>para ' +
+            escaparHtml(d.prof ? d.prof.nome : '-') + (d.feita_em ? ' &middot; visto' : ' &middot; ainda nao visto') +
+            '</small></div></div>').join('')
+        : '') +
+      '</div>';
+  },
+
+  modalDemanda(tipo) {
+    const pb = tipo === 'parabens';
+    abrirModal(pb ? '&#127881; Parabens pro AT' : 'Nova demanda',
+      '<div class="grade-form">' +
+      '<div class="campo c2"><label>' + (pb ? 'Mensagem de parabens *' : 'O que precisa ser feito *') + '</label>' +
+      '<input id="dm-titulo" placeholder="' + (pb ? 'Ex.: Parabens pela conducao da sessao do Miguel!' : 'Ex.: Atualizar as fichas da sala 2') + '"></div>' +
+      '<div class="campo c2"><label>Detalhe (opcional)</label><input id="dm-det"></div>' +
+      '<div class="campo"><label>Para quem *</label><select id="dm-prof">' +
+      this.equipe.map(m => '<option value="' + m.id + '">' + escaparHtml(m.nome) + '</option>').join('') +
+      '</select></div>' +
+      (pb ? '' : '<div class="campo"><label>Prazo</label><input type="date" id="dm-prazo"></div>') +
+      '</div>' +
+      '<p class="sub" style="margin-top:6px">' + (pb
+        ? 'A pessoa recebe um festejo &#127882; ao abrir o sistema.'
+        : 'A pessoa ve a demanda no aviso do login e marca como feita.') + '</p>' +
+      '<div class="mensagem-erro" id="dm-erro"></div>' +
+      '<div class="barra-acoes">' +
+      '<button class="btn btn-fantasma" onclick="fecharModal()">Cancelar</button>' +
+      '<button class="btn btn-primario" onclick="MODULOS.eventos.salvarDemanda(\'' + tipo + '\')">' +
+      (pb ? 'Enviar &#127881;' : 'Criar demanda') + '</button></div>');
+  },
+
+  async salvarDemanda(tipo) {
+    const erro = document.getElementById('dm-erro');
+    const titulo = document.getElementById('dm-titulo').value.trim();
+    if (!titulo) { erro.textContent = 'Escreva a mensagem.'; erro.classList.add('visivel'); return; }
+    const prazoEl = document.getElementById('dm-prazo');
+    const { error } = await sb.from('demandas').insert({
+      tipo: tipo,
+      titulo: titulo,
+      detalhe: document.getElementById('dm-det').value.trim() || null,
+      profissional_id: document.getElementById('dm-prof').value,
+      prazo: prazoEl && prazoEl.value ? prazoEl.value : null,
+      criado_por: window.CORTEX_SESSAO.user.id
+    });
+    if (error) { erro.textContent = error.message; erro.classList.add('visivel'); return; }
+    fecharModal();
+    this.carregarDemandas();
+  },
+
+  async concluirDemanda(id, botao) {
+    await sb.from('demandas').update({ feita_em: new Date().toISOString() }).eq('id', id);
+    if (botao) { botao.outerHTML = '<span class="selo selo-ok">Feita &#10003;</span>'; }
   }
 };

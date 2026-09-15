@@ -252,54 +252,75 @@ window.MODULOS.pei = {
     const porArea = {};
     metas.forEach(m => { (porArea[m.area] = porArea[m.area] || []).push(m); });
 
-    let tabela = '<table class="tabela-presenca"><thead><tr>' +
-      '<th style="width:150px">Area de estimulo</th><th>Meta</th>' +
-      '<th style="width:220px">Recurso</th><th style="width:100px">Prazo</th></tr></thead><tbody>';
-    Object.entries(porArea).forEach(([area, lista]) => {
-      lista.forEach((m, i) => {
-        tabela += '<tr>' +
-          (i === 0 ? '<td rowspan="' + lista.length + '" style="vertical-align:top"><b>' + escaparHtml(area) + '</b></td>' : '') +
-          '<td>' + escaparHtml(m.meta) +
-          (perm('programas') === 'E'
+    // Programas do paciente para casar meta -> andamento
+    const { data: pps } = await sb.from('paciente_programas')
+      .select('status, programas(nome)').eq('paciente_id', pei.pacientes.id);
+    const andamento = m => {
+      const alvo = (m.meta || '').slice(0, 120).toLowerCase();
+      const pp = (pps || []).find(x => x.programas && x.programas.nome.toLowerCase() === alvo);
+      if (!pp) return '';
+      const rot = { na_fila: ['Na fila', 'selo-neutro'], em_intervencao: ['Em intervencao', 'selo-warn'],
+        dominado: ['Dominado', 'selo-ok'] };
+      const r = rot[pp.status] || [pp.status, 'selo-neutro'];
+      return '<span class="selo ' + r[1] + '" style="margin-left:6px">' + r[0] + '</span>';
+    };
+
+    const CORES_DOM = ['azul', 'teal', 'amarelo', 'rosa'];
+    const fmtD = d => d ? new Date(d + 'T12:00:00').toLocaleDateString('pt-BR') : '-';
+    let corpo = '';
+    Object.entries(porArea).forEach(([area, lista], ai) => {
+      corpo += '<h2 style="margin-top:14px"><span class="ponto deq-' + CORES_DOM[ai % 4] + '"></span>' +
+        escaparHtml(area) + ' <small style="font-weight:600">&middot; ' + lista.length + ' meta(s)</small></h2>' +
+        '<table class="deq-freq"><tr><th style="text-align:left; padding-left:10px">Meta</th>' +
+        '<th style="text-align:left">Recurso</th><th style="width:90px">Prazo</th></tr>' +
+        lista.map(m =>
+          '<tr><td style="width:auto; text-align:left; padding:6px 10px">' + escaparHtml(m.meta) +
+          andamento(m) +
+          (this.podeGerir()
             ? ' <button class="btn-chip nao-imprime" style="margin-left:6px" ' +
               'title="Cria um programa na biblioteca a partir desta meta e coloca na fila do paciente." ' +
-              'onclick="MODULOS.pei.lancarPrograma(\'' + m.id + '\')">&#9654; Lancar programa</button>'
+              'onclick="MODULOS.pei.lancarPrograma(\'' + m.id + '\')">&#9654; Lancar</button>'
             : '') + '</td>' +
-          '<td>' + escaparHtml(m.recurso || '-') + '</td>' +
-          '<td>' + escaparHtml(m.prazo || '-') + '</td></tr>';
-      });
+          '<td style="width:auto; text-align:left; padding:6px 10px">' + escaparHtml(m.recurso || '-') + '</td>' +
+          '<td style="width:auto">' + escaparHtml(m.prazo || '-') + '</td></tr>').join('') +
+        '</table>';
     });
-    tabela += '</tbody></table>';
 
     el.innerHTML =
-      '<div class="pagina-cabecalho nao-imprime">' +
+      '<div class="pagina-cabecalho">' +
       '  <div>' +
       '    <button class="btn-voltar" onclick="MODULOS.pacientes.telaDetalhe(\'' + pei.pacientes.id + '\', \'pei\')">&larr; Prontuario</button>' +
       '    <h2>Plano de Ensino Individualizado</h2>' +
       '  </div>' +
-      '  <button class="btn btn-primario" onclick="MODULOS.pei.docPEI(\'' + pei.id + '\')">&#128196; Documento oficial</button>' +
+      '  <button class="btn btn-primario" onclick="MODULOS.pei.docPEI(\'' + pei.id + '\')">&#128424; Imprimir / Enviar ao portal</button>' +
       '</div>' +
 
-      '<div class="cartao folha-presenca">' +
-      '  <div class="folha-titulo">' +
-      '    <div><b>PLANO DE ENSINO INDIVIDUALIZADO</b>' +
-      '    <small>Formulario 02 &middot; Psicoterapia ABA</small></div>' +
-      '    <span class="folha-marca">CORTEX aba &middot; Equilibrium Terapia Infantil</span>' +
-      '  </div>' +
-      '  <div class="grade-visao" style="margin-bottom:14px">' +
-      '    <div class="caixa-info larga"><small>Paciente</small><b>' + escaparHtml(pei.pacientes.nome) + '</b></div>' +
-      '    <div class="caixa-info"><small>Nascimento</small><b>' +
-        new Date(pei.pacientes.data_nascimento + 'T12:00:00').toLocaleDateString('pt-BR') + '</b></div>' +
-      '    <div class="caixa-info"><small>Periodo</small><b>' +
-        (pei.periodo_inicio ? new Date(pei.periodo_inicio + 'T12:00:00').toLocaleDateString('pt-BR') : '-') + ' a ' +
-        (pei.periodo_fim ? new Date(pei.periodo_fim + 'T12:00:00').toLocaleDateString('pt-BR') : '-') + '</b></div>' +
-      '    <div class="caixa-info"><small>Responsavel tecnico</small><b>' +
-        escaparHtml(pei.profissional ? pei.profissional.nome : '-') + '</b></div>' +
-      (pei.finalidade ? '<div class="caixa-info larga"><small>Finalidade</small><b>' +
-        escaparHtml(pei.finalidade) + '</b></div>' : '') +
-      '  </div>' +
-      tabela +
-      '</div>';
+      '<div class="cartao"><div class="doc-eq">' +
+      '<div class="deq-cab">' +
+      '  <img src="icones/equilibrium.png" alt="Equilibrium">' +
+      '  <div class="deq-cab-t"><h1>PLANO DE ENSINO INDIVIDUALIZADO</h1>' +
+      '  <p>Equilibrium Terapia Infantil &middot; Psicoterapia ABA &middot; Formul&aacute;rio 02</p></div>' +
+      '</div>' +
+      '<div class="deq-caixa deq-dados" style="grid-template-columns:repeat(4, 1fr); margin-top:8px">' +
+      '  <div><small>Paciente</small><b>' + escaparHtml(pei.pacientes.nome) + '</b></div>' +
+      '  <div><small>Nascimento</small><b>' + fmtD(pei.pacientes.data_nascimento) + '</b></div>' +
+      '  <div><small>Periodo</small><b>' + fmtD(pei.periodo_inicio) + ' a ' + fmtD(pei.periodo_fim) + '</b></div>' +
+      '  <div style="border-bottom:none"><small>Responsavel tecnico</small><b>' +
+           escaparHtml(pei.profissional ? pei.profissional.nome : '-') + '</b></div>' +
+      '</div>' +
+      (pei.finalidade
+        ? '<div class="deq-caixa deq-texto" style="margin-top:8px"><b style="font-size:11px">Finalidade:</b> ' +
+          escaparHtml(pei.finalidade) + '</div>' : '') +
+      corpo +
+      '<p class="sub nao-imprime" style="margin-top:10px">O selo ao lado da meta mostra o andamento do programa vinculado. ' +
+      '&#9654; Lancar cria o programa na biblioteca e coloca na fila deste paciente. Para papel ou portal, use o botao la em cima.</p>' +
+      '<div class="deq-rodape">' +
+      '  <span>Equilibrium Terapia Infantil &middot; Uberl&acirc;ndia/MG</span>' +
+      '  <span class="pontos"><i style="background:var(--eq-teal)"></i><i style="background:var(--eq-amarelo)"></i>' +
+      '<i style="background:var(--eq-rosa)"></i><i style="background:var(--eq-azul)"></i></span>' +
+      '  <span>CORTEX aba</span>' +
+      '</div>' +
+      '</div></div>';
   },
 
   // ─────────────────── RELATORIO DE DEVOLUTIVA ───────────────────

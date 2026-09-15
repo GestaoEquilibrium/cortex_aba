@@ -55,7 +55,7 @@ window.MODULOS.pacientes = {
 
     let consulta = sb
       .from('pacientes')
-      .select('id, nome, data_nascimento, nivel, status, convenio, aplicador_id, foto_path, admitido_em, ' +
+      .select('id, nome, data_nascimento, nivel, status, convenio, aplicador_id, foto_path, admitido_em, etapas_ok, ' +
               'aplicador:profiles!pacientes_aplicador_id_fkey(nome), ' +
               'responsaveis(nome, telefone, principal)')
       .order('nome');
@@ -106,7 +106,15 @@ window.MODULOS.pacientes = {
         const setDe = r => new Set((r.data || []).map(x => x.paciente_id));
         const sAn = setDe(an), sPl = setDe(pl), sAv = setDe(av), sPei = setDe(pei), sProg = setDe(prog);
         this.dados.forEach(p => {
+          const ok = p.etapas_ok || {};
           p._jornada = {
+            anamnese: sAn.has(p.id) || !!ok.anamnese,
+            plano: sPl.has(p.id) || !!ok.plano,
+            avaliacao: sAv.has(p.id) || !!ok.avaliacao,
+            pei: sPei.has(p.id) || !!ok.pei,
+            intervencao: sProg.has(p.id) || !!ok.intervencao
+          };
+          p._jornadaAuto = {
             anamnese: sAn.has(p.id), plano: sPl.has(p.id), avaliacao: sAv.has(p.id),
             pei: sPei.has(p.id), intervencao: sProg.has(p.id)
           };
@@ -442,6 +450,40 @@ window.MODULOS.pacientes = {
       '</div></div>';
   },
 
+  blocoEtapas(p) {
+    const gestao = ['direcao', 'coordenador', 'suporte'].includes(window.CORTEX_SESSAO.profile.perfil);
+    const ok = p.etapas_ok || {};
+    const auto = p._jornadaAuto || {};
+    const ETAPAS = [['anamnese', 'Anamnese'], ['avaliacao', 'Avaliacao'],
+      ['plano', 'Plano'], ['pei', 'PEI'], ['intervencao', 'Intervencao']];
+    return '<div class="cartao"><h3>Jornada clinica</h3>' +
+      '<p class="sub" style="margin-bottom:8px">O sistema marca sozinho o que foi feito aqui dentro. O que aconteceu fora (papel, sistema antigo) a gestao marca a mao &mdash; e o card do paciente passa a mostrar certo.</p>' +
+      ETAPAS.map(([id, rotulo]) => {
+        const feitoAuto = !!auto[id];
+        const feitoMao = !!ok[id];
+        const feito = feitoAuto || feitoMao;
+        return '<div class="linha-doc"><div><b>' + rotulo + '</b>' +
+          '<small>' + (feitoAuto ? 'Concluida no sistema' :
+            feitoMao ? 'Marcada manualmente como concluida' : 'Pendente') + '</small></div>' +
+          '<div class="pac-selos">' +
+          '<span class="selo ' + (feito ? 'selo-ok' : 'selo-neutro') + '">' + (feito ? 'Concluida' : 'Pendente') + '</span>' +
+          (gestao && !feitoAuto
+            ? '<button class="btn-chip" onclick="MODULOS.pacientes.marcarEtapa(\'' + p.id + '\', \'' + id + '\', ' + (feitoMao ? 'false' : 'true') + ')">' +
+              (feitoMao ? 'Desmarcar' : 'Marcar concluida') + '</button>'
+            : '') +
+          '</div></div>';
+      }).join('') + '</div>';
+  },
+
+  async marcarEtapa(pacienteId, etapa, valor) {
+    const { data: atual } = await sb.from('pacientes').select('etapas_ok').eq('id', pacienteId).single();
+    const ok = (atual && atual.etapas_ok) || {};
+    if (valor) ok[etapa] = true; else delete ok[etapa];
+    const { error } = await sb.from('pacientes').update({ etapas_ok: ok }).eq('id', pacienteId);
+    if (error) { alert(error.message); return; }
+    this.telaDetalhe(pacienteId, 'visao');
+  },
+
   htmlVisaoGeral(p) {
     const endereco = [p.endereco, p.numero, p.complemento, p.bairro]
       .filter(Boolean).join(', ');
@@ -449,7 +491,7 @@ window.MODULOS.pacientes = {
     const resps = (p.responsaveis || []).sort((a, b) => (b.principal ? 1 : 0) - (a.principal ? 1 : 0));
     const principal = resps[0];
 
-    return '<div class="cartao">' +
+    return this.blocoEtapas(p) + '<div class="cartao">' +
       '<h3>Visao geral</h3>' +
       '<div class="grade-visao">' +
       this.caixa('Telefone', principal ? principal.telefone : null) +

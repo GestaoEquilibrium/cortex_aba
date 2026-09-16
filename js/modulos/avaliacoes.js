@@ -554,6 +554,142 @@ window.MODULOS.avaliacoes = {
   // Cores do catavento para as aplicacoes AV1..AV4+
   COR_AV: ['#1468B2', '#56C4CF', '#F3B63D', '#E9586A', '#7C6FD0', '#3E9C6E'],
 
+  // ═══════════ GRAFICOS SVG DOS DOCUMENTOS (formato das planilhas, cores Equilibrium) ═══════════
+  // series: [{ nome, cor, valores: [n|null] }] ; categorias: ['...'] ; opc: { max, unidade, altura, fmt }
+  COR_AREA: ['#1468B2', '#56C4CF', '#F3B63D', '#E9586A', '#7C6FD0', '#3E9C6E', '#E07A2F'],
+
+  _gRotulo(texto, x, y, extra) {
+    // quebra rotulos longos em 2 linhas
+    const partes = String(texto).split(' ');
+    if (partes.length < 2 || texto.length <= 12) {
+      return '<text x="' + x + '" y="' + y + '" text-anchor="middle" ' + extra + '>' + escaparHtml(texto) + '</text>';
+    }
+    const meio = Math.ceil(partes.length / 2);
+    return '<text x="' + x + '" y="' + y + '" text-anchor="middle" ' + extra + '>' +
+      '<tspan x="' + x + '" dy="0">' + escaparHtml(partes.slice(0, meio).join(' ')) + '</tspan>' +
+      '<tspan x="' + x + '" dy="10">' + escaparHtml(partes.slice(meio).join(' ')) + '</tspan></text>';
+  },
+
+  _gLegenda(series, W, y) {
+    let x = 8, out = '';
+    series.forEach(s => {
+      out += '<rect x="' + x + '" y="' + (y - 8) + '" width="10" height="10" rx="2" fill="' + s.cor + '"/>' +
+        '<text x="' + (x + 14) + '" y="' + y + '" font-size="9.5" font-weight="700" fill="#475569">' + escaparHtml(s.nome) + '</text>';
+      x += 22 + s.nome.length * 5.6;
+    });
+    return out;
+  },
+
+  _gEixo(W, H, ESQ, DIR, TOPO, BASE, max, unidade) {
+    const y = v => BASE - (v / max) * (BASE - TOPO);
+    const passos = max === 100 ? [0, 25, 50, 75, 100] : [0, .25, .5, .75, 1].map(f => Math.round(max * f));
+    return passos.map(g =>
+      '<line x1="' + ESQ + '" y1="' + y(g) + '" x2="' + (W - DIR) + '" y2="' + y(g) + '" stroke="#E2E8F0" stroke-dasharray="3 4"/>' +
+      '<text x="' + (ESQ - 6) + '" y="' + (y(g) + 3) + '" text-anchor="end" font-size="9" fill="#94A3B8">' + g + (unidade || '') + '</text>').join('');
+  },
+
+  gBarras(categorias, series, opc) {
+    opc = opc || {};
+    const max = opc.max || 100, un = opc.unidade === undefined ? '%' : opc.unidade;
+    const fmt = opc.fmt || (v => v + un);
+    const W = 680, H = opc.altura || 230, ESQ = 40, DIR = 10, TOPO = 22, BASE = H - 44;
+    const y = v => BASE - (Math.min(v, max) / max) * (BASE - TOPO);
+    const nC = categorias.length, nS = series.length;
+    const larguraCat = (W - ESQ - DIR) / nC;
+    const gap = Math.max(4, larguraCat * 0.18);
+    const larguraBarra = Math.min(34, (larguraCat - gap) / nS);
+    let svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%; height:auto; font-family:inherit">' +
+      this._gEixo(W, H, ESQ, DIR, TOPO, BASE, max, un);
+    categorias.forEach((cat, ci) => {
+      const x0 = ESQ + ci * larguraCat + (larguraCat - larguraBarra * nS) / 2;
+      series.forEach((s, si) => {
+        const v = s.valores[ci];
+        if (v === null || v === undefined) return;
+        const x = x0 + si * larguraBarra;
+        svg += '<rect x="' + x + '" y="' + y(v) + '" width="' + (larguraBarra - 2) + '" height="' + (BASE - y(v)) +
+          '" rx="3" fill="' + s.cor + '"/>';
+        // rotulo do valor: normal em barras largas; vertical dentro da barra quando estreitas
+        if (larguraBarra >= 22) {
+          svg += '<text x="' + (x + (larguraBarra - 2) / 2) + '" y="' + (y(v) - 4) + '" text-anchor="middle" font-size="8.5" font-weight="800" fill="' + s.cor + '">' + fmt(v) + '</text>';
+        } else if (BASE - y(v) > 26) {
+          const cx = x + (larguraBarra - 2) / 2, cy = y(v) + 6;
+          svg += '<text transform="translate(' + cx + ' ' + cy + ') rotate(90)" text-anchor="start" font-size="7.5" font-weight="800" fill="#fff">' + fmt(v) + '</text>';
+        }
+      });
+      svg += this._gRotulo(cat, ESQ + ci * larguraCat + larguraCat / 2, BASE + 12, 'font-size="9" font-weight="700" fill="#475569"');
+    });
+    svg += '<line x1="' + ESQ + '" y1="' + BASE + '" x2="' + (W - DIR) + '" y2="' + BASE + '" stroke="#CBD5E1"/>';
+    if (nS > 1 || opc.legenda) svg += this._gLegenda(series, W, H - 6);
+    return svg + '</svg>';
+  },
+
+  gLinhas(categorias, series, opc) {
+    opc = opc || {};
+    const max = opc.max || 100, un = opc.unidade === undefined ? '%' : opc.unidade;
+    const fmt = opc.fmt || (v => v + un);
+    const W = 680, H = opc.altura || 220, ESQ = 64, DIR = 60, TOPO = 22, BASE = H - 44;
+    const y = v => BASE - (Math.min(v, max) / max) * (BASE - TOPO);
+    const nC = categorias.length;
+    const passo = nC > 1 ? (W - ESQ - DIR) / (nC - 1) : 0;
+    const x = i => nC > 1 ? ESQ + i * passo : (ESQ + W - DIR) / 2;
+    let svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%; height:auto; font-family:inherit">' +
+      this._gEixo(W, H, ESQ, DIR, TOPO, BASE, max, un);
+    categorias.forEach((cat, i) =>
+      svg += this._gRotulo(cat, x(i), BASE + 12, 'font-size="9" font-weight="700" fill="#475569"'));
+    series.forEach(s => {
+      const pts = s.valores.map((v, i) => (v === null || v === undefined) ? null : x(i) + ',' + y(v)).filter(Boolean);
+      svg += '<polyline fill="none" stroke="' + s.cor + '" stroke-width="2.5" stroke-linejoin="round" points="' + pts.join(' ') + '"/>';
+      s.valores.forEach((v, i) => {
+        if (v === null || v === undefined) return;
+        svg += '<circle cx="' + x(i) + '" cy="' + y(v) + '" r="4.5" fill="#fff" stroke="' + s.cor + '" stroke-width="2.5"/>' +
+          '<text x="' + x(i) + '" y="' + (y(v) - 8) + '" text-anchor="middle" font-size="8.5" font-weight="800" fill="' + s.cor + '">' + fmt(v) + '</text>';
+      });
+    });
+    svg += '<line x1="' + ESQ + '" y1="' + BASE + '" x2="' + (W - DIR) + '" y2="' + BASE + '" stroke="#CBD5E1"/>';
+    if (series.length > 1 || opc.legenda) svg += this._gLegenda(series, W, H - 6);
+    return svg + '</svg>';
+  },
+
+  gRadar(categorias, series, opc) {
+    opc = opc || {};
+    const max = opc.max || 100;
+    const W = 680, H = 300, CX = W / 2, CY = 140, R = 100;
+    const n = categorias.length;
+    const ang = i => -Math.PI / 2 + (2 * Math.PI * i) / n;
+    const pt = (i, v) => (CX + Math.cos(ang(i)) * R * v / max) + ',' + (CY + Math.sin(ang(i)) * R * v / max);
+    let svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%; height:auto; font-family:inherit">';
+    [25, 50, 75, 100].forEach(g => {
+      svg += '<polygon fill="none" stroke="#E2E8F0" points="' + categorias.map((c, i) => pt(i, g)).join(' ') + '"/>';
+      svg += '<text x="' + (CX + 4) + '" y="' + (CY - R * g / max + 3) + '" font-size="8" fill="#94A3B8">' + g + '%</text>';
+    });
+    categorias.forEach((c, i) => {
+      svg += '<line x1="' + CX + '" y1="' + CY + '" x2="' + pt(i, max).replace(',', '" y2="') + '" stroke="#E2E8F0"/>';
+      const lx = CX + Math.cos(ang(i)) * (R + 22), ly = CY + Math.sin(ang(i)) * (R + 22);
+      svg += this._gRotulo(c, lx, ly + 3, 'font-size="9" font-weight="700" fill="#475569"');
+    });
+    series.forEach(s => {
+      svg += '<polygon fill="' + s.cor + '22" stroke="' + s.cor + '" stroke-width="2" points="' +
+        categorias.map((c, i) => pt(i, s.valores[i] || 0)).join(' ') + '"/>';
+      categorias.forEach((c, i) => {
+        const [px, py] = pt(i, s.valores[i] || 0).split(',');
+        svg += '<circle cx="' + px + '" cy="' + py + '" r="3.5" fill="' + s.cor + '"/>';
+      });
+    });
+    svg += this._gLegenda(series, W, H - 8);
+    return svg + '</svg>';
+  },
+
+  // tabela colorida: cab = ['Area', 'AV1', ...]; linhas = [['Nome', v, v...]]; cores = cor por coluna (opcional)
+  gTabela(cab, linhas, cores) {
+    return '<table class="deq-freq deq-graf-tab"><tr>' +
+      cab.map((c, i) => '<th' + (i === 0 ? ' style="text-align:left; padding-left:10px"' : '') +
+        (cores && cores[i] ? ' style="background:' + cores[i] + '"' : '') + '>' + c + '</th>').join('') + '</tr>' +
+      linhas.map(l => '<tr>' + l.map((v, i) =>
+        '<td style="' + (i === 0 ? 'text-align:left; padding:6px 10px; font-weight:700' : 'width:auto') + '">' +
+        (v === null || v === undefined ? '&mdash;' : v) + '</td>').join('') + '</tr>').join('') + '</table>';
+  },
+
+
   async docSS(pacienteId) {
     await this.carregarItensSS();
     const ov = this.abrirDocOverlay();
@@ -587,18 +723,21 @@ window.MODULOS.avaliacoes = {
 
     const fmtD = d => new Date(d).toLocaleDateString('pt-BR');
 
-    // Grafico 1: barras horizontais por area, uma cor por AV (estilo GRAFICO-1 da pasta)
-    const grafAreas = '<div style="display:grid; gap:10px">' +
-      this.SS_AREAS.map(area =>
-        '<div><div style="font-size:11px; font-weight:800; color:var(--eq-azul-escuro); margin-bottom:3px">' + area + '</div>' +
-        dados.map((d, i) => {
-          const x = d.porArea.find(p => p.area === area);
-          return '<div style="display:flex; align-items:center; gap:8px; margin-top:2px">' +
-            '<small style="width:34px; font-weight:800; color:' + this.COR_AV[i % 6] + '">AV' + (i + 1) + '</small>' +
-            '<div style="flex:1; height:9px; background:#EFF4F8; border-radius:5px; overflow:hidden">' +
-            '<i style="display:block; height:100%; width:' + x.pct + '%; background:' + this.COR_AV[i % 6] + '; border-radius:5px"></i></div>' +
-            '<b style="width:40px; text-align:right; font-size:11px">' + x.pct + '%</b></div>';
-        }).join('') + '</div>').join('') + '</div>';
+    // Tabela + graficos no formato da planilha SS (CONSOLIDADO): barras agrupadas, linhas e radar por AV
+    const seriesAV = dados.map((d, i) => ({
+      nome: 'AV' + (i + 1) + ' (' + fmtD(d.av.concluido_em) + ')', cor: this.COR_AV[i % 6],
+      valores: this.SS_AREAS.map(area => d.porArea.find(p => p.area === area).pct)
+    }));
+    const tabSS = this.gTabela(
+      ['&Aacute;rea'].concat(dados.map((d, i) => 'AV' + (i + 1))),
+      this.SS_AREAS.map(area => [area].concat(dados.map(d => {
+        const x = d.porArea.find(p => p.area === area); return x.pct + '% <small>(' + x.r + '/' + x.max + ')</small>';
+      }))).concat([['<b>Total geral</b>'].concat(dados.map(d => '<b>' + d.total + '%</b>'))]),
+      [null].concat(dados.map((d, i) => this.COR_AV[i % 6])));
+    const grafAreas = tabSS +
+      '<div style="margin-top:12px">' + this.gBarras(this.SS_AREAS, seriesAV) + '</div>' +
+      '<div style="margin-top:8px">' + this.gLinhas(this.SS_AREAS, seriesAV) + '</div>' +
+      '<div style="margin-top:8px">' + this.gRadar(this.SS_AREAS, seriesAV) + '</div>';
 
     // Grafico 2: evolucao do total (bolinhas ligadas, nosso estilo)
     let grafTotal = '';
@@ -784,6 +923,25 @@ window.MODULOS.avaliacoes = {
       
       '<h2 style="margin-top:14px"><span class="ponto deq-amarelo"></span>Perfil por &aacute;rea &middot; adquirida/esperada</h2>' +
       '<div class="deq-caixa">' + grafico + '</div>' +
+      '<h2 style="margin-top:14px"><span class="ponto deq-teal"></span>Quadro e gr&aacute;ficos por &aacute;rea</h2>' +
+      '<div class="deq-caixa">' +
+      this.gTabela(['&Aacute;rea'].concat(calc.map((c, i) => 'AV' + (i + 1))),
+        this.AREAS.map(area => [area].concat(calc.map(c => {
+          const x = c.areas.find(p => p.area === area);
+          return x && x.pct !== null ? x.pct + '% <small>(' + x.adq + '/' + x.esp + ')</small>' : null;
+        }))).concat([['<b>Total</b>'].concat(calc.map(c => '<b>' + c.tPct + '% (' + c.tAdq + '/' + c.tEsp + ')</b>'))]),
+        [null].concat(calc.map((c, i) => this.COR_AV[i % 6]))) +
+      '<div style="margin-top:12px"><p class="sub" style="font-size:10.5px; margin-bottom:2px">Pontua&ccedil;&atilde;o adquirida &times; esperada por &aacute;rea &middot; AV' + calc.length + ' (faixas ' + ult.faixas.join(', ') + ')</p>' +
+      this.gBarras(this.AREAS, [
+        { nome: 'Adquirida', cor: '#1468B2', valores: this.AREAS.map(a => { const x = ult.areas.find(p => p.area === a); return x && x.esp ? x.adq : null; }) },
+        { nome: 'Esperada', cor: '#F3B63D', valores: this.AREAS.map(a => { const x = ult.areas.find(p => p.area === a); return x && x.esp ? x.esp : null; }) }
+      ], { max: Math.max(10, ...ult.areas.map(a => a.esp)), unidade: '' }) + '</div>' +
+      (calc.length > 1
+        ? '<div style="margin-top:8px"><p class="sub" style="font-size:10.5px; margin-bottom:2px">Evolu&ccedil;&atilde;o do % por &aacute;rea entre aplica&ccedil;&otilde;es</p>' +
+          this.gLinhas(this.AREAS, calc.map((c, i) => ({ nome: 'AV' + (i + 1), cor: this.COR_AV[i % 6],
+            valores: this.AREAS.map(a => { const x = c.areas.find(p => p.area === a); return x ? x.pct : null; }) }))) + '</div>'
+        : '') +
+      '</div>' +
       secAnalise +
       calc.filter(c => c.av.observacoes).map((c, i) =>
         '<div class="deq-caixa deq-texto" style="margin-top:8px"><b style="font-size:11px">Observa&ccedil;&otilde;es AV' +
@@ -1226,8 +1384,26 @@ window.MODULOS.avaliacoes = {
       '</div>' +
       '<h2 style="margin-top:14px"><span class="ponto deq-teal"></span>% de acertos por faixa et&aacute;ria (AV' + calc.length + ')</h2>' +
       tabela +
+      '<div class="deq-caixa" style="margin-top:8px"><p class="sub" style="font-size:10.5px; margin-bottom:2px">% de acertos por faixa et&aacute;ria e &aacute;rea &middot; AV' + calc.length + '</p>' +
+      this.gBarras(this.P_FAIXAS.map(f => f.replace(' anos', 'a').replace(' ano', 'a')), this.P_AREAS.map((area, i) => ({
+        nome: area, cor: this.COR_AREA[i],
+        valores: ult.areas.find(a => a.area === area).faixas.map(x => x === null ? null : x.pct)
+      })), { altura: 250 }) +
+      '<p class="sub" style="font-size:10.5px; margin:10px 0 2px">Idade de desenvolvimento por &aacute;rea (meses)</p>' +
+      this.gBarras(this.P_AREAS, calc.map((c, i) => ({
+        nome: 'AV' + (i + 1), cor: this.COR_AV[i % 6],
+        valores: this.P_AREAS.map(area => Math.round(c.areas.find(a => a.area === area).idade * 12))
+      })), { max: 72, unidade: 'm', legenda: true }) +
+      '</div>' +
       '<h2 style="margin-top:14px"><span class="ponto deq-amarelo"></span>Comparativo entre aplica&ccedil;&otilde;es</h2>' +
-      '<div class="deq-caixa">' + barras + '</div>' +
+      '<div class="deq-caixa">' + barras +
+      (calc.length > 1
+        ? '<div style="margin-top:10px">' + this.gBarras(this.P_AREAS, calc.map((c, i) => ({
+            nome: 'AV' + (i + 1), cor: this.COR_AV[i % 6],
+            valores: this.P_AREAS.map(area => { const a = c.areas.find(x => x.area === area); return a.total === null ? null : a.total; })
+          }))) + '</div>'
+        : '') +
+      '</div>' +
       '<h2 style="margin-top:14px"><span class="ponto deq-rosa"></span>An&aacute;lise</h2>' +
       '<div class="deq-caixa deq-texto">' + analise +
       '<br><small style="color:var(--eq-cinza)">Regra: Sim = 1 &middot; As vezes = 0,5 &middot; Nao/NA/em branco = 0; % da faixa = pontos &divide; itens da faixa; idade de desenvolvimento = soma das fra&ccedil;&otilde;es das faixas aplicadas. Texto de apoio gerado automaticamente; a leitura cl&iacute;nica cabe &agrave; equipe.</small></div>' +

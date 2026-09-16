@@ -228,3 +228,9 @@
         background: #fff;
     }
 }
+
+/* tabela dos graficos: cabecalho colorido por AV, corpo compacto */
+.deq-graf-tab td { font-size: 11px; padding: 5px 6px; text-align: center; border-bottom: 1px solid #E5EDF4; }
+.deq-graf-tab td small { color: #64748B; font-weight: 600; }
+.deq-graf-tab th { font-size: 10px; }
+.deq-graf-tab tr:last-child td { border-bottom: none; background: #F4F8FB; }

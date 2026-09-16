@@ -601,16 +601,18 @@ window.MODULOS.avaliacoes = {
     let svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%; height:auto; font-family:inherit">' +
       this._gEixo(W, H, ESQ, DIR, TOPO, BASE, max, un);
     categorias.forEach((cat, ci) => {
+      if (ci % 2 === 0) svg += '<rect x="' + (ESQ + ci * larguraCat) + '" y="' + TOPO + '" width="' + larguraCat + '" height="' + (BASE - TOPO) + '" fill="#F5F8FB"/>';
       const x0 = ESQ + ci * larguraCat + (larguraCat - larguraBarra * nS) / 2;
       series.forEach((s, si) => {
         const v = s.valores[ci];
         if (v === null || v === undefined) return;
         const x = x0 + si * larguraBarra;
+        const cor = (nS === 1 && opc.porCategoria !== false) ? this.COR_AREA[ci % this.COR_AREA.length] : s.cor;
         svg += '<rect x="' + x + '" y="' + y(v) + '" width="' + (larguraBarra - 2) + '" height="' + (BASE - y(v)) +
-          '" rx="3" fill="' + s.cor + '"/>';
+          '" rx="3" fill="' + cor + '"/>';
         // rotulo do valor: normal em barras largas; vertical dentro da barra quando estreitas
         if (larguraBarra >= 22) {
-          svg += '<text x="' + (x + (larguraBarra - 2) / 2) + '" y="' + (y(v) - 4) + '" text-anchor="middle" font-size="8.5" font-weight="800" fill="' + s.cor + '">' + fmt(v) + '</text>';
+          svg += '<text x="' + (x + (larguraBarra - 2) / 2) + '" y="' + (y(v) - 4) + '" text-anchor="middle" font-size="8.5" font-weight="800" fill="' + cor + '">' + fmt(v) + '</text>';
         } else if (BASE - y(v) > 26) {
           const cx = x + (larguraBarra - 2) / 2, cy = y(v) + 6;
           svg += '<text transform="translate(' + cx + ' ' + cy + ') rotate(90)" text-anchor="start" font-size="7.5" font-weight="800" fill="#fff">' + fmt(v) + '</text>';
@@ -638,11 +640,16 @@ window.MODULOS.avaliacoes = {
       svg += this._gRotulo(cat, x(i), BASE + 12, 'font-size="9" font-weight="700" fill="#475569"'));
     series.forEach(s => {
       const pts = s.valores.map((v, i) => (v === null || v === undefined) ? null : x(i) + ',' + y(v)).filter(Boolean);
+      if (pts.length > 1) {
+        const p0 = pts[0].split(',')[0], pN = pts[pts.length - 1].split(',')[0];
+        svg += '<polygon fill="' + s.cor + '" fill-opacity="' + (series.length === 1 ? '.14' : '.06') + '" points="' + p0 + ',' + BASE + ' ' + pts.join(' ') + ' ' + pN + ',' + BASE + '"/>';
+      }
       svg += '<polyline fill="none" stroke="' + s.cor + '" stroke-width="2.5" stroke-linejoin="round" points="' + pts.join(' ') + '"/>';
       s.valores.forEach((v, i) => {
         if (v === null || v === undefined) return;
-        svg += '<circle cx="' + x(i) + '" cy="' + y(v) + '" r="4.5" fill="#fff" stroke="' + s.cor + '" stroke-width="2.5"/>' +
-          '<text x="' + x(i) + '" y="' + (y(v) - 8) + '" text-anchor="middle" font-size="8.5" font-weight="800" fill="' + s.cor + '">' + fmt(v) + '</text>';
+        const cor = (series.length === 1 && opc.porCategoria !== false) ? this.COR_AREA[i % this.COR_AREA.length] : s.cor;
+        svg += '<circle cx="' + x(i) + '" cy="' + y(v) + '" r="5.5" fill="' + cor + '" stroke="#fff" stroke-width="2"/>' +
+          '<text x="' + x(i) + '" y="' + (y(v) - 9) + '" text-anchor="middle" font-size="8.5" font-weight="800" fill="' + cor + '">' + fmt(v) + '</text>';
       });
     });
     svg += '<line x1="' + ESQ + '" y1="' + BASE + '" x2="' + (W - DIR) + '" y2="' + BASE + '" stroke="#CBD5E1"/>';
@@ -663,16 +670,19 @@ window.MODULOS.avaliacoes = {
       svg += '<text x="' + (CX + 4) + '" y="' + (CY - R * g / max + 3) + '" font-size="8" fill="#94A3B8">' + g + '%</text>';
     });
     categorias.forEach((c, i) => {
-      svg += '<line x1="' + CX + '" y1="' + CY + '" x2="' + pt(i, max).replace(',', '" y2="') + '" stroke="#E2E8F0"/>';
+      const corA = this.COR_AREA[i % this.COR_AREA.length];
+      svg += '<line x1="' + CX + '" y1="' + CY + '" x2="' + pt(i, max).replace(',', '" y2="') + '" stroke="' + corA + '" stroke-opacity=".35"/>';
       const lx = CX + Math.cos(ang(i)) * (R + 22), ly = CY + Math.sin(ang(i)) * (R + 22);
-      svg += this._gRotulo(c, lx, ly + 3, 'font-size="9" font-weight="700" fill="#475569"');
+      svg += this._gRotulo(c, lx, ly + 3, 'font-size="9" font-weight="800" fill="' + corA + '"');
     });
     series.forEach(s => {
-      svg += '<polygon fill="' + s.cor + '22" stroke="' + s.cor + '" stroke-width="2" points="' +
+      svg += '<polygon fill="' + s.cor + '" fill-opacity="' + (series.length === 1 ? '.22' : '.14') + '" stroke="' + s.cor + '" stroke-width="2.5" stroke-linejoin="round" points="' +
         categorias.map((c, i) => pt(i, s.valores[i] || 0)).join(' ') + '"/>';
       categorias.forEach((c, i) => {
         const [px, py] = pt(i, s.valores[i] || 0).split(',');
-        svg += '<circle cx="' + px + '" cy="' + py + '" r="3.5" fill="' + s.cor + '"/>';
+        const cor = series.length === 1 ? this.COR_AREA[i % this.COR_AREA.length] : s.cor;
+        svg += '<circle cx="' + px + '" cy="' + py + '" r="5" fill="' + cor + '" stroke="#fff" stroke-width="2"/>' +
+          '<text x="' + px + '" y="' + (parseFloat(py) - 8) + '" text-anchor="middle" font-size="8" font-weight="800" fill="' + cor + '">' + (s.valores[i] || 0) + '%</text>';
       });
     });
     svg += this._gLegenda(series, W, H - 8);
@@ -684,8 +694,10 @@ window.MODULOS.avaliacoes = {
     return '<table class="deq-freq deq-graf-tab"><tr>' +
       cab.map((c, i) => '<th' + (i === 0 ? ' style="text-align:left; padding-left:10px"' : '') +
         (cores && cores[i] ? ' style="background:' + cores[i] + '"' : '') + '>' + c + '</th>').join('') + '</tr>' +
-      linhas.map(l => '<tr>' + l.map((v, i) =>
+      linhas.map((l, li) => '<tr>' + l.map((v, i) =>
         '<td style="' + (i === 0 ? 'text-align:left; padding:6px 10px; font-weight:700' : 'width:auto') + '">' +
+        (i === 0 && li < linhas.length - 1 && !/^<b>/.test(String(v))
+          ? '<i class="deq-bolinha" style="background:' + this.COR_AREA[li % this.COR_AREA.length] + '"></i>' : '') +
         (v === null || v === undefined ? '&mdash;' : v) + '</td>').join('') + '</tr>').join('') + '</table>';
   },
 

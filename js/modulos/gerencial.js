@@ -65,7 +65,185 @@ window.MODULOS.gerencial = {
       '  <button class="btn btn-primario" onclick="MODULOS.gerencial.gerar()">Gerar relatorio</button>' +
       '</div></div>' +
 
-      '<div id="ge-resultado"></div>';
+      '<div id="ge-resultado"></div>' +
+
+      (['direcao', 'coordenador', 'suporte'].includes(window.CORTEX_SESSAO.profile.perfil)
+        ? '<div class="cartao" style="margin-top:14px"><h3>Importar atendimentos do outro sistema</h3>' +
+          '<p class="sub" style="margin-bottom:8px">Exportacao "atendimentos_prontuario_*.csv": cria/atualiza as sessoes da agenda (status, aplicador) ' +
+          'e traz as evolucoes escritas la, sem sobrescrever o que ja foi escrito aqui. Pode repetir: nao duplica.</p>' +
+          '<div class="barra-acoes" style="justify-content:flex-start">' +
+          '  <input type="file" id="imp-arq" accept=".csv,text/csv" onchange="MODULOS.gerencial.lerCsv(this.files[0])">' +
+          '</div><div id="imp-previa"></div></div>'
+        : '');
+  },
+
+  // ─────────────── IMPORTACAO DO CSV DO OUTRO SISTEMA ───────────────
+  IMP_STATUS: { 'Concluído / Realizado': 'concluida', 'Falta': 'falta', 'Cancelado (Paciente)': 'cancelada',
+                'Cancelado (Clínica)': 'cancelada', 'Em Espera (Recepção)': 'checkin', 'Confirmado': 'agendada', 'Agendado': 'agendada' },
+
+  normNome(t) {
+    return String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+  },
+
+  parseCsv(texto, sep) {
+    const linhas = []; let campo = '', linha = [], aspas = false;
+    for (let i = 0; i < texto.length; i++) {
+      const c = texto[i];
+      if (aspas) {
+        if (c === '"') { if (texto[i + 1] === '"') { campo += '"'; i++; } else aspas = false; }
+        else campo += c;
+      } else if (c === '"') aspas = true;
+      else if (c === sep) { linha.push(campo); campo = ''; }
+      else if (c === '\n' || c === '\r') {
+        if (c === '\r' && texto[i + 1] === '\n') i++;
+        linha.push(campo); linhas.push(linha); linha = []; campo = '';
+      } else campo += c;
+    }
+    if (campo.length || linha.length) { linha.push(campo); linhas.push(linha); }
+    return linhas.filter(l => l.some(x => x.trim() !== ''));
+  },
+
+  async lerCsv(arquivo) {
+    if (!arquivo) return;
+    const previa = document.getElementById('imp-previa');
+    previa.innerHTML = '<p class="sub">Lendo...</p>';
+    let texto = await arquivo.text();
+    if (texto.charCodeAt(0) === 0xFEFF) texto = texto.slice(1);
+    const sep = (texto.split('\n')[0].match(/;/g) || []).length >= (texto.split('\n')[0].match(/,/g) || []).length ? ';' : ',';
+    const linhas = this.parseCsv(texto, sep);
+    const cab = linhas[0].map(c => c.trim());
+    const col = nome => cab.findIndex(c => this.normNome(c) === this.normNome(nome));
+    const iId = col('ID Agendamento'), iData = col('Data'), iHora = col('Horário'), iPac = col('Paciente'),
+          iProf = col('Profissional'), iSt = col('Status'), iEvo = col('Prontuário Evoluído?'), iTxt = col('Conteúdo da Evolução');
+    if ([iId, iData, iHora, iPac, iProf, iSt].some(i => i < 0)) {
+      previa.innerHTML = '<div class="mensagem-erro visivel">Este arquivo nao tem as colunas esperadas (ID Agendamento, Data, Horario, Paciente, Profissional, Status).</div>';
+      return;
+    }
+    const regs = linhas.slice(1).map(l => ({
+      id_ext: l[iId].trim(), data: l[iData].trim().replace(/^(\d{2})\/(\d{2})\/(\d{4})$/, '$3-$2-$1'),
+      hora: (l[iHora] || '').trim().slice(0, 5) + ':00', paciente: l[iPac].trim(), profissional: l[iProf].trim(),
+      status: this.IMP_STATUS[l[iSt].trim()] || 'agendada', statusTxt: l[iSt].trim(),
+      evoluido: iEvo >= 0 && this.normNome(l[iEvo]) === 'sim', evolucao: iTxt >= 0 ? (l[iTxt] || '').trim() : ''
+    })).filter(r => r.id_ext && /^\d{4}-\d{2}-\d{2}$/.test(r.data));
+
+    // casamento de nomes
+    const [rPac, rProf] = await Promise.all([
+      sb.from('pacientes').select('id, nome'), sb.from('profiles').select('id, nome').eq('ativo', true)
+    ]);
+    const pacs = (rPac.data || []).map(p => ({ ...p, n: this.normNome(p.nome) }));
+    const profs = (rProf.data || []).map(p => ({ ...p, n: this.normNome(p.nome) }));
+    const achaPac = nome => {
+      const n = this.normNome(nome);
+      return pacs.find(p => p.n === n) || pacs.find(p => n.startsWith(p.n) || p.n.startsWith(n)) || null;
+    };
+    const achaProf = nome => {
+      const n = this.normNome(nome), dois = n.split(' ').slice(0, 2).join(' ');
+      return profs.find(p => p.n === n) || profs.find(p => p.n.startsWith(dois)) || null;
+    };
+    const mapaPac = {}, mapaProf = {};
+    [...new Set(regs.map(r => r.paciente))].forEach(nm => { mapaPac[nm] = achaPac(nm); });
+    [...new Set(regs.map(r => r.profissional))].forEach(nm => { mapaProf[nm] = achaProf(nm); });
+    this._imp = { regs, mapaPac, mapaProf, pacs, profs };
+
+    const semPac = Object.keys(mapaPac).filter(k => !mapaPac[k]);
+    const semProf = Object.keys(mapaProf).filter(k => !mapaProf[k]);
+    const datas = regs.map(r => r.data).sort();
+    const contagem = {}; regs.forEach(r => { contagem[r.statusTxt] = (contagem[r.statusTxt] || 0) + 1; });
+
+    previa.innerHTML =
+      '<div class="grade-visao" style="margin:10px 0">' +
+      '<div class="caixa-info"><small>Agendamentos</small><b>' + regs.length + '</b></div>' +
+      '<div class="caixa-info"><small>Periodo</small><b>' + datas[0].split('-').reverse().join('/') + ' a ' + datas[datas.length - 1].split('-').reverse().join('/') + '</b></div>' +
+      '<div class="caixa-info"><small>Com evolucao</small><b>' + regs.filter(r => r.evoluido && r.evolucao).length + '</b></div>' +
+      '<div class="caixa-info"><small>Criancas</small><b>' + Object.keys(mapaPac).length + '</b></div>' +
+      '</div>' +
+      '<p class="sub">' + Object.entries(contagem).map(([k, v]) => escaparHtml(k) + ': <b>' + v + '</b>').join(' &middot; ') + '</p>' +
+      (semPac.length
+        ? '<h4 style="margin:12px 0 6px">Criancas que nao casaram com o cadastro <span class="selo selo-warn">' + semPac.length + '</span></h4>' +
+          '<p class="sub">Escolha a crianca certa ou deixe em branco para pular os agendamentos dela.</p>' +
+          semPac.map(nm => '<div class="linha-doc"><span><b>' + escaparHtml(nm) + '</b></span>' +
+            '<select data-imp-pac="' + escaparHtml(nm) + '"><option value="">(pular)</option>' +
+            pacs.sort((a, b) => a.nome.localeCompare(b.nome)).map(p => '<option value="' + p.id + '">' + escaparHtml(p.nome) + '</option>').join('') +
+            '</select></div>').join('')
+        : '<p class="sub"><span class="selo selo-ok">todas as criancas casaram</span></p>') +
+      (semProf.length
+        ? '<h4 style="margin:12px 0 6px">Profissionais que nao casaram <span class="selo selo-warn">' + semProf.length + '</span></h4>' +
+          semProf.map(nm => '<div class="linha-doc"><span><b>' + escaparHtml(nm) + '</b></span>' +
+            '<select data-imp-prof="' + escaparHtml(nm) + '"><option value="">(sem aplicador)</option>' +
+            profs.map(p => '<option value="' + p.id + '">' + escaparHtml(p.nome) + '</option>').join('') +
+            '</select></div>').join('')
+        : '') +
+      '<div class="mensagem-erro" id="imp-erro"></div>' +
+      '<div class="barra-acoes"><button class="btn btn-primario" id="imp-btn" onclick="MODULOS.gerencial.importarCsv()">Importar</button></div>';
+  },
+
+  async importarCsv() {
+    const I = this._imp; if (!I) return;
+    const erro = document.getElementById('imp-erro'); erro.classList.remove('visivel');
+    const botao = document.getElementById('imp-btn'); botao.disabled = true;
+    const passo = t => { botao.textContent = t; };
+    document.querySelectorAll('[data-imp-pac]').forEach(s => { I.mapaPac[s.dataset.impPac] = s.value ? I.pacs.find(p => p.id === s.value) : null; });
+    document.querySelectorAll('[data-imp-prof]').forEach(s => { I.mapaProf[s.dataset.impProf] = s.value ? I.profs.find(p => p.id === s.value) : null; });
+
+    try {
+      const regs = I.regs.filter(r => I.mapaPac[r.paciente]);
+      const pulados = I.regs.length - regs.length;
+      const datas = regs.map(r => r.data).sort();
+      const pacIds = [...new Set(regs.map(r => I.mapaPac[r.paciente].id))];
+
+      // 1) sessoes: upsert pela chave (paciente, data, hora)
+      passo('Gravando sessoes...');
+      const linhas = regs.map(r => ({
+        paciente_id: I.mapaPac[r.paciente].id, data: r.data, hora_inicio: r.hora, duracao_min: 40,
+        aplicador_id: I.mapaProf[r.profissional] ? I.mapaProf[r.profissional].id : null,
+        status: r.status, id_externo: r.id_ext
+      }));
+      // sem aplicador no CSV: nao apaga o que ja existe (upsert manda null) -> separa
+      const comApl = linhas.filter(l => l.aplicador_id), semApl = linhas.filter(l => !l.aplicador_id).map(l => { const c = { ...l }; delete c.aplicador_id; return c; });
+      for (const lote of [comApl, semApl]) {
+        for (let i = 0; i < lote.length; i += 200) {
+          const { error } = await sb.from('sessoes').upsert(lote.slice(i, i + 200), { onConflict: 'paciente_id,data,hora_inicio' });
+          if (error) throw new Error('Sessoes: ' + error.message);
+        }
+      }
+
+      // 2) evolucoes: so onde a sessao ainda nao tem
+      passo('Gravando evolucoes...');
+      const { data: sess } = await sb.from('sessoes').select('id, paciente_id, data, hora_inicio')
+        .in('paciente_id', pacIds).gte('data', datas[0]).lte('data', datas[datas.length - 1]);
+      const chave = s => s.paciente_id + '|' + s.data + '|' + String(s.hora_inicio).slice(0, 8);
+      const porChave = {}; (sess || []).forEach(s => { porChave[chave(s)] = s.id; });
+      const ids = (sess || []).map(s => s.id);
+      const jaTem = new Set();
+      for (let i = 0; i < ids.length; i += 300) {
+        const { data: ev } = await sb.from('evolucoes').select('sessao_id').in('sessao_id', ids.slice(i, i + 300));
+        (ev || []).forEach(e => jaTem.add(e.sessao_id));
+      }
+      const novas = regs.filter(r => r.evoluido && r.evolucao).map(r => {
+        const sid = porChave[I.mapaPac[r.paciente].id + '|' + r.data + '|' + r.hora];
+        return sid && !jaTem.has(sid) ? {
+          sessao_id: sid, paciente_id: I.mapaPac[r.paciente].id,
+          aplicador_id: I.mapaProf[r.profissional] ? I.mapaProf[r.profissional].id : window.CORTEX_SESSAO.user.id,
+          texto: r.evolucao, id_externo: r.id_ext
+        } : null;
+      }).filter(Boolean);
+      for (let i = 0; i < novas.length; i += 200) {
+        const { error } = await sb.from('evolucoes').insert(novas.slice(i, i + 200));
+        if (error) throw new Error('Evolucoes: ' + error.message);
+      }
+
+      document.getElementById('imp-previa').innerHTML =
+        '<div class="grade-visao" style="margin:10px 0">' +
+        '<div class="caixa-info"><small>Sessoes gravadas</small><b>' + linhas.length + '</b></div>' +
+        '<div class="caixa-info"><small>Evolucoes novas</small><b>' + novas.length + '</b></div>' +
+        '<div class="caixa-info"><small>Ja tinham evolucao</small><b>' + (regs.filter(r => r.evoluido && r.evolucao).length - novas.length) + '</b></div>' +
+        '<div class="caixa-info"><small>Pulados (sem crianca)</small><b>' + pulados + '</b></div>' +
+        '</div><p class="sub"><span class="selo selo-ok">importacao concluida</span> Agenda, prontuarios e pendencias ja refletem o arquivo.</p>';
+      document.getElementById('imp-arq').value = '';
+    } catch (e) {
+      erro.textContent = e.message; erro.classList.add('visivel');
+      botao.disabled = false; botao.textContent = 'Importar';
+    }
   },
 
   mudouTipo() {

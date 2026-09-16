@@ -420,6 +420,11 @@ window.MODULOS.agenda = {
 
   // Aplicador/terapeuta ve na agenda so as sessoes dele e das criancas da carteira dele
   async soMinhas(sessoes) {
+    if (ESCOPO.ativo()) {
+      const eq = await ESCOPO.carregar();
+      const eu = window.CORTEX_SESSAO.user.id;
+      return (sessoes || []).filter(s => eq.pacientes.has(s.paciente_id) || s.aplicador_id === eu || eq.aplicadores.has(s.aplicador_id));
+    }
     if (!ehEquipe()) return sessoes;
     const meus = await meusPacientesIds();
     const eu = window.CORTEX_SESSAO.user.id;

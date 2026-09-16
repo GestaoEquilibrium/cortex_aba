@@ -66,7 +66,8 @@ window.MODULOS.pacientes = {
       consulta = consulta.in('id', ids.length ? ids : ['00000000-0000-0000-0000-000000000000']);
     }
 
-    const { data, error } = await consulta;
+    let { data, error } = await consulta;
+    data = await ESCOPO.pacs(data, 'id');
 
     if (error) {
       document.getElementById('pac-lista').innerHTML =

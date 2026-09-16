@@ -43,7 +43,7 @@ window.MODULOS.faltas = {
     const hoje = new Date().toISOString().slice(0, 10);
 
     // Historico fechado (concluida/falta) para a sequencia atual + dados do mes
-    const [{ data: historico }, { data: doMes }, { data: pacs }] = await Promise.all([
+    let [{ data: historico }, { data: doMes }, { data: pacs }] = await Promise.all([
       sb.from('sessoes')
         .select('paciente_id, data, hora_inicio, status')
         .in('status', ['concluida', 'falta'])
@@ -61,6 +61,7 @@ window.MODULOS.faltas = {
     ]);
 
     const porPaciente = {};
+    pacs = await ESCOPO.pacs(pacs || [], 'id');
     (pacs || []).forEach(p => {
       const resp = (p.responsaveis || []).sort((a, b) =>
         (b.principal ? 1 : 0) - (a.principal ? 1 : 0)).find(r => r.telefone) || null;

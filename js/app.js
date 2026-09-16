@@ -28,6 +28,7 @@ const ICONES = {
   termos:     '<svg ' + SVG_ATTR + '><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4M9 12h6M9 16h4"/></svg>',
   auditoria:  '<svg ' + SVG_ATTR + '><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3M11 8v3l2 2"/></svg>',
   diagnostico: '<svg ' + SVG_ATTR + '><path d="M3 12h4l2.5-6 4 12 2.5-6h5"/></svg>',
+  coordenacao: '<svg ' + SVG_ATTR + '><circle cx="12" cy="7" r="3.5"/><path d="M4 21v-1a5 5 0 0 1 5-5h6a5 5 0 0 1 5 5v1"/><path d="M12 10.5v4"/></svg>',
   chat:       '<svg ' + SVG_ATTR + '><path d="M21 11.5a8.5 8.5 0 0 1-12.4 7.5L3 21l2-5.6A8.5 8.5 0 1 1 21 11.5z"/></svg>',
   admin:      '<svg ' + SVG_ATTR + '><circle cx="8.5" cy="12" r="4"/><path d="M12.5 12H21M18 12v3M15.5 12v2"/></svg>'
 };
@@ -53,6 +54,7 @@ const NAVEGACAO = [
   {
     grupo: 'GESTAO',
     itens: [
+      { id: 'coordenacao', rotulo: 'Coordenacao', perfis: ['coordenador', 'direcao', 'suporte'] },
       { id: 'presenca', rotulo: 'Lista de Presenca',  chave: 'presenca' },
       { id: 'faltas',   rotulo: 'Gestao de Faltas',   chave: 'faltas' },
       { id: 'termos',   rotulo: 'Termos digitais',    chave: 'termos' },
@@ -212,10 +214,12 @@ function abrirModulo(id) {
 
   const pagina = document.getElementById('pagina');
   pagina.innerHTML = '';
+  window._moduloAtual = id;
 
   const modulo = window.MODULOS[id];
   if (modulo && typeof modulo.render === 'function') {
     modulo.render(pagina, window.CORTEX_SESSAO);
+    if (['pacientes', 'agenda', 'auditoria', 'eventos', 'presenca', 'faltas'].includes(id)) ESCOPO.montar(pagina);
   } else {
     pagina.innerHTML =
       '<div class="cartao"><div class="vazio">' +
@@ -452,6 +456,72 @@ async function meusPacientesIds(forcar) {
   return window._meusPac;
 }
 function ehEquipe() { return ['aplicador', 'terapeuta'].includes(window.CORTEX_SESSAO?.profile?.perfil); }
+
+// ─────────────── ESCOPO DA COORDENADORA: "Minha equipe" (padrao) ou "Geral" ───────────────
+// Equipe = criancas com pacientes.coordenador_id = eu + criancas dos aplicadores cujo profiles.coordenador_id = eu.
+// Vale para Pacientes, Agenda, Auditoria, Supervisao, Lista de Presenca e Faltas. A escolha fica guardada no navegador.
+const ESCOPO = {
+  ehCoord() { return window.CORTEX_SESSAO?.profile?.perfil === 'coordenador'; },
+  ativo() {
+    if (!this.ehCoord()) return false;
+    try { return localStorage.getItem('cortex_escopo') !== 'geral'; } catch (e) { return true; }
+  },
+  async carregar(forcar, coordId) {
+    if (window._equipe && !forcar && !coordId) return window._equipe;
+    const eu = coordId || window.CORTEX_SESSAO.user.id;
+    const [rProf, rPac, rPa] = await Promise.all([
+      sb.from('profiles').select('id, nome, coordenador_id').eq('ativo', true),
+      sb.from('pacientes').select('id, coordenador_id, aplicador_id').neq('status', 'encerrado'),
+      sb.from('paciente_aplicadores').select('paciente_id, aplicador_id')
+    ]);
+    const apl = new Set((rProf.data || []).filter(p => p.coordenador_id === eu).map(p => p.id));
+    const pacs = new Set();
+    (rPac.data || []).forEach(p => { if (p.coordenador_id === eu || apl.has(p.aplicador_id)) pacs.add(p.id); });
+    (rPa.data || []).forEach(x => { if (apl.has(x.aplicador_id)) pacs.add(x.paciente_id); });
+    // aplicadores que atendem criancas da equipe tambem contam como equipe
+    (rPac.data || []).forEach(p => { if (pacs.has(p.id) && p.aplicador_id) apl.add(p.aplicador_id); });
+    (rPa.data || []).forEach(x => { if (pacs.has(x.paciente_id)) apl.add(x.aplicador_id); });
+    const eq = { pacientes: pacs, aplicadores: apl, nomes: Object.fromEntries((rProf.data || []).map(p => [p.id, p.nome])) };
+    if (!coordId) window._equipe = eq;
+    return eq;
+  },
+  async pacs(lista, campo) {
+    if (!this.ativo()) return lista;
+    const eq = await this.carregar();
+    return (lista || []).filter(r => eq.pacientes.has(r[campo || 'paciente_id']));
+  },
+  async apls(lista, campo, permitirVazio) {
+    if (!this.ativo()) return lista;
+    const eq = await this.carregar();
+    const eu = window.CORTEX_SESSAO.user.id;
+    return (lista || []).filter(r => {
+      const v = r[campo || 'aplicador_id'];
+      return v === eu || eq.aplicadores.has(v) || (permitirVazio && !v);
+    });
+  },
+  alternar(valor) {
+    try { localStorage.setItem('cortex_escopo', valor); } catch (e) {}
+    if (window._moduloAtual) abrirModulo(window._moduloAtual);
+  },
+  html() {
+    if (!this.ehCoord()) return '';
+    const eq = this.ativo();
+    return '<div class="toggle-visao escopo-toggle" title="Ver so a minha equipe ou tudo">' +
+      '<button type="button" class="' + (eq ? 'ativo' : '') + '" onclick="ESCOPO.alternar(\'equipe\')">Minha equipe</button>' +
+      '<button type="button" class="' + (!eq ? 'ativo' : '') + '" onclick="ESCOPO.alternar(\'geral\')">Geral</button></div>';
+  },
+  // encaixa o botao no cabecalho da pagina assim que ele existir
+  montar(pagina) {
+    if (!this.ehCoord()) return;
+    let n = 0;
+    const tenta = () => {
+      const cab = pagina.querySelector('.pagina-cabecalho');
+      if (cab) { if (!cab.querySelector('.escopo-toggle')) cab.insertAdjacentHTML('beforeend', this.html()); return; }
+      if (++n < 30) setTimeout(tenta, 120);
+    };
+    tenta();
+  }
+};
 
 // ─────────────── Cadeia clinica: avaliacao -> plano -> PEI -> programas ───────────────
 // Regra de Wess: nunca bloqueia; sem a etapa anterior, avisa em pop-up e segue se a pessoa quiser.

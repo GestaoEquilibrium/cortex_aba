@@ -1581,11 +1581,21 @@ window.MODULOS.programas = {
       if ((tentativa || 0) < 40) setTimeout(() => this.popupEquipe((tentativa || 0) + 1), 3000);
       return;
     }
+    const perfil = window.CORTEX_SESSAO.profile.perfil;
+    if (!['direcao', 'suporte', 'coordenador'].includes(perfil)) return;
+    const r = await this.pendenciasEquipe();
+    if (!r) return;
+    abrirModal('Pendencias da equipe', r.html +
+      '<div class="barra-acoes"><button class="btn btn-primario" onclick="fecharModal()">Entendi</button></div>', true, 'aviso');
+  },
+
+  // Calcula as pendencias de sessao da equipe (coordenadora: a dela; direcao/suporte: todas, por equipe;
+  // coordId forca uma equipe especifica). Retorna { html, total } ou null se nao ha nada.
+  async pendenciasEquipe(coordId) {
     const sess = window.CORTEX_SESSAO;
     const perfil = sess.profile.perfil;
-    const eu = sess.user.id;
-    const veTudo = ['direcao', 'suporte'].includes(perfil);
-    if (!veTudo && perfil !== 'coordenador') return;
+    const eu = coordId || sess.user.id;
+    const veTudo = !coordId && ['direcao', 'suporte'].includes(perfil);
 
     const hoje = new Date().toISOString().slice(0, 10);
     const desde = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
@@ -1597,7 +1607,7 @@ window.MODULOS.programas = {
     const profs = {}; (rProf.data || []).forEach(p => { profs[p.id] = p; });
     const coordDe = pac => pac.coordenador_id || (pac.aplicador_id && profs[pac.aplicador_id] ? profs[pac.aplicador_id].coordenador_id : null);
     const minhas = (rPac.data || []).filter(p => veTudo ? !!coordDe(p) : coordDe(p) === eu);
-    if (!minhas.length) return;
+    if (!minhas.length) return null;
     const pacMap = {}; minhas.forEach(p => { pacMap[p.id] = p; });
 
     const { data: ss } = await sb.from('sessoes')
@@ -1607,7 +1617,7 @@ window.MODULOS.programas = {
       .not('status', 'in', '("falta","cancelada")')
       .order('data', { ascending: false }).limit(400);
     const passadas = (ss || []).filter(s => s.data < hoje || s.status === 'concluida' || s.status === 'em_atendimento');
-    if (!passadas.length) return;
+    if (!passadas.length) return null;
 
     const ids = passadas.map(s => s.id);
     const [rEv, rReg] = await Promise.all([
@@ -1624,7 +1634,7 @@ window.MODULOS.programas = {
       if (s.status !== 'concluida') faltas.push('nao encerrada');
       return { s, faltas };
     }).filter(x => x.faltas.length);
-    if (!pend.length) return;
+    if (!pend.length) return null;
 
     // agrupa: coordenadora (so quando ve tudo) -> aplicador -> sessoes
     const grupos = {};
@@ -1654,8 +1664,7 @@ window.MODULOS.programas = {
           '</div>';
       });
     });
-    html += '<div class="barra-acoes"><button class="btn btn-primario" onclick="fecharModal()">Entendi</button></div>';
-    abrirModal('Pendencias da equipe', html, true, 'aviso');
+    return { html, total: pend.length };
   },
 
   evolucaoRapida(sessaoId, pacienteId, nome, data) {

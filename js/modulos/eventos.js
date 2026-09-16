@@ -37,7 +37,7 @@ window.MODULOS.eventos = {
         .gte('data', corte).order('data').order('hora'),
       sb.from('profiles').select('id, nome').eq('ativo', true).neq('perfil', 'familia').order('nome')
     ]);
-    this.lista = rE.data || [];
+    this.lista = await ESCOPO.apls(rE.data || [], 'profissional_id', true);
     this.equipe = rP.data || [];
   },
 
@@ -317,7 +317,7 @@ window.MODULOS.eventos = {
       vence.setMonth(vence.getMonth() + meses);
       const dias = Math.floor((vence - Date.now()) / 86400000);
       if (dias <= 30) {
-        saida.push({ nome: nomes[pac], protocolo: proto, dias: dias, aplicador_id: aplics[pac],
+        saida.push({ paciente_id: pac, nome: nomes[pac], protocolo: proto, dias: dias, aplicador_id: aplics[pac],
           rotulo: 'ultima em ' + new Date(quando).toLocaleDateString('pt-BR') +
             ' &middot; validade ' + meses + ' meses' });
       }

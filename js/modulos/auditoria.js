@@ -86,7 +86,7 @@ window.MODULOS.auditoria = {
         '<div class="cartao"><div class="mensagem-erro visivel">' + escaparHtml(error.message) + '</div></div>';
       return;
     }
-    this.registros = data || [];
+    this.registros = ESCOPO.ativo() ? await ESCOPO.pacs(data || [], 'paciente_id') : (data || []);
 
     // Nomes dos pacientes envolvidos
     const idsPac = [...new Set(this.registros.map(r => r.paciente_id).filter(Boolean))];

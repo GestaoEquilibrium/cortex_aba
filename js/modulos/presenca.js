@@ -44,7 +44,7 @@ window.MODULOS.presenca = {
         '<div class="cartao"><div class="mensagem-erro visivel">' + escaparHtml(error.message) + '</div></div>';
       return;
     }
-    this.grade = data || [];
+    this.grade = await ESCOPO.pacs(data || [], 'paciente_id');
     this.gerar();
   },
 

@@ -366,6 +366,35 @@ window.MODULOS.avaliacoes = {
   },
 
   // Reutilizado pela aba Avaliacao do prontuario
+  // Botao "Devolutiva" da ultima aplicacao concluida do protocolo (qualquer protocolo)
+  btnDevolutiva(concluidas, protocolo) {
+    if (perm('pei') !== 'E') return '';
+    const lista = concluidas.filter(a => a.protocolo === protocolo)
+      .sort((a, b) => String(b.concluido_em || '').localeCompare(String(a.concluido_em || '')));
+    if (!lista.length) return '';
+    return '<button class="btn-chip" title="Relatorio de devolutiva desta avaliacao" ' +
+      'onclick="MODULOS.pei.abrirDevolutiva(\'' + lista[0].id + '\')">Devolutiva</button>';
+  },
+
+  async htmlResultadoPortage(av) {
+    await this.carregarItensPortage();
+    const { data: resps } = await sb.from('portage_respostas')
+      .select('item_id, valor').eq('avaliacao_id', av.id);
+    const mapa = {};
+    (resps || []).forEach(r => { mapa[r.item_id] = r.valor; });
+    const areas = this.calcPortage(mapa);
+    const idadeGlobal = areas.reduce((s, a) => s + a.idade, 0) / this.P_AREAS.length;
+    return '<div class="cartao"><h3>Resultado do Portage' +
+      (av.concluido_em ? ' <small class="sub">&middot; ' + new Date(av.concluido_em).toLocaleDateString('pt-BR') + '</small>' : '') + '</h3>' +
+      this.gTabela(['Area'].concat(this.P_FAIXAS.map(f => f.split(' ')[0])).concat(['Total', 'Idade desenv.']),
+        areas.map(a => [a.area].concat(a.faixas.map(x => x === null ? null : x.pct + '%'))
+          .concat([a.total === null ? null : '<b>' + a.total + '%</b>', '<b>' + this.fmtIdade(a.idade) + '</b>']))
+        .concat([['<b>Idade global</b>'].concat(this.P_FAIXAS.map(() => '')).concat(['', '<b>' + this.fmtIdade(idadeGlobal) + '</b>'])])) +
+      '<div style="margin-top:10px">' + this.gBarras(this.P_AREAS, [{ nome: 'Total', cor: '#1468B2',
+        valores: areas.map(a => a.total === null ? null : a.total) }]) + '</div>' +
+      '</div>';
+  },
+
   async htmlResultado(avaliacaoId) {
     await this.carregarQuestoes();
 
@@ -374,6 +403,7 @@ window.MODULOS.avaliacoes = {
       .eq('id', avaliacaoId).single();
     if (!av) return '<div class="cartao"><p class="sub">Avaliacao nao encontrada.</p></div>';
     if (av.protocolo === 'ss') return this.htmlResultadoSS(av);
+    if (av.protocolo === 'portage') return this.htmlResultadoPortage(av);
 
     const { data: resps } = await sb.from('avaliacao_respostas')
       .select('questao_id, resposta').eq('avaliacao_id', avaliacaoId);
@@ -460,11 +490,11 @@ window.MODULOS.avaliacoes = {
           ? '<button class="btn btn-primario" title="Inicia uma aplicacao QADI-R deste paciente, em janela por cima do prontuario." ' +
             'onclick="MODULOS.avaliacoes.iniciarDoProntuario(\'' + pacienteId + '\', \'qadi\')">+ QADI-R</button>' : '') +
         (podeSS
-          ? '<button class="btn ' + (podeQadi ? 'btn-fantasma' : 'btn-primario') + '" ' +
+          ? '<button class="btn btn-primario" ' +
             'title="Inicia uma aplicacao Socially Savvy deste paciente, em janela por cima do prontuario." ' +
             'onclick="MODULOS.avaliacoes.iniciarDoProntuario(\'' + pacienteId + '\', \'ss\')">+ Socially Savvy</button>' : '') +
         (podeQadi
-          ? '<button class="btn btn-fantasma" title="Guia Portage: 479 itens em 5 areas por faixa etaria (Sim / As vezes / Nao / NA)." ' +
+          ? '<button class="btn btn-primario" title="Guia Portage: 479 itens em 5 areas por faixa etaria (Sim / As vezes / Nao / NA)." ' +
             'onclick="MODULOS.avaliacoes.iniciarDoProntuario(\'' + pacienteId + '\', \'portage\')">+ Portage</button>' : '') +
         '</div>';
     }
@@ -496,15 +526,20 @@ window.MODULOS.avaliacoes = {
         (temSS
           ? '<div class="linha-doc"><div><b>Socially Savvy &middot; consolidado</b>' +
             '<small>' + nSS + ' aplicacao(oes) (AV1' + (nSS > 1 ? '-AV' + Math.min(nSS, 9) : '') + ') com datas, areas e graficos</small></div>' +
+            '<div class="pac-selos">' +
             '<button class="btn btn-primario" onclick="MODULOS.avaliacoes.docSS(\'' + pacienteId + '\')">&#128196; Ver documento</button>' +
+            this.btnDevolutiva(concluidas, 'ss') +
+            '</div>' +
             '</div>'
           : '') +
         (concluidas.some(a => a.protocolo === 'portage')
           ? '<div class="linha-doc"><div><b>Portage &middot; consolidado</b>' +
             '<small>' + concluidas.filter(a => a.protocolo === 'portage').length +
             ' aplicacao(oes) &middot; % por faixa etaria e idades de desenvolvimento</small></div>' +
+            '<div class="pac-selos">' +
             '<button class="btn btn-primario" onclick="MODULOS.avaliacoes.docPortage(\'' + pacienteId + '\')">&#128196; Ver documento</button>' +
-            '</div>'
+            this.btnDevolutiva(concluidas, 'portage') +
+            '</div></div>'
           : '') +
         (concluidas.some(a => a.protocolo === 'qadi')
           ? '<div class="linha-doc"><div><b>QADI-R &middot; consolidado</b>' +
@@ -512,9 +547,7 @@ window.MODULOS.avaliacoes = {
             ' aplicacao(oes) &middot; pontuacao adquirida x esperada por area (regra Equilibrium)</small></div>' +
             '<div class="pac-selos">' +
             '<button class="btn btn-primario" onclick="MODULOS.avaliacoes.docQADI(\'' + pacienteId + '\')">&#128196; Ver documento</button>' +
-            (perm('pei') === 'E'
-              ? '<button class="btn-chip" onclick="MODULOS.pei.abrirDevolutiva(\'' +
-                concluidas.filter(a => a.protocolo === 'qadi')[0].id + '\')">Devolutiva</button>' : '') +
+            this.btnDevolutiva(concluidas, 'qadi') +
             '</div></div>'
           : '') +
         '</div>';

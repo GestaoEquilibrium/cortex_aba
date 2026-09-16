@@ -342,9 +342,10 @@ window.MODULOS.pei = {
     el.innerHTML = '<div class="cartao"><p class="sub">Carregando devolutiva...</p></div>';
 
     const { data: av } = await sb.from('avaliacoes')
-      .select('id, paciente_id, concluido_em, pacientes(id, nome, data_nascimento)')
+      .select('id, paciente_id, protocolo, concluido_em, pacientes(id, nome, data_nascimento)')
       .eq('id', avaliacaoId).single();
     if (!av) return;
+    const nomeProt = CADEIA.nomeProtocolo(av.protocolo);
 
     let { data: rel } = await sb.from('relatorios_devolutiva')
       .select('*').eq('avaliacao_id', avaliacaoId).maybeSingle();
@@ -391,7 +392,7 @@ window.MODULOS.pei = {
 
       '<div class="cartao folha-presenca">' +
       '  <div class="folha-titulo">' +
-      '    <div><b>RELATORIO DE DEVOLUTIVA &middot; QADI-R</b>' +
+      '    <div><b>RELATORIO DE DEVOLUTIVA &middot; ' + nomeProt.toUpperCase() + '</b>' +
       '    <small>' + escaparHtml(av.pacientes.nome) + ' &middot; nasc. ' +
         new Date(av.pacientes.data_nascimento + 'T12:00:00').toLocaleDateString('pt-BR') +
         ' &middot; avaliacao concluida em ' +

@@ -411,12 +411,12 @@ window.MODULOS.agenda = {
       '</div>');
   },
 
-  mudarStatusSeguro(id, novo) {
+  async mudarStatusSeguro(id, novo) {
     const s = this._sessaoModal && this._sessaoModal.s;
     if (s && ['concluida', 'falta', 'cancelada'].includes(s.status) &&
-        !confirm('Esta sessao ja esta encerrada como "' + s.status + '". Alterar mesmo assim?')) return;
-    if (novo === 'falta' && !confirm('Registrar falta?')) return;
-    if (novo === 'cancelada' && !confirm('Cancelar esta sessao?')) return;
+        !await popConfirmar('Esta sessao ja esta encerrada como "' + s.status + '". Alterar mesmo assim?')) return;
+    if (novo === 'falta' && !await popConfirmar('Registrar falta?')) return;
+    if (novo === 'cancelada' && !await popConfirmar('Cancelar esta sessao?')) return;
     this.statusModal(id, novo);
   },
 
@@ -640,7 +640,7 @@ window.MODULOS.agenda = {
   },
 
   async encerrarHorario(id) {
-    if (!confirm('Encerrar este horario da grade? As familias e o profissional serao notificados.')) return;
+    if (!await popConfirmar('Encerrar este horario da grade? As familias e o profissional serao notificados.')) return;
     const anterior = this.grade.find(x => x.id === id);
     const { error } = await sb.from('grade_horarios').update({ ativo: false }).eq('id', id);
     if (error) { alert('Erro: ' + error.message); return; }
@@ -1195,7 +1195,7 @@ window.MODULOS.agenda = {
   },
 
   async recusarIndicativo(id) {
-    if (!confirm('Recusar este indicativo? Ele some da fila (a coordenacao pode gerar outro).')) return;
+    if (!await popConfirmar('Recusar este indicativo? Ele some da fila (a coordenacao pode gerar outro).')) return;
     await sb.from('indicativos').update({
       status: 'recusado',
       decidido_por: window.CORTEX_SESSAO.user.id,

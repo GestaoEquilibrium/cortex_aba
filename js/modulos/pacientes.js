@@ -1283,7 +1283,7 @@ window.MODULOS.pacientes = {
   },
 
   async removerDocPortal(id) {
-    if (!confirm('Remover este documento do portal? A familia deixa de ve-lo (o documento original continua no sistema).')) return;
+    if (!await popConfirmar('Remover este documento do portal? A familia deixa de ve-lo (o documento original continua no sistema).')) return;
     const { error } = await sb.from('portal_documentos').delete().eq('id', id);
     if (error) { alert(error.message); return; }
     this.blocoPortal(this._portalPac);

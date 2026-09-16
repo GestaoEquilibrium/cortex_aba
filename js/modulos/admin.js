@@ -165,7 +165,7 @@ window.MODULOS.admin = {
       botao.textContent = 'Copiado!';
       setTimeout(() => { botao.textContent = antes; }, 1400);
     } catch (e) {
-      prompt('Copie manualmente:', texto);
+      popCopiar(texto, 'Copie manualmente');
     }
   },
 
@@ -322,7 +322,7 @@ window.MODULOS.admin = {
   },
 
   async alternarAtivo(id, ativo) {
-    if (!ativo && !confirm('Inativar este acesso? A pessoa nao conseguira mais entrar no sistema.')) return;
+    if (!ativo && !await popConfirmar('Inativar este acesso? A pessoa nao conseguira mais entrar no sistema.')) return;
     const { error } = await sb.from('profiles').update({ ativo: ativo }).eq('id', id);
     if (error) { alert('Erro: ' + error.message); return; }
     fecharModal();
@@ -331,7 +331,7 @@ window.MODULOS.admin = {
   },
 
   async redefinirSenha(id, nome) {
-    if (!confirm('Gerar uma nova senha para ' + nome + '? A senha atual deixa de funcionar.')) return;
+    if (!await popConfirmar('Gerar uma nova senha para ' + nome + '? A senha atual deixa de funcionar.')) return;
 
     const senha = this.gerarSenha();
     try {

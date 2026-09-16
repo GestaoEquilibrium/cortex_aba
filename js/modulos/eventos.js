@@ -124,7 +124,7 @@ window.MODULOS.eventos = {
   },
 
   async excluir(id) {
-    if (!confirm('Excluir este evento?')) return;
+    if (!await popConfirmar('Excluir este evento?')) return;
     await sb.from('eventos').delete().eq('id', id);
     fecharModal();
     await this.carregar();

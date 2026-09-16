@@ -245,7 +245,7 @@ window.MODULOS.relatorios = {
       alert('Preencha ao menos Progresso e Conclusao antes de liberar.');
       return;
     }
-    if (!confirm('Liberar este relatorio no portal da familia? Depois de liberado ele fica somente leitura.')) return;
+    if (!await popConfirmar('Liberar este relatorio no portal da familia? Depois de liberado ele fica somente leitura.')) return;
 
     const partes = [];
     if (campos.objetivos) partes.push('OBJETIVOS DE ENSINO\n' + campos.objetivos);

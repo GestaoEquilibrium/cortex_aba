@@ -207,7 +207,7 @@ window.MODULOS.avaliacoes = {
   },
 
   async cancelarAvaliacao(id, rotulo) {
-    if (!confirm('Cancelar e apagar a aplicacao "' + rotulo + '"?\n' +
+    if (!await popConfirmar('Cancelar e apagar a aplicacao "' + rotulo + '"?\n' +
       'As respostas ja registradas serao apagadas junto. Esta acao nao tem volta.')) return;
     const { error } = await sb.from('avaliacoes').delete().eq('id', id);
     if (error) { alert('Nao foi possivel cancelar: ' + error.message); return; }
@@ -346,7 +346,7 @@ window.MODULOS.avaliacoes = {
   async concluir() {
     const respondidas = Object.keys(this.respostas).length;
     if (respondidas === 0) { alert('Nenhuma resposta registrada ainda.'); return; }
-    if (!confirm('Concluir a avaliacao com ' + respondidas + ' resposta(s)? ' +
+    if (!await popConfirmar('Concluir a avaliacao com ' + respondidas + ' resposta(s)? ' +
       'Depois de concluida ela fica somente leitura.')) return;
 
     const { error } = await sb.from('avaliacoes')
@@ -917,7 +917,7 @@ window.MODULOS.avaliacoes = {
         total + ' itens respondidos.');
       return;
     }
-    if (!confirm('Concluir a Avaliacao ' + this.numSS + ' do Socially Savvy? Depois ela fica somente leitura.')) return;
+    if (!await popConfirmar('Concluir a Avaliacao ' + this.numSS + ' do Socially Savvy? Depois ela fica somente leitura.')) return;
 
     const { error } = await sb.from('avaliacoes')
       .update({ status: 'concluida', concluido_em: new Date().toISOString() })
@@ -1108,7 +1108,7 @@ window.MODULOS.avaliacoes = {
 
   async concluirPortage() {
     const n = Object.keys(this._pResp).length;
-    if (!confirm('Concluir a aplicacao com ' + n + ' item(ns) respondido(s)? Itens em branco contam como nao alcancados nas faixas aplicadas.')) return;
+    if (!await popConfirmar('Concluir a aplicacao com ' + n + ' item(ns) respondido(s)? Itens em branco contam como nao alcancados nas faixas aplicadas.')) return;
     await sb.from('avaliacoes').update({ status: 'concluida', concluido_em: new Date().toISOString() })
       .eq('id', this.avaliacao.id);
     this.fecharJanela();

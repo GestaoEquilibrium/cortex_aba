@@ -226,7 +226,7 @@ window.MODULOS.portal = {
 
   async responder(sessaoId, resposta, botao) {
     if (resposta === 'nao' &&
-        !confirm('Desmarcar esta sessao? A clinica sera avisada.')) return;
+        !await popConfirmar('Desmarcar esta sessao? A clinica sera avisada.')) return;
     const token = this._tokens[sessaoId];
     if (!token) return;
 

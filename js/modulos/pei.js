@@ -452,7 +452,7 @@ window.MODULOS.pei = {
   },
 
   async finalizarDevolutiva() {
-    if (!confirm('Finalizar a devolutiva? Depois ela fica somente leitura.')) return;
+    if (!await popConfirmar('Finalizar a devolutiva? Depois ela fica somente leitura.')) return;
     clearTimeout(this._devTimer);
     const analises = {};
     MODULOS.pei.DOMINIOS.forEach(d => {
@@ -648,7 +648,7 @@ window.MODULOS.pei = {
     const { data: m } = await sb.from('pei_metas')
       .select('*, peis(paciente_id)').eq('id', metaId).single();
     if (!m) return;
-    if (!confirm('Criar o programa "' + (m.meta || '').slice(0, 60) +
+    if (!await popConfirmar('Criar o programa "' + (m.meta || '').slice(0, 60) +
         '" na biblioteca e coloca-lo NA FILA deste paciente?')) return;
 
     const { data: prog, error: e1 } = await sb.from('programas').insert({

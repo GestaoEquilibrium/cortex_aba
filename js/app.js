@@ -380,13 +380,64 @@ function abrirModal(titulo, html, larga, tipo) {
   document.body.style.overflow = 'hidden';
 }
 
+// ─────────────── Avisos e confirmacoes em pop-up (nunca alert/confirm do navegador) ───────────────
+// Camada propria, acima da janela suspensa e do modal: um aviso dentro de um formulario nao derruba o formulario.
+function popBase(titulo, html, tipo) {
+  document.getElementById('pop-fundo')?.remove();
+  const t = TIPOS_POP[tipo || 'aviso'];
+  const fundo = document.createElement('div');
+  fundo.className = 'modal-fundo pop-fundo';
+  fundo.id = 'pop-fundo';
+  fundo.innerHTML =
+    '<div class="modal pop-caixa' + (t ? ' ' + t.classe : '') + '" role="alertdialog" aria-modal="true">' +
+    '  <div class="modal-topo"><h3>' + (t ? '<span class="pop-icone">' + t.icone + '</span> ' : '') + titulo + '</h3></div>' +
+    '  <div class="modal-corpo">' + html + '</div></div>';
+  document.body.appendChild(fundo);
+  return fundo;
+}
+function fecharPop() { document.getElementById('pop-fundo')?.remove(); }
+function textoPop(msg) {
+  return '<p class="pop-texto">' + escaparHtml(String(msg == null ? '' : msg)).replace(/\n/g, '<br>') + '</p>';
+}
+function popAviso(msg, titulo) {
+  popBase(titulo || 'Aviso', textoPop(msg) +
+    '<div class="barra-acoes"><button class="btn btn-primario" id="pop-ok" onclick="fecharPop()">Entendi</button></div>', 'aviso');
+  setTimeout(() => document.getElementById('pop-ok')?.focus(), 30);
+}
+function popConfirmar(msg, opcoes) {
+  const o = opcoes || {};
+  return new Promise(resolve => {
+    const fundo = popBase(o.titulo || 'Confirmar', textoPop(msg) +
+      '<div class="barra-acoes">' +
+      '  <button class="btn btn-fantasma" id="pop-nao">' + (o.cancelar || 'Cancelar') + '</button>' +
+      '  <button class="btn btn-primario" id="pop-sim">' + (o.ok || 'Confirmar') + '</button></div>', o.tipo || 'aviso');
+    const fim = v => { fundo.remove(); resolve(v); };
+    fundo.querySelector('#pop-nao').onclick = () => fim(false);
+    fundo.querySelector('#pop-sim').onclick = () => fim(true);
+    fundo.addEventListener('keydown', e => { if (e.key === 'Escape') fim(false); });
+    setTimeout(() => fundo.querySelector('#pop-sim').focus(), 30);
+  });
+}
+function popCopiar(texto, titulo) {
+  popBase(titulo || 'Copie manualmente',
+    '<input class="pop-copia" readonly value="' + escaparHtml(texto) + '" onclick="this.select()">' +
+    '<div class="barra-acoes"><button class="btn btn-primario" onclick="fecharPop()">Fechar</button></div>', 'aviso');
+}
+window.alert = msg => popAviso(msg);
+window.prompt = (rotulo, texto) => { popCopiar(texto || '', rotulo); return null; };
+window.confirm = msg => { console.warn('confirm() bloqueado - use popConfirmar'); popAviso(msg); return false; };
+
 function fecharModal() {
   const m = document.getElementById('modal-fundo');
   if (m) m.remove();
   document.body.style.overflow = '';
 }
 
-document.addEventListener('keydown', e => { if (e.key === 'Escape') fecharModal(); });
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  if (document.getElementById('pop-fundo')) { fecharPop(); return; }
+  fecharModal();
+});
 
 // Clicar no fundo escurecido fecha a janela suspensa (com o fechamento certo de cada uma)
 document.addEventListener('click', e => {

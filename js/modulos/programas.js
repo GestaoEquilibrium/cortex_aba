@@ -811,7 +811,7 @@ window.MODULOS.programas = {
     const n = Math.max(1, Math.min(40, parseInt(valor, 10) || g.length));
     if (n < g.length) {
       const perdidas = g.slice(n).filter(l => l.resposta).length;
-      if (perdidas && !confirm('Reduzir para ' + n + ' tentativas apaga ' + perdidas +
+      if (perdidas && !await popConfirmar('Reduzir para ' + n + ' tentativas apaga ' + perdidas +
         ' tentativa(s) ja marcada(s) no fim da ficha. Continuar?')) { this.desenharFolha(); return; }
       g.length = n;
     }
@@ -845,8 +845,8 @@ window.MODULOS.programas = {
     this.desenharFolha();
   },
 
-  limparFicha(ppId) {
-    if (!confirm('Limpar todas as tentativas deste programa nesta sessao?')) return;
+  async limparFicha(ppId) {
+    if (!await popConfirmar('Limpar todas as tentativas deste programa nesta sessao?')) return;
     this._folha.fichas[ppId].forEach(l => { l.resposta = ''; l.reforcador = ''; l.estimulo = ''; });
     this._sujo = true;
     this.desenharFolha();
@@ -1977,8 +1977,8 @@ window.MODULOS.programas = {
         'Apagar remove o programa DESTE paciente e TODO o historico dele (tentativas e fechamentos por sessao). ' +
         'Os relatorios ja gerados em PDF nao mudam.\n\nApagar mesmo assim?'
       : 'Remover o programa "' + nome + '" deste paciente?';
-    if (!confirm(aviso)) return;
-    if (count && !confirm('Confirmacao final: apagar o historico de ' + count + ' tentativa(s) de "' + nome + '"?')) return;
+    if (!await popConfirmar(aviso)) return;
+    if (count && !await popConfirmar('Confirmacao final: apagar o historico de ' + count + ' tentativa(s) de "' + nome + '"?')) return;
 
     const d1 = await sb.from('registros_tentativas').delete().eq('paciente_programa_id', ppId);
     if (d1.error) { alert('Tentativas: ' + d1.error.message); return; }
@@ -1999,9 +1999,9 @@ window.MODULOS.programas = {
     const { count } = await sb.from('registros_tentativas')
       .select('sessao_id', { count: 'exact', head: true }).eq('sessao_id', sessaoId);
     const rotulo = data ? data.split('-').reverse().join('/') : 'esta sessao';
-    if (!confirm('Apagar a sessao de ' + rotulo + '?' +
+    if (!await popConfirmar('Apagar a sessao de ' + rotulo + '?' +
         (count ? '\n\nEla tem ' + count + ' tentativa(s) registrada(s). Apagar remove a sessao, as tentativas, os fechamentos e a evolucao dela. PDFs ja gerados nao mudam.' : ''))) return;
-    if (count && !confirm('Confirmacao final: apagar de vez a sessao de ' + rotulo + ' com todo o historico?')) return;
+    if (count && !await popConfirmar('Confirmacao final: apagar de vez a sessao de ' + rotulo + ' com todo o historico?')) return;
 
     const passos = [
       ['Evolucao', sb.from('evolucoes').delete().eq('sessao_id', sessaoId)],

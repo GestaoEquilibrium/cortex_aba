@@ -224,7 +224,7 @@ window.MODULOS.guias = {
   },
 
   async excluirGuia(id) {
-    if (!confirm('Excluir esta guia? As sessoes nao sao afetadas; some apenas o controle.')) return;
+    if (!await popConfirmar('Excluir esta guia? As sessoes nao sao afetadas; some apenas o controle.')) return;
     const { error } = await sb.from('guias').delete().eq('id', id);
     if (error) { alert(error.message); return; }
     fecharModal();

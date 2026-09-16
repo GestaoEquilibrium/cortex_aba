@@ -155,10 +155,11 @@ async function iniciarApp() {
   festejarAniversario(profile);
 
   if (profile.perfil !== 'familia') {
-    setTimeout(() => { MODULOS.programas?.popupEvolucoesPendentes?.(); }, 900);
-    setTimeout(() => { MODULOS.agenda?.popupIndicativos?.(); }, 2200);
-    setTimeout(() => { MODULOS.eventos?.popupAvisos?.(); }, 3400);
-    setTimeout(() => { MODULOS.programas?.popupEquipe?.(); }, 4800);
+    // Fila de pop-ups da entrada: cada um so aparece depois que o anterior for fechado
+    agendarPop(() => MODULOS.programas?.popupEvolucoesPendentes?.(), 900);
+    agendarPop(() => MODULOS.agenda?.popupIndicativos?.(), 1200);
+    agendarPop(() => MODULOS.eventos?.popupAvisos?.(), 1500);
+    agendarPop(() => MODULOS.programas?.popupEquipe?.(), 1800);
   }
 }
 
@@ -361,6 +362,19 @@ const TIPOS_POP = {
   agenda:   { classe: 'pop-agenda',   icone: '&#128197;' },
   aviso:    { classe: 'pop-aviso',    icone: '&#128276;' }
 };
+
+// Pop-ups da entrada em fila: espera nao haver modal/pop aberto (ate ~3 min) antes de chamar
+function agendarPop(fn, atraso) {
+  const tentar = n => {
+    if (document.getElementById('modal-fundo') || document.getElementById('pop-fundo') || window._popOcupado) {
+      if (n < 90) setTimeout(() => tentar(n + 1), 2000);
+      return;
+    }
+    window._popOcupado = true;
+    Promise.resolve(fn()).finally(() => { window._popOcupado = false; });
+  };
+  setTimeout(() => tentar(0), atraso);
+}
 
 function abrirModal(titulo, html, larga, tipo) {
   fecharModal();

@@ -477,7 +477,7 @@ window.MODULOS.avaliacoes = {
   async htmlDoPaciente(pacienteId) {
     this._pacAtualId = pacienteId;
     const { data } = await sb.from('avaliacoes')
-      .select('id, protocolo, status, iniciado_em, concluido_em')
+      .select('id, protocolo, status, iniciado_em, concluido_em, origem, observacoes')
       .eq('paciente_id', pacienteId)
       .order('iniciado_em', { ascending: false });
 
@@ -518,6 +518,18 @@ window.MODULOS.avaliacoes = {
 
     const concluidas = data.filter(x => x.status === 'concluida');
     let html = acoes;
+    // Avaliacoes registradas fora do sistema (quadro geral importado): entram no vencimento, sem documento
+    const externas = concluidas.filter(x => x.origem === 'importado');
+    if (externas.length) {
+      const NOME_PROT = { ss: 'Socially Savvy', qadi: 'QADI-R', portage: 'Portage', vbmapp: 'VB-MAPP', ipo: 'IPO + QI', interno: 'Protocolo interno' };
+      html += '<div class="cartao faixa-roxo"><h3>Registradas fora do sistema <span class="selo selo-roxo">' + externas.length + '</span></h3>' +
+        '<p class="sub" style="margin-bottom:6px">Importadas do quadro geral da coordenacao: contam para o vencimento (6 meses), mas nao tem itens nem documento aqui.</p>' +
+        externas.map(x =>
+          '<div class="linha-doc"><div><b>' + (NOME_PROT[x.protocolo] || x.protocolo.toUpperCase()) + '</b>' +
+          '<small>Aplicada em ' + new Date(x.concluido_em).toLocaleDateString('pt-BR') +
+          (x.observacoes ? ' &middot; ' + escaparHtml(x.observacoes.replace(/^Importado[^-]*- /, '')) : '') + '</small></div>' +
+          '<span class="selo selo-neutro">externa</span></div>').join('') + '</div>';
+    }
     if (concluidas.length) {
       const temSS = concluidas.some(x => x.protocolo === 'ss');
       const nSS = concluidas.filter(x => x.protocolo === 'ss').length;

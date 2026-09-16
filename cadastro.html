@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cadastro - Equilibrium Terapia Infantil</title>
+  <link rel="icon" type="image/svg+xml" href="icones/favicon.svg">
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Caveat:wght@600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles/base.css">
+  <link rel="stylesheet" href="styles/components.css">
+  <link rel="stylesheet" href="styles/tema-indigo.css">
+  <style>
+    .cad-pagina { min-height: 100vh; display: flex; align-items: flex-start; justify-content: center; padding: 24px 14px 40px; }
+    .cad-cartao {
+      width: 100%; max-width: 560px;
+      background: var(--surface); border: 1px solid var(--line);
+      border-radius: var(--raio); box-shadow: var(--shadow-md);
+      padding: 28px 26px; position: relative; z-index: 1;
+    }
+    .cad-cartao .marca { justify-content: center; margin-bottom: 16px; }
+    .cad-cartao h1 { font-size: 19px; font-weight: 800; text-align: center; margin-bottom: 4px; }
+    .cad-cartao .intro { color: var(--ink-muted); font-size: 13px; line-height: 1.6; text-align: center; margin-bottom: 18px; }
+    .cad-sec { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
+    .cad-sec h2 { font-size: 13px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--acao); margin-bottom: 10px; }
+    .campo { margin-bottom: 10px; }
+    .campo label { display: block; font-size: 12px; font-weight: 700; color: var(--ink-muted); margin-bottom: 4px; }
+    .campo input, .campo select {
+      width: 100%; padding: 10px 12px; font: inherit; font-size: 14px;
+      border: 1.5px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink);
+    }
+    .campo input:focus, .campo select:focus { outline: none; border-color: var(--acao); box-shadow: 0 0 0 3px var(--acao-soft); }
+    .campo small { display: block; color: var(--ink-soft); font-size: 11.5px; margin-top: 3px; }
+    .linha2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    @media (max-width: 480px) { .linha2 { grid-template-columns: 1fr; } }
+    .check { display: flex; align-items: center; gap: 8px; font-size: 13px; margin: 6px 0; }
+    .mensagem-erro { display: none; background: var(--st-bad-bg); color: var(--st-bad); border-radius: 12px; padding: 10px 12px; font-size: 13px; margin-top: 10px; }
+    .mensagem-erro.visivel { display: block; }
+    .cad-ok { text-align: center; }
+    .cad-ok .icone { font-size: 44px; margin: 6px 0; }
+    .cred { background: var(--surface-alt); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin: 16px 0; text-align: left; }
+    .cred div { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px dashed var(--line); font-size: 14px; }
+    .cred div:last-child { border-bottom: none; }
+    .cred b { font-family: var(--fonte-mono, monospace); font-size: 15px; word-break: break-all; }
+    .cad-botoes { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+    .btn-whats { background: #25D366; color: #fff; }
+    .btn-whats:hover { background: #1DA851; }
+    .rodape { text-align: center; color: var(--ink-soft); font-size: 11.5px; margin-top: 18px; }
+  </style>
+</head>
+<body data-tema="familia">
+  <div class="cad-pagina">
+    <div class="cad-cartao" id="cartao">
+      <div class="marca">
+        <span class="simbolo" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 32 32" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+            <line x1="16" y1="16" x2="9" y2="9"/><line x1="16" y1="16" x2="23" y2="9"/>
+            <line x1="16" y1="16" x2="9" y2="23"/><line x1="16" y1="16" x2="23" y2="23"/>
+            <line x1="16" y1="16" x2="16" y2="7"/><line x1="16" y1="16" x2="16" y2="25"/>
+            <circle cx="16" cy="16" r="2.8" stroke="none"/>
+            <circle cx="9" cy="9" r="1.6" stroke="none"/><circle cx="23" cy="9" r="1.6" stroke="none"/>
+            <circle cx="9" cy="23" r="1.6" stroke="none"/><circle cx="23" cy="23" r="1.6" stroke="none"/>
+            <circle cx="16" cy="7" r="1.6" stroke="none"/><circle cx="16" cy="25" r="1.6" stroke="none"/>
+          </svg>
+        </span>
+        <span class="nome">CORTEX <span class="mao">aba</span></span>
+      </div>
+      <div id="conteudo"><p class="intro">Carregando...</p></div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/config.js"></script>
+  <script>
+    const token = new URLSearchParams(window.location.search).get('t');
+    const alvo = document.getElementById('conteudo');
+    const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const v = id => (document.getElementById(id).value || '').trim();
+
+    function erroFinal(msg) {
+      alvo.innerHTML = '<div class="cad-ok"><div class="icone">&#9888;&#65039;</div><h1>' + esc(msg) + '</h1>' +
+        '<p class="intro">Se precisar, fale com a recepcao da Equilibrium.</p></div>';
+    }
+
+    function formulario(conv) {
+      alvo.innerHTML =
+        '<h1>Cadastro da crian&ccedil;a</h1>' +
+        '<p class="intro">Ol&aacute;! A Equilibrium Terapia Infantil enviou este link para voc&ecirc; fazer o cadastro' +
+        (conv.nome_crianca ? ' de <b>' + esc(conv.nome_crianca) + '</b>' : '') +
+        '. Leva uns 3 minutos. No fim voc&ecirc; recebe o acesso ao portal da fam&iacute;lia, onde a anamnese j&aacute; estar&aacute; liberada.</p>' +
+
+        '<div class="cad-sec"><h2>A crian&ccedil;a</h2>' +
+        '<div class="campo"><label>Nome completo *</label><input id="c-nome" value="' + esc(conv.nome_crianca || '') + '" autocomplete="off"></div>' +
+        '<div class="linha2">' +
+        '<div class="campo"><label>Data de nascimento *</label><input id="c-nasc" type="date"></div>' +
+        '<div class="campo"><label>Sexo *</label><select id="c-sexo"><option value="">Selecione</option><option value="M">Masculino</option><option value="F">Feminino</option></select></div>' +
+        '</div>' +
+        '<div class="linha2">' +
+        '<div class="campo"><label>Conv&ecirc;nio</label><input id="c-convenio" placeholder="Unimed, NDI Minas, Particular..."></div>' +
+        '<div class="campo"><label>N&uacute;mero da carteirinha</label><input id="c-carteirinha"></div>' +
+        '</div>' +
+        '<div class="campo"><label>Escola (se estuda)</label><input id="c-escola"></div>' +
+        '</div>' +
+
+        '<div class="cad-sec"><h2>Voc&ecirc; (respons&aacute;vel)</h2>' +
+        '<div class="campo"><label>Seu nome completo *</label><input id="r-nome" autocomplete="name"></div>' +
+        '<div class="linha2">' +
+        '<div class="campo"><label>Parentesco *</label><select id="r-parentesco"><option value="">Selecione</option><option>M&atilde;e</option><option>Pai</option><option>Av&oacute;</option><option>Av&ocirc;</option><option>Tia</option><option>Tio</option><option>Respons&aacute;vel legal</option><option>Outro</option></select></div>' +
+        '<div class="campo"><label>CPF</label><input id="r-cpf" inputmode="numeric" placeholder="000.000.000-00"></div>' +
+        '</div>' +
+        '<div class="linha2">' +
+        '<div class="campo"><label>WhatsApp *</label><input id="r-telefone" inputmode="tel" value="' + esc(conv.telefone || '') + '" placeholder="(34) 9 9999-9999"></div>' +
+        '<div class="campo"><label>E-mail *</label><input id="r-email" type="email" autocomplete="email"><small>Ser&aacute; o seu login no portal.</small></div>' +
+        '</div>' +
+        '<label class="check"><input type="checkbox" id="r-legal" checked> Sou respons&aacute;vel legal pela crian&ccedil;a</label>' +
+        '</div>' +
+
+        '<div class="cad-sec"><h2>Senha do portal</h2>' +
+        '<div class="linha2">' +
+        '<div class="campo"><label>Crie uma senha *</label><input id="s-senha" type="password" autocomplete="new-password"><small>M&iacute;nimo 6 caracteres.</small></div>' +
+        '<div class="campo"><label>Repita a senha *</label><input id="s-senha2" type="password" autocomplete="new-password"></div>' +
+        '</div>' +
+        '</div>' +
+
+        '<div class="mensagem-erro" id="erro"></div>' +
+        '<div class="cad-botoes"><button class="btn btn-primario" id="btn-enviar" onclick="enviar()">Concluir cadastro</button></div>' +
+        '<p class="rodape">Seus dados s&atilde;o usados apenas para o atendimento da crian&ccedil;a na Equilibrium.</p>';
+    }
+
+    async function enviar() {
+      const erro = document.getElementById('erro');
+      erro.classList.remove('visivel');
+      const dados = {
+        token: token,
+        crianca: { nome: v('c-nome'), data_nascimento: v('c-nasc'), sexo: v('c-sexo'), convenio: v('c-convenio') || null,
+                   carteirinha: v('c-carteirinha') || null, escola: v('c-escola') || null },
+        responsavel: { nome: v('r-nome'), parentesco: v('r-parentesco'), cpf: v('r-cpf') || null, telefone: v('r-telefone'),
+                       email: v('r-email').toLowerCase(), responsavel_legal: document.getElementById('r-legal').checked },
+        senha: v('s-senha')
+      };
+      const faltas = [];
+      if (!dados.crianca.nome) faltas.push('nome da crianca');
+      if (!dados.crianca.data_nascimento) faltas.push('data de nascimento');
+      if (!dados.crianca.sexo) faltas.push('sexo');
+      if (!dados.responsavel.nome) faltas.push('seu nome');
+      if (!dados.responsavel.parentesco) faltas.push('parentesco');
+      if (!dados.responsavel.telefone) faltas.push('WhatsApp');
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(dados.responsavel.email)) faltas.push('e-mail valido');
+      if (dados.senha.length < 6) faltas.push('senha com 6+ caracteres');
+      if (dados.senha !== v('s-senha2')) faltas.push('as duas senhas iguais');
+      if (faltas.length) { erro.textContent = 'Falta: ' + faltas.join(', ') + '.'; erro.classList.add('visivel'); return; }
+
+      const botao = document.getElementById('btn-enviar');
+      botao.disabled = true; botao.textContent = 'Enviando...';
+      try {
+        const resp = await fetch(CORTEX_CONFIG.SUPABASE_URL + '/functions/v1/cadastro-familia', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'apikey': CORTEX_CONFIG.SUPABASE_ANON_KEY,
+                     'Authorization': 'Bearer ' + CORTEX_CONFIG.SUPABASE_ANON_KEY },
+          body: JSON.stringify(dados)
+        });
+        const corpo = await resp.json();
+        if (!resp.ok) throw new Error(corpo.erro || 'Nao foi possivel concluir o cadastro.');
+        sucesso(corpo, dados);
+      } catch (e) {
+        erro.textContent = e.message; erro.classList.add('visivel');
+        botao.disabled = false; botao.textContent = 'Concluir cadastro';
+      }
+    }
+
+    function sucesso(corpo, dados) {
+      const urlPortal = window.location.origin + window.location.pathname.replace(/[^/]*$/, '') + 'index.html';
+      const texto = 'Equilibrium Terapia Infantil - acesso ao portal da familia\n' +
+        'Crianca: ' + dados.crianca.nome + '\nPortal: ' + urlPortal + '\nLogin: ' + dados.responsavel.email + '\nSenha: ' + dados.senha;
+      alvo.innerHTML = '<div class="cad-ok"><div class="icone">&#127881;</div>' +
+        '<h1>Cadastro conclu&iacute;do!</h1>' +
+        '<p class="intro">A anamnese de <b>' + esc(dados.crianca.nome) + '</b> j&aacute; est&aacute; liberada no portal. Guarde seus dados de acesso:</p>' +
+        '<div class="cred">' +
+        '<div><span>Portal</span><b>' + esc(urlPortal) + '</b></div>' +
+        '<div><span>Login</span><b>' + esc(dados.responsavel.email) + '</b></div>' +
+        '<div><span>Senha</span><b>' + esc(dados.senha) + '</b></div>' +
+        '</div>' +
+        '<div class="cad-botoes">' +
+        '<a class="btn btn-primario" href="' + urlPortal + '">Entrar no portal e responder a anamnese</a>' +
+        '<a class="btn btn-whats" href="https://wa.me/?text=' + encodeURIComponent(texto) + '" target="_blank" rel="noopener">Guardar no meu WhatsApp</a>' +
+        '</div>' +
+        '<p class="rodape">A recep&ccedil;&atilde;o da Equilibrium tamb&eacute;m recebeu o aviso do seu cadastro.</p></div>';
+    }
+
+    (async function () {
+      if (!token) { erroFinal('Link invalido.'); return; }
+      try {
+        const { data, error } = await sb.rpc('convite_cadastro_ler', { p_token: token });
+        if (error || !data) throw new Error('Link invalido ou expirado.');
+        if (data.status === 'concluido') { erroFinal('Este cadastro ja foi concluido.'); return; }
+        if (data.status !== 'pendente') { erroFinal('Link invalido ou expirado.'); return; }
+        formulario(data);
+      } catch (e) { erroFinal(e.message); }
+    })();
+  </script>
+</body>
+</html>

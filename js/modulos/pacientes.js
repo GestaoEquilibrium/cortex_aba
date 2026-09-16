@@ -30,7 +30,9 @@ window.MODULOS.pacientes = {
       '<div class="pagina-cabecalho">' +
       '  <div><h2>Pacientes</h2><p class="sub" id="pac-contagem">Carregando...</p></div>' +
       (podeAdmitir
-        ? '<button class="btn btn-primario" onclick="MODULOS.pacientes.telaNova()">+ Nova admissao</button>'
+        ? '<div style="display:flex; gap:8px; flex-wrap:wrap">' +
+          '<button class="btn btn-fantasma" onclick="MODULOS.pacientes.modalLinkCadastro()">&#128279; Enviar link de cadastro</button>' +
+          '<button class="btn btn-primario" onclick="MODULOS.pacientes.telaNova()">+ Nova admissao</button></div>'
         : '') +
       '</div>' +
       '<div class="toolbar">' +
@@ -1065,6 +1067,48 @@ window.MODULOS.pacientes = {
     crypto.getRandomValues(a);
     for (let i = 0; i < 8; i++) s += chars[a[i] % chars.length];
     return s;
+  },
+
+  // ─────────────── Link de pre-cadastro pela familia (call center) ───────────────
+  modalLinkCadastro() {
+    abrirModal('Enviar link de cadastro',
+      '<p class="sub" style="margin-bottom:10px">A familia preenche os dados da crianca e do responsavel, cria a senha e ' +
+      'sai com o acesso ao portal. A anamnese ja fica liberada. Voce recebe um aviso quando concluir.</p>' +
+      '<div class="campo"><label>Nome da crianca <small>(opcional, so pre-preenche)</small></label><input id="lk-nome"></div>' +
+      '<div class="campo"><label>WhatsApp do responsavel <small>(opcional)</small></label><input id="lk-fone" inputmode="tel" placeholder="(34) 9 9999-9999"></div>' +
+      '<div class="mensagem-erro" id="lk-erro"></div>' +
+      '<div class="barra-acoes">' +
+      '  <button class="btn btn-fantasma" onclick="fecharModal()">Cancelar</button>' +
+      '  <button class="btn btn-primario" id="lk-gerar" onclick="MODULOS.pacientes.gerarLinkCadastro()">Gerar link</button>' +
+      '</div>');
+  },
+
+  async gerarLinkCadastro() {
+    const erro = document.getElementById('lk-erro');
+    const botao = document.getElementById('lk-gerar');
+    erro.classList.remove('visivel');
+    botao.disabled = true; botao.textContent = 'Gerando...';
+    const a = new Uint8Array(18); crypto.getRandomValues(a);
+    const token = Array.from(a, b => b.toString(16).padStart(2, '0')).join('');
+    const nome = document.getElementById('lk-nome').value.trim() || null;
+    const fone = document.getElementById('lk-fone').value.trim() || null;
+    const { error } = await sb.from('convites_cadastro').insert({
+      token, nome_crianca: nome, telefone: fone, criado_por: this.sessao.user.id
+    });
+    if (error) { erro.textContent = error.message; erro.classList.add('visivel'); botao.disabled = false; botao.textContent = 'Gerar link'; return; }
+
+    const link = window.location.origin + window.location.pathname.replace(/[^/]*$/, '') + 'cadastro.html?t=' + token;
+    const msg = 'Ola! Aqui e da Equilibrium Terapia Infantil. Para iniciarmos o atendimento' +
+      (nome ? ' de ' + nome : '') + ', faca o cadastro pelo link abaixo (leva 3 minutos). No final voce ja recebe o acesso ao portal da familia:\n' + link;
+    let foneWa = (fone || '').replace(/\D/g, '');
+    if (foneWa.length === 10 || foneWa.length === 11) foneWa = '55' + foneWa;
+    abrirModal('Link de cadastro pronto',
+      '<p class="sub" style="margin-bottom:8px">Vale por 7 dias e so pode ser usado uma vez.</p>' +
+      '<input class="pop-copia" readonly value="' + escaparHtml(link) + '" onclick="this.select()" style="margin-bottom:12px">' +
+      '<div class="barra-acoes" style="justify-content:flex-start; flex-wrap:wrap">' +
+      '  <button class="btn btn-fantasma" onclick="navigator.clipboard.writeText(\'' + link + '\').then(function(){ popAviso(\'Link copiado.\'); })">Copiar link</button>' +
+      '  <a class="btn btn-primario" target="_blank" rel="noopener" href="https://wa.me/' + foneWa + '?text=' + encodeURIComponent(msg) + '">Enviar no WhatsApp</a>' +
+      '</div>');
   },
 
   gerarLogin() {

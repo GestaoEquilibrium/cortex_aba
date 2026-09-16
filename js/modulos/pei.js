@@ -266,10 +266,12 @@ window.MODULOS.pei = {
 
     // Programas do paciente para casar meta -> andamento
     const { data: pps } = await sb.from('paciente_programas')
-      .select('status, programas(nome)').eq('paciente_id', pei.pacientes.id);
+      .select('status, pei_meta_id, programas(nome)').eq('paciente_id', pei.pacientes.id);
     const andamento = m => {
+      // 1) vinculo exato pela meta (programas lancados pelo botao da meta); 2) reserva: nome igual
       const alvo = (m.meta || '').slice(0, 120).toLowerCase();
-      const pp = (pps || []).find(x => x.programas && x.programas.nome.toLowerCase() === alvo);
+      const pp = (pps || []).find(x => x.pei_meta_id === m.id) ||
+        (pps || []).find(x => !x.pei_meta_id && x.programas && x.programas.nome.toLowerCase() === alvo);
       if (!pp) return '';
       const rot = { na_fila: ['Na fila', 'selo-neutro'], em_intervencao: ['Em intervencao', 'selo-warn'],
         dominado: ['Dominado', 'selo-ok'] };

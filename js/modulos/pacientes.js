@@ -198,7 +198,7 @@ window.MODULOS.pacientes = {
         '</span>' +
         '    </div>' +
         '    <div class="pac-selos" style="margin-left:auto">' +
-             this.seloNovo(p) + this.seloNivel(p.nivel) + this.seloStatus(p.status) + '</div>' +
+             this.seloIncompleto(p) + this.seloNovo(p) + this.seloNivel(p.nivel) + this.seloStatus(p.status) + '</div>' +
         '  </div>';
 
       if (modo === 'simples') {
@@ -258,6 +258,13 @@ window.MODULOS.pacientes = {
     if (nivel === 'aba1') return '<span class="selo selo-roxo">ABA 1</span>';
     if (nivel === 'aba2') return '<span class="selo selo-roxo">ABA 2</span>';
     return '<span class="selo selo-neutro">Nivel a definir</span>';
+  },
+
+  // Cadastro minimo (importado): sem responsavel e sem convenio -> avisa a recepcao
+  seloIncompleto(p) {
+    const semResp = !(p.responsaveis && p.responsaveis.length) && !p._resp;
+    if (!semResp || p.convenio) return '';
+    return '<span class="selo selo-warn" title="Sem responsavel e sem convenio cadastrados. Complete em Editar dados.">&#9998; cadastro incompleto</span>';
   },
 
   seloNovo(p) {
@@ -350,7 +357,7 @@ window.MODULOS.pacientes = {
       '</b></div>' +
       '      </div>' +
       '      <div class="capa-acoes">' +
-               this.seloNovo(p) + this.seloNivel(p.nivel) + this.seloStatus(p.status) +
+               this.seloIncompleto(p) + this.seloNovo(p) + this.seloNivel(p.nivel) + this.seloStatus(p.status) +
       (podeAdmitir
         ? '<button class="btn-chip" onclick="MODULOS.pacientes.telaEditar()">&#9998; Editar dados</button>' +
           '<button class="btn-chip" onclick="MODULOS.pacientes.modalFoto()">&#128247; ' +

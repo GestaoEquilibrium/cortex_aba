@@ -31,7 +31,8 @@ window.MODULOS.agenda = {
     this.el = el;
     this.sessao = sessao;
     this.dataRef = new Date().toISOString().slice(0, 10);
-    this.visao = 'dia';
+    // call center abre direto na visao por aplicador (reservas)
+    this.visao = sessao.profile.perfil === 'callcenter' ? 'equipe' : 'dia';
     await this.carregarBase();
     this.telaPrincipal();
     this.ligarTempoReal();
@@ -93,10 +94,10 @@ window.MODULOS.agenda = {
       '</div>' +
       '<div class="ag-controles">' +
       '  <div class="segmento">' +
-      ['dia', 'semana', 'mes'].map(v =>
+      ['dia', 'semana', 'mes'].concat(this.podeReservar() ? ['equipe'] : []).map(v =>
         '<button type="button" class="seg' + (this.visao === v ? ' ativo' : '') + '" data-visao="' + v + '" ' +
         'onclick="MODULOS.agenda.mudarVisao(\'' + v + '\')">' +
-        (v === 'dia' ? 'Dia' : v === 'semana' ? 'Semana' : 'Mes') + '</button>').join('') +
+        ({ dia: 'Dia', semana: 'Semana', mes: 'Mes', equipe: 'Por aplicador' })[v] + '</button>').join('') +
       '  </div>' +
       '  <div class="ag-nav">' +
       '    <button class="botao-icone tema" onclick="MODULOS.agenda.navegar(-1)">&lsaquo;</button>' +
@@ -118,7 +119,7 @@ window.MODULOS.agenda = {
 
   navegar(delta) {
     const d = new Date(this.dataRef + 'T12:00:00');
-    if (this.visao === 'dia') d.setDate(d.getDate() + delta);
+    if (this.visao === 'dia' || this.visao === 'equipe') d.setDate(d.getDate() + delta);
     else if (this.visao === 'semana') d.setDate(d.getDate() + delta * 7);
     else d.setMonth(d.getMonth() + delta);
     this.dataRef = d.toISOString().slice(0, 10);
@@ -131,9 +132,172 @@ window.MODULOS.agenda = {
   },
 
   desenhar() {
+    if (this.visao === 'equipe') { this.desenharEquipe(); return; }
     if (this.visao === 'dia') this.desenharDia();
     else if (this.visao === 'semana') this.desenharSemana();
     else this.desenharMes();
+  },
+
+  // ───────────────────── VISAO POR APLICADOR (call center: reservas de horario) ─────────────────────
+  podeReservar() {
+    return ['callcenter', 'direcao', 'coordenador', 'suporte'].includes(this.sessao.profile.perfil) || this.gere();
+  },
+
+  hm(t) { return String(t || '').slice(0, 5); },
+  somaMin(hhmm, min) {
+    const [h, m] = hhmm.split(':').map(Number);
+    const t = h * 60 + m + min;
+    return String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0');
+  },
+
+  async desenharEquipe() {
+    const corpo = document.getElementById('ag-corpo');
+    const data = this.dataRef;
+    const d = new Date(data + 'T12:00:00');
+    const dow = d.getDay();
+    document.getElementById('ag-sub').textContent =
+      d.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' }) + ' - horarios de cada aplicador';
+    corpo.innerHTML = '<div class="cartao"><p class="sub">Montando a grade...</p></div>';
+
+    const [rS, rR] = await Promise.all([
+      sb.from('sessoes').select('id, hora_inicio, status, aplicador_id, paciente_id, pacientes(nome)').eq('data', data),
+      sb.from('reservas_agenda').select('*, quem:profiles!reservas_agenda_reservado_por_fkey(nome)').eq('data', data).eq('status', 'reservado')
+    ]);
+    const sess = rS.data || [], res = rR.data || [];
+
+    // colunas: aplicadores com jornada no dia (ou com sessao/reserva no dia)
+    const jorDia = this.jornadas.filter(j => j.dia_semana === dow);
+    const cols = this.equipe.filter(p => jorDia.some(j => j.profissional_id === p.id) ||
+      sess.some(s => s.aplicador_id === p.id) || res.some(r => r.aplicador_id === p.id));
+    if (!cols.length) {
+      corpo.innerHTML = '<div class="cartao"><div class="vazio"><div class="simbolo-vazio">&#128197;</div><strong>Ninguem com jornada neste dia</strong>' +
+        'Cadastre as jornadas em Horarios para a grade aparecer.</div></div>';
+      return;
+    }
+    // linhas: uniao dos inicios de slot de cada jornada (pela duracao do aplicador) + horarios reais
+    const horas = new Set();
+    cols.forEach(p => {
+      const dur = this.durDe(p.id);
+      jorDia.filter(j => j.profissional_id === p.id).forEach(j => {
+        let h = this.hm(j.hora_inicio);
+        while (this.somaMin(h, dur) <= this.hm(j.hora_fim)) { horas.add(h); h = this.somaMin(h, dur); }
+      });
+    });
+    sess.forEach(s => horas.add(this.hm(s.hora_inicio)));
+    res.forEach(r => horas.add(this.hm(r.hora_inicio)));
+    const linhas = [...horas].sort();
+
+    const dentro = (p, h) => jorDia.some(j => j.profissional_id === p.id && this.hm(j.hora_inicio) <= h && h < this.hm(j.hora_fim));
+    const ocupa = (p, h) => {
+      const dur = this.durDe(p.id);
+      return sess.find(s => s.aplicador_id === p.id && s.status !== 'cancelada' &&
+        this.hm(s.hora_inicio) <= h && h < this.somaMin(this.hm(s.hora_inicio), dur));
+    };
+    const ST = { agendada: 'ag-eq-agendada', checkin: 'ag-eq-checkin', em_atendimento: 'ag-eq-atend', concluida: 'ag-eq-concluida', falta: 'ag-eq-falta' };
+
+    let html = '<div class="cartao ag-eq-wrap"><table class="ag-eq"><thead><tr><th class="ag-eq-h"></th>' +
+      cols.map(p => '<th><b>' + escaparHtml(p.nome.split(' ').slice(0, 2).join(' ')) + '</b><small>' +
+        jorDia.filter(j => j.profissional_id === p.id).map(j => this.hm(j.hora_inicio) + '-' + this.hm(j.hora_fim)).join(' / ') + '</small></th>').join('') +
+      '</tr></thead><tbody>';
+    linhas.forEach(h => {
+      html += '<tr><td class="ag-eq-h">' + h + '</td>' +
+        cols.map(p => {
+          const s = ocupa(p, h);
+          if (s) {
+            if (this.hm(s.hora_inicio) !== h) return '<td class="ag-eq-cont"></td>';
+            return '<td class="ag-eq-cel ' + (ST[s.status] || '') + '" onclick="MODULOS.agenda.abrirSessao(\'' + s.id + '\')" title="Abrir sessao">' +
+              '<b>' + escaparHtml((s.pacientes ? s.pacientes.nome : '').split(' ').slice(0, 2).join(' ')) + '</b><small>' + this.selosSessao(s).replace(/<[^>]+>/g, ' ').trim() + '</small></td>';
+          }
+          const r = res.find(x => x.aplicador_id === p.id && this.hm(x.hora_inicio) === h);
+          if (r) return '<td class="ag-eq-cel ag-eq-reserva" onclick="MODULOS.agenda.modalReserva(\'' + r.id + '\')" title="Reservado por ' + escaparHtml(r.quem ? r.quem.nome : '') + '">' +
+            '<b>' + escaparHtml(r.nome_paciente) + '</b><small>reservado &middot; ' + escaparHtml((r.quem ? r.quem.nome : '').split(' ')[0]) + '</small></td>';
+          if (!dentro(p, h)) return '<td class="ag-eq-fora"></td>';
+          return '<td class="ag-eq-livre" onclick="MODULOS.agenda.modalReservar(\'' + p.id + '\', \'' + h + '\')" title="Reservar este horario">+ livre</td>';
+        }).join('') + '</tr>';
+    });
+    html += '</tbody></table></div>' +
+      '<p class="sub" style="margin-top:8px">Clique num horario livre para <b>reservar</b> (nome do paciente ou interessado). ' +
+      'A reserva guarda quem fez; depois voce <b>confirma</b> (vira sessao na agenda) ou <b>libera</b>.</p>';
+    corpo.innerHTML = html;
+    this._eqCache = { sess, res };
+  },
+
+  modalReservar(profId, hora) {
+    const prof = this.equipe.find(p => p.id === profId);
+    abrirModal('Reservar horario',
+      '<p class="sub" style="margin-bottom:10px"><b>' + escaparHtml(prof ? prof.nome : '') + '</b> &middot; ' +
+      new Date(this.dataRef + 'T12:00:00').toLocaleDateString('pt-BR') + ' as <b>' + hora + '</b></p>' +
+      '<div class="campo"><label>Nome do paciente ou interessado *</label>' +
+      '<input id="rv-nome" list="rv-pacs" autocomplete="off" placeholder="Digite o nome (pode ser alguem ainda sem cadastro)">' +
+      '<datalist id="rv-pacs">' + this.pacientes.map(p => '<option value="' + escaparHtml(p.nome) + '">').join('') + '</datalist></div>' +
+      '<div class="campo"><label>Telefone</label><input id="rv-fone" inputmode="tel"></div>' +
+      '<div class="campo"><label>Observacao</label><input id="rv-obs" placeholder="Ex.: aguardando guia do convenio"></div>' +
+      '<div class="mensagem-erro" id="rv-erro"></div>' +
+      '<div class="barra-acoes"><button class="btn btn-fantasma" onclick="fecharModal()">Cancelar</button>' +
+      '<button class="btn btn-primario" onclick="MODULOS.agenda.salvarReserva(\'' + profId + '\', \'' + hora + '\')">Reservar</button></div>', false, 'agenda');
+    setTimeout(() => document.getElementById('rv-nome')?.focus(), 50);
+  },
+
+  async salvarReserva(profId, hora) {
+    const nome = document.getElementById('rv-nome').value.trim();
+    const erro = document.getElementById('rv-erro');
+    if (!nome) { erro.textContent = 'Informe o nome.'; erro.classList.add('visivel'); return; }
+    const pac = this.pacientes.find(p => p.nome.toLowerCase() === nome.toLowerCase());
+    const { error } = await sb.from('reservas_agenda').insert({
+      data: this.dataRef, hora_inicio: hora + ':00', aplicador_id: profId,
+      nome_paciente: nome, paciente_id: pac ? pac.id : null,
+      telefone: document.getElementById('rv-fone').value.trim() || null,
+      observacao: document.getElementById('rv-obs').value.trim() || null,
+      reservado_por: this.sessao.user.id
+    });
+    if (error) { erro.textContent = error.message; erro.classList.add('visivel'); return; }
+    fecharModal();
+    this.desenharEquipe();
+  },
+
+  modalReserva(id) {
+    const r = (this._eqCache?.res || []).find(x => x.id === id);
+    if (!r) return;
+    const prof = this.equipe.find(p => p.id === r.aplicador_id);
+    abrirModal('Horario reservado',
+      '<div class="grade-visao" style="margin-bottom:10px">' +
+      '<div class="caixa-info"><small>Paciente</small><b>' + escaparHtml(r.nome_paciente) + '</b></div>' +
+      '<div class="caixa-info"><small>Aplicador</small><b>' + escaparHtml(prof ? prof.nome : '') + '</b></div>' +
+      '<div class="caixa-info"><small>Quando</small><b>' + r.data.split('-').reverse().join('/') + ' as ' + this.hm(r.hora_inicio) + '</b></div>' +
+      '<div class="caixa-info"><small>Reservado por</small><b>' + escaparHtml(r.quem ? r.quem.nome : '-') + '<br><small>' + new Date(r.criado_em).toLocaleString('pt-BR') + '</small></b></div>' +
+      (r.telefone ? '<div class="caixa-info"><small>Telefone</small><b>' + escaparHtml(r.telefone) + '</b></div>' : '') +
+      (r.observacao ? '<div class="caixa-info"><small>Observacao</small><b>' + escaparHtml(r.observacao) + '</b></div>' : '') +
+      '</div>' +
+      '<div class="campo"><label>Confirmar para qual paciente cadastrado?</label>' +
+      '<select id="rv-pac"><option value="">Selecione...</option>' +
+      this.pacientes.map(p => '<option value="' + p.id + '"' + (p.id === r.paciente_id || p.nome.toLowerCase() === r.nome_paciente.toLowerCase() ? ' selected' : '') + '>' + escaparHtml(p.nome) + '</option>').join('') +
+      '</select><small class="sub">Se ainda nao esta cadastrado, faca a admissao (ou envie o link de cadastro) e confirme depois.</small></div>' +
+      '<div class="mensagem-erro" id="rv-erro"></div>' +
+      '<div class="barra-acoes">' +
+      '<button class="btn btn-fantasma" onclick="MODULOS.agenda.liberarReserva(\'' + r.id + '\')">Liberar horario</button>' +
+      '<button class="btn btn-primario" onclick="MODULOS.agenda.confirmarReserva(\'' + r.id + '\')">Confirmar e agendar</button></div>', false, 'agenda');
+  },
+
+  async liberarReserva(id) {
+    if (!await popConfirmar('Liberar este horario? A reserva sai da grade.', { ok: 'Liberar', tipo: 'agenda' })) return;
+    const { error } = await sb.from('reservas_agenda').update({ status: 'liberado', liberado_por: this.sessao.user.id, liberado_em: new Date().toISOString() }).eq('id', id);
+    if (error) { popAviso('Nao consegui liberar: ' + error.message); return; }
+    fecharModal(); this.desenharEquipe();
+  },
+
+  async confirmarReserva(id) {
+    const r = (this._eqCache?.res || []).find(x => x.id === id);
+    const pacId = document.getElementById('rv-pac').value;
+    const erro = document.getElementById('rv-erro');
+    if (!pacId) { erro.textContent = 'Escolha o paciente cadastrado para confirmar.'; erro.classList.add('visivel'); return; }
+    const { data: nova, error } = await sb.from('sessoes').insert({
+      paciente_id: pacId, data: r.data, hora_inicio: r.hora_inicio, duracao_min: this.durDe(r.aplicador_id),
+      aplicador_id: r.aplicador_id, status: 'agendada'
+    }).select('id').single();
+    if (error) { erro.textContent = 'Sessao: ' + error.message; erro.classList.add('visivel'); return; }
+    await sb.from('reservas_agenda').update({ status: 'confirmado', paciente_id: pacId, sessao_id: nova.id,
+      confirmado_por: this.sessao.user.id, confirmado_em: new Date().toISOString() }).eq('id', id);
+    fecharModal(); this.desenharEquipe();
   },
 
   segunda(dataStr) {

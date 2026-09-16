@@ -2280,3 +2280,29 @@
 /* ── Escopo "Minha equipe / Geral" no cabecalho ─────────────────────── */
 .escopo-toggle { margin-left: auto; }
 .pagina-cabecalho { flex-wrap: wrap; gap: 10px; }
+
+/* ── Agenda por aplicador (reservas do call center) ─────────────────── */
+.ag-eq-wrap { padding: 0; overflow-x: auto; }
+.ag-eq { border-collapse: separate; border-spacing: 0; width: 100%; min-width: 640px; font-size: 12px; }
+.ag-eq th { position: sticky; top: 0; background: var(--surface); padding: 10px 8px; text-align: center; border-bottom: 2px solid var(--line); z-index: 1; }
+.ag-eq th small { display: block; font-weight: 600; color: var(--ink-soft); font-size: 10.5px; margin-top: 2px; }
+.ag-eq td { border-bottom: 1px solid var(--line); border-right: 1px solid var(--line); height: 46px; vertical-align: middle; text-align: center; padding: 4px 6px; }
+.ag-eq .ag-eq-h { width: 58px; font-weight: 800; color: var(--ink-muted); background: var(--surface-alt); position: sticky; left: 0; }
+.ag-eq-cel { cursor: pointer; border-radius: 8px; }
+.ag-eq-cel b { display: block; font-size: 12px; }
+.ag-eq-cel small { display: block; font-size: 10.5px; opacity: .85; }
+.ag-eq-agendada { background: #FFF6DB; color: #7A4B00; }
+.ag-eq-checkin  { background: #E3F0FB; color: #0C447C; }
+.ag-eq-atend    { background: #E1F5EA; color: #0F5132; }
+.ag-eq-concluida{ background: #ECEAFB; color: #3C3489; }
+.ag-eq-falta    { background: #FDE6E8; color: #8A1C2C; }
+.ag-eq-reserva  { background: repeating-linear-gradient(45deg, #FFF1D6 0 6px, #FFE7B8 6px 12px); color: #7A4B00; cursor: pointer; }
+.ag-eq-cont     { background: rgba(0,0,0,.03); }
+.ag-eq-fora     { background: repeating-linear-gradient(45deg, transparent 0 5px, rgba(0,0,0,.04) 5px 10px); }
+.ag-eq-livre    { color: var(--ink-soft); cursor: pointer; font-weight: 700; transition: background .15s; }
+.ag-eq-livre:hover { background: var(--acao-soft); color: var(--acao); }
+[data-modo="escuro"] .ag-eq-agendada, [data-modo="escuro"] .ag-eq-reserva { background: rgba(243,182,61,.18); color: #F3B63D; }
+[data-modo="escuro"] .ag-eq-concluida { background: rgba(124,111,208,.22); color: #CECBF6; }
+[data-modo="escuro"] .ag-eq-falta { background: rgba(233,88,106,.2); color: #F4A3AE; }
+[data-modo="escuro"] .ag-eq-atend { background: rgba(62,156,110,.22); color: #9BE0BC; }
+[data-modo="escuro"] .ag-eq-checkin { background: rgba(20,104,178,.25); color: #9CC9F1; }

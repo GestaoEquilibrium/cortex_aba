@@ -1572,6 +1572,92 @@ window.MODULOS.programas = {
       false, 'evolucao');
   },
 
+  // ─────────────── Pop-up da coordenadora: pendencias de sessao da equipe dela ───────────────
+  // Equipe = criancas com pacientes.coordenador_id = eu + criancas dos aplicadores cujo profiles.coordenador_id = eu.
+  // Direcao/suporte veem todas as equipes, agrupadas por coordenadora.
+  async popupEquipe(tentativa) {
+    // nao atropela o pop-up anterior da entrada: espera ele ser fechado (ate ~2 min)
+    if (document.getElementById('modal-fundo') || document.getElementById('pop-fundo')) {
+      if ((tentativa || 0) < 40) setTimeout(() => this.popupEquipe((tentativa || 0) + 1), 3000);
+      return;
+    }
+    const sess = window.CORTEX_SESSAO;
+    const perfil = sess.profile.perfil;
+    const eu = sess.user.id;
+    const veTudo = ['direcao', 'suporte'].includes(perfil);
+    if (!veTudo && perfil !== 'coordenador') return;
+
+    const hoje = new Date().toISOString().slice(0, 10);
+    const desde = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+
+    const [rPac, rProf] = await Promise.all([
+      sb.from('pacientes').select('id, nome, coordenador_id, aplicador_id').eq('status', 'ativo'),
+      sb.from('profiles').select('id, nome, coordenador_id, perfil').eq('ativo', true)
+    ]);
+    const profs = {}; (rProf.data || []).forEach(p => { profs[p.id] = p; });
+    const coordDe = pac => pac.coordenador_id || (pac.aplicador_id && profs[pac.aplicador_id] ? profs[pac.aplicador_id].coordenador_id : null);
+    const minhas = (rPac.data || []).filter(p => veTudo ? !!coordDe(p) : coordDe(p) === eu);
+    if (!minhas.length) return;
+    const pacMap = {}; minhas.forEach(p => { pacMap[p.id] = p; });
+
+    const { data: ss } = await sb.from('sessoes')
+      .select('id, data, hora_inicio, status, paciente_id, aplicador_id')
+      .in('paciente_id', minhas.map(p => p.id))
+      .gte('data', desde).lte('data', hoje)
+      .not('status', 'in', '("falta","cancelada")')
+      .order('data', { ascending: false }).limit(400);
+    const passadas = (ss || []).filter(s => s.data < hoje || s.status === 'concluida' || s.status === 'em_atendimento');
+    if (!passadas.length) return;
+
+    const ids = passadas.map(s => s.id);
+    const [rEv, rReg] = await Promise.all([
+      sb.from('evolucoes').select('sessao_id').in('sessao_id', ids),
+      sb.from('programa_sessao_registros').select('sessao_id').in('sessao_id', ids)
+    ]);
+    const comEvo = new Set((rEv.data || []).map(e => e.sessao_id));
+    const comFicha = new Set((rReg.data || []).map(r => r.sessao_id));
+
+    const pend = passadas.map(s => {
+      const faltas = [];
+      if (!comEvo.has(s.id)) faltas.push('sem evolucao');
+      if (!comFicha.has(s.id)) faltas.push('sem ficha de programas');
+      if (s.status !== 'concluida') faltas.push('nao encerrada');
+      return { s, faltas };
+    }).filter(x => x.faltas.length);
+    if (!pend.length) return;
+
+    // agrupa: coordenadora (so quando ve tudo) -> aplicador -> sessoes
+    const grupos = {};
+    pend.forEach(x => {
+      const pac = pacMap[x.s.paciente_id];
+      const coord = veTudo ? (coordDe(pac) || '-') : eu;
+      const apl = x.s.aplicador_id || 'sem';
+      ((grupos[coord] = grupos[coord] || {})[apl] = grupos[coord][apl] || []).push({ ...x, pac });
+    });
+    const nome = id => profs[id] ? profs[id].nome.split(' ').slice(0, 2).join(' ') : 'Sem aplicador';
+    const fmt = d => d.split('-').reverse().join('/');
+    const selo = f => '<span class="selo ' + (f === 'nao encerrada' ? 'selo-warn' : f === 'sem evolucao' ? 'selo-bad' : 'selo-neutro') + '">' + f + '</span>';
+
+    let html = '<p class="sub" style="margin-bottom:10px"><b>' + pend.length + '</b> sessao(oes) dos ultimos 30 dias com pendencia' +
+      (veTudo ? ', por equipe' : ' na sua equipe') + '. Toque no nome para abrir o prontuario.</p>';
+    Object.entries(grupos).forEach(([coord, porApl]) => {
+      if (veTudo) html += '<h4 style="margin:10px 0 4px; font-size:12.5px">Equipe ' + escaparHtml(nome(coord)) + '</h4>';
+      Object.entries(porApl).sort((a, b) => b[1].length - a[1].length).forEach(([apl, lista]) => {
+        html += '<div class="cartao" style="padding:10px 12px; margin:6px 0">' +
+          '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px">' +
+          '<b>' + escaparHtml(nome(apl)) + '</b><span class="selo selo-warn">' + lista.length + ' sessao(oes)</span></div>' +
+          lista.slice(0, 12).map(x =>
+            '<div class="linha-doc" style="padding:5px 0"><span><a href="#" onclick="fecharModal(); MODULOS.pacientes.telaDetalhe(\'' + x.pac.id + '\', \'evolucoes\'); return false;" style="font-weight:700">' +
+            escaparHtml(x.pac.nome) + '</a><small>' + fmt(x.s.data) + ' as ' + (x.s.hora_inicio || '').slice(0, 5) + '</small></span>' +
+            '<span class="pac-selos">' + x.faltas.map(selo).join('') + '</span></div>').join('') +
+          (lista.length > 12 ? '<p class="sub">+ ' + (lista.length - 12) + ' sessao(oes)</p>' : '') +
+          '</div>';
+      });
+    });
+    html += '<div class="barra-acoes"><button class="btn btn-primario" onclick="fecharModal()">Entendi</button></div>';
+    abrirModal('Pendencias da equipe', html, true, 'aviso');
+  },
+
   evolucaoRapida(sessaoId, pacienteId, nome, data) {
     abrirModal('Evolucao \u00b7 ' + nome + ' \u00b7 ' + data.split('-').reverse().join('/'),
       '<div class="campo"><label>Evolucao da sessao *</label>' +

@@ -158,6 +158,7 @@ async function iniciarApp() {
     setTimeout(() => { MODULOS.programas?.popupEvolucoesPendentes?.(); }, 900);
     setTimeout(() => { MODULOS.agenda?.popupIndicativos?.(); }, 2200);
     setTimeout(() => { MODULOS.eventos?.popupAvisos?.(); }, 3400);
+    setTimeout(() => { MODULOS.programas?.popupEquipe?.(); }, 4800);
   }
 }
 

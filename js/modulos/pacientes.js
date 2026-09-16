@@ -179,7 +179,7 @@ window.MODULOS.pacientes = {
       filtrados.map(p => {
       const foto = p._fotoUrl
         ? '<div class="avatar-paciente"><img src="' + p._fotoUrl + '" alt=""></div>'
-        : '<div class="avatar-paciente">' + escaparHtml(this.iniciais(p.nome)) + '</div>';
+        : '<div class="avatar-paciente ' + corAvatar(p.nome) + '">' + escaparHtml(this.iniciais(p.nome)) + '</div>';
 
       let proxima = '&mdash;';
       if (p._proxima) {
@@ -336,7 +336,7 @@ window.MODULOS.pacientes = {
       '  <div class="capa-linha">' +
       (foto
         ? '<img class="capa-avatar foto" src="' + foto + '" alt="">'
-        : '<div class="capa-avatar">' + escaparHtml(this.iniciais(p.nome)) + '</div>') +
+        : '<div class="capa-avatar ' + corAvatar(p.nome) + '">' + escaparHtml(this.iniciais(p.nome)) + '</div>') +
       '    <div class="capa-info">' +
       '      <h2>' + escaparHtml(p.nome) + '</h2>' +
       '      <div class="capa-meta">' +

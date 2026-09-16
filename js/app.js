@@ -197,6 +197,13 @@ function montarSidebar(perfil) {
   });
 }
 
+// Classe de cor do avatar (av-1..av-6) estavel por nome
+function corAvatar(nome) {
+  let h = 0;
+  for (const c of String(nome || '')) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return 'av-' + (h % 6 + 1);
+}
+
 function abrirModulo(id) {
   document.querySelectorAll('.nav-item').forEach(n =>
     n.classList.toggle('ativa', n.dataset.modulo === id));

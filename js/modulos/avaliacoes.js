@@ -559,7 +559,7 @@ window.MODULOS.avaliacoes = {
     const ov = this.abrirDocOverlay();
 
     const [rAvs, rPac] = await Promise.all([
-      sb.from('avaliacoes').select('id, concluido_em, contexto, duracao_min, avaliador:profiles!avaliacoes_avaliador_id_fkey(nome)')
+      sb.from('avaliacoes').select('id, concluido_em, contexto, duracao, avaliador:profiles!avaliacoes_avaliador_id_fkey(nome)')
         .eq('paciente_id', pacienteId).eq('protocolo', 'ss').eq('status', 'concluida')
         .order('concluido_em'),
       sb.from('pacientes').select('nome, data_nascimento').eq('id', pacienteId).single()

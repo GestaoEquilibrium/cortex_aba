@@ -1,0 +1,202 @@
+/* ============================================================================
+   CORTEX aba - styles/tema-indigo.css
+   Camada visual "Indigo" (estetica do CORTEX neuro): sidebar indigo,
+   ativo em bloco claro, cartoes limpos, avatares coloridos e animacoes.
+   Carregado DEPOIS de components.css - so sobrescreve aparencia, nao regras.
+   ============================================================================ */
+
+:root {
+    --indigo:      #26215C;
+    --indigo-2:    #2F2A73;
+    --indigo-3:    #3C3489;
+    --side-bg:     #26215C;
+    --side-bg-2:   #2F2A73;
+    --side-ink:    #CECBF6;
+    --side-soft:   #8F8AC8;
+    --side-ativa:  rgba(255, 255, 255, .12);
+
+    --bg:          #F3F5FA;
+    --line:        #E4E8F0;
+    --line-strong: #CFD6E3;
+
+    --raio:    16px;
+    --raio-sm: 12px;
+
+    --shadow-xs: 0 1px 2px rgba(20, 24, 60, .05), 0 1px 3px rgba(20, 24, 60, .04);
+    --shadow-sm: 0 2px 8px rgba(20, 24, 60, .08);
+    --shadow-md: 0 10px 26px rgba(20, 24, 60, .12);
+    --shadow-lg: 0 20px 48px rgba(20, 24, 60, .20);
+
+    --gd-heroi: linear-gradient(140deg, #26215C 0%, #3C3489 55%, #534AB7 100%);
+    --gd-login: linear-gradient(150deg, #1B1745 0%, #26215C 55%, #3C3489 100%);
+
+    --dot-cor: rgba(38, 33, 92, .09);
+}
+[data-modo="escuro"] {
+    --side-bg:   #1B1745;
+    --side-bg-2: #221D58;
+    --bg:        #0F1120;
+    --surface:   #171A2E;
+    --surface-alt: #1D2038;
+    --line:      #262A46;
+    --line-strong: #343A5C;
+    --dot-cor:   rgba(255, 255, 255, .06);
+}
+
+/* ── Sidebar ─────────────────────────────────────────────────────────── */
+.sidebar {
+    background: linear-gradient(180deg, var(--side-bg-2) 0%, var(--side-bg) 100%);
+    box-shadow: 0 12px 30px rgba(38, 33, 92, .28);
+}
+.sidebar-topo { padding: 18px 14px 12px; }
+.marca .simbolo {
+    width: 38px; height: 38px;
+    border-radius: 11px;
+    background: #F3B63D;
+    color: var(--indigo);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, .28);
+}
+.marca .nome { font-size: 16px; font-weight: 800; color: #fff; }
+.marca .nome .mao { color: #F3B63D; }
+.botao-icone {
+    width: 28px; height: 28px;
+    background: rgba(255, 255, 255, .10);
+    border-radius: 8px;
+    color: #E9E7FB;
+    font-size: 13px;
+}
+.botao-icone:hover { background: rgba(255, 255, 255, .20); }
+
+.nav-grupo-titulo {
+    font-size: 10px; letter-spacing: .12em;
+    color: var(--side-soft);
+    padding: 16px 14px 6px;
+    opacity: .85;
+}
+.nav-item {
+    padding: 10px 12px;
+    border-radius: 10px;
+    color: #D9D6F5;
+    font-weight: 600; font-size: 13px;
+    transition: background .16s ease, color .16s ease, transform .2s cubic-bezier(.34,1.56,.64,1);
+}
+.nav-item .icone { opacity: .8; color: #BDB8EE; }
+.nav-item .icone svg { width: 17px; height: 17px; }
+.nav-item:hover { background: rgba(255, 255, 255, .08); color: #fff; transform: translateX(2px); }
+.nav-item:hover .icone { opacity: 1; color: #fff; }
+.nav-item.ativa {
+    background: #fff;
+    color: var(--indigo);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, .22);
+    font-weight: 700;
+}
+.nav-item.ativa:hover { transform: none; color: var(--indigo); }
+.nav-item.ativa .icone { color: var(--indigo); opacity: 1; }
+[data-modo="escuro"] .nav-item.ativa { background: #EEEDFE; }
+
+.cartao-usuario {
+    background: rgba(255, 255, 255, .08);
+    border: 1px solid rgba(255, 255, 255, .08);
+    border-radius: 12px;
+}
+.cartao-usuario .usuario-perfil { color: #A9A4DE; }
+.avatar { background: #534AB7; box-shadow: 0 2px 6px rgba(0, 0, 0, .3); }
+
+/* ── Area principal: entrada suave de cada tela ──────────────────────── */
+@keyframes tela-entrar {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+.app-main > * { animation: tela-entrar .28s ease both; }
+
+/* ── Cabecalho de pagina ─────────────────────────────────────────────── */
+.pagina-cabecalho { margin-bottom: 18px; }
+.pagina-cabecalho h2 { font-size: 24px; font-weight: 800; letter-spacing: -.02em; }
+.pagina-cabecalho .sub { font-size: 12.5px; margin-top: 4px; }
+
+/* ── Toolbar: busca larga com lupa, filtros brancos ──────────────────── */
+.toolbar input[type="search"] {
+    padding: 11px 14px 11px 38px;
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    box-shadow: var(--shadow-xs);
+    background: var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238B9AA8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E") no-repeat 13px center;
+}
+.toolbar select {
+    padding: 11px 14px;
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    box-shadow: var(--shadow-xs);
+}
+
+/* ── Cartoes ─────────────────────────────────────────────────────────── */
+.cartao, .kpi, .capa, .abas {
+    border-radius: var(--raio);
+    border: 1px solid var(--line);
+    box-shadow: var(--shadow-xs);
+    transition: box-shadow .18s ease, transform .18s ease;
+}
+.cartao-paciente:hover { transform: translateY(-3px); box-shadow: var(--shadow-md); border-color: var(--line-strong); }
+
+/* avatar de paciente: circulo colorido por nome (classe av-1..av-6 no JS) */
+.avatar-paciente, .capa-avatar {
+    font-weight: 800; letter-spacing: .02em;
+    color: #fff;
+    background: #2563EB;
+}
+.avatar-paciente { width: 44px; height: 44px; font-size: 14px; }
+.avatar-paciente img, .capa-avatar.foto { object-fit: cover; }
+.av-1 { background: #2563EB; }
+.av-2 { background: #DB2777; }
+.av-3 { background: #16A34A; }
+.av-4 { background: #7C3AED; }
+.av-5 { background: #0D9488; }
+.av-6 { background: #EA580C; }
+.pac-quem strong { font-size: 14px; font-weight: 700; }
+.pac-quem span { font-size: 12px; }
+
+/* ── KPIs: numero grande, rotulo em caixa alta discreta ──────────────── */
+.kpi { padding: 18px 20px 16px 22px; }
+.kpi::before { width: 5px; border-radius: 0; }
+.kpi-valor { font-size: 28px; font-weight: 800; letter-spacing: -.03em; }
+.kpi-rotulo { font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; font-weight: 700; margin-top: 4px; }
+
+/* ── Selos: pilulas com fundo claro e texto forte ────────────────────── */
+.selo { padding: 4px 11px; font-size: 11.5px; font-weight: 700; border-radius: 999px; }
+.selo-roxo { background: #EEEDFE; color: #3C3489; }
+[data-modo="escuro"] .selo-roxo { background: rgba(124, 58, 237, .22); color: #CECBF6; }
+
+/* ── Botoes ──────────────────────────────────────────────────────────── */
+.btn { border-radius: 12px; padding: 10px 18px; font-size: 13px; }
+.btn-primario { box-shadow: 0 2px 6px rgba(20, 24, 60, .14); }
+.btn-primario:hover { box-shadow: 0 6px 14px rgba(20, 24, 60, .18); }
+.btn-chip { border-radius: 10px; padding: 7px 13px; border-width: 1px; box-shadow: var(--shadow-xs); }
+.btn-chip:hover { box-shadow: var(--shadow-sm); }
+
+/* ── Abas do prontuario: ativa em bloco claro na cor de acao ─────────── */
+.abas { padding: 6px; gap: 4px; }
+.aba { border-radius: 10px; font-size: 12.5px; }
+.aba.ativa { background: var(--acao-soft); color: var(--acao); box-shadow: none; }
+.aba.ativa .feita { color: var(--acao); }
+.aba .etapa-ponto { border-color: currentColor; }
+
+/* ── Capa do paciente ────────────────────────────────────────────────── */
+.capa::before { height: 5px; }
+.capa-avatar { width: 66px; height: 66px; font-size: 22px; }
+.capa-info h2 { font-size: 22px; font-weight: 800; letter-spacing: -.02em; }
+
+/* ── Modal ───────────────────────────────────────────────────────────── */
+.modal-fundo { background: rgba(20, 17, 50, .55); backdrop-filter: blur(4px); }
+.modal { border-radius: var(--raio); }
+.modal-fechar { border-radius: 8px; }
+
+/* ── Heroi ───────────────────────────────────────────────────────────── */
+.heroi { border-radius: var(--raio); box-shadow: 0 10px 26px rgba(38, 33, 92, .22); }
+
+/* ── Login ───────────────────────────────────────────────────────────── */
+.login-pagina .marca .simbolo { background: #F3B63D; color: var(--indigo); }
+
+/* ── Movimento reduzido ──────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+    .app-main > * { animation: none; }
+}

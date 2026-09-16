@@ -550,27 +550,44 @@ window.MODULOS.programas = {
     let sessaoId = existente && existente[0] ? existente[0].id : null;
     if (!sessaoId) {
       const gestao = ['direcao', 'coordenador', 'suporte'].includes(window.CORTEX_SESSAO.profile.perfil);
-      if (!gestao) {
-        alert('Nenhuma sessao agendada para este paciente hoje.\n\n' +
-          'O atendimento e sempre vinculado a uma sessao da Agenda: peca a coordenacao para agendar ' +
-          '(ou criar um encaixe) e volte aqui. Assim os programas e a evolucao ficam presos a data e ao horario certos.');
-        return;
-      }
-      if (!confirm('Nenhuma sessao agendada hoje para este paciente.\n\n' +
-        'Criar um ENCAIXE agora? Ele entra na Agenda de hoje com o horario atual, vinculado a voce, ' +
-        'e a folha de atendimento abre em seguida.')) return;
-      const agora = new Date().toTimeString().slice(0, 5) + ':00';
-      const { data: nova, error } = await sb.from('sessoes').insert({
-        paciente_id: pacienteId,
-        data: hoje,
-        hora_inicio: agora,
-        aplicador_id: window.CORTEX_SESSAO.user.id,
-        status: 'em_atendimento'
-      }).select('id').single();
-      if (error) { alert('Nao consegui criar o encaixe: ' + error.message); return; }
-      sessaoId = nova.id;
+      const agora = new Date().toTimeString().slice(0, 5);
+      abrirModal('Sem sessao agendada hoje',
+        '<p style="margin-bottom:8px">O atendimento e sempre vinculado a uma sessao da <b>Agenda</b>: ' +
+        'assim os programas e a evolucao ficam presos a data e ao horario certos.</p>' +
+        (gestao
+          ? '<p class="sub" style="margin-bottom:14px">Voce pode criar um <b>encaixe</b> agora: ele entra na Agenda de hoje as <b>' +
+            agora + '</b>, vinculado a voce, e a ficha de aplicacao abre em seguida.</p>' +
+            '<div class="mensagem-erro" id="enc-erro"></div>' +
+            '<div class="barra-acoes">' +
+            '  <button class="btn btn-fantasma" onclick="fecharModal()">Agora nao</button>' +
+            '  <button class="btn btn-primario" id="enc-criar" onclick="MODULOS.programas.criarEncaixe(\'' + pacienteId + '\')">Criar encaixe e abrir a ficha</button>' +
+            '</div>'
+          : '<p class="sub" style="margin-bottom:14px">Peca a coordenacao para agendar (ou criar um encaixe) e volte aqui.</p>' +
+            '<div class="barra-acoes"><button class="btn btn-primario" onclick="fecharModal()">Entendi</button></div>'),
+        false, 'agenda');
+      return;
     }
     this.abrirFolha(sessaoId, true);
+  },
+
+  async criarEncaixe(pacienteId) {
+    const botao = document.getElementById('enc-criar');
+    const erro = document.getElementById('enc-erro');
+    if (botao) { botao.disabled = true; botao.textContent = 'Criando...'; }
+    const { data: nova, error } = await sb.from('sessoes').insert({
+      paciente_id: pacienteId,
+      data: new Date().toISOString().slice(0, 10),
+      hora_inicio: new Date().toTimeString().slice(0, 5) + ':00',
+      aplicador_id: window.CORTEX_SESSAO.user.id,
+      status: 'em_atendimento'
+    }).select('id').single();
+    if (error) {
+      if (erro) { erro.textContent = 'Nao consegui criar o encaixe: ' + error.message; erro.classList.add('visivel'); }
+      if (botao) { botao.disabled = false; botao.textContent = 'Criar encaixe e abrir a ficha'; }
+      return;
+    }
+    fecharModal();
+    this.abrirFolha(nova.id, true);
   },
 
   async abrirFolha(sessaoId, emJanela) {

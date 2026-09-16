@@ -427,6 +427,9 @@ window.MODULOS.programas = {
   },
 
   async modalAtribuir(pacienteId) {
+    const peiBase = await CADEIA.peiAtivo(pacienteId);
+    if (!await CADEIA.avisar('programas para o paciente', peiBase ? [] : ['um PEI ativo (aba PEI) - os programas devem nascer das metas dele'])) return;
+    this._peiBase = peiBase;
     await this.carregarBiblioteca();
     const ativos = this.biblioteca.filter(p => p.ativo);
     if (ativos.length === 0) {
@@ -462,6 +465,7 @@ window.MODULOS.programas = {
       programa_id: document.getElementById('at-prog').value,
       status: document.getElementById('at-status').value,
       tentativas: (tent >= 1 && tent <= 40) ? tent : null,
+      pei_id: this._peiBase ? this._peiBase.id : null,
       criado_por: window.CORTEX_SESSAO.user.id
     });
     if (error) { erro.textContent = error.message; erro.classList.add('visivel'); return; }

@@ -424,6 +424,39 @@ function popCopiar(texto, titulo) {
     '<div class="barra-acoes"><button class="btn btn-primario" onclick="fecharPop()">Fechar</button></div>', 'aviso');
 }
 window.alert = msg => popAviso(msg);
+
+// ─────────────── Cadeia clinica: avaliacao -> plano -> PEI -> programas ───────────────
+// Regra de Wess: nunca bloqueia; sem a etapa anterior, avisa em pop-up e segue se a pessoa quiser.
+// O vinculo (avaliacao_id / plano_id / pei_id) e gravado sempre que a etapa anterior existe.
+const CADEIA = {
+  async ultimaAvaliacao(pacienteId) {
+    const { data } = await sb.from('avaliacoes').select('id, protocolo, concluido_em')
+      .eq('paciente_id', pacienteId).eq('status', 'concluida')
+      .order('concluido_em', { ascending: false }).limit(1);
+    return data && data[0] ? data[0] : null;
+  },
+  async planoAtivo(pacienteId) {
+    const { data } = await sb.from('planos_terapeuticos').select('id, vigencia_inicio, vigencia_fim')
+      .eq('paciente_id', pacienteId).eq('status', 'ativo')
+      .order('criado_em', { ascending: false }).limit(1);
+    return data && data[0] ? data[0] : null;
+  },
+  async peiAtivo(pacienteId) {
+    const { data } = await sb.from('peis').select('id, periodo_inicio, periodo_fim')
+      .eq('paciente_id', pacienteId).eq('status', 'ativo')
+      .order('criado_em', { ascending: false }).limit(1);
+    return data && data[0] ? data[0] : null;
+  },
+  nomeProtocolo(p) { return p === 'ss' ? 'Socially Savvy' : p === 'portage' ? 'Portage' : 'QADI-R'; },
+  // faltas = lista de textos das etapas ausentes; retorna true para seguir
+  async avisar(etapa, faltas) {
+    if (!faltas.length) return true;
+    return popConfirmar('Para elaborar ' + etapa + ' o esperado e ter antes:\n' +
+      faltas.map(f => '\u2022 ' + f).join('\n') +
+      '\n\nVoce pode seguir mesmo assim - o vinculo com a etapa anterior ficara em branco e os relatorios vao apontar isso.',
+      { titulo: 'Etapa anterior em falta', ok: 'Seguir mesmo assim', cancelar: 'Voltar', tipo: 'aviso' });
+  }
+};
 window.prompt = (rotulo, texto) => { popCopiar(texto || '', rotulo); return null; };
 window.confirm = msg => { console.warn('confirm() bloqueado - use popConfirmar'); popAviso(msg); return false; };
 

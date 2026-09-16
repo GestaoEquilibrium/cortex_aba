@@ -40,9 +40,10 @@ window.MODULOS.pei = {
             'onclick="MODULOS.pei.abrirConstrutor(\'' + avs[0].id + '\', \'' + pacienteId + '\')">+ Elaborar PEI</button>' +
             '<span class="sub">A partir do ' + nomeProt + ' de ' +
             new Date(avs[0].concluido_em).toLocaleDateString('pt-BR') + '</span>'
-          : '<button class="btn btn-primario" disabled ' +
-            'title="E preciso uma avaliacao concluida (QADI-R ou Socially Savvy) para elaborar o PEI.">+ Elaborar PEI</button>' +
-            '<span class="sub">Conclua uma avaliacao na aba Avaliacao para liberar.</span>') +
+          : '<button class="btn btn-primario" ' +
+            'title="Sem avaliacao concluida: o sistema avisa e deixa elaborar com metas manuais." ' +
+            'onclick="MODULOS.pei.abrirConstrutor(null, \'' + pacienteId + '\')">+ Elaborar PEI</button>' +
+            '<span class="sub">Sem avaliacao concluida - o PEI sera montado com metas manuais.</span>') +
         '</div>';
     }
 
@@ -65,11 +66,18 @@ window.MODULOS.pei = {
   // ─────────────────── CONSTRUTOR ───────────────────
 
   async abrirConstrutor(avaliacaoId, pacienteId) {
+    const planoBase = await CADEIA.planoAtivo(pacienteId);
+    const faltas = [];
+    if (!avaliacaoId) faltas.push('uma avaliacao concluida (as metas candidatas vem dela)');
+    if (!planoBase) faltas.push('um Plano Terapeutico ativo (aba Plano)');
+    if (!await CADEIA.avisar('o PEI', faltas)) return;
+
     const el = this.el();
     el.innerHTML = '<div class="cartao"><p class="sub">Preparando metas candidatas...</p></div>';
 
-    const { data: avInfo } = await sb.from('avaliacoes')
-      .select('protocolo').eq('id', avaliacaoId).single();
+    const { data: avInfo } = avaliacaoId
+      ? await sb.from('avaliacoes').select('protocolo').eq('id', avaliacaoId).single()
+      : { data: null };
     const ehSS = avInfo && avInfo.protocolo === 'ss';
 
     const [{ data: pac }, { data: equipe }] = await Promise.all([
@@ -78,7 +86,10 @@ window.MODULOS.pei = {
     ]);
 
     let candidatas, listaAreas;
-    if (ehSS) {
+    if (!avaliacaoId) {
+      candidatas = [];
+      listaAreas = MODULOS.avaliacoes.SS_AREAS;
+    } else if (ehSS) {
       await MODULOS.avaliacoes.carregarItensSS();
       const { data: resps } = await sb.from('ss_respostas')
         .select('item_id, pontos').eq('avaliacao_id', avaliacaoId);
@@ -105,7 +116,7 @@ window.MODULOS.pei = {
       listaAreas = MODULOS.avaliacoes.AREAS;
     }
 
-    this._construtor = { avaliacaoId, paciente: pac, candidatas, seq: 0, ehSS };
+    this._construtor = { avaliacaoId, planoId: planoBase ? planoBase.id : null, paciente: pac, candidatas, seq: 0, ehSS };
 
     const hoje = new Date();
     const fim = new Date(hoje); fim.setMonth(fim.getMonth() + 6);
@@ -130,7 +141,7 @@ window.MODULOS.pei = {
       '  <div>' +
       '    <button class="btn-voltar" onclick="MODULOS.pacientes.telaDetalhe(\'' + pac.id + '\', \'pei\')">&larr; Prontuario</button>' +
       '    <h2>Novo PEI &middot; ' + escaparHtml(pac.nome) + '</h2>' +
-      '    <p class="sub">' + candidatas.length + (this._construtor.ehSS ? ' metas candidatas do Socially Savvy: itens que pontuaram 2 vem marcados (prioritarios); 0 e 1 ficam disponiveis. ' : ' metas candidatas geradas dos "Nao" do QADI-R. ') +
+      '    <p class="sub">' + (!this._construtor.avaliacaoId ? 'Sem avaliacao vinculada: monte as metas manualmente com "+ Meta manual" em cada area. ' : candidatas.length + (this._construtor.ehSS ? ' metas candidatas do Socially Savvy: itens que pontuaram 2 vem marcados (prioritarios); 0 e 1 ficam disponiveis. ' : ' metas candidatas geradas dos "Nao" do QADI-R. ')) +
       'Desmarque as que nao entram, ajuste o texto e defina recurso e prazo.</p>' +
       '  </div>' +
       '  <button class="btn btn-primario" onclick="MODULOS.pei.salvarPei()">Salvar PEI</button>' +
@@ -139,7 +150,7 @@ window.MODULOS.pei = {
       '<div class="cartao faixa-azul"><h3>Identificacao (Formulario 02)</h3>' +
       '<div class="grade-form">' +
       '  <div class="campo c3"><label>Finalidade</label>' +
-      '    <textarea id="pei-finalidade" rows="2">' + (this._construtor.ehSS ? 'Desenvolver habilidades sociais identificadas no Socially Savvy Checklist, promovendo participacao conjunta, linguagem social e autorregulacao.' : 'Desenvolver habilidades essenciais identificadas na avaliacao QADI-R, promovendo autonomia, comunicacao e interacao social.') + '</textarea></div>' +
+      '    <textarea id="pei-finalidade" rows="2">' + (!this._construtor.avaliacaoId ? '' : this._construtor.ehSS ? 'Desenvolver habilidades sociais identificadas no Socially Savvy Checklist, promovendo participacao conjunta, linguagem social e autorregulacao.' : 'Desenvolver habilidades essenciais identificadas na avaliacao QADI-R, promovendo autonomia, comunicacao e interacao social.') + '</textarea></div>' +
       '  <div class="campo"><label>Periodo - inicio</label>' +
       '    <input type="date" id="pei-inicio" value="' + hoje.toISOString().slice(0, 10) + '"></div>' +
       '  <div class="campo"><label>Periodo - fim</label>' +
@@ -216,7 +227,8 @@ window.MODULOS.pei = {
     try {
       const { data: pei, error: e1 } = await sb.from('peis').insert({
         paciente_id: ctx.paciente.id,
-        avaliacao_id: ctx.avaliacaoId,
+        avaliacao_id: ctx.avaliacaoId || null,
+        plano_id: ctx.planoId || null,
         finalidade: document.getElementById('pei-finalidade').value.trim() || null,
         periodo_inicio: document.getElementById('pei-inicio').value || null,
         periodo_fim: document.getElementById('pei-fim').value || null,
@@ -664,7 +676,10 @@ window.MODULOS.pei = {
     const { error: e2 } = await sb.from('paciente_programas').insert({
       paciente_id: m.peis.paciente_id,
       programa_id: prog.id,
-      status: 'na_fila'
+      status: 'na_fila',
+      pei_id: m.pei_id,
+      pei_meta_id: m.id,
+      criado_por: window.CORTEX_SESSAO.user.id
     });
     if (e2) { alert(e2.message); return; }
     alert('Programa criado e colocado na fila. Ajuste niveis e tentativas no menu Programas se precisar.');

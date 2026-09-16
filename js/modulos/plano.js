@@ -74,6 +74,8 @@ window.MODULOS.plano = {
   // ─────────────── CONSTRUTOR ───────────────
 
   async abrirConstrutor(pacienteId, renovarDeId) {
+    const avBase = await CADEIA.ultimaAvaliacao(pacienteId);
+    if (!await CADEIA.avisar('o Plano Terapeutico', avBase ? [] : ['uma avaliacao concluida (QADI-R, Socially Savvy ou Portage)'])) return;
     document.getElementById('plano-elab-overlay')?.remove();
     const ov = document.createElement('div');
     ov.id = 'plano-elab-overlay';
@@ -105,7 +107,7 @@ window.MODULOS.plano = {
     const freqSugerida = (base && base.frequencia_semanal) ||
       (enc && enc[0] && enc[0].sessoes_semanais) || '';
 
-    this._ctx = { pacienteId, renovarDeId: renovarDeId || null, paciente: pac };
+    this._ctx = { pacienteId, renovarDeId: renovarDeId || null, paciente: pac, avaliacaoId: avBase ? avBase.id : null };
 
     const fmt = d => d ? new Date(d + 'T12:00:00').toLocaleDateString('pt-BR') : '&mdash;';
     const medico = enc && enc[0] ? enc[0].medico : null;
@@ -247,6 +249,7 @@ window.MODULOS.plano = {
 
     const dados = {
       paciente_id: ctx.pacienteId,
+      avaliacao_id: ctx.avaliacaoId || null,
       diagnostico: document.getElementById('pl-diagnostico').value.trim() || null,
       queixa: document.getElementById('pl-queixa').value.trim() || null,
       objetivo_geral: document.getElementById('pl-objetivo_geral').value.trim() || null,

@@ -589,34 +589,44 @@ window.MODULOS.programas = {
       .eq('id', sessaoId).single();
     if (!s) { this._overlay ? this.fecharFolha(false) : abrirModulo('agenda'); return; }
 
-    const [rPps, rRegs, rEst, rRef] = await Promise.all([
+    const [rPps, rRegs, rEst, rRef, rCfg] = await Promise.all([
       sb.from('paciente_programas')
-        .select('id, programas(id, nome, area, procedimento, tentativas_padrao, niveis, criterio_avanco)')
+        .select('id, tentativas, programas(id, nome, area, procedimento, tentativas_padrao, niveis, criterio_avanco)')
         .eq('paciente_id', s.paciente_id)
         .eq('status', 'em_intervencao'),
       sb.from('registros_tentativas')
         .select('id, paciente_programa_id, ordem, resposta, acertou, estimulo_id, reforcador')
         .eq('sessao_id', sessaoId),
       sb.from('estimulos').select('id, nome, categoria').eq('ativo', true).order('categoria').order('nome'),
-      sb.from('reforcadores').select('nome').order('nome').limit(200)
+      sb.from('reforcadores').select('nome').order('nome').limit(200),
+      sb.from('fichas_config').select('paciente_programa_id, tentativas').eq('sessao_id', sessaoId)
     ]);
 
     const pps = rPps.data || [];
+    const cfg = {};
+    (rCfg.data || []).forEach(c => { cfg[c.paciente_programa_id] = c.tentativas; });
     const fichas = {};
     const estimuloProg = {};
+    const tentPrevistas = {};
     pps.forEach(pp => {
-      const n = pp.tentativas || pp.programas.tentativas_padrao || 10;
-      fichas[pp.id] = Array.from({ length: n }, () => ({ resposta: '', reforcador: '' }));
+      // previsto = ajuste do paciente ou padrao do programa; a sessao pode declarar outro numero
+      tentPrevistas[pp.id] = pp.tentativas || pp.programas.tentativas_padrao || 10;
+      const n = cfg[pp.id] || tentPrevistas[pp.id];
+      fichas[pp.id] = Array.from({ length: n }, () => ({ resposta: '', reforcador: '', estimulo: '' }));
       estimuloProg[pp.id] = '';
     });
     (rRegs.data || []).forEach(r => {
       const g = fichas[r.paciente_programa_id];
-      if (g && r.ordem >= 1 && r.ordem <= g.length) {
+      if (!g) return;
+      // registro alem da grade (sessao declarada menor depois): a grade cresce para nao perder dado
+      while (r.ordem > g.length) g.push({ resposta: '', reforcador: '', estimulo: '' });
+      if (r.ordem >= 1) {
         g[r.ordem - 1] = {
           resposta: (r.resposta === 'I' ? 'C' : r.resposta) || '',
-          reforcador: r.reforcador || ''
+          reforcador: r.reforcador || '',
+          estimulo: r.estimulo_id || ''
         };
-        if (r.estimulo_id) estimuloProg[r.paciente_programa_id] = r.estimulo_id;
+        if (r.estimulo_id && !estimuloProg[r.paciente_programa_id]) estimuloProg[r.paciente_programa_id] = r.estimulo_id;
       }
     });
 
@@ -624,6 +634,7 @@ window.MODULOS.programas = {
       sessao: s,
       programas: pps,
       fichas: fichas,
+      tentPrevistas: tentPrevistas,
       estimuloProg: estimuloProg,
       estimulos: rEst.data || [],
       reforcadores: (rRef.data || []).map(x => x.nome)
@@ -678,7 +689,11 @@ window.MODULOS.programas = {
         (p.procedimento ? '<p class="sub" style="margin:2px 0 10px">' + escaparHtml(p.procedimento) + '</p>' : '') +
 
         '<div class="ficha-rapido">' +
-        '  <label>Estimulo da ficha <small>(o mesmo em todas as tentativas)</small> ' +
+        '  <label>Tentativas nesta sessao ' +
+        '  <input type="number" min="1" max="40" class="ficha-tent" value="' + grade.length + '" ' +
+        '    onchange="MODULOS.programas.mudarTentativas(\'' + pp.id + '\', this.value)"></label>' +
+        '  <small class="sub">programa preve ' + f.tentPrevistas[pp.id] + '</small>' +
+        '  <label>Estimulo padrao <small>(preenche as tentativas sem estimulo)</small> ' +
         '  <select onchange="MODULOS.programas.mudarEstimulo(\'' + pp.id + '\', this.value)">' +
              this.opcoesEstimulo(f.estimuloProg[pp.id]) + '</select></label>' +
         '  <span class="fr-rotulo" style="margin-left:auto">Preencher rapido</span>' +
@@ -690,12 +705,15 @@ window.MODULOS.programas = {
 
         this.legendaNiveis(niveis) +
 
-        '<div class="ficha-grade-cab ficha-v3"><span>#</span>' +
+        '<div class="ficha-grade-cab ficha-v4"><span>#</span>' +
+        '<span>Estimulo</span>' +
         '<span>Nivel de ajuda <small>&mdash; um por tentativa; o nivel ja diz que realizou (erro = ER)</small></span>' +
         '<span>Reforcador</span></div>' +
         grade.map((linha, i) =>
-          '<div class="ficha-linha ficha-v3">' +
+          '<div class="ficha-linha ficha-v4">' +
           '  <span class="ficha-num">' + String(i + 1).padStart(2, '0') + '</span>' +
+          '  <select class="ficha-est" onchange="MODULOS.programas.mudarLinha(\'' + pp.id + '\', ' + i + ', \'estimulo\', this.value)">' +
+               this.opcoesEstimulo(linha.estimulo || f.estimuloProg[pp.id]) + '</select>' +
           '  <div class="ficha-niveis">' +
                niveis.map(v =>
                  '<button type="button" class="niv-btn' + (linha.resposta === v ? ' ativo' : '') +
@@ -745,8 +763,10 @@ window.MODULOS.programas = {
     const f = this._folha;
     const pp = f.programas.find(x => x.id === ppId);
     const c = this.contarFicha(f.fichas[ppId]);
+    const prev = f.tentPrevistas[ppId];
     return '<div class="fr-indep"><small>Independencia</small><b>' + c.pct + '%</b></div>' +
-      '<div class="fr-meio"><span>' + c.corretos + '/' + c.n + ' corretos</span>' +
+      '<div class="fr-meio"><span>' + c.corretos + '/' + c.n + ' corretos' +
+      (prev !== c.n ? ' <small class="sub">(programa preve ' + prev + ')</small>' : '') + '</span>' +
       '<div class="fr-trilho"><div class="fr-barra" style="width:' + c.pct + '%"></div></div>' +
       '<span>' + c.preenchidas + ' de ' + c.n + ' preenchidas</span></div>' +
       (pp.programas.criterio_avanco
@@ -767,6 +787,24 @@ window.MODULOS.programas = {
   mudarEstimulo(ppId, valor) {
     this._folha.estimuloProg[ppId] = valor;
     this._sujo = true;
+  },
+
+  async mudarTentativas(ppId, valor) {
+    const g = this._folha.fichas[ppId];
+    const n = Math.max(1, Math.min(40, parseInt(valor, 10) || g.length));
+    if (n < g.length) {
+      const perdidas = g.slice(n).filter(l => l.resposta).length;
+      if (perdidas && !confirm('Reduzir para ' + n + ' tentativas apaga ' + perdidas +
+        ' tentativa(s) ja marcada(s) no fim da ficha. Continuar?')) { this.desenharFolha(); return; }
+      g.length = n;
+    }
+    while (g.length < n) g.push({ resposta: '', reforcador: '', estimulo: '' });
+    this._sujo = true;
+    const { error } = await sb.from('fichas_config').upsert(
+      { sessao_id: this._folha.sessao.id, paciente_programa_id: ppId, tentativas: n },
+      { onConflict: 'sessao_id,paciente_programa_id' });
+    if (error) alert('Nao consegui guardar o numero de tentativas: ' + error.message);
+    this.desenharFolha();
   },
 
   marcarNivel(ppId, i, sigla) {
@@ -792,7 +830,7 @@ window.MODULOS.programas = {
 
   limparFicha(ppId) {
     if (!confirm('Limpar todas as tentativas deste programa nesta sessao?')) return;
-    this._folha.fichas[ppId].forEach(l => { l.resposta = ''; l.reforcador = ''; });
+    this._folha.fichas[ppId].forEach(l => { l.resposta = ''; l.reforcador = ''; l.estimulo = ''; });
     this._sujo = true;
     this.desenharFolha();
   },
@@ -814,7 +852,7 @@ window.MODULOS.programas = {
             ordem: x.ordem,
             resposta: x.l.resposta,
             acertou: null,
-            estimulo_id: f.estimuloProg[pp.id] || null,
+            estimulo_id: x.l.estimulo || f.estimuloProg[pp.id] || null,
             reforcador: (x.l.reforcador || '').trim() || null,
             registrado_por: window.CORTEX_SESSAO.user.id
           }));
@@ -874,7 +912,8 @@ window.MODULOS.programas = {
           linhas.map(l =>
             '<div class="linha-doc">' +
             '<div><b>' + escaparHtml(l.pp.programas.nome) + '</b>' +
-            '<small>' + l.preenchidas + ' de ' + l.total + ' tentativas &middot; ' +
+            '<small>' + l.preenchidas + ' de ' + l.total + ' tentativas' +
+            (f.tentPrevistas[l.pp.id] !== l.total ? ' (programa preve ' + f.tentPrevistas[l.pp.id] + ')' : '') + ' &middot; ' +
             l.corretos + ' corretos &middot; <b>' + l.pct + '% de independencia</b>' +
             (l.pp.programas.criterio_avanco ? ' &middot; criterio: ' + escaparHtml(l.pp.programas.criterio_avanco) : '') +
             '</small></div>' +
@@ -921,6 +960,8 @@ window.MODULOS.programas = {
           sessao_id: f.sessao.id,
           paciente_programa_id: pp.id,
           tentativas: c.preenchidas,
+          tentativas_sessao: c.n,
+          tentativas_previstas: f.tentPrevistas[pp.id],
           corretos: c.corretos,
           pct_corretos: c.pct,
           acertos: c.corretos,
@@ -1309,7 +1350,7 @@ window.MODULOS.programas = {
                 'profissional:profiles!sessoes_aplicador_id_fkey(nome)')
         .eq('id', sessaoId).single(),
       sb.from('programa_sessao_registros')
-        .select('paciente_programa_id, corretos, tentativas, pct_corretos, acertos, pct_acertos, paciente_programas(programas(nome, area, tentativas_padrao, niveis))')
+        .select('paciente_programa_id, corretos, tentativas, tentativas_sessao, tentativas_previstas, pct_corretos, acertos, pct_acertos, paciente_programas(programas(nome, area, tentativas_padrao, niveis))')
         .eq('sessao_id', sessaoId),
       sb.from('evolucoes').select('texto, destinacao, aplicador:profiles!evolucoes_aplicador_id_fkey(nome)')
         .eq('sessao_id', sessaoId),
@@ -1388,13 +1429,15 @@ window.MODULOS.programas = {
       ? '<table style="width:100%; border-collapse:separate; border-spacing:0 6px; margin:-2px 0">' +
         fotos.map(fx => {
           const prog = fx.paciente_programas && fx.paciente_programas.programas;
-          const total = prog ? (prog.tentativas_padrao || fx.tentativas) : fx.tentativas;
+          const total = fx.tentativas_sessao || fx.tentativas;
+          const prev = fx.tentativas_previstas || (prog ? prog.tentativas_padrao : null);
+          const notaPrev = (prev && prev !== total) ? ' &middot; programa preve ' + prev : '';
           return '<tr>' +
             '<td style="padding:7px 11px; background:var(--eq-fundo); border-radius:9px 0 0 9px; font-weight:700; font-size:12px">' +
             escaparHtml(prog ? prog.nome : '-') +
             ' <span style="color:var(--eq-cinza); font-weight:600">&middot; ' + escaparHtml(prog ? prog.area : '') + '</span></td>' +
             '<td style="padding:7px 11px; background:var(--eq-fundo); border-radius:0 9px 9px 0; text-align:right; white-space:nowrap; font-size:12px">' +
-            '<b style="color:var(--eq-azul)">' + fx.pct_corretos + '%</b> de corretos (' + fx.corretos + '/' + total + ')' +
+            '<b style="color:var(--eq-azul)">' + fx.pct_corretos + '%</b> de corretos (' + fx.corretos + '/' + total + notaPrev + ')' +
             '<span style="display:inline-block; vertical-align:middle; width:110px; height:7px; margin-left:8px; ' +
             'background:#E5EDF4; border-radius:5px; overflow:hidden"><i style="display:block; height:100%; width:' +
             fx.pct_corretos + '%; background:var(--eq-azul); border-radius:5px"></i></span></td></tr>';

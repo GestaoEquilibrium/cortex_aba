@@ -2254,3 +2254,10 @@
 }
 .aba .etapa-ponto.feita { background: currentColor; opacity: .45; border-color: transparent; }
 .aba:hover .etapa-ponto { opacity: .85; }
+
+/* ── Ficha v4: estimulo por tentativa + tentativas da sessao ─────────── */
+.ficha-grade-cab.ficha-v4, .ficha-linha.ficha-v4 {
+    grid-template-columns: 34px minmax(130px, 200px) minmax(0, 1fr) minmax(110px, 160px);
+}
+.ficha-linha .ficha-est { padding: 6px 8px; font-size: 12px; width: 100%; }
+.ficha-rapido .ficha-tent { width: 64px; padding: 6px 8px; font-size: 13px; font-weight: 700; text-align: center; }

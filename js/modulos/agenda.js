@@ -170,9 +170,10 @@ window.MODULOS.agenda = {
 
     await sb.rpc('gerar_sessoes_do_dia', { p_data: this.dataRef });
 
-    const { data: sessoes, error } = await sb.from('sessoes')
+    let { data: sessoes, error } = await sb.from('sessoes')
       .select('*, pacientes(nome), profissional:profiles!sessoes_aplicador_id_fkey(nome), salas(nome)')
       .eq('data', this.dataRef).order('hora_inicio');
+    sessoes = await this.soMinhas(sessoes);
 
     const comEvo = new Set();
     if (sessoes && sessoes.length) {
@@ -227,9 +228,10 @@ window.MODULOS.agenda = {
     }
     await Promise.all(datas.map(dt => sb.rpc('gerar_sessoes_do_dia', { p_data: dt })));
 
-    const { data: sessoes } = await sb.from('sessoes')
-      .select('id, data, hora_inicio, status, confirmacao, pacientes(nome), profissional:profiles!sessoes_aplicador_id_fkey(nome), salas(nome)')
+    let { data: sessoes } = await sb.from('sessoes')
+      .select('id, data, hora_inicio, status, confirmacao, paciente_id, aplicador_id, pacientes(nome), profissional:profiles!sessoes_aplicador_id_fkey(nome), salas(nome)')
       .gte('data', datas[0]).lte('data', datas[4]).order('hora_inicio');
+    sessoes = await this.soMinhas(sessoes);
 
     const alvo = document.getElementById('ag-corpo');
     if (!alvo) return;
@@ -269,9 +271,10 @@ window.MODULOS.agenda = {
     const primeiro = new Date(ano, mes, 1);
     const ultimo = new Date(ano, mes + 1, 0);
 
-    const { data: sessoes } = await sb.from('sessoes')
-      .select('data, status')
+    let { data: sessoes } = await sb.from('sessoes')
+      .select('data, status, paciente_id, aplicador_id')
       .gte('data', this.fmt(primeiro)).lte('data', this.fmt(ultimo));
+    sessoes = await this.soMinhas(sessoes);
 
     const porDia = {};
     (sessoes || []).forEach(s => {
@@ -338,6 +341,9 @@ window.MODULOS.agenda = {
     const aberta = !['concluida', 'falta', 'cancelada'].includes(s.status);
 
     const podeOperar = perm('agenda') === 'E';
+    // aplicador da propria sessao (ou da carteira) marca Concluida / Falta sem ter a agenda liberada
+    const meus = ehEquipe() ? await meusPacientesIds() : new Set();
+    const ehMinha = ehEquipe() && (s.aplicador_id === window.CORTEX_SESSAO.user.id || meus.has(s.pacientes.id));
 
     let fotoUrl = null;
     if (s.pacientes.foto_path) {
@@ -358,8 +364,9 @@ window.MODULOS.agenda = {
     ];
     const listaStatus = STATUS.map(([v, rotulo, cor]) => {
       const atual = s.status === v;
+      const liberado = podeOperar || (ehMinha && ['concluida', 'falta'].includes(v));
       return '<button type="button" class="st-btn ' + cor + (atual ? ' atual' : '') + '" ' +
-        (atual || !podeOperar ? 'disabled' : 'onclick="MODULOS.agenda.mudarStatusSeguro(\'' + id + '\', \'' + v + '\')"') +
+        (atual || !liberado ? 'disabled' : 'onclick="MODULOS.agenda.mudarStatusSeguro(\'' + id + '\', \'' + v + '\')"') +
         '>' + (atual ? '&#10003; ' : '') + rotulo + '</button>';
     }).join('');
 
@@ -409,6 +416,14 @@ window.MODULOS.agenda = {
       listaStatus +
       '  </div>' +
       '</div>');
+  },
+
+  // Aplicador/terapeuta ve na agenda so as sessoes dele e das criancas da carteira dele
+  async soMinhas(sessoes) {
+    if (!ehEquipe()) return sessoes;
+    const meus = await meusPacientesIds();
+    const eu = window.CORTEX_SESSAO.user.id;
+    return (sessoes || []).filter(s => s.aplicador_id === eu || meus.has(s.paciente_id));
   },
 
   async mudarStatusSeguro(id, novo) {

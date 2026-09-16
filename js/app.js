@@ -440,6 +440,19 @@ function popCopiar(texto, titulo) {
 }
 window.alert = msg => popAviso(msg);
 
+// ─────────────── Carteira do aplicador: pacientes onde ele e principal OU esta em paciente_aplicadores ───────────────
+async function meusPacientesIds(forcar) {
+  if (window._meusPac && !forcar) return window._meusPac;
+  const eu = window.CORTEX_SESSAO.user.id;
+  const [a, b] = await Promise.all([
+    sb.from('pacientes').select('id').eq('aplicador_id', eu),
+    sb.from('paciente_aplicadores').select('paciente_id').eq('aplicador_id', eu)
+  ]);
+  window._meusPac = new Set([...(a.data || []).map(x => x.id), ...(b.data || []).map(x => x.paciente_id)]);
+  return window._meusPac;
+}
+function ehEquipe() { return ['aplicador', 'terapeuta'].includes(window.CORTEX_SESSAO?.profile?.perfil); }
+
 // ─────────────── Cadeia clinica: avaliacao -> plano -> PEI -> programas ───────────────
 // Regra de Wess: nunca bloqueia; sem a etapa anterior, avisa em pop-up e segue se a pessoa quiser.
 // O vinculo (avaliacao_id / plano_id / pei_id) e gravado sempre que a etapa anterior existe.

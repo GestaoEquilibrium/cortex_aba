@@ -10,7 +10,7 @@ window.MODULOS = window.MODULOS || {};
 window.MODULOS.auditoria = {
 
   ROTULOS_TABELA: {
-    pacientes: 'Pacientes', responsaveis: 'Responsaveis',
+    pacientes: 'Pacientes', responsaveis: 'Responsaveis', paciente_aplicadores: 'Aplicadores da crianca',
     encaminhamentos: 'Encaminhamentos', familia_pacientes: 'Vinculos de familia',
     anamneses: 'Anamneses', anamnese_respostas: 'Respostas de anamnese',
     avaliacoes: 'Avaliacoes', avaliacao_respostas: 'Respostas de avaliacao',
@@ -143,6 +143,35 @@ window.MODULOS.auditoria = {
           '</div>';
       }).join('') +
       '</div>').join('');
+  },
+
+  // ─────────────── HISTORICO DA PASTA DO PACIENTE (aba Auditoria do prontuario) ───────────────
+
+  async htmlDoPaciente(pacienteId) {
+    const { data, error } = await sb.from('auditoria').select('*')
+      .eq('paciente_id', pacienteId).order('criado_em', { ascending: false }).limit(300);
+    if (error) return '<div class="cartao"><div class="mensagem-erro visivel">' + escaparHtml(error.message) + '</div></div>';
+    this.registros = (this.registros || []).filter(r => r.paciente_id !== pacienteId).concat(data || []);
+    if (!data || !data.length) {
+      return '<div class="cartao"><div class="vazio"><div class="simbolo-vazio">&#128220;</div>' +
+        '<strong>Nenhuma alteracao registrada</strong>Tudo que for criado, alterado ou apagado nesta pasta aparece aqui, com quem fez e quando.</div></div>';
+    }
+    const porDia = {};
+    data.forEach(r => { (porDia[r.criado_em.slice(0, 10)] = porDia[r.criado_em.slice(0, 10)] || []).push(r); });
+    return '<div class="cartao"><h3>Historico da pasta <span class="selo selo-neutro">' + data.length +
+      (data.length === 300 ? '+' : '') + '</span></h3>' +
+      '<p class="sub">Quem mexeu, em que e quando. "Ver" mostra exatamente o que mudou.</p></div>' +
+      Object.entries(porDia).map(([dia, regs]) =>
+        '<div class="cartao"><h3>' +
+        new Date(dia + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' }) +
+        ' <span class="selo selo-neutro">' + regs.length + '</span></h3>' +
+        regs.map(r =>
+          '<div class="linha-doc"><div><b>' + escaparHtml(r.usuario_nome || 'Sistema/SQL') + ' ' +
+          '<span class="selo ' + (this.CORES_ACAO[r.acao] || 'selo-neutro') + '">' + (this.ROTULOS_ACAO[r.acao] || r.acao) + '</span> ' +
+          escaparHtml(this.ROTULOS_TABELA[r.tabela] || r.tabela) + '</b>' +
+          '<small>' + new Date(r.criado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) + '</small></div>' +
+          '<button class="btn-chip" onclick="MODULOS.auditoria.ver(\'' + r.id + '\')">Ver</button></div>').join('') +
+        '</div>').join('');
   },
 
   // ─────────────── DIFF (o "exatamente o que foi feito") ───────────────

@@ -59,7 +59,10 @@ window.MODULOS.pacientes = {
               'aplicador:profiles!pacientes_aplicador_id_fkey(nome), ' +
               'responsaveis(nome, telefone, principal)')
       .order('nome');
-    if (soMeus) consulta = consulta.eq('aplicador_id', this.sessao.user.id);
+    if (soMeus) {
+      const ids = [...await meusPacientesIds(true)];
+      consulta = consulta.in('id', ids.length ? ids : ['00000000-0000-0000-0000-000000000000']);
+    }
 
     const { data, error } = await consulta;
 
@@ -298,6 +301,7 @@ window.MODULOS.pacientes = {
     { id: 'comportamentos', rotulo: 'Comportamentos', sprint: 'Sprint 16' },
     { id: 'evolucoes',  rotulo: 'Evolucoes',  sprint: 'Sprint 10' },
     { id: 'relatorios', rotulo: 'Relatorios', sprint: 'Sprint 11' },
+    { id: 'auditoria',  rotulo: 'Auditoria',  gestao: true },
     { id: 'documentos', rotulo: 'Documentos' }
   ],
 
@@ -305,9 +309,8 @@ window.MODULOS.pacientes = {
 
   async telaDetalhe(id, abaInicial) {
     if (['aplicador', 'terapeuta'].includes(this.sessao.profile.perfil)) {
-      const { data: dono } = await sb.from('pacientes')
-        .select('aplicador_id').eq('id', id).single();
-      if (dono && dono.aplicador_id !== this.sessao.user.id) {
+      const meus = await meusPacientesIds(true);
+      if (!meus.has(id)) {
         this.el.innerHTML = '<div class="cartao"><div class="vazio">' +
           '<div class="simbolo-vazio">&#128274;</div>' +
           '<strong>Paciente de outro profissional</strong>' +
@@ -321,7 +324,7 @@ window.MODULOS.pacientes = {
 
     const { data: p, error } = await sb
       .from('pacientes')
-      .select('*, responsaveis(*), encaminhamentos(id, medico, sessoes_semanais, arquivo_path, criado_em), aplicador:profiles!pacientes_aplicador_id_fkey(id, nome, perfil)')
+      .select('*, responsaveis(*), encaminhamentos(id, medico, sessoes_semanais, arquivo_path, criado_em), aplicador:profiles!pacientes_aplicador_id_fkey(id, nome, perfil), aplicadores:paciente_aplicadores(aplicador_id, principal, profiles(nome))')
       .eq('id', id).single();
 
     if (error || !p) { this.telaLista(); return; }
@@ -352,8 +355,8 @@ window.MODULOS.pacientes = {
       '        <div><span>Nascimento</span><b>' +
                new Date(p.data_nascimento + 'T12:00:00').toLocaleDateString('pt-BR') + '</b></div>' +
       (p.convenio ? '<div><span>Convenio</span><b>' + escaparHtml(p.convenio) + '</b></div>' : '') +
-      '<div><span>Aplicador</span><b>' +
-      (p.aplicador ? escaparHtml(p.aplicador.nome) : '<span style="color:var(--ink-soft)">Nao designado</span>') +
+      '<div><span>Aplicador' + ((p.aplicadores || []).length > 1 ? 'es' : '') + '</span><b>' +
+      this.textoAplicadores(p) +
       '</b></div>' +
       '      </div>' +
       '      <div class="capa-acoes">' +
@@ -378,7 +381,7 @@ window.MODULOS.pacientes = {
       '</div>' +
 
       '<div class="abas" id="pac-abas">' +
-      this.ABAS.map(a =>
+      this.ABAS.filter(a => !a.gestao || ['direcao', 'coordenador', 'suporte'].includes(this.sessao.profile.perfil)).map(a =>
         '<button class="aba" data-aba="' + a.id + '" onclick="MODULOS.pacientes.abrirAba(\'' + a.id + '\')">' +
         a.rotulo + this.pontoEtapa(a.id) + '</button>').join('') +
       '</div>' +
@@ -454,6 +457,11 @@ window.MODULOS.pacientes = {
     if (id === 'relatorios') {
       alvo.innerHTML = '<div class="cartao"><p class="sub">Carregando relatorios...</p></div>';
       MODULOS.relatorios.htmlDoPaciente(p.id).then(html => { alvo.innerHTML = html; });
+      return;
+    }
+    if (id === 'auditoria') {
+      alvo.innerHTML = '<div class="cartao"><p class="sub">Carregando historico...</p></div>';
+      MODULOS.auditoria.htmlDoPaciente(p.id).then(html => { alvo.innerHTML = html; });
       return;
     }
     if (id === 'comportamentos') {
@@ -586,6 +594,16 @@ window.MODULOS.pacientes = {
     abrirModalPdf('Encaminhamento medico', data.signedUrl);
   },
 
+  // Nomes dos aplicadores da crianca: principal primeiro, depois os demais
+  textoAplicadores(p) {
+    const lista = (p.aplicadores || []).slice().sort((a, b) => (b.principal ? 1 : 0) - (a.principal ? 1 : 0));
+    if (!lista.length) {
+      return p.aplicador ? escaparHtml(p.aplicador.nome) : '<span style="color:var(--ink-soft)">Nao designado</span>';
+    }
+    return lista.map(a => escaparHtml(a.profiles ? a.profiles.nome.split(' ').slice(0, 2).join(' ') : '?') +
+      (a.principal ? ' <small class="sub">(principal)</small>' : '')).join(' &middot; ');
+  },
+
   async modalAplicador() {
     const { data: equipe, error } = await sb
       .from('profiles')
@@ -603,16 +621,24 @@ window.MODULOS.pacientes = {
       return;
     }
 
-    const atual = this.paciente.aplicador_id || '';
-    abrirModal('Designar profissional para ' + escaparHtml(this.paciente.nome),
-      '<div class="campo"><label>Aplicador ou terapeuta responsavel</label>' +
-      '<select id="ap-select">' +
-      '<option value="">Nenhum (remover designacao)</option>' +
+    const atuais = new Set((this.paciente.aplicadores || []).map(a => a.aplicador_id));
+    if (this.paciente.aplicador_id) atuais.add(this.paciente.aplicador_id);
+    const principal = this.paciente.aplicador_id ||
+      ((this.paciente.aplicadores || []).find(a => a.principal) || {}).aplicador_id || '';
+    abrirModal('Designar profissionais para ' + escaparHtml(this.paciente.nome),
+      '<p class="sub" style="margin-bottom:8px">Marque todos os aplicadores/terapeutas da crianca e escolha o <b>principal</b> ' +
+      '(o que responde pelo caso, aparece no card e recebe os avisos).</p>' +
+      '<div class="ap-lista">' +
       equipe.map(m =>
-        '<option value="' + m.id + '"' + (m.id === atual ? ' selected' : '') + '>' +
-        escaparHtml(m.nome) + ' (' + (ROTULOS_PERFIL[m.perfil] || m.perfil) + ')</option>').join('') +
-      '</select></div>' +
-      '<p class="sub">O profissional designado recebe uma notificacao no Inicio dele.</p>' +
+        '<label class="ap-item' + (atuais.has(m.id) ? ' marcado' : '') + '">' +
+        '<input type="checkbox" class="ap-chk" value="' + m.id + '"' + (atuais.has(m.id) ? ' checked' : '') +
+        ' onchange="this.closest(\'.ap-item\').classList.toggle(\'marcado\', this.checked); if(!this.checked){ const r=this.closest(\'.ap-item\').querySelector(\'.ap-princ\'); if(r.checked) r.checked=false; }">' +
+        '<span class="ap-nome">' + escaparHtml(m.nome) + ' <small>' + (ROTULOS_PERFIL[m.perfil] || m.perfil) + '</small></span>' +
+        '<span class="ap-princ-wrap" title="Principal"><input type="radio" name="ap-princ" class="ap-princ" value="' + m.id + '"' +
+        (m.id === principal ? ' checked' : '') + ' onchange="const c=this.closest(\'.ap-item\').querySelector(\'.ap-chk\'); c.checked=true; this.closest(\'.ap-item\').classList.add(\'marcado\')"> principal</span>' +
+        '</label>').join('') +
+      '</div>' +
+      '<p class="sub" style="margin-top:6px">Quem entrar na lista recebe uma notificacao no Inicio.</p>' +
       '<div class="mensagem-erro" id="ap-erro"></div>' +
       '<div class="barra-acoes">' +
       '  <button type="button" class="btn btn-fantasma" onclick="fecharModal()">Cancelar</button>' +
@@ -622,7 +648,10 @@ window.MODULOS.pacientes = {
   },
 
   async salvarAplicador() {
-    const novoId = document.getElementById('ap-select').value || null;
+    const marcados = Array.from(document.querySelectorAll('.ap-chk:checked')).map(c => c.value);
+    let principal = (document.querySelector('.ap-princ:checked') || {}).value || null;
+    if (principal && !marcados.includes(principal)) principal = null;
+    if (marcados.length && !principal) principal = marcados[0];
     const erro = document.getElementById('ap-erro');
     const botao = document.getElementById('ap-salvar');
     erro.classList.remove('visivel');
@@ -630,18 +659,31 @@ window.MODULOS.pacientes = {
     botao.textContent = 'Salvando...';
 
     try {
-      const { error } = await sb.from('pacientes')
-        .update({ aplicador_id: novoId }).eq('id', this.paciente.id);
-      if (error) throw new Error(error.message);
+      const antes = new Set((this.paciente.aplicadores || []).map(a => a.aplicador_id));
+      if (this.paciente.aplicador_id) antes.add(this.paciente.aplicador_id);
 
-      if (novoId && novoId !== this.paciente.aplicador_id) {
-        await sb.from('notificacoes').insert({
-          destinatario_id: novoId,
-          titulo: 'Voce foi designado(a): ' + this.paciente.nome,
-          corpo: 'A coordenacao designou voce como aplicador responsavel. ' +
-                 'Consulte o prontuario para conhecer o caso.'
-        });
+      // principal continua em pacientes.aplicador_id (compatibilidade); todos ficam em paciente_aplicadores
+      const { error } = await sb.from('pacientes')
+        .update({ aplicador_id: principal }).eq('id', this.paciente.id);
+      if (error) throw new Error(error.message);
+      const { error: eDel } = await sb.from('paciente_aplicadores').delete().eq('paciente_id', this.paciente.id);
+      if (eDel) throw new Error(eDel.message);
+      if (marcados.length) {
+        const { error: eIns } = await sb.from('paciente_aplicadores').insert(
+          marcados.map(id => ({ paciente_id: this.paciente.id, aplicador_id: id, principal: id === principal })));
+        if (eIns) throw new Error(eIns.message);
       }
+
+      const novos = marcados.filter(id => !antes.has(id));
+      if (novos.length) {
+        await sb.from('notificacoes').insert(novos.map(id => ({
+          destinatario_id: id,
+          titulo: 'Voce foi designado(a): ' + this.paciente.nome,
+          corpo: 'A coordenacao incluiu voce na equipe desta crianca' +
+                 (id === principal ? ' como aplicador principal' : '') + '. Consulte o prontuario para conhecer o caso.'
+        })));
+      }
+      window._meusPac = null;
 
       fecharModal();
       this.telaDetalhe(this.paciente.id);

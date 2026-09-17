@@ -822,6 +822,8 @@ window.MODULOS.pacientes = {
       '    <option value="F"' + (p.sexo === 'F' ? ' selected' : '') + '>Feminino</option></select></div>' +
       '  <div class="campo"><label>Convenio</label><input id="e-convenio" value="' + escaparHtml(p.convenio || '') + '"></div>' +
       '  <div class="campo"><label>Carteirinha</label><input id="e-carteirinha" value="' + escaparHtml(p.carteirinha || '') + '"></div>' +
+      '  <div class="campo"><label>CID-11 <small>(ex.: 6A02 / 6A05)</small></label><input id="e-cid" value="' + escaparHtml(p.cid || '') + '"></div>' +
+      '  <div class="campo c2"><label>Motivo do encaminhamento <small>(uma frase; vai para o Plano e o Relatorio)</small></label><input id="e-motivo" value="' + escaparHtml(p.motivo_encaminhamento || '') + '" placeholder="Ex.: rigidez cognitiva e hiperatividade"></div>' +
       '  <div class="campo"><label>Escola</label><input id="e-escola" value="' + escaparHtml(p.escola || '') + '"></div>' +
       '  <div class="campo"><label>Turno escolar</label><select id="e-turno">' +
       ['', 'Manha', 'Tarde', 'Integral', 'Nao estuda'].map(t =>
@@ -864,6 +866,8 @@ window.MODULOS.pacientes = {
         sexo: document.getElementById('e-sexo').value,
         convenio: document.getElementById('e-convenio').value.trim() || null,
         carteirinha: document.getElementById('e-carteirinha').value.trim() || null,
+        cid: document.getElementById('e-cid').value.trim() || null,
+        motivo_encaminhamento: document.getElementById('e-motivo').value.trim() || null,
         escola: document.getElementById('e-escola').value.trim() || null,
         turno_escolar: document.getElementById('e-turno').value || null,
         cep: document.getElementById('e-cep').value.trim() || null,

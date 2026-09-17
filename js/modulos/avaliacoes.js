@@ -540,7 +540,7 @@ window.MODULOS.avaliacoes = {
             '<small>' + nSS + ' aplicacao(oes) (AV1' + (nSS > 1 ? '-AV' + Math.min(nSS, 9) : '') + ') com datas, areas e graficos</small></div>' +
             '<div class="pac-selos">' +
             '<button class="btn btn-primario" onclick="MODULOS.avaliacoes.docSS(\'' + pacienteId + '\')">&#128196; Ver documento</button>' +
-            this.btnDevolutiva(concluidas, 'ss') +
+            this.btnDevolutiva(concluidas, 'ss') + MODULOS.laudo_avaliacao.btn(concluidas, 'ss') +
             '</div>' +
             '</div>'
           : '') +
@@ -550,7 +550,7 @@ window.MODULOS.avaliacoes = {
             ' aplicacao(oes) &middot; % por faixa etaria e idades de desenvolvimento</small></div>' +
             '<div class="pac-selos">' +
             '<button class="btn btn-primario" onclick="MODULOS.avaliacoes.docPortage(\'' + pacienteId + '\')">&#128196; Ver documento</button>' +
-            this.btnDevolutiva(concluidas, 'portage') +
+            this.btnDevolutiva(concluidas, 'portage') + MODULOS.laudo_avaliacao.btn(concluidas, 'portage') +
             '</div></div>'
           : '') +
         (concluidas.some(a => a.protocolo === 'qadi')
@@ -559,7 +559,7 @@ window.MODULOS.avaliacoes = {
             ' aplicacao(oes) &middot; pontuacao adquirida x esperada por area (regra Equilibrium)</small></div>' +
             '<div class="pac-selos">' +
             '<button class="btn btn-primario" onclick="MODULOS.avaliacoes.docQADI(\'' + pacienteId + '\')">&#128196; Ver documento</button>' +
-            this.btnDevolutiva(concluidas, 'qadi') +
+            this.btnDevolutiva(concluidas, 'qadi') + MODULOS.laudo_avaliacao.btn(concluidas, 'qadi') +
             '</div></div>'
           : '') +
         '</div>';

@@ -248,7 +248,11 @@
 }
 /* so a folha de DOCUMENTO fica transparente (a A4 branca e o conteudo); fichas e outras janelas mantem o fundo */
 .folha-pagina:has(> .doc-eq), .folha-pagina:has(> * > .doc-eq) { max-width: 232mm; background: transparent; box-shadow: none; padding-top: 12px; }
-@media print { .folha-pagina .doc-eq { width: auto; min-height: 0; box-shadow: none; margin: 0; padding: 0; } }
+@media print {
+    .folha-pagina .doc-eq { width: auto; min-height: 0; box-shadow: none; margin: 0; padding: 0; border-radius: 0; }
+    .folha-pagina:has(> .doc-eq), .folha-pagina:has(> * > .doc-eq) { max-width: none; padding: 0; margin: 0; }
+    .deq-grade2 { gap: 6px 8px; }
+}
 
 /* grade de graficos: 2 por linha na folha, quebra sem cortar */
 .deq-grade2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; margin-top: 8px; }
@@ -256,5 +260,5 @@
 .deq-graf-item.deq-graf-largo { grid-column: 1 / -1; }
 .deq-graf-tit { font-size: 10.5px; font-weight: 800; color: var(--eq-azul-escuro); margin: 0 0 2px 4px; display: flex; justify-content: space-between; gap: 6px; }
 .deq-graf-tit small { font-weight: 700; color: var(--eq-cinza); white-space: nowrap; }
-.deq-graf-item svg { display: block; margin: 0 auto; max-height: 120px; }
+.deq-graf-item svg { display: block; margin: 0 auto; max-height: 185px; }
 @media (max-width: 640px) { .deq-grade2 { grid-template-columns: 1fr; } }

@@ -1434,8 +1434,8 @@ window.MODULOS.programas = {
     if (!niveis.length || !tentativas.length) return '';
     // Horizontal e compacto: tentativas no eixo X, nivel de ajuda no eixo Y (cabe meia folha A4)
     const n = tentativas.length;
-    const ESQ = 34, DIR = 10, TOPO = 10, LIN = 14, BASE = TOPO + (niveis.length - 1) * LIN + LIN;
-    const PX = Math.max(14, Math.min(30, Math.floor(560 / n)));
+    const ESQ = 36, DIR = 10, TOPO = 10, LIN = 18, BASE = TOPO + (niveis.length - 1) * LIN + LIN;
+    const PX = Math.max(18, Math.min(38, Math.floor(600 / n)));
     const W = ESQ + n * PX + DIR, H = BASE + 26;
     const yDe = s => TOPO + (niveis.length - 1 - niveis.indexOf(s)) * LIN + LIN / 2;
     const x = i => ESQ + i * PX + PX / 2;
@@ -1452,7 +1452,7 @@ window.MODULOS.programas = {
       svg += '<text x="' + x(i) + '" y="' + (BASE + 12) + '" text-anchor="middle" font-size="8" font-weight="700" fill="#94A3B8">' + (t.ordem || i + 1) + '</text>';
       if (niveis.includes(t.resposta)) {
         pts.push(x(i) + ',' + yDe(t.resposta));
-        svg += '<circle cx="' + x(i) + '" cy="' + yDe(t.resposta) + '" r="4.5" fill="' + this.corNivel(t.resposta) + '" stroke="#fff" stroke-width="1.5"/>';
+        svg += '<circle cx="' + x(i) + '" cy="' + yDe(t.resposta) + '" r="5.5" fill="' + this.corNivel(t.resposta) + '" stroke="#fff" stroke-width="1.5"/>';
       }
     });
     if (pts.length > 1) svg = svg.replace('<circle', '<polyline fill="none" stroke="#1468B2" stroke-width="1.8" opacity=".7" stroke-linejoin="round" points="' + pts.join(' ') + '"/><circle');
@@ -2144,8 +2144,8 @@ window.MODULOS.programas = {
     const niveis = this.ORDEM_GRAFICO.filter(n => this.normalizarNiveis(niveisPrograma).includes(n));
     const total = blocos.reduce((s, [, b]) => s + b.lista.length, 0);
     if (!total) return '<p class="sub">Sem tentativas.</p>';
-    const PX = Math.max(9, Math.min(16, Math.floor(520 / total)));
-    const ESQ = 30, TOPO = 10, LIN = 13, BASE = TOPO + niveis.length * LIN;
+    const PX = Math.max(11, Math.min(18, Math.floor(600 / total)));
+    const ESQ = 32, TOPO = 10, LIN = 16, BASE = TOPO + niveis.length * LIN;
     const W = ESQ + total * PX + blocos.length * 10 + 16;
     const H = BASE + 30;
     const yDe = s => TOPO + (niveis.length - 1 - niveis.indexOf(s)) * LIN + LIN / 2;

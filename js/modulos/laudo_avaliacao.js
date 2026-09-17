@@ -204,6 +204,11 @@ window.MODULOS.laudo_avaliacao = {
   chaveArea(pr, area) { return pr.av.protocolo + '|' + area; },
 
   async abrirEditor(avaliacaoId) {
+    try { await this._abrirEditor(avaliacaoId); }
+    catch (e) { this.el().innerHTML = '<div class="cartao"><div class="mensagem-erro visivel">Nao consegui montar o relatorio: ' + escaparHtml(e.message) + '</div></div>'; }
+  },
+
+  async _abrirEditor(avaliacaoId) {
     const el = this.el();
     el.innerHTML = '<div class="cartao"><p class="sub">Preparando o relatorio...</p></div>';
     const ids = Array.isArray(avaliacaoId) ? avaliacaoId : [avaliacaoId];
@@ -389,7 +394,7 @@ window.MODULOS.laudo_avaliacao = {
     });
     const ids = Object.values(porProt).map(a => a.id);
     if (ids.length < 2) return '';
-    return '<button class="btn btn-primario" onclick="MODULOS.laudo_avaliacao.abrirEditor(' + escaparHtml(JSON.stringify(ids)) + ')">&#128203; Relat&oacute;rio completo (' + ids.length + ' protocolos)</button>';
+    return '<button class="btn btn-primario" onclick="MODULOS.laudo_avaliacao.abrirEditor([' + ids.map(id => "'" + id + "'").join(',') + '])">&#128203; Relat&oacute;rio completo (' + ids.length + ' protocolos)</button>';
   },
 
   // botao para a aba Avaliacao: ultima aplicacao concluida do protocolo

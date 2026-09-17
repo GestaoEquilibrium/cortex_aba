@@ -206,12 +206,17 @@ window.MODULOS.avaliacoes = {
       '<div class="barra-acoes"><button class="btn btn-primario" onclick="fecharModal()">Fechar</button></div>', true);
   },
 
-  async cancelarAvaliacao(id, rotulo) {
+  async cancelarAvaliacao(id, rotulo, pacienteId) {
     if (!await popConfirmar('Cancelar e apagar a aplicacao "' + rotulo + '"?\n' +
-      'As respostas ja registradas serao apagadas junto. Esta acao nao tem volta.')) return;
+      'As respostas ja registradas serao apagadas junto. Esta acao nao tem volta.', { ok: 'Cancelar aplicacao', cancelar: 'Voltar' })) return;
+    // respostas primeiro (sem depender de cascade), depois a avaliacao
+    for (const t of ['avaliacao_respostas', 'ss_respostas', 'portage_respostas']) {
+      const { error: eR } = await sb.from(t).delete().eq('avaliacao_id', id);
+      if (eR) { popAviso('Nao foi possivel apagar as respostas (' + t + '): ' + eR.message); return; }
+    }
     const { error } = await sb.from('avaliacoes').delete().eq('id', id);
-    if (error) { alert('Nao foi possivel cancelar: ' + error.message); return; }
-    this.telaLista();
+    if (error) { popAviso('Nao foi possivel cancelar: ' + error.message); return; }
+    if (pacienteId) MODULOS.pacientes.telaDetalhe(pacienteId, 'avaliacao'); else this.telaLista();
   },
 
   // ───────────────────────── APLICACAO ─────────────────────────
@@ -512,8 +517,12 @@ window.MODULOS.avaliacoes = {
         abertas.map(x =>
           '<div class="linha-doc"><div><b>' + (x.protocolo === 'ss' ? 'Socially Savvy' : x.protocolo === 'portage' ? 'Portage' : 'QADI-R') + '</b>' +
           '<small>Iniciada em ' + new Date(x.iniciado_em).toLocaleDateString('pt-BR') + '</small></div>' +
+          '<div class="pac-selos">' +
+          (['direcao', 'coordenador', 'suporte'].includes(window.CORTEX_SESSAO.profile.perfil)
+            ? '<button class="btn-chip" title="Cancelar e apagar esta aplicacao" onclick="MODULOS.avaliacoes.cancelarAvaliacao(\'' + x.id + '\', \'' +
+              (x.protocolo === 'ss' ? 'Socially Savvy' : x.protocolo === 'portage' ? 'Portage' : 'QADI-R') + '\', \'' + pacienteId + '\')">&#10005; Cancelar</button>' : '') +
           '<button class="btn-chip cheio" onclick="MODULOS.avaliacoes.abrirJanela(\'' + x.id + '\')">Continuar</button>' +
-          '</div>').join('') + '</div>';
+          '</div></div>').join('') + '</div>';
     }
 
     const concluidas = data.filter(x => x.status === 'concluida');

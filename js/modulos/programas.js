@@ -1429,34 +1429,35 @@ window.MODULOS.programas = {
 
 
 
-  graficoTentativas(niveisPrograma, tentativas) {
+  // Opcao B: as tentativas se espalham pela largura toda; ate 6 tentativas o item fica em meia coluna
+  // (largura 330), acima disso ocupa a linha inteira (680). Altura fixa pelos niveis do programa.
+  graficoTentativas(niveisPrograma, tentativas, largo) {
     const niveis = this.ORDEM_GRAFICO.filter(n => (niveisPrograma || this.NIVEIS_PADRAO).includes(n));
     if (!niveis.length || !tentativas.length) return '';
-    // Horizontal e compacto: tentativas no eixo X, nivel de ajuda no eixo Y (cabe meia folha A4)
     const n = tentativas.length;
-    const ESQ = 40, DIR = 12, TOPO = 12, LIN = 22, BASE = TOPO + (niveis.length - 1) * LIN + LIN;
-    const PX = Math.max(22, Math.min(52, Math.floor(640 / n)));
-    const W = ESQ + n * PX + DIR, H = BASE + 26;
+    const W = largo ? 680 : 330, ESQ = 36, DIR = 12, TOPO = 12, LIN = 20;
+    const BASE = TOPO + niveis.length * LIN, H = BASE + 26;
+    const util = W - ESQ - DIR, passo = util / n;
+    const x = i => ESQ + passo * (i + 0.5);
     const yDe = s => TOPO + (niveis.length - 1 - niveis.indexOf(s)) * LIN + LIN / 2;
-    const x = i => ESQ + i * PX + PX / 2;
-    let svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg" style="width:100%; max-width:' + Math.round(W * 1.05) + 'px; height:auto; font-family:inherit">';
+    let svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg" style="width:100%; height:auto; font-family:inherit">';
     if (niveis.includes('C')) {
-      svg += '<rect x="' + ESQ + '" y="' + (yDe('C') - LIN / 2) + '" width="' + (n * PX) + '" height="' + LIN + '" fill="#ECFDF5" rx="4"/>';
+      svg += '<rect x="' + ESQ + '" y="' + (yDe('C') - LIN / 2 + 1) + '" width="' + util + '" height="' + (LIN - 2) + '" fill="#ECFDF5" rx="4"/>';
     }
     niveis.forEach(nv => {
       svg += '<line x1="' + ESQ + '" y1="' + yDe(nv) + '" x2="' + (W - DIR) + '" y2="' + yDe(nv) + '" stroke="#EDF2F6"/>' +
-        '<text x="' + (ESQ - 7) + '" y="' + (yDe(nv) + 3.5) + '" text-anchor="end" font-size="10" font-weight="800" fill="' + this.corUi(nv) + '">' + nv + '</text>';
+        '<text x="' + (ESQ - 7) + '" y="' + (yDe(nv) + 3.5) + '" text-anchor="end" font-size="9.5" font-weight="800" fill="' + this.corUi(nv) + '">' + nv + '</text>';
     });
     const pts = [];
     tentativas.forEach((t, i) => {
-      svg += '<text x="' + x(i) + '" y="' + (BASE + 13) + '" text-anchor="middle" font-size="9" font-weight="700" fill="#94A3B8">' + (t.ordem || i + 1) + '</text>';
+      svg += '<text x="' + x(i) + '" y="' + (BASE + 12) + '" text-anchor="middle" font-size="8.5" font-weight="700" fill="#94A3B8">' + (t.ordem || i + 1) + '</text>';
       if (niveis.includes(t.resposta)) {
         pts.push(x(i) + ',' + yDe(t.resposta));
         svg += '<circle cx="' + x(i) + '" cy="' + yDe(t.resposta) + '" r="6.5" fill="#fff" stroke="' + this.corUi(t.resposta) + '" stroke-width="3"/>';
       }
     });
     if (pts.length > 1) svg = svg.replace('<circle', '<polyline fill="none" stroke="#1468B2" stroke-width="2" opacity=".55" stroke-linejoin="round" points="' + pts.join(' ') + '"/><circle');
-    svg += '<text x="' + (ESQ + n * PX / 2) + '" y="' + (BASE + 24) + '" text-anchor="middle" font-size="8.5" fill="#94A3B8">tentativas</text>';
+    svg += '<text x="' + (ESQ + util / 2) + '" y="' + (BASE + 23) + '" text-anchor="middle" font-size="8.5" fill="#94A3B8">tentativas</text>';
     return svg + '</svg>';
   },
 
@@ -1535,10 +1536,11 @@ window.MODULOS.programas = {
       const prog = fx.paciente_programas && fx.paciente_programas.programas;
       const lista = tentPorPp[fx.paciente_programa_id] || [];
       if (!lista.length) return '';
-      return '<div class="deq-graf-item">' +
+      const largo = lista.length > 6;
+      return '<div class="deq-graf-item' + (largo ? ' deq-graf-largo' : '') + '">' +
         '<div class="deq-graf-tit">' + escaparHtml(prog ? prog.nome : '') +
         ' <small>' + fx.corretos + '/' + (fx.tentativas_sessao || fx.tentativas) + ' C &middot; ' + fx.pct_corretos + '%</small></div>' +
-        this.graficoTentativas(prog ? prog.niveis : null, lista) +
+        this.graficoTentativas(prog ? prog.niveis : null, lista, largo) +
         '</div>';
     }).join('') + '</div>';
 
@@ -2040,10 +2042,11 @@ window.MODULOS.programas = {
           .sort((a, b) => a[1].data.localeCompare(b[1].data) || a[0].localeCompare(b[0]));
         const tot = blocos.reduce((s, [, b]) => s + b.lista.length, 0);
         const cor = blocos.reduce((s, [, b]) => s + b.lista.filter(t => t.resposta === 'C').length, 0);
-        corpo += '<div class="deq-graf-item' + (tot > 40 ? ' deq-graf-largo' : '') + '">' +
+        const largo = tot > 12;
+        corpo += '<div class="deq-graf-item' + (largo ? ' deq-graf-largo' : '') + '">' +
           '<div class="deq-graf-tit">' + escaparHtml(pp.programas.nome) +
           ' <small>' + blocos.length + ' sess&otilde;es &middot; ' + cor + '/' + tot + ' C (' + (tot ? Math.round(cor * 100 / tot) : 0) + '%)</small></div>' +
-          this.graficoCompilado(pp.programas.niveis, blocos) + '</div>';
+          this.graficoCompilado(pp.programas.niveis, blocos, largo) + '</div>';
       });
       corpo += '</div>';
       // Metas do PEI e andamento
@@ -2138,13 +2141,12 @@ window.MODULOS.programas = {
   },
 
   // Grafico compilado: X = tentativas em blocos por sessao (cor do dia), Y = niveis
-  graficoCompilado(niveisPrograma, blocos) {
+  graficoCompilado(niveisPrograma, blocos, largo) {
     const niveis = this.ORDEM_GRAFICO.filter(n => this.normalizarNiveis(niveisPrograma).includes(n));
     const total = blocos.reduce((s, [, b]) => s + b.lista.length, 0);
     if (!total) return '<p class="sub">Sem tentativas.</p>';
-    const PX = Math.max(12, Math.min(22, Math.floor(640 / total)));
-    const ESQ = 36, TOPO = 10, LIN = 19, BASE = TOPO + niveis.length * LIN;
-    const W = ESQ + total * PX + blocos.length * 10 + 16;
+    const W = largo ? 680 : 330, ESQ = 36, TOPO = 10, LIN = 19, BASE = TOPO + niveis.length * LIN;
+    const PX = (W - ESQ - 16 - blocos.length * 10) / total;
     const H = BASE + 30;
     const yDe = s => TOPO + (niveis.length - 1 - niveis.indexOf(s)) * LIN + LIN / 2;
 

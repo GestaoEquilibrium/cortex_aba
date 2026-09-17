@@ -86,35 +86,60 @@ window.MODULOS.laudo_avaliacao = {
     return { areas, total: tEsp ? Math.round(tAdq * 100 / tEsp) : null, faixas };
   },
 
-  // ─────────────── DADOS ───────────────
-  async dados(avaliacaoId) {
-    const { data: av } = await sb.from('avaliacoes')
+  // ─────────────── DADOS (um ou varios protocolos) ───────────────
+  // ids = lista de avaliacoes concluidas; a mais recente e a "principal" (datas, demanda, evolucoes)
+  async dados(ids) {
+    ids = Array.isArray(ids) ? ids : [ids];
+    const { data: avs } = await sb.from('avaliacoes')
       .select('*, pacientes(id, nome, data_nascimento, sexo, cid, motivo_encaminhamento, nivel), avaliador:profiles!avaliacoes_avaliador_id_fkey(nome)')
-      .eq('id', avaliacaoId).single();
-    if (!av) return null;
-    const pac = av.pacientes;
-    const [rAnt, rEnc, rPlano, rSes, rEvo] = await Promise.all([
-      sb.from('avaliacoes').select('id, protocolo, concluido_em').eq('paciente_id', pac.id).eq('protocolo', av.protocolo)
-        .eq('status', 'concluida').lt('concluido_em', av.concluido_em).order('concluido_em', { ascending: false }).limit(1),
+      .in('id', ids).order('concluido_em', { ascending: false });
+    if (!avs || !avs.length) return null;
+    const av = avs[0], pac = av.pacientes;
+    const inicio = avs.map(a => String(a.iniciado_em || a.concluido_em).slice(0, 10)).sort()[0];
+    const [rEnc, rPlano, rSes, rEvo] = await Promise.all([
       sb.from('encaminhamentos').select('medico, sessoes_semanais').eq('paciente_id', pac.id).order('criado_em', { ascending: false }).limit(1),
       sb.from('planos_terapeuticos').select('frequencia_semanal').eq('paciente_id', pac.id).eq('status', 'ativo').limit(1),
       sb.from('sessoes').select('id, data').eq('paciente_id', pac.id).eq('status', 'concluida')
-        .gte('data', String(av.iniciado_em || av.concluido_em).slice(0, 10)).lte('data', String(av.concluido_em).slice(0, 10)),
+        .gte('data', inicio).lte('data', String(av.concluido_em).slice(0, 10)),
       sb.from('evolucoes').select('texto, criado_em').eq('paciente_id', pac.id)
         .gte('criado_em', new Date(new Date(av.concluido_em).getTime() - 60 * 86400000).toISOString()).lte('criado_em', av.concluido_em)
         .order('criado_em').limit(40)
     ]);
-    const atual = await this.perfil(av);
-    const anteriorAv = rAnt.data && rAnt.data[0];
-    const anterior = anteriorAv ? await this.perfil(anteriorAv) : null;
-    const n = [...new Set((rSes.data || []).map(s => s.data))].length || 1;
+    const protocolos = [];
+    for (const a of avs) {
+      const { data: rAnt } = await sb.from('avaliacoes').select('id, protocolo, concluido_em').eq('paciente_id', pac.id).eq('protocolo', a.protocolo)
+        .eq('status', 'concluida').lt('concluido_em', a.concluido_em).order('concluido_em', { ascending: false }).limit(1);
+      const anteriorAv = rAnt && rAnt[0];
+      const { data: rS } = await sb.from('sessoes').select('data').eq('paciente_id', pac.id).eq('status', 'concluida')
+        .gte('data', String(a.iniciado_em || a.concluido_em).slice(0, 10)).lte('data', String(a.concluido_em).slice(0, 10));
+      protocolos.push({ av: a, atual: await this.perfil(a), anteriorAv, anterior: anteriorAv ? await this.perfil(anteriorAv) : null,
+        nSessoes: [...new Set((rS || []).map(x => x.data))].length || 1 });
+    }
+    const p0 = protocolos[0];
     return {
-      av, pac, atual, anterior, anteriorAv,
+      av, pac, protocolos, completo: protocolos.length > 1,
+      atual: p0.atual, anterior: p0.anterior, anteriorAv: p0.anteriorAv, nSessoes: p0.nSessoes,
       medico: rEnc.data && rEnc.data[0] ? rEnc.data[0].medico : null,
       freq: (rPlano.data && rPlano.data[0] && rPlano.data[0].frequencia_semanal) || (rEnc.data && rEnc.data[0] && rEnc.data[0].sessoes_semanais) || null,
-      nSessoes: n,
       evolucoes: rEvo.data || []
     };
+  },
+
+  // captura o documento consolidado de um protocolo (tabelas/graficos) como anexo, sem mostrar a janela
+  async capturarAnexo(protocolo, pacienteId) {
+    const A = MODULOS.avaliacoes;
+    const fn = { qadi: 'docQADI', ss: 'docSS', portage: 'docPortage' }[protocolo];
+    if (!A || !A[fn]) return '';
+    document.body.classList.add('capturando-doc');
+    try {
+      await A[fn](pacienteId);
+      const ov = document.getElementById('doc-eq-overlay');
+      const doc = ov ? ov.querySelector('.doc-eq') : null;
+      const html = doc ? doc.outerHTML : '';
+      if (ov) ov.remove();
+      return html;
+    } catch (e) { document.getElementById('doc-eq-overlay')?.remove(); return ''; }
+    finally { document.body.classList.remove('capturando-doc'); }
   },
 
   idadeTxt(dn, ref) {
@@ -142,19 +167,21 @@ window.MODULOS.laudo_avaliacao = {
     return 'Durante o processo de avalia\u00e7\u00e3o, foi poss\u00edvel observar o desenvolvimento de ' + primeiro + ' ao longo das sess\u00f5es realizadas. Registros da equipe no per\u00edodo: ' +
       uniq.map(f => '\u201c' + f + '\u201d').join('; ') + '.\n\nCom base no conjunto de observa\u00e7\u00f5es, ' + primeiro + ' vem apresentando adapta\u00e7\u00e3o \u00e0 rotina terap\u00eautica e fortalecimento do v\u00ednculo com a equipe.';
   },
-  rascunhoComparativo(d) {
-    if (!d.anterior) return '';
-    const antTxt = d.anterior.areas.map(a => a.pct + '% em ' + a.area.toLowerCase()).join(', ');
-    const atuTxt = d.atual.areas.map(a => a.pct + '%').join(', ');
-    const sobe = d.atual.areas.filter(a => { const b = d.anterior.areas.find(x => x.area === a.area); return b && a.pct !== null && b.pct !== null && a.pct > b.pct; }).map(a => a.area);
-    const desce = d.atual.areas.filter(a => { const b = d.anterior.areas.find(x => x.area === a.area); return b && a.pct !== null && b.pct !== null && a.pct < b.pct; }).map(a => a.area);
-    return 'Na avalia\u00e7\u00e3o anterior (' + new Date(d.anteriorAv.concluido_em).toLocaleDateString('pt-BR') + '), ' + d.pac.nome.split(' ')[0] + ' obteve ' + antTxt + '. Na avalia\u00e7\u00e3o atual, os resultados foram, respectivamente, ' + atuTxt + '. ' +
+  rascunhoComparativo(d, pr) {
+    pr = pr || d.protocolos[0];
+    if (!pr.anterior) return '';
+    const antTxt = pr.anterior.areas.map(a => a.pct + '% em ' + a.area.toLowerCase()).join(', ');
+    const atuTxt = pr.atual.areas.map(a => a.pct + '%').join(', ');
+    const sobe = pr.atual.areas.filter(a => { const b = pr.anterior.areas.find(x => x.area === a.area); return b && a.pct !== null && b.pct !== null && a.pct > b.pct; }).map(a => a.area);
+    const desce = pr.atual.areas.filter(a => { const b = pr.anterior.areas.find(x => x.area === a.area); return b && a.pct !== null && b.pct !== null && a.pct < b.pct; }).map(a => a.area);
+    return 'Na avalia\u00e7\u00e3o anterior (' + new Date(pr.anteriorAv.concluido_em).toLocaleDateString('pt-BR') + '), ' + d.pac.nome.split(' ')[0] + ' obteve ' + antTxt + '. Na avalia\u00e7\u00e3o atual, os resultados foram, respectivamente, ' + atuTxt + '. ' +
       (sobe.length ? 'Observam-se avan\u00e7os em ' + sobe.join(', ') + '. ' : '') +
       (desce.length ? 'Os percentuais inferiores em ' + desce.join(', ') + ' n\u00e3o devem ser interpretados isoladamente como regress\u00e3o, uma vez que a faixa et\u00e1ria atual contempla habilidades mais complexas e exige maior autonomia, coordena\u00e7\u00e3o, planejamento, generaliza\u00e7\u00e3o e flexibilidade.' : '');
   },
-  rascunhoArea(d, a) {
+  rascunhoArea(d, a, pr) {
+    pr = pr || d.protocolos[0];
     const primeiro = d.pac.nome.split(' ')[0];
-    const b = d.anterior ? d.anterior.areas.find(x => x.area === a.area) : null;
+    const b = pr.anterior ? pr.anterior.areas.find(x => x.area === a.area) : null;
     if (a.pct === null) return 'Esta \u00e1rea n\u00e3o foi avaliada nesta aplica\u00e7\u00e3o.';
     let t = '';
     if (b && b.pct !== null) t += primeiro + ' obteve ' + a.pct + '% nesta \u00e1rea, em compara\u00e7\u00e3o a ' + b.pct + '% na avalia\u00e7\u00e3o anterior' + (a.pct > b.pct ? ', evidenciando avan\u00e7o. ' : a.pct < b.pct ? '; a diferen\u00e7a deve ser lida \u00e0 luz da mudan\u00e7a da faixa et\u00e1ria de refer\u00eancia. ' : ', mantendo o desempenho. ');
@@ -165,7 +192,7 @@ window.MODULOS.laudo_avaliacao = {
   },
   rascunhoConclusao(d) {
     const primeiro = d.pac.nome.split(' ')[0];
-    const ok = d.atual.areas.filter(a => a.pct !== null).sort((x, y) => y.pct - x.pct);
+    const ok = d.protocolos.flatMap(pr => pr.atual.areas.filter(a => a.pct !== null)).sort((x, y) => y.pct - x.pct);
     const fortes = ok.filter(a => a.pct >= 80).map(a => a.area), fracas = ok.filter(a => a.pct < 70).map(a => a.area);
     return 'Com base nos dados obtidos, conclui-se que ' + d.pac.nome + ' apresenta ' +
       (fortes.length ? 'desenvolvimento compat\u00edvel com os marcos esperados em ' + fortes.join(', ') : 'habilidades em desenvolvimento nas \u00e1reas avaliadas') +
@@ -174,16 +201,23 @@ window.MODULOS.laudo_avaliacao = {
   },
 
   // ─────────────── EDITOR ───────────────
+  chaveArea(pr, area) { return pr.av.protocolo + '|' + area; },
+
   async abrirEditor(avaliacaoId) {
     const el = this.el();
     el.innerHTML = '<div class="cartao"><p class="sub">Preparando o relatorio...</p></div>';
-    const d = await this.dados(avaliacaoId);
+    const ids = Array.isArray(avaliacaoId) ? avaliacaoId : [avaliacaoId];
+    const d = await this.dados(ids);
     if (!d) { el.innerHTML = '<div class="cartao"><p class="sub">Avaliacao nao encontrada.</p></div>'; return; }
+    const tipo = d.completo ? 'completo' : 'protocolo';
+    const idsOrd = d.protocolos.map(pr => pr.av.id);
 
-    let { data: rel } = await sb.from('relatorios_avaliacao').select('*').eq('avaliacao_id', avaliacaoId).maybeSingle();
+    let { data: rel } = await sb.from('relatorios_avaliacao').select('*').eq('paciente_id', d.pac.id).eq('tipo', tipo)
+      .contains('avaliacoes_ids', idsOrd).order('criado_em', { ascending: false }).limit(1).maybeSingle();
+    if (rel && (rel.avaliacoes_ids || []).length !== idsOrd.length) rel = null;
     if (!rel && this.podeGerir()) {
       const { data: novo, error } = await sb.from('relatorios_avaliacao')
-        .insert({ avaliacao_id: avaliacaoId, paciente_id: d.pac.id, elaborado_por: window.CORTEX_SESSAO.user.id }).select('*').single();
+        .insert({ avaliacao_id: d.av.id, avaliacoes_ids: idsOrd, tipo, paciente_id: d.pac.id, elaborado_por: window.CORTEX_SESSAO.user.id }).select('*').single();
       if (error) { el.innerHTML = '<div class="cartao"><div class="mensagem-erro visivel">' + escaparHtml(error.message) + '</div></div>'; return; }
       rel = novo;
     }
@@ -192,15 +226,21 @@ window.MODULOS.laudo_avaliacao = {
     const auto = {};
     if (!rel.demanda) auto.demanda = this.rascunhoDemanda(d);
     if (!rel.analise) auto.analise = this.rascunhoAnalise(d);
-    if (!rel.comparativo && d.anterior) auto.comparativo = this.rascunhoComparativo(d);
-    if (!rel.areas || !Object.keys(rel.areas).length) { auto.areas = {}; d.atual.areas.forEach(a => { auto.areas[a.area] = this.rascunhoArea(d, a); }); }
+    if (!rel.comparativo && d.protocolos.some(pr => pr.anterior)) auto.comparativo = d.protocolos.filter(pr => pr.anterior).map(pr => (d.completo ? this.NOME_PROT[pr.av.protocolo] + ': ' : '') + this.rascunhoComparativo(d, pr)).join('\n\n');
+    if (!rel.areas || !Object.keys(rel.areas).length) { auto.areas = {}; d.protocolos.forEach(pr => pr.atual.areas.forEach(a => { auto.areas[this.chaveArea(pr, a.area)] = this.rascunhoArea(d, a, pr); })); }
     if (!rel.conclusao) auto.conclusao = this.rascunhoConclusao(d);
     if (!rel.assinatura_nome) { auto.assinatura_nome = this.ASSINATURA_PADRAO.nome; auto.assinatura_titulo = this.ASSINATURA_PADRAO.titulo; }
     if (rel.status === 'rascunho' && Object.keys(auto).length) {
       await sb.from('relatorios_avaliacao').update(auto).eq('id', rel.id);
       Object.assign(rel, auto);
     }
+    if (rel.incluir_anexos === null || rel.incluir_anexos === undefined) rel.incluir_anexos = d.completo;
     this._rel = rel; this._d = d;
+    // anexos consolidados (tabelas/graficos de cada protocolo), capturados uma vez
+    this._anexos = {};
+    if (rel.status === 'rascunho') {
+      for (const pr of d.protocolos) this._anexos[pr.av.protocolo] = await this.capturarAnexo(pr.av.protocolo, d.pac.id);
+    }
     const { data: ass } = await sb.from('profiles').select('nome, perfil').in('perfil', ['direcao', 'coordenador']).eq('ativo', true).order('nome');
     this._assinaturas = [this.ASSINATURA_PADRAO].concat((ass || []).filter(p => p.nome !== this.ASSINATURA_PADRAO.nome)
       .map(p => ({ nome: p.nome, titulo: p.perfil === 'direcao' ? 'Dire\u00e7\u00e3o cl\u00ednica' : 'Coordena\u00e7\u00e3o ABA' })));
@@ -218,7 +258,7 @@ window.MODULOS.laudo_avaliacao = {
     el.innerHTML =
       '<div class="pagina-cabecalho nao-imprime">' +
       '  <div><button class="btn-voltar" onclick="MODULOS.pacientes.telaDetalhe(\'' + d.pac.id + '\', \'avaliacao\')">&larr; Prontuario</button>' +
-      '    <h2>Relatorio de Avaliacao &middot; ' + escaparHtml(this.NOME_PROT[d.av.protocolo] || d.av.protocolo) + (d.anterior ? ' &middot; reavaliacao' : ' &middot; avaliacao inicial') + '</h2>' +
+      '    <h2>Relatorio de Avaliacao ' + (d.completo ? 'completo &middot; ' + d.protocolos.map(pr => escaparHtml(this.NOME_PROT[pr.av.protocolo] || pr.av.protocolo)).join(' + ') : '&middot; ' + escaparHtml(this.NOME_PROT[d.av.protocolo] || d.av.protocolo)) + (d.protocolos.some(pr => pr.anterior) ? ' &middot; reavaliacao' : ' &middot; avaliacao inicial') + '</h2>' +
       '    <p class="sub">' + escaparHtml(d.pac.nome) + ' &middot; concluida em ' + new Date(d.av.concluido_em).toLocaleDateString('pt-BR') +
       (editavel ? ' &middot; rascunho salvo automaticamente' : ' &middot; gerado em ' + (rel.gerado_em ? new Date(rel.gerado_em).toLocaleString('pt-BR') : '-') + ' (travado)') + '</p></div>' +
       '  <div style="display:flex; gap:8px; flex-wrap:wrap">' +
@@ -226,18 +266,19 @@ window.MODULOS.laudo_avaliacao = {
       '  <button class="btn btn-fantasma" onclick="MODULOS.laudo_avaliacao.doc()">&#128196; Folha / Imprimir</button></div></div>' +
       '<div class="rm-split"><div class="rm-form">' +
       '  <div class="cartao faixa-azul"><h3>Vem do sistema</h3><div class="grade-visao">' +
-      '    <div class="caixa-info"><small>Protocolo</small><b>' + escaparHtml(this.NOME_PROT[d.av.protocolo] || d.av.protocolo) + '</b></div>' +
-      '    <div class="caixa-info"><small>Sessoes de avaliacao</small><b>' + d.nSessoes + '</b></div>' +
-      '    <div class="caixa-info"><small>Total atual</small><b>' + (d.atual.total === null ? '-' : d.atual.total + '%') + '</b></div>' +
-      '    <div class="caixa-info"><small>AV anterior</small><b>' + (d.anterior ? new Date(d.anteriorAv.concluido_em).toLocaleDateString('pt-BR') + ' (' + d.anterior.total + '%)' : 'nenhuma') + '</b></div></div>' +
+      d.protocolos.map(pr =>
+      '    <div class="caixa-info"><small>' + escaparHtml(this.NOME_PROT[pr.av.protocolo] || pr.av.protocolo) + '</small><b>' + (pr.atual.total === null ? '-' : pr.atual.total + '%') +
+      ' <small class="sub">' + new Date(pr.av.concluido_em).toLocaleDateString('pt-BR') + ' &middot; ' + pr.nSessoes + ' sess.' + (pr.anterior ? ' &middot; ant. ' + pr.anterior.total + '%' : '') + '</small></b></div>').join('') + '</div>' +
+      '  <label class="check" style="display:flex; gap:6px; align-items:center; font-size:12.5px; margin-top:8px"><input type="checkbox" id="la-anexos"' + (rel.incluir_anexos ? ' checked' : '') + (editavel ? '' : ' disabled') + ' onchange="MODULOS.laudo_avaliacao.salvarAuto()"> Incluir anexos consolidados (tabelas e graficos de cada protocolo)</label>' +
       (faltas.length ? '<div class="mensagem-erro visivel" style="margin-top:8px">Faltam no cadastro: ' + faltas.join(', ') + '. O relatorio sai sem esses dados ate preencher em Editar dados / Plano.</div>' : '') +
       '  <div class="campo" style="margin-top:8px"><label>Assinatura</label><select id="la-ass"' + (editavel ? '' : ' disabled') + ' onchange="MODULOS.laudo_avaliacao.salvarAuto()">' +
       this._assinaturas.map(a => '<option value="' + escaparHtml(a.nome) + '"' + (a.nome === rel.assinatura_nome ? ' selected' : '') + '>' + escaparHtml(a.nome) + ' \u2014 ' + escaparHtml(a.titulo) + '</option>').join('') + '</select></div></div>' +
       '  <div class="cartao">' +
       campo('demanda', 'II. Descricao da demanda', rel.demanda, 3) +
       campo('analise', 'IV. Analise clinica (vinculo, engajamento, pares, comportamentos)', rel.analise, 7) +
-      (d.anterior ? campo('comparativo', 'Analise comparativa das avaliacoes', rel.comparativo, 5) : '') +
-      d.atual.areas.map(a => campo('area-' + a.area.replace(/[^a-z0-9]/gi, '_'), a.area + (a.pct === null ? '' : ' \u2013 ' + a.pct + '%') + ' <small class="sub">(o paragrafo descritivo da area entra sozinho)</small>', (rel.areas || {})[a.area], 3)).join('') +
+      (d.protocolos.some(pr => pr.anterior) ? campo('comparativo', 'Analise comparativa das avaliacoes', rel.comparativo, 5) : '') +
+      d.protocolos.map(pr => (d.completo ? '<h4 style="margin:12px 0 6px; color:var(--acao)">' + escaparHtml(this.NOME_PROT[pr.av.protocolo] || pr.av.protocolo) + '</h4>' : '') +
+        pr.atual.areas.map(a => campo('area-' + this.chaveArea(pr, a.area).replace(/[^a-z0-9]/gi, '_'), a.area + (a.pct === null ? '' : ' \u2013 ' + a.pct + '%') + ' <small class="sub">(o paragrafo descritivo da area entra sozinho)</small>', (rel.areas || {})[this.chaveArea(pr, a.area)], 3)).join('')).join('') +
       campo('conclusao', 'V. Conclusao <small class="sub">(os dois paragrafos finais entram sozinhos)</small>', rel.conclusao, 4) +
       '  </div></div>' +
       '<div class="rm-previa"><div class="folha-mini" id="la-previa"></div></div></div>';
@@ -249,11 +290,12 @@ window.MODULOS.laudo_avaliacao = {
     const rel = this._rel, d = this._d;
     const v = id => document.getElementById('la-' + id)?.value.trim() || null;
     const areas = {};
-    d.atual.areas.forEach(a => { areas[a.area] = v('area-' + a.area.replace(/[^a-z0-9]/gi, '_')) || (rel.areas || {})[a.area] || ''; });
+    d.protocolos.forEach(pr => pr.atual.areas.forEach(a => { const k = this.chaveArea(pr, a.area); areas[k] = v('area-' + k.replace(/[^a-z0-9]/gi, '_')) || (rel.areas || {})[k] || ''; }));
     const ass = document.getElementById('la-ass');
     const a = ass ? this._assinaturas.find(x => x.nome === ass.value) : null;
+    const anx = document.getElementById('la-anexos');
     return { demanda: v('demanda') ?? rel.demanda, analise: v('analise') ?? rel.analise, comparativo: v('comparativo') ?? rel.comparativo,
-      areas, conclusao: v('conclusao') ?? rel.conclusao,
+      areas, conclusao: v('conclusao') ?? rel.conclusao, incluir_anexos: anx ? anx.checked : rel.incluir_anexos,
       assinatura_nome: a ? a.nome : rel.assinatura_nome, assinatura_titulo: a ? a.titulo : rel.assinatura_titulo };
   },
   salvarAuto() {
@@ -276,7 +318,7 @@ window.MODULOS.laudo_avaliacao = {
     const html = this.html(this._rel, this._d);
     const { error } = await sb.from('relatorios_avaliacao').update(Object.assign({}, c, { html_snapshot: html, status: 'gerado', gerado_em: new Date().toISOString(), gerado_por: window.CORTEX_SESSAO.user.id })).eq('id', this._rel.id);
     if (error) { popAviso('Nao consegui gerar: ' + error.message); return; }
-    this.abrirEditor(this._rel.avaliacao_id);
+    this.abrirEditor(this._rel.avaliacoes_ids && this._rel.avaliacoes_ids.length ? this._rel.avaliacoes_ids : this._rel.avaliacao_id);
   },
 
   // ─────────────── FOLHA ───────────────
@@ -286,17 +328,25 @@ window.MODULOS.laudo_avaliacao = {
     const txt = v => escaparHtml(v || '').replace(/\n/g, '<br>');
     const dataAss = rel.gerado_em ? new Date(rel.gerado_em) : new Date(d.av.concluido_em);
     const extenso = dataAss.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' });
-    const proc = (this.PROCEDIMENTO[d.av.protocolo] || '') + this.APLICACAO.replace('{N}', d.nSessoes);
-    const cats = d.atual.areas.map(a => a.area);
-    const series = [];
-    if (d.anterior) series.push({ nome: 'AV anterior (' + fmt(d.anteriorAv.concluido_em) + ')', cor: '#1468B2', valores: cats.map(c => { const x = d.anterior.areas.find(a => a.area === c); return x ? x.pct : null; }) });
-    series.push({ nome: (d.anterior ? 'AV atual (' : 'AV1 (') + fmt(d.av.concluido_em) + ')', cor: d.anterior ? '#E07A2F' : '#1468B2', valores: d.atual.areas.map(a => a.pct) });
-    const grafico = A && A.gBarras ? A.gBarras(cats, series, { legenda: true }) : '';
+    const proc = d.protocolos.map(pr => (this.PROCEDIMENTO[pr.av.protocolo] || '') + this.APLICACAO.replace('{N}', pr.nSessoes)).join('\n\n');
+    const blocoProt = pr => {
+      const cats = pr.atual.areas.map(a => a.area);
+      const series = [];
+      if (pr.anterior) series.push({ nome: 'AV anterior (' + fmt(pr.anteriorAv.concluido_em) + ')', cor: '#1468B2', valores: cats.map(c => { const x = pr.anterior.areas.find(a => a.area === c); return x ? x.pct : null; }) });
+      series.push({ nome: (pr.anterior ? 'AV atual (' : 'AV1 (') + fmt(pr.av.concluido_em) + ')', cor: pr.anterior ? '#E07A2F' : '#1468B2', valores: pr.atual.areas.map(a => a.pct) });
+      const grafico = A && A.gBarras ? A.gBarras(cats, series, { legenda: true }) : '';
+      return (d.completo ? '<h2 style="margin-top:10px"><span class="ponto deq-teal"></span>' + escaparHtml(this.NOME_PROT[pr.av.protocolo] || pr.av.protocolo) + ' <small>&middot; ' + fmt(pr.av.concluido_em) + '</small></h2>' : '') +
+        '<div class="deq-caixa" style="margin-top:6px">' + grafico + '</div>' +
+        pr.atual.areas.map(a =>
+          '<div class="deq-caixa deq-texto" style="margin-top:6px"><b>' + escaparHtml(a.area) + (a.pct === null ? '' : ' &ndash; ' + a.pct + '%') + '</b><br>' +
+          '<span style="color:var(--eq-cinza)">' + escaparHtml(this.AREA_TEXTO[a.area] || '') + '</span><br>' + txt((rel.areas || {})[this.chaveArea(pr, a.area)]) + '</div>').join('');
+    };
+    const anexos = rel.incluir_anexos && this._anexos ? d.protocolos.map(pr => this._anexos[pr.av.protocolo] || '').filter(Boolean) : [];
     const sec = (n, t) => '<h2><span class="ponto deq-azul"></span>' + n + ' ' + t + '</h2>';
     return '<div class="doc-eq">' +
       '<div class="deq-cab"><img src="icones/equilibrium.png" alt="Equilibrium">' +
       '  <div class="deq-cab-t"><h1>RELAT&Oacute;RIO &middot; AVALIA&Ccedil;&Atilde;O DO DESENVOLVIMENTO E COMPORTAMENTO INFANTIL</h1><p>Equilibrium Terapia Infantil &middot; Psicoterapia ABA</p></div>' +
-      '  <span class="deq-pilula">' + (d.anterior ? 'REAVALIA&Ccedil;&Atilde;O' : 'AVALIA&Ccedil;&Atilde;O') + '</span></div>' +
+      '  <span class="deq-pilula">' + (d.protocolos.some(pr => pr.anterior) ? 'REAVALIA&Ccedil;&Atilde;O' : 'AVALIA&Ccedil;&Atilde;O') + (d.completo ? ' COMPLETA' : '') + '</span></div>' +
       sec('I.', 'Identifica&ccedil;&atilde;o') +
       '<div class="deq-caixa deq-dados" style="grid-template-columns:2fr 1.2fr 1.6fr 1fr 1fr">' +
       '  <div style="border-bottom:none"><small>Nome</small><b>' + escaparHtml(d.pac.nome) + '</b></div>' +
@@ -305,19 +355,17 @@ window.MODULOS.laudo_avaliacao = {
       '  <div style="border-bottom:none"><small>Especialidade</small><b>Psicoterapia ABA</b></div>' +
       '  <div style="border-bottom:none"><small>Frequ&ecirc;ncia</small><b>' + (d.freq ? escaparHtml(String(d.freq)) + ' sess&otilde;es semanais' : '&mdash;') + '</b></div></div>' +
       sec('II.', 'Descri&ccedil;&atilde;o da demanda') + '<div class="deq-caixa deq-texto">' + txt(rel.demanda) + '</div>' +
-      sec('III.', 'Procedimento') + '<div class="deq-caixa deq-texto">' + escaparHtml(proc) + '</div>' +
+      sec('III.', 'Procedimento') + '<div class="deq-caixa deq-texto">' + txt(proc) + '</div>' +
       sec('IV.', 'An&aacute;lise') + '<div class="deq-caixa deq-texto">' + txt(rel.analise) + '</div>' +
-      (rel.comparativo ? '<div class="deq-caixa deq-texto" style="margin-top:6px"><b>An&aacute;lise comparativa das avalia&ccedil;&otilde;es:</b> ' + txt(rel.comparativo) + '</div>' : '') +
-      '<div class="deq-caixa" style="margin-top:6px">' + grafico + '</div>' +
-      d.atual.areas.map(a =>
-        '<div class="deq-caixa deq-texto" style="margin-top:6px"><b>' + escaparHtml(a.area) + (a.pct === null ? '' : ' &ndash; ' + a.pct + '%') + '</b><br>' +
-        '<span style="color:var(--eq-cinza)">' + escaparHtml(this.AREA_TEXTO[a.area] || '') + '</span><br>' + txt((rel.areas || {})[a.area]) + '</div>').join('') +
+      (rel.comparativo ? '<div class="deq-caixa deq-texto" style="margin-top:6px"><b>An&aacute;lise comparativa das avalia&ccedil;&otilde;es:</b><br>' + txt(rel.comparativo) + '</div>' : '') +
+      d.protocolos.map(blocoProt).join('') +
       sec('V.', 'Conclus&atilde;o') + '<div class="deq-caixa deq-texto">' + txt(rel.conclusao) + '<br><br>' + txt(this.CONCLUSAO_FIXA) + '</div>' +
       '<div class="deq-local">Uberl&acirc;ndia, ' + extenso + '.</div>' +
       '<div class="deq-assinatura">' + escaparHtml(rel.assinatura_nome || this.ASSINATURA_PADRAO.nome) + '<br><small>' + escaparHtml(rel.assinatura_titulo || this.ASSINATURA_PADRAO.titulo) + '</small></div>' +
       '<div class="deq-rodape"><span>Equilibrium Terapia Infantil &middot; Uberl&acirc;ndia/MG</span>' +
       '<span class="pontos"><i style="background:var(--eq-teal)"></i><i style="background:var(--eq-amarelo)"></i><i style="background:var(--eq-rosa)"></i><i style="background:var(--eq-azul)"></i></span>' +
-      '<span>Documento gerado pelo CORTEX aba &middot; ' + fmt(dataAss) + '</span></div></div>';
+      '<span>Documento gerado pelo CORTEX aba &middot; ' + fmt(dataAss) + '</span></div></div>' +
+      anexos.map((h, i) => '<div class="deq-quebra"></div><p class="sub" style="text-align:center; font-size:10px; margin:4px 0">ANEXO ' + (i + 1) + ' &middot; documento consolidado do protocolo</p>' + h).join('');
   },
 
   async doc() {
@@ -331,6 +379,17 @@ window.MODULOS.laudo_avaliacao = {
       '<div class="pagina-cabecalho nao-imprime"><div><button class="btn-voltar" onclick="document.getElementById(\'doc-eq-overlay\').remove()">&larr; Fechar</button>' +
       '<h2>Relatorio de avaliacao &middot; documento oficial ' + (rel.status === 'rascunho' ? '<span class="selo selo-warn">rascunho</span>' : '<span class="selo selo-ok">gerado</span>') + '</h2></div>' +
       '<button class="btn btn-primario" onclick="window.print()">&#128424; Imprimir / PDF</button>' + portalBtn() + '</div>' + corpo + '</div>';
+  },
+
+  // botao "Relatorio completo": ultima aplicacao concluida de cada protocolo, unidas
+  btnCompleto(concluidas) {
+    const porProt = {};
+    concluidas.filter(a => ['qadi', 'ss', 'portage'].includes(a.protocolo) && a.origem !== 'importado').forEach(a => {
+      if (!porProt[a.protocolo] || String(a.concluido_em) > String(porProt[a.protocolo].concluido_em)) porProt[a.protocolo] = a;
+    });
+    const ids = Object.values(porProt).map(a => a.id);
+    if (ids.length < 2) return '';
+    return '<button class="btn btn-primario" onclick="MODULOS.laudo_avaliacao.abrirEditor(' + escaparHtml(JSON.stringify(ids)) + ')">&#128203; Relat&oacute;rio completo (' + ids.length + ' protocolos)</button>';
   },
 
   // botao para a aba Avaliacao: ultima aplicacao concluida do protocolo

@@ -2351,3 +2351,6 @@
 .folha-mini { background: #E9EDF3; border-radius: 14px; padding: 14px; max-height: calc(100vh - 120px); overflow: auto; }
 .folha-mini .doc-eq { width: 100%; min-height: 0; font-size: 11px; padding: 10mm 9mm; box-shadow: 0 6px 22px rgba(20,24,60,.16); border-radius: 4px; margin: 0; }
 [data-modo="escuro"] .folha-mini { background: #1D2038; }
+
+/* captura silenciosa de documento para anexo */
+.capturando-doc .folha-overlay { visibility: hidden; pointer-events: none; }

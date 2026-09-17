@@ -535,6 +535,7 @@ window.MODULOS.avaliacoes = {
       const nSS = concluidas.filter(x => x.protocolo === 'ss').length;
       html += '<div class="cartao"><h3>Concluidas <span class="selo selo-neutro">' + concluidas.length + '</span></h3>' +
         '<p class="sub" style="margin-bottom:8px">Os resultados vivem nos documentos oficiais: gere e imprima ou envie ao portal.</p>' +
+        (MODULOS.laudo_avaliacao.btnCompleto(concluidas) ? '<div style="margin-bottom:10px">' + MODULOS.laudo_avaliacao.btnCompleto(concluidas) + '</div>' : '') +
         (temSS
           ? '<div class="linha-doc"><div><b>Socially Savvy &middot; consolidado</b>' +
             '<small>' + nSS + ' aplicacao(oes) (AV1' + (nSS > 1 ? '-AV' + Math.min(nSS, 9) : '') + ') com datas, areas e graficos</small></div>' +

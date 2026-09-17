@@ -261,6 +261,20 @@ window.MODULOS.pei = {
         metas.map(m => ({ ...m, pei_id: pei.id })));
       if (e2) throw new Error(e2.message);
 
+      // nova rodada: o PEI anterior sai de "ativo"; programas do anterior ficam a criterio da coordenacao
+      const { data: antigos } = await sb.from('peis').select('id').eq('paciente_id', ctx.paciente.id).eq('status', 'ativo').neq('id', pei.id);
+      if (antigos && antigos.length) {
+        await sb.from('peis').update({ status: 'encerrado' }).in('id', antigos.map(a => a.id));
+        const { data: pps } = await sb.from('paciente_programas').select('id').eq('paciente_id', ctx.paciente.id)
+          .in('pei_id', antigos.map(a => a.id)).in('status', ['em_intervencao', 'na_fila']);
+        if (pps && pps.length) {
+          const encerrar = await popConfirmar('O PEI anterior foi encerrado. Ha ' + pps.length + ' programa(s) em andamento vinculados a ele.\n\n' +
+            'Encerrar esses programas agora (os dados das sessoes ficam guardados) ou manter em andamento ate a coordenacao revisar?',
+            { titulo: 'Programas do PEI anterior', ok: 'Encerrar programas', cancelar: 'Manter em andamento', tipo: 'aviso' });
+          if (encerrar) await sb.from('paciente_programas').update({ status: 'encerrado' }).in('id', pps.map(p => p.id));
+        }
+      }
+
       this.abrirVisual(pei.id);
     } catch (e) {
       erro.textContent = e.message;

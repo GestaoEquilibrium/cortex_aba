@@ -11,6 +11,52 @@ window.MODULOS.plano = {
   el() { return document.getElementById('pagina'); },
   podeGerir() { return perm('plano') === 'E'; },
 
+  // ─────────────── CICLO DE REAVALIACAO (item 5) ───────────────
+  // Avaliacao (6 meses) -> Plano -> PEI -> Programas: mostra em que etapa a crianca esta e o que vence.
+  async htmlCiclo(pacienteId, planoAtivo) {
+    const [rAv, rPei, rProg, rCfg] = await Promise.all([
+      sb.from('avaliacoes').select('id, protocolo, concluido_em').eq('paciente_id', pacienteId).eq('status', 'concluida').order('concluido_em', { ascending: false }).limit(1),
+      sb.from('peis').select('id, periodo_inicio, periodo_fim, avaliacao_id').eq('paciente_id', pacienteId).eq('status', 'ativo').order('criado_em', { ascending: false }).limit(1),
+      sb.from('paciente_programas').select('id, status, pei_id').eq('paciente_id', pacienteId).in('status', ['em_intervencao', 'na_fila']),
+      sb.from('configuracoes').select('valor').eq('chave', 'validade_avaliacao_meses').maybeSingle()
+    ]);
+    const meses = parseInt(rCfg.data && rCfg.data.valor, 10) || 6;
+    const av = rAv.data && rAv.data[0], pei = rPei.data && rPei.data[0], progs = rProg.data || [];
+    const hoje = new Date();
+    const fmt = d => d ? new Date(d.length === 10 ? d + 'T12:00:00' : d).toLocaleDateString('pt-BR') : '-';
+    const dias = d => Math.ceil((new Date(d) - hoje) / 86400000);
+    // etapa 1: avaliacao
+    let venceAv = null;
+    if (av) { venceAv = new Date(av.concluido_em); venceAv.setMonth(venceAv.getMonth() + meses); }
+    const avVencida = !av || (venceAv && venceAv < hoje);
+    const planoVencido = !planoAtivo || (planoAtivo.vigencia_fim && new Date(planoAtivo.vigencia_fim + 'T12:00:00') < hoje);
+    const peiAntigo = !pei || (av && pei.avaliacao_id && pei.avaliacao_id !== av.id && !avVencida);
+    const progsDoPeiAtual = pei ? progs.filter(p => p.pei_id === pei.id).length : 0;
+    const etapa = (n, titulo, ok, texto, botao) =>
+      '<div class="ciclo-etapa' + (ok ? ' ok' : ' pend') + '"><b>' + n + '</b><div><span>' + titulo + '</span><small>' + texto + '</small>' + (botao || '') + '</div></div>';
+    const pid = "'" + pacienteId + "'";
+    return '<div class="cartao"><h3>Ciclo de reavalia&ccedil;&atilde;o <small class="sub">&middot; validade ' + meses + ' meses</small></h3>' +
+      '<div class="ciclo">' +
+      etapa(1, 'Avalia&ccedil;&atilde;o',
+        !avVencida,
+        av ? (String(av.protocolo).toUpperCase() + ' em ' + fmt(av.concluido_em) + (avVencida ? ' &middot; <b style="color:var(--st-bad)">vencida h&aacute; ' + Math.abs(dias(venceAv)) + ' dia(s)</b>' : ' &middot; vence em ' + dias(venceAv) + ' dia(s)')) : 'nenhuma concluida',
+        avVencida ? '<button class="btn-chip" onclick="MODULOS.pacientes.telaDetalhe(' + pid + ', \'avaliacao\')">Nova avalia&ccedil;&atilde;o</button>' : '') +
+      etapa(2, 'Plano Terap&ecirc;utico',
+        !planoVencido && !(av && planoAtivo && planoAtivo.criado_em && new Date(planoAtivo.criado_em) < new Date(av.concluido_em)),
+        planoAtivo ? 'vig&ecirc;ncia at&eacute; ' + fmt(planoAtivo.vigencia_fim) + (av && planoAtivo.criado_em && new Date(planoAtivo.criado_em) < new Date(av.concluido_em) ? ' &middot; <b style="color:var(--st-warn)">anterior &agrave; &uacute;ltima avalia&ccedil;&atilde;o</b>' : '') : 'sem plano ativo',
+        (planoVencido || (av && planoAtivo && planoAtivo.criado_em && new Date(planoAtivo.criado_em) < new Date(av.concluido_em))) && this.podeGerir()
+          ? '<button class="btn-chip" onclick="MODULOS.plano.abrirConstrutor(' + pid + (planoAtivo ? ', \'' + planoAtivo.id + '\'' : '') + ')">' + (planoAtivo ? 'Renovar plano' : 'Elaborar plano') + '</button>' : '') +
+      etapa(3, 'PEI',
+        !!pei && !peiAntigo,
+        pei ? 'per&iacute;odo ' + fmt(pei.periodo_inicio) + ' a ' + fmt(pei.periodo_fim) + (peiAntigo ? ' &middot; <b style="color:var(--st-warn)">de avalia&ccedil;&atilde;o anterior</b>' : '') : 'sem PEI ativo',
+        (!pei || peiAntigo) ? '<button class="btn-chip" onclick="MODULOS.pacientes.telaDetalhe(' + pid + ', \'pei\')">' + (pei ? 'Novo PEI' : 'Elaborar PEI') + '</button>' : '') +
+      etapa(4, 'Programas',
+        progsDoPeiAtual > 0,
+        progs.length + ' em andamento' + (pei ? ' &middot; ' + progsDoPeiAtual + ' do PEI atual' : ''),
+        pei && !progsDoPeiAtual ? '<button class="btn-chip" onclick="MODULOS.pacientes.telaDetalhe(' + pid + ', \'pei\')">Lan&ccedil;ar do PEI</button>' : '') +
+      '</div></div>';
+  },
+
   // ─────────────── ABA DO PRONTUARIO ───────────────
 
   async htmlDoPaciente(pacienteId) {
@@ -37,7 +83,7 @@ window.MODULOS.plano = {
       }
     }
 
-    let html = alerta;
+    let html = alerta + await this.htmlCiclo(pacienteId, ativo);
     if (this.podeGerir()) {
       html += '<div class="cartao faixa-ambar"><h3>' +
         (ativo ? 'Renovacao' : 'Novo Plano Terapeutico') + '</h3>' +

@@ -1434,8 +1434,8 @@ window.MODULOS.programas = {
     if (!niveis.length || !tentativas.length) return '';
     // Horizontal e compacto: tentativas no eixo X, nivel de ajuda no eixo Y (cabe meia folha A4)
     const n = tentativas.length;
-    const ESQ = 36, DIR = 10, TOPO = 10, LIN = 18, BASE = TOPO + (niveis.length - 1) * LIN + LIN;
-    const PX = Math.max(18, Math.min(38, Math.floor(600 / n)));
+    const ESQ = 40, DIR = 12, TOPO = 12, LIN = 22, BASE = TOPO + (niveis.length - 1) * LIN + LIN;
+    const PX = Math.max(22, Math.min(52, Math.floor(640 / n)));
     const W = ESQ + n * PX + DIR, H = BASE + 26;
     const yDe = s => TOPO + (niveis.length - 1 - niveis.indexOf(s)) * LIN + LIN / 2;
     const x = i => ESQ + i * PX + PX / 2;
@@ -1445,18 +1445,18 @@ window.MODULOS.programas = {
     }
     niveis.forEach(nv => {
       svg += '<line x1="' + ESQ + '" y1="' + yDe(nv) + '" x2="' + (W - DIR) + '" y2="' + yDe(nv) + '" stroke="#EDF2F6"/>' +
-        '<text x="' + (ESQ - 6) + '" y="' + (yDe(nv) + 3) + '" text-anchor="end" font-size="8.5" font-weight="800" fill="' + this.corNivel(nv) + '">' + nv + '</text>';
+        '<text x="' + (ESQ - 7) + '" y="' + (yDe(nv) + 3.5) + '" text-anchor="end" font-size="10" font-weight="800" fill="' + this.corUi(nv) + '">' + nv + '</text>';
     });
     const pts = [];
     tentativas.forEach((t, i) => {
-      svg += '<text x="' + x(i) + '" y="' + (BASE + 12) + '" text-anchor="middle" font-size="8" font-weight="700" fill="#94A3B8">' + (t.ordem || i + 1) + '</text>';
+      svg += '<text x="' + x(i) + '" y="' + (BASE + 13) + '" text-anchor="middle" font-size="9" font-weight="700" fill="#94A3B8">' + (t.ordem || i + 1) + '</text>';
       if (niveis.includes(t.resposta)) {
         pts.push(x(i) + ',' + yDe(t.resposta));
-        svg += '<circle cx="' + x(i) + '" cy="' + yDe(t.resposta) + '" r="5.5" fill="' + this.corNivel(t.resposta) + '" stroke="#fff" stroke-width="1.5"/>';
+        svg += '<circle cx="' + x(i) + '" cy="' + yDe(t.resposta) + '" r="6.5" fill="#fff" stroke="' + this.corUi(t.resposta) + '" stroke-width="3"/>';
       }
     });
-    if (pts.length > 1) svg = svg.replace('<circle', '<polyline fill="none" stroke="#1468B2" stroke-width="1.8" opacity=".7" stroke-linejoin="round" points="' + pts.join(' ') + '"/><circle');
-    svg += '<text x="' + (ESQ + n * PX / 2) + '" y="' + (BASE + 23) + '" text-anchor="middle" font-size="8" fill="#94A3B8">tentativas</text>';
+    if (pts.length > 1) svg = svg.replace('<circle', '<polyline fill="none" stroke="#1468B2" stroke-width="2" opacity=".55" stroke-linejoin="round" points="' + pts.join(' ') + '"/><circle');
+    svg += '<text x="' + (ESQ + n * PX / 2) + '" y="' + (BASE + 24) + '" text-anchor="middle" font-size="8.5" fill="#94A3B8">tentativas</text>';
     return svg + '</svg>';
   },
 
@@ -1545,10 +1545,8 @@ window.MODULOS.programas = {
     const legendaGraf = fotos.length
       ? '<div style="display:flex; gap:14px; flex-wrap:wrap; font-size:10px; font-weight:700; ' +
         'color:var(--eq-cinza); margin-top:8px; padding-left:4px">' +
-        '<span><i style="display:inline-block; width:9px; height:9px; border-radius:50%; border:2.5px solid #15803D; margin-right:4px"></i>Correto (independente)</span>' +
-        '<span><i style="display:inline-block; width:9px; height:9px; border-radius:50%; border:2.5px solid #D97706; margin-right:4px"></i>Com ajuda (FT&rarr;VI)</span>' +
-        '<span><i style="display:inline-block; width:9px; height:9px; border-radius:50%; border:2.5px solid #E9586A; margin-right:4px"></i>Erro / sem resposta</span>' +
-        '<span><i style="display:inline-block; width:9px; height:9px; border-radius:50%; border:2.5px solid #94A3B8; margin-right:4px"></i>Nao aplicado / falta</span>' +
+        this.ORDEM_GRAFICO.slice().reverse().map(nv => '<span><i style="display:inline-block; width:9px; height:9px; border-radius:50%; border:2.5px solid ' +
+          this.corUi(nv) + '; margin-right:4px"></i>' + nv + ' ' + this.nomeNivel(nv) + '</span>').join('') +
         '</div>'
       : '';
 
@@ -2144,8 +2142,8 @@ window.MODULOS.programas = {
     const niveis = this.ORDEM_GRAFICO.filter(n => this.normalizarNiveis(niveisPrograma).includes(n));
     const total = blocos.reduce((s, [, b]) => s + b.lista.length, 0);
     if (!total) return '<p class="sub">Sem tentativas.</p>';
-    const PX = Math.max(11, Math.min(18, Math.floor(600 / total)));
-    const ESQ = 32, TOPO = 10, LIN = 16, BASE = TOPO + niveis.length * LIN;
+    const PX = Math.max(12, Math.min(22, Math.floor(640 / total)));
+    const ESQ = 36, TOPO = 10, LIN = 19, BASE = TOPO + niveis.length * LIN;
     const W = ESQ + total * PX + blocos.length * 10 + 16;
     const H = BASE + 30;
     const yDe = s => TOPO + (niveis.length - 1 - niveis.indexOf(s)) * LIN + LIN / 2;
@@ -2154,8 +2152,8 @@ window.MODULOS.programas = {
     niveis.forEach(n => {
       svg += '<line x1="' + ESQ + '" y1="' + yDe(n) + '" x2="' + (W - 8) + '" y2="' + yDe(n) +
         '" stroke="#EDF2F6"/>' +
-        '<text x="' + (ESQ - 6) + '" y="' + (yDe(n) + 3) + '" text-anchor="end" font-size="8.5" font-weight="800" fill="' +
-        this.corNivel(n) + '">' + n + '</text>';
+        '<text x="' + (ESQ - 7) + '" y="' + (yDe(n) + 3.5) + '" text-anchor="end" font-size="9.5" font-weight="800" fill="' +
+        this.corUi(n) + '">' + n + '</text>';
     });
     let x = ESQ + 6;
     blocos.forEach(([, b], bi) => {
@@ -2164,7 +2162,7 @@ window.MODULOS.programas = {
       b.lista.forEach(t => {
         if (niveis.includes(t.resposta)) {
           pts.push(x + ',' + yDe(t.resposta));
-          svg += '<circle cx="' + x + '" cy="' + yDe(t.resposta) + '" r="4.5" fill="#fff" stroke="' + cor + '" stroke-width="2.4"/>';
+          svg += '<circle cx="' + x + '" cy="' + yDe(t.resposta) + '" r="5.5" fill="#fff" stroke="' + this.corUi(t.resposta) + '" stroke-width="2.6"/>';
         }
         x += PX;
       });

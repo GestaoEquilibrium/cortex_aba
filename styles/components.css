@@ -1786,9 +1786,12 @@
 .rel-evo { font-size: 13px; white-space: pre-wrap; }
 
 @media print {
-    .folha-overlay { position: static; padding: 0; background: #fff; overflow: visible; }
-    .folha-overlay .folha-pagina { box-shadow: none; max-width: none; border-radius: 0; }
-    .folha-pagina { box-shadow: none; border-radius: 0; max-width: none; padding: 0; }
+    /* sem blur: backdrop-filter vira "containing block" e quebra o cabecalho/rodape fixos */
+    .folha-overlay { position: static !important; padding: 0 !important; background: #fff !important; overflow: visible !important;
+                     backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+    /* o max-width inline (900px) da janela nao vale no papel */
+    .folha-pagina { box-shadow: none !important; border-radius: 0 !important; max-width: none !important; width: 100% !important;
+                    padding: 0 !important; margin: 0 !important; background: #fff !important; }
     .rel-trilho { border: 1px solid #ddd; }
     body > *:not(#rel-sessao-overlay):not(#folha-overlay):not(#doc-eq-overlay) { display: none !important; }
 }

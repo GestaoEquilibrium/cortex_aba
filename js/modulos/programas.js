@@ -696,7 +696,8 @@ window.MODULOS.programas = {
 
     // programas com tentativa ja marcada contam como selecionados mesmo sem config
     Object.entries(fichas).forEach(([id, g]) => { if (g.some(l => l.resposta)) selecionados[id] = true; });
-    const jaEscolheu = (rCfg.data || []).length > 0;
+    // no celular a ficha sempre abre pela tela da crianca (escolher o programa); no computador pula se ja escolheu
+    const jaEscolheu = (rCfg.data || []).length > 0 && !this.celular();
 
     this._folha = {
       sessao: s,
@@ -879,7 +880,7 @@ window.MODULOS.programas = {
       ' &middot; programa ' + (f.idx + 1) + ' de ' + doDia.length + '</small></div>' +
       '  <span class="area-chip" style="background:' + cor + '1A; color:' + cor + '">' + escaparHtml(p.area) + '</span></div>' +
       '<div class="cel-passos">' + grade.map((l, i) =>
-        '<i class="' + (i === t ? 'on' : l.resposta ? 'ok' : '') + '" style="' + (l.resposta && i !== t ? 'background:' + this.corUi(l.resposta) : '') + '" onclick="MODULOS.programas.irTentativa(' + i + ')"></i>').join('') + '</div>' +
+        '<i class="' + (i === t ? 'on' : '') + '" style="' + (l.resposta ? 'background:' + this.corUi(l.resposta) : '') + '" onclick="MODULOS.programas.irTentativa(' + i + ')" title="' + (i + 1) + (l.resposta ? ' · ' + l.resposta : '') + '"></i>').join('') + '</div>' +
       '<div class="cel-ficha-cont"><b>Tentativa ' + (t + 1) + ' de ' + grade.length + '</b><small>' + c.corretos + '/' + c.preenchidas + ' C &middot; ' + c.pct + '% ' +
       (f.tentPrevistas[pp.id] !== grade.length ? '&middot; programa preve ' + f.tentPrevistas[pp.id] : '') + '</small>' +
       '<button class="btn-chip" onclick="MODULOS.programas.modalTentativasCel(\'' + pp.id + '\')">' + grade.length + ' tent.</button></div>' +
@@ -887,8 +888,8 @@ window.MODULOS.programas = {
         this.opcoesEstimulo(linha.estimulo || f.estimuloProg[pp.id]) + '</select></div>' +
       '<div class="cel-niv-tit">NIVEL DE AJUDA &middot; um toque marca e avanca</div>' +
       '<div class="cel-niv">' +
-      (niveis.includes('C') ? '<button class="cel-nv c' + (linha.resposta === 'C' ? ' ativo' : '') + '" style="--nv:' + this.corUi('C') + '" onclick="MODULOS.programas.marcarCel(\'' + pp.id + '\', \'C\')"><b>C</b><span>Correto (independente)</span></button>' : '') +
       outros.map(n => '<button class="cel-nv' + (linha.resposta === n ? ' ativo' : '') + '" style="--nv:' + this.corUi(n) + '" onclick="MODULOS.programas.marcarCel(\'' + pp.id + '\', \'' + n + '\')"><b>' + n + '</b><span>' + escaparHtml(this.nomeNivel(n)) + '</span></button>').join('') +
+      (niveis.includes('C') ? '<button class="cel-nv c' + (linha.resposta === 'C' ? ' ativo' : '') + '" style="--nv:' + this.corUi('C') + '" onclick="MODULOS.programas.marcarCel(\'' + pp.id + '\', \'C\')"><b>C</b><span>Correto (independente)</span></button>' : '') +
       '</div>' +
       '<div class="cartao cel-ref"><small>REFORCADOR</small><input list="lista-reforcadores" value="' + escaparHtml(linha.reforcador || '') + '" placeholder="digitar..." ' +
         'oninput="MODULOS.programas.mudarLinha(\'' + pp.id + '\', ' + t + ', \'reforcador\', this.value)"></div>' +
@@ -939,7 +940,10 @@ window.MODULOS.programas = {
       (this._overlay
         ? '<button class="btn-voltar" onclick="MODULOS.programas.sairDaFolha()">&larr; Voltar ao prontuario</button>'
         : '<button class="btn-voltar" onclick="abrirModulo(\'agenda\')">&larr; Agenda</button>') +
-      '<h2>O que vamos aplicar hoje &middot; ' + escaparHtml(s.pacientes.nome) + '</h2>' +
+      (this.celular()
+        ? '<div class="cel-crianca"><div class="avatar-paciente ' + corAvatar(s.pacientes.nome) + '">' + escaparHtml(s.pacientes.nome.split(' ').slice(0, 2).map(x => x[0]).join('').toUpperCase()) + '</div>' +
+          '<div><h2 style="margin:0">' + escaparHtml(s.pacientes.nome) + '</h2><small class="sub">' + (s.pacientes.data_nascimento ? calcularIdade(s.pacientes.data_nascimento) + ' &middot; ' : '') + 'toque em Aplicar no programa, ou marque varios e Comecar</small></div></div>'
+        : '<h2>O que vamos aplicar hoje &middot; ' + escaparHtml(s.pacientes.nome) + '</h2>') +
       '<p class="sub">' + new Date(s.data + 'T12:00:00').toLocaleDateString('pt-BR') + ' as ' + s.hora_inicio.slice(0, 5) +
       ' &middot; Marque os programas desta sessao. Depois eles aparecem um de cada vez.</p></div></div>' +
       (f.faixaComp || '') +
@@ -947,16 +951,35 @@ window.MODULOS.programas = {
       f.programas.map(pp => {
         const p = pp.programas, cor = this.CORES_AREA[p.area] || '#64748B';
         const marcado = semConfig ? true : !!f.selecionados[pp.id];
+        const c = this.contarFicha(f.fichas[pp.id]);
         return '<label class="sel-item' + (marcado ? ' marcado' : '') + '">' +
           '<input type="checkbox" value="' + pp.id + '"' + (marcado ? ' checked' : '') + ' onchange="this.closest(\'.sel-item\').classList.toggle(\'marcado\', this.checked)">' +
           '<span class="sel-nome">' + escaparHtml(p.nome) + '<small>' + escaparHtml(p.area) + ' &middot; preve ' + f.tentPrevistas[pp.id] + ' tentativas' +
-          (p.procedimento ? ' &middot; ' + escaparHtml(p.procedimento.slice(0, 80)) : '') + '</small></span>' +
-          '<i class="area-chip" style="background:' + cor + '1A; color:' + cor + '">' + escaparHtml(p.area) + '</i></label>';
+          (c.preenchidas ? ' &middot; <b style="color:var(--st-ok)">' + c.preenchidas + '/' + c.n + ' feitas</b>' : '') +
+          (p.procedimento && !this.celular() ? ' &middot; ' + escaparHtml(p.procedimento.slice(0, 80)) : '') + '</small></span>' +
+          (this.celular()
+            ? '<button type="button" class="btn-chip cheio" onclick="event.preventDefault(); MODULOS.programas.aplicarDireto(\'' + pp.id + '\')">Aplicar &rsaquo;</button>'
+            : '<i class="area-chip" style="background:' + cor + '1A; color:' + cor + '">' + escaparHtml(p.area) + '</i>') + '</label>';
       }).join('') + '</div>' +
       '<p class="sub" style="margin-top:8px">Os que ficarem de fora entram no encerramento como <b>nao aplicados</b>, com um campo para o motivo.</p>' +
       '<div class="barra-acoes">' +
       '<button class="btn btn-fantasma" onclick="document.querySelectorAll(\'.sel-item input\').forEach(c => { c.checked = true; c.closest(\'.sel-item\').classList.add(\'marcado\'); })">Marcar todos</button>' +
       '<button class="btn btn-primario" onclick="MODULOS.programas.comecarAplicacao()">Comecar &rsaquo;</button></div></div>';
+  },
+
+  // celular: toca em "Aplicar" num programa e vai direto para ele (marca-o como selecionado)
+  async aplicarDireto(ppId) {
+    const f = this._folha;
+    const marcados = new Set(Array.from(document.querySelectorAll('.sel-item input:checked')).map(c => c.value));
+    marcados.add(ppId);
+    f.programas.forEach(pp => { f.selecionados[pp.id] = marcados.has(pp.id); });
+    const linhas = f.programas.map(pp => ({ sessao_id: f.sessao.id, paciente_programa_id: pp.id,
+      tentativas: f.fichas[pp.id].length, selecionado: !!f.selecionados[pp.id] }));
+    await sb.from('fichas_config').upsert(linhas, { onConflict: 'sessao_id,paciente_programa_id' });
+    f.etapa = 'aplicar';
+    f.idx = Math.max(0, this.programasDoDia().findIndex(pp => pp.id === ppId));
+    f.tIdx = undefined;
+    this.desenharFolha();
   },
 
   async comecarAplicacao() {

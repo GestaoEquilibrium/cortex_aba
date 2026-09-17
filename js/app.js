@@ -162,6 +162,8 @@ async function iniciarApp() {
     agendarPop(() => MODULOS.agenda?.popupIndicativos?.(), 1200);
     agendarPop(() => MODULOS.eventos?.popupAvisos?.(), 1500);
     agendarPop(() => MODULOS.programas?.popupEquipe?.(), 1800);
+    // instalacao no celular / notificacoes (entra na fila, depois dos avisos do dia)
+    agendarPop(() => window.PWA && PWA.instalado() ? PWA.pedirNotificacoes() : null, 2200);
   }
 }
 

@@ -2373,3 +2373,8 @@
 .at-item .at-nome { font-weight: 700; font-size: 13px; }
 .at-item .at-nome small { display: block; font-weight: 600; font-size: 11px; color: var(--ink-muted); }
 .at-item .area-chip { font-style: normal; white-space: nowrap; }
+
+/* ── PWA: tela de instalar ─────────────────────────────────────────── */
+.pwa-logo { text-align: center; margin-bottom: 10px; }
+.pwa-passo { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border: 1.5px solid var(--line); border-radius: 12px; margin-bottom: 6px; font-size: 13px; }
+.pwa-passo b { width: 24px; height: 24px; border-radius: 50%; background: var(--acao); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; flex: none; }

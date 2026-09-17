@@ -263,3 +263,21 @@
 .deq-quebra { break-before: page; page-break-before: always; height: 0; }
 .deq-assinatura small { display: block; font-weight: 600; color: var(--eq-cinza); }
 .deq-freq-dias .deq-fp, .deq-freq-dias .deq-ff, .deq-freq-dias .deq-fv { width: auto; height: auto; padding: 2px 8px; font-size: 10px; letter-spacing: .02em; }
+
+/* ── Documentos de uma pagina (Plano Terapeutico): tudo compacto para caber numa A4 ── */
+.deq-uma-pagina { font-size: 11px; }
+.deq-uma-pagina .deq-cab { padding-bottom: 8px; margin-bottom: 8px; }
+.deq-uma-pagina .deq-cab img { width: 62px; }
+.deq-uma-pagina .deq-cab-t h1 { font-size: 18px; }
+.deq-uma-pagina h2 { margin: 8px 0 4px; font-size: 10.5px; }
+.deq-uma-pagina .deq-caixa { padding: 8px 11px; }
+.deq-uma-pagina .deq-texto { line-height: 1.5; font-size: 11px; }
+.deq-uma-pagina .deq-dados > div { padding: 5px 0; }
+.deq-uma-pagina .deq-local { margin-top: 8px; font-size: 10.5px; }
+.deq-uma-pagina .deq-assinatura { margin-top: 16px; }
+.deq-uma-pagina .deq-rodape { margin-top: 8px; }
+@media print {
+    .deq-uma-pagina { zoom: .94; }
+    .deq-uma-pagina .deq-assinatura, .deq-uma-pagina .deq-rodape, .deq-uma-pagina .deq-local { break-before: avoid; page-break-before: avoid; }
+    .deq-uma-pagina .deq-caixa, .deq-uma-pagina h2 { break-inside: avoid; }
+}

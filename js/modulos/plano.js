@@ -444,7 +444,7 @@ window.MODULOS.plano = {
       portalBtn() +
       '</div>' +
 
-      '<div class="doc-eq">' +
+      '<div class="doc-eq deq-uma-pagina">' +
       '<div class="deq-cab">' +
       '  <img src="icones/equilibrium.png" alt="Equilibrium">' +
       '  <div class="deq-cab-t"><h1>PLANO TERAP&Ecirc;UTICO</h1>' +

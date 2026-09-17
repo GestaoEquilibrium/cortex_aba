@@ -203,7 +203,7 @@
 
 /* ── Modelo de impressao: margens curtas, cabecalho e rodape travados ── */
 /* Laterais curtas; topo e base reservam a faixa do cabecalho/rodape fixos */
-@page { margin: 30mm 7mm 17mm; }
+@page { size: A4; margin: 12mm 11mm 14mm; }
 
 .doc-eq { padding: 6px 8px 2px; }
 .doc-eq .deq-caixa { padding: 12px 14px; }
@@ -213,20 +213,11 @@
     .doc-eq h2 { break-after: avoid; }
     .doc-eq .deq-caixa { break-inside: avoid; }
 
-    /* Cabecalho fixo no topo de TODAS as paginas, colado na margem */
-    .doc-eq .deq-cab {
-        position: fixed;
-        top: 4mm; left: 7mm; right: 7mm;
-        margin: 0;
-        background: #fff;
-    }
-    /* Rodape fixo na base de TODAS as paginas */
-    .doc-eq .deq-rodape {
-        position: fixed;
-        bottom: 4mm; left: 7mm; right: 7mm;
-        margin: 0;
-        background: #fff;
-    }
+    /* Cabecalho e rodape no fluxo do documento (o Chrome nao respeita fixed dentro das margens) */
+    .doc-eq .deq-cab { position: static; margin: 0 0 8px; break-after: avoid; }
+    .doc-eq .deq-rodape { position: static; margin-top: 10px; }
+    .doc-eq { font-size: 11.5px; }
+    .deq-caixa, .deq-graf-item, table { break-inside: avoid; }
 }
 
 /* tabela dos graficos: cabecalho colorido por AV, corpo compacto */

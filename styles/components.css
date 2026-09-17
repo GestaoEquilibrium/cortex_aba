@@ -2340,3 +2340,11 @@
 .folha-overlay { background: rgba(20, 17, 50, .62); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
 .folha-pagina { background: var(--bg); box-shadow: 0 24px 70px rgba(20, 17, 50, .45); }
 [data-modo="escuro"] .folha-pagina { background: var(--bg); }
+
+/* ── Relatorio mensal: formulario + previa da folha ───────────────── */
+.rm-split { display: grid; grid-template-columns: minmax(340px, 1fr) minmax(360px, 1.1fr); gap: 14px; align-items: start; }
+@media (max-width: 1100px) { .rm-split { grid-template-columns: 1fr; } }
+.rm-previa { position: sticky; top: 10px; }
+.folha-mini { background: #E9EDF3; border-radius: 14px; padding: 14px; max-height: calc(100vh - 120px); overflow: auto; }
+.folha-mini .doc-eq { width: 100%; min-height: 0; font-size: 11px; padding: 10mm 9mm; box-shadow: 0 6px 22px rgba(20,24,60,.16); border-radius: 4px; margin: 0; }
+[data-modo="escuro"] .folha-mini { background: #1D2038; }

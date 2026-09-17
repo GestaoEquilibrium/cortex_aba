@@ -262,3 +262,13 @@
 .deq-graf-tit small { font-weight: 700; color: var(--eq-cinza); white-space: nowrap; }
 .deq-graf-item svg { display: block; width: 100%; height: auto; }
 @media (max-width: 640px) { .deq-grade2 { grid-template-columns: 1fr; } }
+
+/* frequencia por dia da semana (modelo da clinica) e quebra de pagina do anexo */
+.deq-freq-dias { width: auto; margin: 0 auto; }
+.deq-freq-dias th { padding: 6px 16px; }
+.deq-freq-dias td { padding: 5px 12px; font-size: 10.5px; white-space: nowrap; text-align: center; }
+.deq-freq-dias td.vazia { border: none; background: transparent; }
+.deq-freq-dias .deq-fdata { margin-right: 6px; }
+.deq-quebra { break-before: page; page-break-before: always; height: 0; }
+.deq-assinatura small { display: block; font-weight: 600; color: var(--eq-cinza); }
+.deq-freq-dias .deq-fp, .deq-freq-dias .deq-ff, .deq-freq-dias .deq-fv { width: auto; height: auto; padding: 2px 8px; font-size: 10px; letter-spacing: .02em; }

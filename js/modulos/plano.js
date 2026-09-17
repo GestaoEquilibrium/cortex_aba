@@ -86,7 +86,7 @@ window.MODULOS.plano = {
     const el = document.getElementById('plano-elab-corpo');
 
     const [{ data: pac }, { data: equipe }, { data: enc }, { data: resps }, { data: avs }] = await Promise.all([
-      sb.from('pacientes').select('id, nome, data_nascimento, nivel, convenio, carteirinha, aplicador_id').eq('id', pacienteId).single(),
+      sb.from('pacientes').select('id, nome, data_nascimento, nivel, convenio, carteirinha, aplicador_id, cid, motivo_encaminhamento, sexo').eq('id', pacienteId).single(),
       sb.from('profiles').select('id, nome, perfil').eq('ativo', true).eq('responsavel_tecnico', true).order('nome'),
       sb.from('encaminhamentos').select('sessoes_semanais, medico').eq('paciente_id', pacienteId)
         .order('criado_em', { ascending: false }).limit(1),
@@ -114,7 +114,39 @@ window.MODULOS.plano = {
     const resp = resps && resps[0] ? resps[0].nome : null;
     const dataAv = avs && avs[0] && avs[0].concluido_em
       ? new Date(avs[0].concluido_em).toLocaleDateString('pt-BR') : '&mdash;';
-    this._nivelSel = (base && base.nivel_suporte) || null;
+    this._nivelSel = (base && base.nivel_suporte) || (pac.nivel ? parseInt(String(pac.nivel).replace(/\D/g, ''), 10) || null : null);
+
+    // ── Rascunhos automaticos (item 7): diagnostico, resultado da avaliacao e plano de cuidado
+    const primeiro = pac.nome.split(' ')[0];
+    const rascDiag = 'Crian\u00e7a encaminhada ' + (medico ? 'pelo(a) m\u00e9dico(a) ' + medico : 'pelo m\u00e9dico(a)') +
+      ' para avalia\u00e7\u00e3o e interven\u00e7\u00e3o terap\u00eautica' + (pac.motivo_encaminhamento ? ' devido a ' + pac.motivo_encaminhamento : '') + '.';
+    let rascResultado = '';
+    try {
+      if (avBase && MODULOS.laudo_avaliacao) {
+        const { data: avFull } = await sb.from('avaliacoes').select('*').eq('id', avBase.id).single();
+        const perfil = await MODULOS.laudo_avaliacao.perfil(avFull);
+        const { data: rAnt } = await sb.from('avaliacoes').select('*').eq('paciente_id', pacienteId).eq('protocolo', avFull.protocolo)
+          .eq('status', 'concluida').lt('concluido_em', avFull.concluido_em).order('concluido_em', { ascending: false }).limit(1);
+        const ok = perfil.areas.filter(a => a.pct !== null);
+        const fortes = ok.filter(a => a.pct >= 75).map(a => a.area.toLowerCase());
+        const fracas = ok.filter(a => a.pct < 70).map(a => a.area.toLowerCase());
+        if (rAnt && rAnt[0]) {
+          const ant = await MODULOS.laudo_avaliacao.perfil(rAnt[0]);
+          const sobe = ok.filter(a => { const b = ant.areas.find(x => x.area === a.area); return b && b.pct !== null && a.pct > b.pct; }).map(a => a.area.toLowerCase());
+          rascResultado = 'Observou-se evolu\u00e7\u00e3o em rela\u00e7\u00e3o \u00e0 avalia\u00e7\u00e3o anterior' + (sobe.length ? ', no que tange a ' + sobe.join(', ') : '') + '. ' +
+            (fracas.length ? 'Permanecem, por\u00e9m, dificuldades em ' + fracas.join(', ') + '. ' : '');
+        } else {
+          rascResultado = (fortes.length ? 'A crian\u00e7a apresenta desempenho compat\u00edvel com o esperado em ' + fortes.join(', ') + '. ' : '') +
+            (fracas.length ? 'Observam-se fragilidades em ' + fracas.join(', ') + ', evidenciadas pela avalia\u00e7\u00e3o realizada. ' : '');
+        }
+        rascResultado += 'Diante disso, recomenda-se a continuidade do acompanhamento m\u00e9dico, associado \u00e0 interven\u00e7\u00e3o psicoterap\u00eautica fundamentada na An\u00e1lise do Comportamento Aplicada (ABA), com o objetivo de desenvolver as habilidades deficit\u00e1rias.';
+      }
+    } catch (e) { /* sem rascunho */ }
+    const mesReaval = new Date(fim).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+    const rascCuidado = freqSugerida
+      ? 'A partir da avalia\u00e7\u00e3o, foi identificado que a crian\u00e7a necessita de ' + freqSugerida + ' sess' + (parseInt(freqSugerida, 10) > 1 ? '\u00f5es semanais' : '\u00e3o semanal') +
+        ' de psicoterapia ABA. Sua evolu\u00e7\u00e3o ser\u00e1 monitorada, e a reavalia\u00e7\u00e3o est\u00e1 prevista para ' + mesReaval + '.'
+      : '';
 
     const caixaTxt = (id, valor, dica, linhas) =>
       '<div class="deq-caixa deq-edit"><textarea id="pl-' + id + '" rows="' + (linhas || 4) + '" ' +
@@ -161,7 +193,7 @@ window.MODULOS.plano = {
       '  </div>' +
       '  <div class="deq-cid" style="display:flex; align-items:center; gap:8px"><small>CID11</small>' +
       '  <input id="pl-cid11" class="deq-input" placeholder="Ex.: 6A02.0" value="' +
-           escaparHtml(base ? base.cid11 || '' : '') + '"></div>' +
+           escaparHtml((base && base.cid11) || pac.cid || '') + '"></div>' +
       '</div>' +
 
       '<h2><span class="ponto"></span>N&iacute;vel de Suporte <small>&middot; toque para marcar</small></h2>' +
@@ -171,17 +203,15 @@ window.MODULOS.plano = {
       '</div>' +
 
       '<h2><span class="ponto deq-rosa"></span>Diagn&oacute;stico Cl&iacute;nico</h2>' +
-      caixaTxt('diagnostico', base ? base.diagnostico : '', 'Diagnostico clinico do beneficiario', 3) +
+      caixaTxt('diagnostico', (base && base.diagnostico) || rascDiag, 'Diagnostico clinico do beneficiario', 3) +
 
-      '<h2><span class="ponto deq-teal"></span>Resultado da Avalia&ccedil;&atilde;o</h2>' +
-      caixaTxt('resultado', base ? base.resultado_avaliacao : '',
-        'Sintese do resultado da avaliacao (QADI-R): areas de defasagem, potencialidades, perfil de intervencao', 4) +
+      '<h2><span class="ponto deq-teal"></span>Plano Terap&ecirc;utico Estabelecido</h2>' +
+      caixaTxt('resultado', (base && base.resultado_avaliacao) || rascResultado,
+        'Sintese da avaliacao: evolucao, dificuldades que permanecem e recomendacao', 4) +
 
       '<h2><span class="ponto deq-amarelo"></span>Plano de Cuidado</h2>' +
-      caixaTxt('cuidado', (base && base.plano_cuidado) ||
-        (freqSugerida ? 'Psicoterapia ABA em regime de ' + freqSugerida +
-          ' sessoes semanais, com Plano de Ensino Individualizado (PEI), coleta de dados por tentativas em todas as sessoes e orientacao parental.' : ''),
-        'Regime de atendimento, abordagem, supervisao e orientacao familiar', 4) +
+      caixaTxt('cuidado', (base && base.plano_cuidado) || rascCuidado,
+        'Regime de atendimento e previsao de reavaliacao', 3) +
 
       '<div class="deq-reaval" style="gap:16px; flex-wrap:wrap">' +
       '  <span><small>Vig&ecirc;ncia - in&iacute;cio</small><br>' +
@@ -196,7 +226,7 @@ window.MODULOS.plano = {
       ((equipe || []).length === 0
         ? '<option value="">Nenhum responsavel tecnico marcado - defina em Usuarios e Acessos</option>' : '') +
       (equipe || []).map(m => '<option value="' + m.id + '"' +
-        ((base ? base.profissional_id : pac.aplicador_id) === m.id ? ' selected' : '') + '>' +
+        ((base ? base.profissional_id === m.id : ((equipe || []).some(x => /^wessilon/i.test(x.nome)) ? /^wessilon/i.test(m.nome) : pac.aplicador_id === m.id)) ? ' selected' : '') + '>' +
         escaparHtml(m.nome) + '</option>').join('') +
       '  </select></span>' +
       '</div>' +
@@ -480,7 +510,7 @@ window.MODULOS.plano = {
       '<h2><span class="ponto deq-rosa"></span>Diagn&oacute;stico Cl&iacute;nico</h2>' +
       '<div class="deq-caixa deq-texto">' + escaparHtml(pl.diagnostico || '') + '</div>' +
 
-      '<h2><span class="ponto deq-teal"></span>Resultado da Avalia&ccedil;&atilde;o</h2>' +
+      '<h2><span class="ponto deq-teal"></span>Plano Terap&ecirc;utico Estabelecido</h2>' +
       '<div class="deq-caixa deq-texto">' + escaparHtml(pl.resultado_avaliacao || '') + '</div>' +
 
       '<h2><span class="ponto deq-amarelo"></span>Plano de Cuidado</h2>' +
@@ -491,8 +521,8 @@ window.MODULOS.plano = {
       '<div class="deq-reaval"><small>Data prevista para reavalia&ccedil;&atilde;o</small>' +
       '<b>' + fmt(pl.vigencia_fim) + '</b></div>' +
 
-      '<div class="deq-assinatura">' + escaparHtml(pl.profissional ? pl.profissional.nome : '') +
-      '<br>Respons&aacute;vel T&eacute;cnico / N&ordm; do Registro de Classe</div>' +
+      '<div class="deq-assinatura">' + escaparHtml(pl.profissional ? pl.profissional.nome : 'Wessilon Marques de Sousa') +
+      '<br><small>' + (pl.profissional && !/^wessilon/i.test(pl.profissional.nome) ? 'Respons&aacute;vel T&eacute;cnico' : 'Psic&oacute;logo e Analista do Comportamento &middot; CRP 04/53832') + '</small></div>' +
 
       '<div class="deq-rodape">' +
       '  <span>Equilibrium Terapia Infantil &middot; Uberl&acirc;ndia/MG</span>' +

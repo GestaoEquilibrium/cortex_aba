@@ -740,10 +740,13 @@ window.MODULOS.programas = {
     return f.programas.filter(pp => f.selecionados[pp.id]);
   },
 
+  celular() { return window.innerWidth <= 720; },
+
   desenharFolha() {
     const f = this._folha;
     const s = f.sessao;
     if (f.etapa === 'selecionar' && f.programas.length) { this.desenharSelecao(); return; }
+    if (this.celular() && f.programas.length) { this.desenharFolhaCelular(); return; }
 
     let corpo = f.faixaComp || '';
     const doDia = this.programasDoDia();
@@ -853,6 +856,81 @@ window.MODULOS.programas = {
       corpo;
   },
 
+  // ─────────────── CELULAR: uma tentativa por tela ───────────────
+  desenharFolhaCelular() {
+    const f = this._folha, s = f.sessao;
+    const doDia = this.programasDoDia();
+    if (f.idx >= doDia.length) f.idx = Math.max(0, doDia.length - 1);
+    const pp = doDia[f.idx];
+    if (!pp) { this.elFolha().innerHTML = '<div class="cartao"><p class="sub">Nenhum programa escolhido.</p></div>'; return; }
+    const p = pp.programas, grade = f.fichas[pp.id], niveis = this.normalizarNiveis(p.niveis);
+    if (f.tIdx === undefined || f.tIdx >= grade.length) f.tIdx = Math.max(0, grade.findIndex(l => !l.resposta));
+    if (f.tIdx < 0) f.tIdx = grade.length - 1;
+    const t = f.tIdx, linha = grade[t];
+    const c = this.contarFicha(grade);
+    const cor = this.CORES_AREA[p.area] || '#64748B';
+    const dtRef = new Date(s.data + 'T12:00:00').toLocaleDateString('pt-BR');
+    const outros = niveis.filter(n => n !== 'C');
+    this.elFolha().innerHTML =
+      '<div class="cel-ficha">' +
+      '<div class="cel-ficha-topo">' +
+      '  <button class="btn-voltar" onclick="' + (this._overlay ? 'MODULOS.programas.sairDaFolha()' : 'abrirModulo(\'agenda\')') + '">&larr;</button>' +
+      '  <div class="cel-ficha-tit"><b>' + escaparHtml(p.nome) + '</b><small>' + escaparHtml(s.pacientes.nome.split(' ').slice(0, 2).join(' ')) + ' &middot; ' + dtRef +
+      ' &middot; programa ' + (f.idx + 1) + ' de ' + doDia.length + '</small></div>' +
+      '  <span class="area-chip" style="background:' + cor + '1A; color:' + cor + '">' + escaparHtml(p.area) + '</span></div>' +
+      '<div class="cel-passos">' + grade.map((l, i) =>
+        '<i class="' + (i === t ? 'on' : l.resposta ? 'ok' : '') + '" style="' + (l.resposta && i !== t ? 'background:' + this.corUi(l.resposta) : '') + '" onclick="MODULOS.programas.irTentativa(' + i + ')"></i>').join('') + '</div>' +
+      '<div class="cel-ficha-cont"><b>Tentativa ' + (t + 1) + ' de ' + grade.length + '</b><small>' + c.corretos + '/' + c.preenchidas + ' C &middot; ' + c.pct + '% ' +
+      (f.tentPrevistas[pp.id] !== grade.length ? '&middot; programa preve ' + f.tentPrevistas[pp.id] : '') + '</small>' +
+      '<button class="btn-chip" onclick="MODULOS.programas.modalTentativasCel(\'' + pp.id + '\')">' + grade.length + ' tent.</button></div>' +
+      '<div class="cartao cel-est"><small>ESTIMULO</small><select onchange="MODULOS.programas.mudarLinha(\'' + pp.id + '\', ' + t + ', \'estimulo\', this.value)">' +
+        this.opcoesEstimulo(linha.estimulo || f.estimuloProg[pp.id]) + '</select></div>' +
+      '<div class="cel-niv-tit">NIVEL DE AJUDA &middot; um toque marca e avanca</div>' +
+      '<div class="cel-niv">' +
+      (niveis.includes('C') ? '<button class="cel-nv c' + (linha.resposta === 'C' ? ' ativo' : '') + '" style="--nv:' + this.corUi('C') + '" onclick="MODULOS.programas.marcarCel(\'' + pp.id + '\', \'C\')"><b>C</b><span>Correto (independente)</span></button>' : '') +
+      outros.map(n => '<button class="cel-nv' + (linha.resposta === n ? ' ativo' : '') + '" style="--nv:' + this.corUi(n) + '" onclick="MODULOS.programas.marcarCel(\'' + pp.id + '\', \'' + n + '\')"><b>' + n + '</b><span>' + escaparHtml(this.nomeNivel(n)) + '</span></button>').join('') +
+      '</div>' +
+      '<div class="cartao cel-ref"><small>REFORCADOR</small><input list="lista-reforcadores" value="' + escaparHtml(linha.reforcador || '') + '" placeholder="digitar..." ' +
+        'oninput="MODULOS.programas.mudarLinha(\'' + pp.id + '\', ' + t + ', \'reforcador\', this.value)"></div>' +
+      '<datalist id="lista-reforcadores">' + (f.reforcadores || []).map(r => '<option value="' + escaparHtml(typeof r === 'string' ? r : r.nome) + '">').join('') + '</datalist>' +
+      '<div class="cel-nav">' +
+      '  <button class="btn btn-fantasma" onclick="MODULOS.programas.irTentativa(' + (t - 1) + ')"' + (t === 0 ? ' disabled' : '') + '>&lsaquo; Anterior</button>' +
+      (t < grade.length - 1
+        ? '<button class="btn btn-fantasma" onclick="MODULOS.programas.irTentativa(' + (t + 1) + ')">Proxima &rsaquo;</button>'
+        : (f.idx < doDia.length - 1
+          ? '<button class="btn btn-primario" onclick="MODULOS.programas.irPara(' + (f.idx + 1) + ')">Proximo programa &rsaquo;</button>'
+          : '<button class="btn btn-primario" onclick="MODULOS.programas.telaFechamento()">Encerrar sessao</button>')) +
+      '</div>' +
+      '<div class="cel-rodape">' +
+      '  <button class="btn-chip" onclick="MODULOS.programas.voltarSelecao()">&#9998; programas</button>' +
+      '  <button class="btn-chip" onclick="MODULOS.programas.salvarFichas(true)">Salvar rascunho</button>' +
+      '  <button class="btn-chip" onclick="MODULOS.programas.telaFechamento()">Encerrar sessao</button>' +
+      '</div></div>';
+  },
+  irTentativa(i) {
+    const f = this._folha, pp = this.programasDoDia()[f.idx];
+    const n = f.fichas[pp.id].length;
+    f.tIdx = Math.max(0, Math.min(n - 1, i));
+    this.desenharFolhaCelular();
+  },
+  marcarCel(ppId, sigla) {
+    const f = this._folha, grade = f.fichas[ppId], t = f.tIdx;
+    grade[t].resposta = grade[t].resposta === sigla ? '' : sigla;
+    this._sujo = true;
+    if (grade[t].resposta && t < grade.length - 1) f.tIdx = t + 1;
+    this.desenharFolhaCelular();
+    if (navigator.vibrate) navigator.vibrate(12);
+    // rascunho a cada 5 marcacoes
+    this._marcas = (this._marcas || 0) + 1;
+    if (this._marcas % 5 === 0) this.salvarFichas(true);
+  },
+  modalTentativasCel(ppId) {
+    const f = this._folha;
+    abrirModal('Tentativas nesta sessao',
+      '<p class="sub" style="margin-bottom:8px">Programa preve ' + f.tentPrevistas[ppId] + '. Quantas voce vai aplicar hoje?</p>' +
+      '<div class="cel-tent-grid">' + [4, 5, 6, 8, 10, 12, 15, 20].map(n => '<button class="btn ' + (f.fichas[ppId].length === n ? 'btn-primario' : 'btn-fantasma') + '" onclick="fecharModal(); MODULOS.programas.mudarTentativas(\'' + ppId + '\', ' + n + ')">' + n + '</button>').join('') + '</div>', false, 'evolucao');
+  },
+
   desenharSelecao() {
     const f = this._folha, s = f.sessao;
     const semConfig = !Object.keys(f.selecionados).length;
@@ -904,6 +982,7 @@ window.MODULOS.programas = {
   async irPara(i) {
     await this.salvarFichas(true);
     this._folha.idx = i;
+    this._folha.tIdx = undefined;
     this.desenharFolha();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   },

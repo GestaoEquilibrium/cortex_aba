@@ -574,15 +574,27 @@ window.MODULOS.programas = {
     }
   },
 
-  async abrirFolhaProntuario(pacienteId) {
-    const hoje = new Date().toISOString().slice(0, 10);
-    const { data: existente } = await sb.from('sessoes')
-      .select('id, status')
-      .eq('paciente_id', pacienteId).eq('data', hoje)
-      .in('status', ['agendada', 'checkin', 'em_atendimento'])
-      .order('hora_inicio').limit(1);
+  hojeLocal() {
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  },
 
-    let sessaoId = existente && existente[0] ? existente[0].id : null;
+  async abrirFolhaProntuario(pacienteId) {
+    const hoje = this.hojeLocal();   // data LOCAL (em UTC, a partir das 21h ja era "amanha")
+    const eu = window.CORTEX_SESSAO.user.id;
+    const { data: doDia, error: eS } = await sb.from('sessoes')
+      .select('id, status, hora_inicio, aplicador_id, profissional:profiles!sessoes_aplicador_id_fkey(nome)')
+      .eq('paciente_id', pacienteId).eq('data', hoje)
+      .not('status', 'in', '("falta","cancelada")')
+      .order('hora_inicio');
+    if (eS) { popAviso('Nao consegui consultar a agenda de hoje: ' + eS.message); return; }
+    const lista = doDia || [];
+    // prioridade: sessao minha em aberto > qualquer em aberto > minha concluida > qualquer
+    const aberta = st => ['agendada', 'checkin', 'em_atendimento'].includes(st);
+    const escolhida = lista.find(x => x.aplicador_id === eu && aberta(x.status)) || lista.find(x => aberta(x.status)) ||
+      lista.find(x => x.aplicador_id === eu) || lista[0];
+
+    let sessaoId = escolhida ? escolhida.id : null;
     if (!sessaoId) {
       const gestao = ['direcao', 'coordenador', 'suporte'].includes(window.CORTEX_SESSAO.profile.perfil);
       const agora = new Date().toTimeString().slice(0, 5);
@@ -611,7 +623,7 @@ window.MODULOS.programas = {
     if (botao) { botao.disabled = true; botao.textContent = 'Criando...'; }
     const { data: nova, error } = await sb.from('sessoes').insert({
       paciente_id: pacienteId,
-      data: new Date().toISOString().slice(0, 10),
+      data: this.hojeLocal(),
       hora_inicio: new Date().toTimeString().slice(0, 5) + ':00',
       aplicador_id: window.CORTEX_SESSAO.user.id,
       status: 'em_atendimento'

@@ -2335,3 +2335,8 @@
 /* ── Historico acumulativo no rodape da sessao ─────────────────────── */
 .sess-historico { margin-top: 12px; padding-top: 8px; border-top: 1px dashed var(--line); font-size: 10.5px; color: var(--ink-soft); line-height: 1.7; max-height: 120px; overflow-y: auto; }
 .sess-historico b { color: var(--ink-muted); font-weight: 700; }
+
+/* ── Janelas suspensas (ficha, documentos): fundo desfocado e folha opaca ── */
+.folha-overlay { background: rgba(20, 17, 50, .62); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.folha-pagina { background: var(--bg); box-shadow: 0 24px 70px rgba(20, 17, 50, .45); }
+[data-modo="escuro"] .folha-pagina { background: var(--bg); }

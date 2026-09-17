@@ -246,7 +246,8 @@
     border-radius: 4px;
     font-size: 12px;
 }
-.folha-pagina { max-width: 232mm; background: transparent; box-shadow: none; padding-top: 12px; }
+/* so a folha de DOCUMENTO fica transparente (a A4 branca e o conteudo); fichas e outras janelas mantem o fundo */
+.folha-pagina:has(> .doc-eq), .folha-pagina:has(> * > .doc-eq) { max-width: 232mm; background: transparent; box-shadow: none; padding-top: 12px; }
 @media print { .folha-pagina .doc-eq { width: auto; min-height: 0; box-shadow: none; margin: 0; padding: 0; } }
 
 /* grade de graficos: 2 por linha na folha, quebra sem cortar */

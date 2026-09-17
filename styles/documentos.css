@@ -214,7 +214,7 @@
     .doc-eq .deq-caixa { break-inside: avoid; }
 
     /* Cabecalho e rodape no fluxo do documento (o Chrome nao respeita fixed dentro das margens) */
-    .doc-eq .deq-cab { position: static; margin: 0 0 8px; break-after: avoid; }
+    .doc-eq .deq-cab { position: relative; margin: 0 0 10px; break-after: avoid; }  /* relative: a faixa colorida (::after) fica presa ao cabecalho */
     .doc-eq .deq-rodape { position: static; margin-top: 10px; }
     .doc-eq { font-size: 11.5px; }
     .deq-caixa, .deq-graf-item, table { break-inside: avoid; }

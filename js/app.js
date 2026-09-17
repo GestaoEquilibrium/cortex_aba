@@ -497,12 +497,14 @@ const ESCOPO = {
   async carregar(forcar, coordId) {
     if (window._equipe && !forcar && !coordId) return window._equipe;
     const eu = coordId || window.CORTEX_SESSAO.user.id;
-    const [rProf, rPac, rPa] = await Promise.all([
+    const [rProf, rPac, rPa, rEm] = await Promise.all([
       sb.from('profiles').select('id, nome, coordenador_id').eq('ativo', true),
       sb.from('pacientes').select('id, coordenador_id, aplicador_id').neq('status', 'encerrado'),
-      sb.from('paciente_aplicadores').select('paciente_id, aplicador_id')
+      sb.from('paciente_aplicadores').select('paciente_id, aplicador_id'),
+      sb.from('equipe_membros').select('coordenador_id, aplicador_id').eq('coordenador_id', eu)
     ]);
     const apl = new Set((rProf.data || []).filter(p => p.coordenador_id === eu).map(p => p.id));
+    (rEm.data || []).forEach(x => apl.add(x.aplicador_id));
     const pacs = new Set();
     (rPac.data || []).forEach(p => { if (p.coordenador_id === eu || apl.has(p.aplicador_id)) pacs.add(p.id); });
     (rPa.data || []).forEach(x => { if (apl.has(x.aplicador_id)) pacs.add(x.paciente_id); });

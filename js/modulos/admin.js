@@ -53,6 +53,9 @@ window.MODULOS.admin = {
       .order('nome');
     const todos = data || [];
     this.equipe = todos.filter(p => p.perfil !== 'familia');
+    const { data: em } = await sb.from('equipe_membros').select('coordenador_id, aplicador_id');
+    this._equipesDe = {};
+    (em || []).forEach(x => { (this._equipesDe[x.aplicador_id] = this._equipesDe[x.aplicador_id] || []).push(x.coordenador_id); });
     this.familias = todos.filter(p => p.perfil === 'familia');
 
     // Vinculos das familias (para mostrar de qual crianca e o acesso)
@@ -85,8 +88,8 @@ window.MODULOS.admin = {
       '<span class="selo selo-roxo">' + (ROTULOS_PERFIL[p.perfil] || p.perfil) + '</span>' +
       (p.atende_pacientes ? '<span class="selo selo-ok">Atende</span>' : '') +
       (p.responsavel_tecnico ? '<span class="selo selo-roxo">Assina</span>' : '') +
-      (p.coordenador_id && this.nomeCoord(p.coordenador_id)
-        ? '<span class="selo selo-neutro">Equipe ' + this.nomeCoord(p.coordenador_id) + '</span>' : '') +
+      [...new Set([p.coordenador_id].concat(this._equipesDe[p.id] || []).filter(Boolean))].map(c => this.nomeCoord(c))
+        .filter(Boolean).map(n => '<span class="selo selo-neutro">Equipe ' + n + '</span>').join('') +
       (p.ativo ? '<span class="selo selo-ok">Ativo</span>' : '<span class="selo selo-bad">Inativo</span>') +
       '<button class="btn-chip" title="Alterar o e-mail de login desta pessoa" onclick="MODULOS.admin.modalEmail(\'' + p.id + '\', \'' + escaparHtml(p.email || '') + '\', \'' + escaparHtml(p.nome).replace(/'/g, '') + '\')">&#9993; E-mail</button>' +
         '<button class="btn-chip" onclick="MODULOS.admin.modalUsuario(\'' + p.id + '\')">Gerenciar</button>' +
@@ -276,13 +279,14 @@ window.MODULOS.admin = {
           '<input type="checkbox" id="ger-resp"' + (p.responsavel_tecnico ? ' checked' : '') + '> Responsavel tecnico ' +
           '<small style="font-weight:600; color:var(--ink-muted)">(pode ser escolhido para assinar Plano Terapeutico e PEI)</small>' +
           '</label></div>' +
-          '<div class="campo"><label>Coordenadora da equipe ' +
-          '<small>(todo aplicador responde a uma coordenadora)</small></label>' +
-          '<select id="ger-coord"><option value="">Sem equipe definida</option>' +
+          '<div class="campo"><label>Equipes de coordenacao ' +
+          '<small>(marque todas em que atua; a primeira marcada e a principal)</small></label>' +
+          '<div class="ap-lista">' +
           this.equipe.filter(m => ['coordenador', 'direcao'].includes(m.perfil) && m.ativo && m.id !== p.id)
-            .map(m => '<option value="' + m.id + '"' + (p.coordenador_id === m.id ? ' selected' : '') + '>' +
-              escaparHtml(m.nome) + '</option>').join('') +
-          '</select></div>'
+            .map(m => { const on = p.coordenador_id === m.id || (this._equipesDe[p.id] || []).includes(m.id);
+              return '<label class="ap-item' + (on ? ' marcado' : '') + '"><input type="checkbox" class="ger-eq" value="' + m.id + '"' + (on ? ' checked' : '') +
+                ' onchange="this.closest(\'.ap-item\').classList.toggle(\'marcado\', this.checked)"><span class="ap-nome">' + escaparHtml(m.nome) + '</span></label>'; }).join('') +
+          '</div></div>'
         : '') +
       (eu ? '<p class="sub">Voce nao pode mudar o proprio perfil nem se inativar.</p>' : '') +
 
@@ -305,7 +309,8 @@ window.MODULOS.admin = {
     const novo = document.getElementById('ger-perfil').value;
     const atende = document.getElementById('ger-atende')?.checked || false;
     const resp = document.getElementById('ger-resp')?.checked || false;
-    const coord = document.getElementById('ger-coord')?.value || null;
+    const equipes = Array.from(document.querySelectorAll('.ger-eq:checked')).map(c => c.value);
+    const coord = equipes[0] || null;   // principal continua em profiles.coordenador_id
     const erro = document.getElementById('ger-erro');
     const { error } = await sb.from('profiles')
       .update({ perfil: novo, atende_pacientes: atende, responsavel_tecnico: resp,
@@ -314,6 +319,11 @@ window.MODULOS.admin = {
       erro.textContent = error.message;
       erro.classList.add('visivel');
       return;
+    }
+    // todas as equipes em equipe_membros (varias coordenadoras por aplicador)
+    const { error: eDel } = await sb.from('equipe_membros').delete().eq('aplicador_id', id);
+    if (!eDel && equipes.length) {
+      await sb.from('equipe_membros').insert(equipes.map(c => ({ coordenador_id: c, aplicador_id: id })));
     }
     fecharModal();
     await this.carregar();

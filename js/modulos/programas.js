@@ -1739,13 +1739,18 @@ window.MODULOS.programas = {
     const hoje = new Date().toISOString().slice(0, 10);
     const desde = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
 
-    const [rPac, rProf] = await Promise.all([
+    const [rPac, rProf, rEm] = await Promise.all([
       sb.from('pacientes').select('id, nome, coordenador_id, aplicador_id').eq('status', 'ativo'),
-      sb.from('profiles').select('id, nome, coordenador_id, perfil').eq('ativo', true)
+      sb.from('profiles').select('id, nome, coordenador_id, perfil').eq('ativo', true),
+      sb.from('equipe_membros').select('coordenador_id, aplicador_id')
     ]);
     const profs = {}; (rProf.data || []).forEach(p => { profs[p.id] = p; });
-    const coordDe = pac => pac.coordenador_id || (pac.aplicador_id && profs[pac.aplicador_id] ? profs[pac.aplicador_id].coordenador_id : null);
-    const minhas = (rPac.data || []).filter(p => veTudo ? !!coordDe(p) : coordDe(p) === eu);
+    const equipesDe = {}; (rEm.data || []).forEach(x => { (equipesDe[x.aplicador_id] = equipesDe[x.aplicador_id] || []).push(x.coordenador_id); });
+    // coordenadoras de uma crianca: a da crianca + todas as do aplicador dela
+    const coordsDe = pac => [...new Set([pac.coordenador_id, pac.aplicador_id && profs[pac.aplicador_id] ? profs[pac.aplicador_id].coordenador_id : null]
+      .concat(pac.aplicador_id ? (equipesDe[pac.aplicador_id] || []) : []).filter(Boolean))];
+    const coordDe = pac => coordsDe(pac)[0] || null;
+    const minhas = (rPac.data || []).filter(p => veTudo ? coordsDe(p).length > 0 : coordsDe(p).includes(eu));
     if (!minhas.length) return null;
     const pacMap = {}; minhas.forEach(p => { pacMap[p.id] = p; });
 

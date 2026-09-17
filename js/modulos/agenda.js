@@ -579,7 +579,41 @@ window.MODULOS.agenda = {
       '    <p class="st-titulo">Alterar status</p>' +
       listaStatus +
       '  </div>' +
-      '</div>');
+      '</div>' +
+      '<div class="sess-historico" id="sess-hist"><small class="sub">Carregando historico...</small></div>');
+    this.historicoSessao(s.id);
+  },
+
+  // Rodape acumulativo: quem mexeu na sessao, quando e o que mudou (trilha de auditoria)
+  async historicoSessao(id) {
+    const alvo = document.getElementById('sess-hist');
+    if (!alvo) return;
+    const { data } = await sb.from('auditoria').select('acao, usuario_nome, criado_em, dados_antes, dados_depois')
+      .eq('tabela', 'sessoes')
+      .or('dados_depois->>id.eq.' + id + ',dados_antes->>id.eq.' + id)
+      .order('criado_em', { ascending: true }).limit(60);
+    if (!alvo.isConnected) return;
+    const ROT = { agendada: 'agendada', checkin: 'chegou', em_atendimento: 'em atendimento', concluida: 'concluida', falta: 'falta', cancelada: 'cancelada' };
+    const linhas = (data || []).map(r => {
+      const a = r.dados_antes || {}, d = r.dados_depois || {};
+      const quando = new Date(r.criado_em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+      let oque;
+      if (r.acao === 'INSERT') oque = 'criou a sessao (' + (ROT[d.status] || d.status || '') + (d.hora_inicio ? ', ' + String(d.hora_inicio).slice(0, 5) : '') + ')';
+      else if (r.acao === 'DELETE') oque = 'apagou a sessao';
+      else {
+        const m = [];
+        if (a.status !== d.status) m.push('status ' + (ROT[a.status] || a.status) + ' &rarr; ' + (ROT[d.status] || d.status));
+        if (a.confirmacao !== d.confirmacao) m.push('confirmacao: ' + (d.confirmacao || 'nenhuma'));
+        if (a.data !== d.data) m.push('data ' + String(a.data).split('-').reverse().join('/') + ' &rarr; ' + String(d.data).split('-').reverse().join('/'));
+        if (a.hora_inicio !== d.hora_inicio) m.push('horario ' + String(a.hora_inicio).slice(0, 5) + ' &rarr; ' + String(d.hora_inicio).slice(0, 5));
+        if (a.aplicador_id !== d.aplicador_id) m.push('trocou o aplicador');
+        if (a.sala_id !== d.sala_id) m.push('trocou a sala');
+        oque = m.length ? m.join(' &middot; ') : 'alterou dados';
+      }
+      return '<div><b>' + quando + '</b> &middot; ' + escaparHtml(r.usuario_nome || 'Sistema/importacao') + ' &middot; ' + oque + '</div>';
+    });
+    alvo.innerHTML = '<small class="sub" style="display:block; margin-bottom:3px; font-weight:800; letter-spacing:.04em">HISTORICO</small>' +
+      (linhas.length ? linhas.join('') : '<div>Sem registros de alteracao ainda.</div>');
   },
 
   // Aplicador/terapeuta ve na agenda so as sessoes dele e das criancas da carteira dele

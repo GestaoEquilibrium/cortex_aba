@@ -235,3 +235,25 @@
 .deq-graf-tab th { font-size: 10px; }
 .deq-graf-tab tr:last-child td { border-bottom: none; background: #F4F8FB; }
 .deq-bolinha { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:7px; vertical-align:1px; }
+
+/* ── Folha A4 na tela (o que se ve e o que sai na impressora) ─────────── */
+.folha-pagina .doc-eq {
+    width: 210mm; max-width: 100%;
+    min-height: 297mm;
+    margin: 0 auto;
+    padding: 12mm 12mm 14mm;
+    box-shadow: 0 6px 26px rgba(20, 24, 60, .18);
+    border-radius: 4px;
+    font-size: 12px;
+}
+.folha-pagina { max-width: 232mm; background: transparent; box-shadow: none; padding-top: 12px; }
+@media print { .folha-pagina .doc-eq { width: auto; min-height: 0; box-shadow: none; margin: 0; padding: 0; } }
+
+/* grade de graficos: 2 por linha na folha, quebra sem cortar */
+.deq-grade2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; margin-top: 8px; }
+.deq-graf-item { border: 1px solid var(--eq-linha); border-radius: 10px; padding: 6px 8px 4px; break-inside: avoid; page-break-inside: avoid; background: #fff; }
+.deq-graf-item.deq-graf-largo { grid-column: 1 / -1; }
+.deq-graf-tit { font-size: 10.5px; font-weight: 800; color: var(--eq-azul-escuro); margin: 0 0 2px 4px; display: flex; justify-content: space-between; gap: 6px; }
+.deq-graf-tit small { font-weight: 700; color: var(--eq-cinza); white-space: nowrap; }
+.deq-graf-item svg { display: block; margin: 0 auto; max-height: 120px; }
+@media (max-width: 640px) { .deq-grade2 { grid-template-columns: 1fr; } }

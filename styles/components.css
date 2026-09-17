@@ -2306,3 +2306,32 @@
 [data-modo="escuro"] .ag-eq-falta { background: rgba(233,88,106,.2); color: #F4A3AE; }
 [data-modo="escuro"] .ag-eq-atend { background: rgba(62,156,110,.22); color: #9BE0BC; }
 [data-modo="escuro"] .ag-eq-checkin { background: rgba(20,104,178,.25); color: #9CC9F1; }
+
+/* ── Ficha: cores por nivel de ajuda ───────────────────────────────── */
+.niv-btn { color: var(--nv, var(--ink-muted)); border-color: color-mix(in srgb, var(--nv, #94A3B8) 45%, transparent); background: color-mix(in srgb, var(--nv, #94A3B8) 8%, transparent); font-weight: 800; }
+.niv-btn:hover { border-color: var(--nv); background: color-mix(in srgb, var(--nv) 18%, transparent); color: var(--nv); }
+.niv-btn.ativo, .niv-btn.correto.ativo { background: var(--nv); border-color: var(--nv); color: #fff; box-shadow: 0 2px 8px color-mix(in srgb, var(--nv) 45%, transparent); }
+.niv-btn.correto { color: var(--nv); border-color: color-mix(in srgb, var(--nv) 45%, transparent); }
+.niv-leg-item { border-left: 4px solid var(--nv, var(--line)); padding-left: 7px; }
+.niv-leg-item b { color: var(--nv); }
+
+/* ── Ficha: passos (um programa por vez) e selecao do dia ───────────── */
+.ficha-passos { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.ficha-passos .passo { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border: 1.5px solid var(--line); border-radius: 999px; background: var(--surface); font: inherit; font-size: 12px; cursor: pointer; color: var(--ink-muted); transition: all .15s; }
+.ficha-passos .passo b { width: 20px; height: 20px; border-radius: 50%; background: var(--surface-alt); display: inline-flex; align-items: center; justify-content: center; font-size: 11px; }
+.ficha-passos .passo small { font-weight: 700; color: var(--st-ok); }
+.ficha-passos .passo.feito b { background: var(--st-ok-bg); color: var(--st-ok); }
+.ficha-passos .passo.ativo { border-color: var(--acao); background: var(--acao-soft); color: var(--acao); font-weight: 700; }
+.ficha-passos .passo.ativo b { background: var(--acao); color: #fff; }
+.ficha-passos .passo-mais { border-style: dashed; }
+.ficha-nav { margin-top: 12px; justify-content: space-between; }
+.sel-lista { display: flex; flex-direction: column; gap: 6px; }
+.sel-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1.5px solid var(--line); border-radius: 12px; cursor: pointer; }
+.sel-item.marcado { border-color: var(--acao); background: var(--acao-soft); }
+.sel-item .sel-nome { flex: 1; font-weight: 700; font-size: 13px; }
+.sel-item .sel-nome small { display: block; font-weight: 600; color: var(--ink-muted); font-size: 11.5px; margin-top: 2px; }
+.sel-item input { width: 18px; height: 18px; }
+
+/* ── Historico acumulativo no rodape da sessao ─────────────────────── */
+.sess-historico { margin-top: 12px; padding-top: 8px; border-top: 1px dashed var(--line); font-size: 10.5px; color: var(--ink-soft); line-height: 1.7; max-height: 120px; overflow-y: auto; }
+.sess-historico b { color: var(--ink-muted); font-weight: 700; }

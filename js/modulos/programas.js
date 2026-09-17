@@ -56,9 +56,14 @@ window.MODULOS.programas = {
     return n ? n[1] : sigla;
   },
 
+  // Uma cor por nivel de ajuda - a mesma nos botoes da ficha e na legenda
+  COR_NIVEL_UI: { FT: '#7C3AED', FP: '#A855F7', MO: '#2563EB', GE: '#0EA5E9', VE: '#F59E0B', VI: '#F97316',
+                  ER: '#E11D48', SR: '#BE123C', NA: '#94A3B8', FA: '#64748B', C: '#16A34A', I: '#16A34A' },
+  corUi(s) { return this.COR_NIVEL_UI[s] || '#475569'; },
+
   legendaNiveis(siglas) {
     return '<div class="niv-legenda">' + (siglas || this.NIVEIS_PADRAO).map(s =>
-      '<span class="niv-leg-item' + (s === 'C' ? ' correto' : '') + '">' +
+      '<span class="niv-leg-item' + (s === 'C' ? ' correto' : '') + '" style="--nv:' + this.corUi(s) + '">' +
       '<b>' + s + '</b> ' + this.nomeNivel(s) + '</span>').join('') + '</div>';
   },
 
@@ -620,12 +625,12 @@ window.MODULOS.programas = {
         .eq('sessao_id', sessaoId),
       sb.from('estimulos').select('id, nome, categoria').eq('ativo', true).order('categoria').order('nome'),
       sb.from('reforcadores').select('nome').order('nome').limit(200),
-      sb.from('fichas_config').select('paciente_programa_id, tentativas').eq('sessao_id', sessaoId)
+      sb.from('fichas_config').select('paciente_programa_id, tentativas, selecionado').eq('sessao_id', sessaoId)
     ]);
 
     const pps = rPps.data || [];
-    const cfg = {};
-    (rCfg.data || []).forEach(c => { cfg[c.paciente_programa_id] = c.tentativas; });
+    const cfg = {}, selecionados = {};
+    (rCfg.data || []).forEach(c => { cfg[c.paciente_programa_id] = c.tentativas; selecionados[c.paciente_programa_id] = c.selecionado !== false; });
     const fichas = {};
     const estimuloProg = {};
     const tentPrevistas = {};
@@ -651,9 +656,16 @@ window.MODULOS.programas = {
       }
     });
 
+    // programas com tentativa ja marcada contam como selecionados mesmo sem config
+    Object.entries(fichas).forEach(([id, g]) => { if (g.some(l => l.resposta)) selecionados[id] = true; });
+    const jaEscolheu = (rCfg.data || []).length > 0;
+
     this._folha = {
       sessao: s,
       programas: pps,
+      selecionados: selecionados,
+      etapa: jaEscolheu ? 'aplicar' : 'selecionar',
+      idx: 0,
       fichas: fichas,
       tentPrevistas: tentPrevistas,
       estimuloProg: estimuloProg,
@@ -684,11 +696,34 @@ window.MODULOS.programas = {
     return html;
   },
 
+  // Programas escolhidos para hoje, na ordem da lista
+  programasDoDia() {
+    const f = this._folha;
+    return f.programas.filter(pp => f.selecionados[pp.id]);
+  },
+
   desenharFolha() {
     const f = this._folha;
     const s = f.sessao;
+    if (f.etapa === 'selecionar' && f.programas.length) { this.desenharSelecao(); return; }
 
     let corpo = f.faixaComp || '';
+    const doDia = this.programasDoDia();
+    if (f.idx >= doDia.length) f.idx = Math.max(0, doDia.length - 1);
+    const atual = doDia[f.idx];
+
+    if (doDia.length) {
+      corpo += '<div class="ficha-passos">' +
+        doDia.map((pp, i) => {
+          const c = this.contarFicha(f.fichas[pp.id]);
+          return '<button type="button" class="passo' + (i === f.idx ? ' ativo' : '') + (c.preenchidas ? ' feito' : '') + '" ' +
+            'onclick="MODULOS.programas.irPara(' + i + ')" title="' + escaparHtml(pp.programas.nome) + '">' +
+            '<b>' + (i + 1) + '</b><span>' + escaparHtml(pp.programas.nome.length > 22 ? pp.programas.nome.slice(0, 21) + '\u2026' : pp.programas.nome) + '</span>' +
+            (c.preenchidas ? '<small>' + c.preenchidas + '/' + c.n + '</small>' : '') + '</button>';
+        }).join('') +
+        '<button type="button" class="passo passo-mais" onclick="MODULOS.programas.voltarSelecao()" title="Escolher outros programas">&#9998; programas</button>' +
+        '</div>';
+    }
 
     if (!f.programas.length) {
       corpo += '<div class="cartao"><div class="vazio">' +
@@ -698,14 +733,15 @@ window.MODULOS.programas = {
         '</div></div>';
     }
 
-    f.programas.forEach(pp => {
+    (atual ? [atual] : []).forEach(pp => {
       const p = pp.programas;
       const cor = this.CORES_AREA[p.area] || '#64748B';
       const niveis = this.normalizarNiveis(p.niveis);
       const grade = f.fichas[pp.id];
 
       corpo += '<div class="cartao ficha-prog" id="ficha-' + pp.id + '">' +
-        '<h3>' + escaparHtml(p.nome) + ' <span class="area-chip" style="background:' + cor + '1A; color:' + cor + '">' +
+        '<h3><small class="sub" style="font-weight:700">Programa ' + (f.idx + 1) + ' de ' + doDia.length + '</small><br>' +
+          escaparHtml(p.nome) + ' <span class="area-chip" style="background:' + cor + '1A; color:' + cor + '">' +
           escaparHtml(p.area) + '</span></h3>' +
         (p.procedimento ? '<p class="sub" style="margin:2px 0 10px">' + escaparHtml(p.procedimento) + '</p>' : '') +
 
@@ -738,7 +774,7 @@ window.MODULOS.programas = {
           '  <div class="ficha-niveis">' +
                niveis.map(v =>
                  '<button type="button" class="niv-btn' + (linha.resposta === v ? ' ativo' : '') +
-                 (v === 'C' ? ' correto' : '') + '" ' +
+                 (v === 'C' ? ' correto' : '') + '" style="--nv:' + this.corUi(v) + '" ' +
                  'id="nb-' + pp.id + '-' + i + '-' + v + '" ' +
                  'title="' + this.nomeNivel(v) + '" ' +
                  'onclick="MODULOS.programas.marcarNivel(\'' + pp.id + '\', ' + i + ', \'' + v + '\')">' + v + '</button>').join('') +
@@ -748,6 +784,12 @@ window.MODULOS.programas = {
           '</div>').join('') +
 
         '<div class="ficha-rodape" id="rodape-' + pp.id + '">' + this.rodapePrograma(pp.id) + '</div>' +
+        '<div class="barra-acoes ficha-nav">' +
+        (f.idx > 0 ? '<button class="btn btn-fantasma" onclick="MODULOS.programas.irPara(' + (f.idx - 1) + ')">&lsaquo; Anterior</button>' : '<span></span>') +
+        (f.idx < doDia.length - 1
+          ? '<button class="btn btn-primario" onclick="MODULOS.programas.irPara(' + (f.idx + 1) + ')">Salvar e continuar &rsaquo;</button>'
+          : '<button class="btn btn-primario" onclick="MODULOS.programas.telaFechamento()">Encerrar sessao</button>') +
+        '</div>' +
         '</div>';
     });
 
@@ -771,6 +813,61 @@ window.MODULOS.programas = {
       this._folha.reforcadores.map(r => '<option value="' + escaparHtml(r) + '">').join('') +
       '</datalist>' +
       corpo;
+  },
+
+  desenharSelecao() {
+    const f = this._folha, s = f.sessao;
+    const semConfig = !Object.keys(f.selecionados).length;
+    this.elFolha().innerHTML =
+      '<div class="pagina-cabecalho"><div>' +
+      (this._overlay
+        ? '<button class="btn-voltar" onclick="MODULOS.programas.sairDaFolha()">&larr; Voltar ao prontuario</button>'
+        : '<button class="btn-voltar" onclick="abrirModulo(\'agenda\')">&larr; Agenda</button>') +
+      '<h2>O que vamos aplicar hoje &middot; ' + escaparHtml(s.pacientes.nome) + '</h2>' +
+      '<p class="sub">' + new Date(s.data + 'T12:00:00').toLocaleDateString('pt-BR') + ' as ' + s.hora_inicio.slice(0, 5) +
+      ' &middot; Marque os programas desta sessao. Depois eles aparecem um de cada vez.</p></div></div>' +
+      (f.faixaComp || '') +
+      '<div class="cartao"><div class="sel-lista">' +
+      f.programas.map(pp => {
+        const p = pp.programas, cor = this.CORES_AREA[p.area] || '#64748B';
+        const marcado = semConfig ? true : !!f.selecionados[pp.id];
+        return '<label class="sel-item' + (marcado ? ' marcado' : '') + '">' +
+          '<input type="checkbox" value="' + pp.id + '"' + (marcado ? ' checked' : '') + ' onchange="this.closest(\'.sel-item\').classList.toggle(\'marcado\', this.checked)">' +
+          '<span class="sel-nome">' + escaparHtml(p.nome) + '<small>' + escaparHtml(p.area) + ' &middot; preve ' + f.tentPrevistas[pp.id] + ' tentativas' +
+          (p.procedimento ? ' &middot; ' + escaparHtml(p.procedimento.slice(0, 80)) : '') + '</small></span>' +
+          '<i class="area-chip" style="background:' + cor + '1A; color:' + cor + '">' + escaparHtml(p.area) + '</i></label>';
+      }).join('') + '</div>' +
+      '<p class="sub" style="margin-top:8px">Os que ficarem de fora entram no encerramento como <b>nao aplicados</b>, com um campo para o motivo.</p>' +
+      '<div class="barra-acoes">' +
+      '<button class="btn btn-fantasma" onclick="document.querySelectorAll(\'.sel-item input\').forEach(c => { c.checked = true; c.closest(\'.sel-item\').classList.add(\'marcado\'); })">Marcar todos</button>' +
+      '<button class="btn btn-primario" onclick="MODULOS.programas.comecarAplicacao()">Comecar &rsaquo;</button></div></div>';
+  },
+
+  async comecarAplicacao() {
+    const f = this._folha;
+    const marcados = new Set(Array.from(document.querySelectorAll('.sel-item input:checked')).map(c => c.value));
+    if (!marcados.size) { popAviso('Marque pelo menos um programa para comecar.'); return; }
+    f.programas.forEach(pp => { f.selecionados[pp.id] = marcados.has(pp.id); });
+    // guarda a escolha (uma linha por programa) para sobreviver a fechar/reabrir a ficha
+    const linhas = f.programas.map(pp => ({ sessao_id: f.sessao.id, paciente_programa_id: pp.id,
+      tentativas: f.fichas[pp.id].length, selecionado: !!f.selecionados[pp.id] }));
+    const { error } = await sb.from('fichas_config').upsert(linhas, { onConflict: 'sessao_id,paciente_programa_id' });
+    if (error) popAviso('Nao consegui guardar a selecao: ' + error.message);
+    f.etapa = 'aplicar'; f.idx = 0;
+    this.desenharFolha();
+  },
+
+  async voltarSelecao() {
+    await this.salvarFichas(true);
+    this._folha.etapa = 'selecionar';
+    this.desenharFolha();
+  },
+
+  async irPara(i) {
+    await this.salvarFichas(true);
+    this._folha.idx = i;
+    this.desenharFolha();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   },
 
   contarFicha(grade) {
@@ -925,6 +1022,13 @@ window.MODULOS.programas = {
       const c = this.contarFicha(grade);
       return { pp, preenchidas: c.preenchidas, corretos: c.corretos, total: c.n, pct: c.pct };
     }).filter(l => l.preenchidas > 0);
+    const naoAplicados = f.programas.filter(pp => !linhas.some(l => l.pp.id === pp.id));
+    // Evolucao ja vem preenchida com o que foi feito (o aplicador so complementa)
+    const resumo = (linhas.length
+      ? 'Programas aplicados: ' + linhas.map(l => l.pp.programas.nome + ' (' + l.corretos + '/' + l.total + ', ' + l.pct + '% de independencia)').join('; ') + '.'
+      : 'Nenhum programa aplicado nesta sessao.') +
+      (naoAplicados.length ? '\nNao aplicados: ' + naoAplicados.map(pp => pp.programas.nome).join('; ') + ' (motivo abaixo).' : '') +
+      '\n\nComportamento e observacoes: ';
 
     abrirModal('Encerrar sessao',
       (linhas.length
@@ -941,8 +1045,17 @@ window.MODULOS.programas = {
             '<label class="check"><input type="checkbox" class="promover" value="' + l.pp.id + '"> Dominado</label>' +
             '</div>').join('')
         : '<p class="sub">Nenhuma tentativa registrada nesta sessao.</p>') +
-      '<div class="campo" style="margin-top:12px"><label>Evolucao diaria *</label>' +
-      '<textarea id="fe-evolucao" rows="4" placeholder="Como foi a sessao, comportamento, atividades realizadas..."></textarea></div>' +
+      (naoAplicados.length
+        ? '<h4 style="margin:12px 0 4px; font-size:12.5px">Nao aplicados hoje <span class="selo selo-warn">' + naoAplicados.length + '</span></h4>' +
+          '<p class="sub" style="margin-bottom:6px">Diga o motivo de cada um - vai para a evolucao e para o relatorio.</p>' +
+          naoAplicados.map(pp =>
+            '<div class="campo"><label>' + escaparHtml(pp.programas.nome) + ' *</label>' +
+            '<input class="fe-motivo" data-pp="' + pp.id + '" list="fe-motivos" placeholder="Ex.: crianca desregulada; faltou tempo; material indisponivel"></div>').join('') +
+          '<datalist id="fe-motivos"><option value="Faltou tempo na sessao"><option value="Crianca desregulada / sem engajamento"><option value="Material indisponivel">' +
+          '<option value="Priorizado outro programa"><option value="Crianca chegou atrasada"><option value="Programa em revisao pela coordenacao"></datalist>'
+        : '') +
+      '<div class="campo" style="margin-top:12px"><label>Evolucao diaria * <small class="sub">(ja veio com o resumo dos programas; complete)</small></label>' +
+      '<textarea id="fe-evolucao" rows="6">' + escaparHtml(resumo) + '</textarea></div>' +
       '<div class="campo"><label>Destinacao da crianca</label>' +
       '<input id="fe-destinacao" placeholder="Ex.: entregue a mae as 09:50, orientada sobre a atividade de casa"></div>' +
       '<div class="mensagem-erro" id="fe-erro"></div>' +
@@ -957,9 +1070,17 @@ window.MODULOS.programas = {
     const botao = document.getElementById('fe-salvar');
     erro.classList.remove('visivel');
 
-    const texto = document.getElementById('fe-evolucao').value.trim();
-    if (!texto) {
-      erro.textContent = 'Escreva a evolucao diaria antes de concluir.';
+    let texto = document.getElementById('fe-evolucao').value.trim();
+    if (!texto || /Comportamento e observacoes:\s*$/.test(texto)) {
+      erro.textContent = 'Complete a evolucao diaria (comportamento e observacoes) antes de concluir.';
+      erro.classList.add('visivel');
+      return;
+    }
+    const motivos = {};
+    let faltaMotivo = false;
+    document.querySelectorAll('.fe-motivo').forEach(i => { motivos[i.dataset.pp] = i.value.trim(); if (!i.value.trim()) faltaMotivo = true; });
+    if (faltaMotivo) {
+      erro.textContent = 'Informe o motivo de cada programa nao aplicado.';
       erro.classList.add('visivel');
       return;
     }
@@ -972,24 +1093,29 @@ window.MODULOS.programas = {
       const okFichas = await this.salvarFichas(false);
       if (!okFichas) throw new Error('Nao foi possivel salvar a ficha.');
 
-      // Retrato da sessao por programa
+      // Retrato da sessao por programa (aplicados e nao aplicados com motivo)
+      const motivosTxt = [];
       for (const pp of f.programas) {
         const grade = f.fichas[pp.id];
         const c = this.contarFicha(grade);
-        if (!c.preenchidas) continue;
+        const naoAplicado = !c.preenchidas;
+        if (naoAplicado) motivosTxt.push(pp.programas.nome + ': ' + (motivos[pp.id] || '-'));
         const { error: eR } = await sb.from('programa_sessao_registros').upsert({
           sessao_id: f.sessao.id,
           paciente_programa_id: pp.id,
           tentativas: c.preenchidas,
-          tentativas_sessao: c.n,
+          tentativas_sessao: naoAplicado ? 0 : c.n,
           tentativas_previstas: f.tentPrevistas[pp.id],
           corretos: c.corretos,
           pct_corretos: c.pct,
           acertos: c.corretos,
-          pct_acertos: c.pct
+          pct_acertos: c.pct,
+          nao_aplicado: naoAplicado,
+          motivo_nao_aplicado: naoAplicado ? (motivos[pp.id] || null) : null
         }, { onConflict: 'sessao_id,paciente_programa_id' });
         if (eR) throw new Error(eR.message);
       }
+      if (motivosTxt.length) texto += '\n\nMotivo dos nao aplicados: ' + motivosTxt.join('; ') + '.';
 
       const promover = Array.from(document.querySelectorAll('.promover:checked')).map(cb => cb.value);
       if (promover.length) {
@@ -1306,52 +1432,32 @@ window.MODULOS.programas = {
   graficoTentativas(niveisPrograma, tentativas) {
     const niveis = this.ORDEM_GRAFICO.filter(n => (niveisPrograma || this.NIVEIS_PADRAO).includes(n));
     if (!niveis.length || !tentativas.length) return '';
-
-    const ESQ = 150, DIR = 46, TOPO = 30, LINHA = 24;
-    const larguraEixo = 420;
-    const passo = larguraEixo / Math.max(1, niveis.length - 1);
-    const largura = ESQ + larguraEixo + DIR;
-    const altura = TOPO + tentativas.length * LINHA + 8;
-    const x = s => ESQ + niveis.indexOf(s) * passo;
-    const y = i => TOPO + i * LINHA + LINHA / 2;
-
-    let svg = '<svg viewBox="0 0 ' + largura + ' ' + altura + '" xmlns="http://www.w3.org/2000/svg" ' +
-      'style="width:100%; height:auto; font-family:inherit">';
-
-    // Faixa da independencia (coluna C) e grades verticais
-    if (niveis.includes('C') && niveis.indexOf('C') > 0) {
-      svg += '<rect x="' + (x('C') - passo / 2) + '" y="' + (TOPO - 4) + '" width="' + (passo / 2 + 14) +
-        '" height="' + (tentativas.length * LINHA + 10) + '" fill="#ECFDF5" rx="8"/>';
+    // Horizontal e compacto: tentativas no eixo X, nivel de ajuda no eixo Y (cabe meia folha A4)
+    const n = tentativas.length;
+    const ESQ = 34, DIR = 10, TOPO = 10, LIN = 14, BASE = TOPO + (niveis.length - 1) * LIN + LIN;
+    const PX = Math.max(14, Math.min(30, Math.floor(560 / n)));
+    const W = ESQ + n * PX + DIR, H = BASE + 26;
+    const yDe = s => TOPO + (niveis.length - 1 - niveis.indexOf(s)) * LIN + LIN / 2;
+    const x = i => ESQ + i * PX + PX / 2;
+    let svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg" style="width:100%; max-width:' + Math.round(W * 1.05) + 'px; height:auto; font-family:inherit">';
+    if (niveis.includes('C')) {
+      svg += '<rect x="' + ESQ + '" y="' + (yDe('C') - LIN / 2) + '" width="' + (n * PX) + '" height="' + LIN + '" fill="#ECFDF5" rx="4"/>';
     }
-    niveis.forEach(n => {
-      svg += '<line x1="' + x(n) + '" y1="' + (TOPO - 2) + '" x2="' + x(n) + '" y2="' +
-        (TOPO + tentativas.length * LINHA + 4) + '" stroke="#DFE6EC" stroke-width="1" stroke-dasharray="3 4"/>' +
-        '<text x="' + x(n) + '" y="' + (TOPO - 10) + '" text-anchor="middle" font-size="10.5" font-weight="800" ' +
-        'fill="' + this.corNivel(n) + '">' + n + '</text>';
+    niveis.forEach(nv => {
+      svg += '<line x1="' + ESQ + '" y1="' + yDe(nv) + '" x2="' + (W - DIR) + '" y2="' + yDe(nv) + '" stroke="#EDF2F6"/>' +
+        '<text x="' + (ESQ - 6) + '" y="' + (yDe(nv) + 3) + '" text-anchor="end" font-size="8.5" font-weight="800" fill="' + this.corNivel(nv) + '">' + nv + '</text>';
     });
-
-    // Linha azul ligando as tentativas + bolinhas
-    const pontos = tentativas.filter(t => niveis.includes(t.resposta));
-    if (pontos.length > 1) {
-      svg += '<polyline fill="none" stroke="#1468B2" stroke-width="2.5" stroke-linejoin="round" points="' +
-        pontos.map(t => x(t.resposta) + ',' + y(tentativas.indexOf(t))).join(' ') + '"/>';
-    }
+    const pts = [];
     tentativas.forEach((t, i) => {
-      const rot = String(t.ordem || i + 1).padStart(2, '0');
-      const est = t.estimulos ? t.estimulos.nome : '';
-      svg += '<text x="10" y="' + (y(i) + 3.5) + '" font-size="10.5" font-weight="800" fill="#64748B">' + rot + '</text>' +
-        '<text x="34" y="' + (y(i) + 3.5) + '" font-size="10" fill="#23303C">' +
-        escaparHtml(est.length > 16 ? est.slice(0, 15) + '\u2026' : est) + '</text>';
+      svg += '<text x="' + x(i) + '" y="' + (BASE + 12) + '" text-anchor="middle" font-size="8" font-weight="700" fill="#94A3B8">' + (t.ordem || i + 1) + '</text>';
       if (niveis.includes(t.resposta)) {
-        const corP = this.corNivel(t.resposta);
-        svg += '<circle cx="' + x(t.resposta) + '" cy="' + y(i) + '" r="7" fill="#fff" ' +
-          'stroke="' + corP + '" stroke-width="3"/>' +
-          '<text x="' + (largura - DIR + 12) + '" y="' + (y(i) + 3.5) + '" font-size="10.5" font-weight="800" ' +
-          'fill="' + corP + '">' + t.resposta + '</text>';
+        pts.push(x(i) + ',' + yDe(t.resposta));
+        svg += '<circle cx="' + x(i) + '" cy="' + yDe(t.resposta) + '" r="4.5" fill="' + this.corNivel(t.resposta) + '" stroke="#fff" stroke-width="1.5"/>';
       }
     });
-    svg += '</svg>';
-    return svg;
+    if (pts.length > 1) svg = svg.replace('<circle', '<polyline fill="none" stroke="#1468B2" stroke-width="1.8" opacity=".7" stroke-linejoin="round" points="' + pts.join(' ') + '"/><circle');
+    svg += '<text x="' + (ESQ + n * PX / 2) + '" y="' + (BASE + 23) + '" text-anchor="middle" font-size="8" fill="#94A3B8">tentativas</text>';
+    return svg + '</svg>';
   },
 
   // ─────────── DOCUMENTO OFICIAL: Evolucao Diaria (identidade Equilibrium) ───────────
@@ -1371,7 +1477,7 @@ window.MODULOS.programas = {
                 'profissional:profiles!sessoes_aplicador_id_fkey(nome)')
         .eq('id', sessaoId).single(),
       sb.from('programa_sessao_registros')
-        .select('paciente_programa_id, corretos, tentativas, tentativas_sessao, tentativas_previstas, pct_corretos, acertos, pct_acertos, paciente_programas(programas(nome, area, tentativas_padrao, niveis))')
+        .select('paciente_programa_id, corretos, tentativas, tentativas_sessao, tentativas_previstas, pct_corretos, acertos, pct_acertos, nao_aplicado, motivo_nao_aplicado, paciente_programas(programas(nome, area, tentativas_padrao, niveis))')
         .eq('sessao_id', sessaoId),
       sb.from('evolucoes').select('texto, destinacao, aplicador:profiles!evolucoes_aplicador_id_fkey(nome)')
         .eq('sessao_id', sessaoId),
@@ -1425,16 +1531,16 @@ window.MODULOS.programas = {
     }
     const fmt = d => d ? new Date(d + 'T12:00:00').toLocaleDateString('pt-BR') : '&mdash;';
 
-    const graficos = fotos.map(fx => {
+    const graficos = '<div class="deq-grade2">' + fotos.map(fx => {
       const prog = fx.paciente_programas && fx.paciente_programas.programas;
       const lista = tentPorPp[fx.paciente_programa_id] || [];
       if (!lista.length) return '';
-      return '<div style="margin-top:10px; border:1px solid var(--eq-linha); border-radius:12px; padding:10px 8px 4px">' +
-        '<div style="font-size:11px; font-weight:800; color:var(--eq-azul-escuro); margin:0 0 2px 10px">' +
-        escaparHtml(prog ? prog.nome : '') + ' &middot; tentativa a tentativa (nivel de ajuda)</div>' +
+      return '<div class="deq-graf-item">' +
+        '<div class="deq-graf-tit">' + escaparHtml(prog ? prog.nome : '') +
+        ' <small>' + fx.corretos + '/' + (fx.tentativas_sessao || fx.tentativas) + ' C &middot; ' + fx.pct_corretos + '%</small></div>' +
         this.graficoTentativas(prog ? prog.niveis : null, lista) +
         '</div>';
-    }).join('');
+    }).join('') + '</div>';
 
     const legendaGraf = fotos.length
       ? '<div style="display:flex; gap:14px; flex-wrap:wrap; font-size:10px; font-weight:700; ' +
@@ -1453,6 +1559,13 @@ window.MODULOS.programas = {
           const total = fx.tentativas_sessao || fx.tentativas;
           const prev = fx.tentativas_previstas || (prog ? prog.tentativas_padrao : null);
           const notaPrev = (prev && prev !== total) ? ' &middot; programa preve ' + prev : '';
+          if (fx.nao_aplicado) {
+            return '<tr>' +
+              '<td style="padding:7px 11px; background:#FFF6E5; border-radius:9px 0 0 9px; font-weight:700; font-size:12px">' +
+              escaparHtml(prog ? prog.nome : '-') + ' <span style="color:var(--eq-cinza); font-weight:600">&middot; ' + escaparHtml(prog ? prog.area : '') + '</span></td>' +
+              '<td style="padding:7px 11px; background:#FFF6E5; border-radius:0 9px 9px 0; text-align:right; font-size:12px">' +
+              '<b style="color:#B45309">N&atilde;o aplicado</b>' + (fx.motivo_nao_aplicado ? ' &middot; ' + escaparHtml(fx.motivo_nao_aplicado) : '') + '</td></tr>';
+          }
           return '<tr>' +
             '<td style="padding:7px 11px; background:var(--eq-fundo); border-radius:9px 0 0 9px; font-weight:700; font-size:12px">' +
             escaparHtml(prog ? prog.nome : '-') +
@@ -1920,16 +2033,21 @@ window.MODULOS.programas = {
     let corpo = '';
 
     if (tipo === 'mensal') {
+      corpo += '<h2 style="margin-top:14px"><span class="ponto deq-azul"></span>Programas &middot; tentativa a tentativa no m&ecirc;s <small>&middot; uma cor por dia</small></h2>' +
+        '<div class="deq-grade2">';
       Object.entries(porProg).forEach(([ppId, sesMap]) => {
         const pp = ppDe[ppId];
         if (!pp) return;
         const blocos = Object.entries(sesMap)
           .sort((a, b) => a[1].data.localeCompare(b[1].data) || a[0].localeCompare(b[0]));
-        corpo += '<h2 style="margin-top:16px"><span class="ponto deq-azul"></span>' +
-          escaparHtml(pp.programas.nome) + '</h2>' +
-          '<div class="deq-caixa" style="padding:12px 8px">' +
+        const tot = blocos.reduce((s, [, b]) => s + b.lista.length, 0);
+        const cor = blocos.reduce((s, [, b]) => s + b.lista.filter(t => t.resposta === 'C').length, 0);
+        corpo += '<div class="deq-graf-item' + (tot > 40 ? ' deq-graf-largo' : '') + '">' +
+          '<div class="deq-graf-tit">' + escaparHtml(pp.programas.nome) +
+          ' <small>' + blocos.length + ' sess&otilde;es &middot; ' + cor + '/' + tot + ' C (' + (tot ? Math.round(cor * 100 / tot) : 0) + '%)</small></div>' +
           this.graficoCompilado(pp.programas.niveis, blocos) + '</div>';
       });
+      corpo += '</div>';
       // Metas do PEI e andamento
       const metas = rPei.data ? (rPei.data.pei_metas || []) : [];
       if (metas.length) {
@@ -1974,9 +2092,9 @@ window.MODULOS.programas = {
         const passo = (W - ESQ - 20) / 5;
         const y = pct => BASE - (pct / 100) * (BASE - TOPO);
         const pontos = medias.map((v, i) => v === null ? null : (ESQ + i * passo) + ',' + y(v)).filter(Boolean);
-        corpo += '<h2 style="margin-top:16px"><span class="ponto deq-azul"></span>' +
-          escaparHtml(pp.programas.nome) + ' <small style="font-weight:600">&middot; % de corretos por mes</small></h2>' +
-          '<div class="deq-caixa"><svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%; height:auto">' +
+        corpo += '<div class="deq-graf-item"><div class="deq-graf-tit">' +
+          escaparHtml(pp.programas.nome) + ' <small>&middot; % de corretos por m&ecirc;s</small></div>' +
+          '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%; height:auto">' +
           [0, 50, 100].map(g => '<line x1="' + ESQ + '" y1="' + y(g) + '" x2="' + (W - 16) + '" y2="' + y(g) +
             '" stroke="#DFE6EC" stroke-dasharray="3 4"/><text x="' + (ESQ - 6) + '" y="' + (y(g) + 3) +
             '" text-anchor="end" font-size="9" fill="#94A3B8">' + g + '%</text>').join('') +
@@ -1992,6 +2110,7 @@ window.MODULOS.programas = {
           }).join('') +
           '</svg></div>';
       });
+      corpo = '<div class="deq-grade2">' + corpo + '</div>';
     }
 
     window._docPortal = { paciente_id: pacienteId, tipo: 'outro',
@@ -2025,8 +2144,8 @@ window.MODULOS.programas = {
     const niveis = this.ORDEM_GRAFICO.filter(n => this.normalizarNiveis(niveisPrograma).includes(n));
     const total = blocos.reduce((s, [, b]) => s + b.lista.length, 0);
     if (!total) return '<p class="sub">Sem tentativas.</p>';
-    const PX = Math.max(11, Math.min(18, Math.floor(560 / total)));
-    const ESQ = 34, TOPO = 12, LIN = 15, BASE = TOPO + niveis.length * LIN;
+    const PX = Math.max(9, Math.min(16, Math.floor(520 / total)));
+    const ESQ = 30, TOPO = 10, LIN = 13, BASE = TOPO + niveis.length * LIN;
     const W = ESQ + total * PX + blocos.length * 10 + 16;
     const H = BASE + 30;
     const yDe = s => TOPO + (niveis.length - 1 - niveis.indexOf(s)) * LIN + LIN / 2;

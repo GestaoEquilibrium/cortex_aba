@@ -160,7 +160,7 @@ window.MODULOS.coordenacao = {
       const lote = sids.slice(i, i + 300);
       const [rE, rR] = await Promise.all([
         sb.from('evolucoes').select('sessao_id, texto, aplicador:profiles!evolucoes_aplicador_id_fkey(nome)').in('sessao_id', lote),
-        sb.from('programa_sessao_registros').select('sessao_id, corretos, tentativas, tentativas_sessao, pct_corretos, paciente_programas(programas(nome))').in('sessao_id', lote)
+        sb.from('programa_sessao_registros').select('sessao_id, corretos, tentativas, tentativas_sessao, pct_corretos, nao_aplicado, motivo_nao_aplicado, paciente_programas(programas(nome))').in('sessao_id', lote)
       ]);
       evs.push(...(rE.data || [])); regs.push(...(rR.data || []));
     }
@@ -171,7 +171,7 @@ window.MODULOS.coordenacao = {
 
     const porDia = {};
     (sess || []).forEach(s => { (porDia[s.data] = porDia[s.data] || []).push(s); });
-    const totalProg = regs.length, totalEvo = Object.keys(evPor).length;
+    const totalProg = regs.filter(r => !r.nao_aplicado).length, totalEvo = Object.keys(evPor).length;
     const semEvo = (sess || []).filter(s => s.status === 'concluida' && !evPor[s.id]).length;
 
     alvo.innerHTML =
@@ -195,6 +195,8 @@ window.MODULOS.coordenacao = {
             '<span class="selo ' + st[0] + '">' + st[1] + '</span></div>' +
             (progs.length
               ? '<div class="pac-selos" style="margin-top:6px">' + progs.map(r => {
+                  if (r.nao_aplicado) return '<span class="selo selo-neutro" title="' + escaparHtml(r.motivo_nao_aplicado || '') + '">' +
+                    escaparHtml(r.paciente_programas?.programas?.nome || 'programa') + ' &middot; nao aplicado</span>';
                   const n = r.tentativas_sessao || r.tentativas || 0;
                   return '<span class="selo ' + (r.pct_corretos >= 80 ? 'selo-ok' : r.pct_corretos >= 50 ? 'selo-warn' : 'selo-bad') + '" title="corretos/tentativas">' +
                     escaparHtml(r.paciente_programas?.programas?.nome || 'programa') + ' ' + r.corretos + '/' + n + ' (' + r.pct_corretos + '%)</span>';

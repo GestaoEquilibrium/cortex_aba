@@ -543,7 +543,8 @@ window.MODULOS.pacientes = {
       '</div>' +
 
       '<div class="cartao">' +
-      '<h3>Responsaveis e acompanhantes</h3>' +
+      '<h3>Responsaveis e acompanhantes' +
+      (perm('pacientes') === 'E' ? ' <button class="btn-chip" style="margin-left:8px" onclick="MODULOS.pacientes.modalResponsavel(null)">+ Adicionar</button>' : '') + '</h3>' +
       (resps.length ? resps.map(r =>
         '<div class="linha-doc">' +
         '  <div><b>' + escaparHtml(r.nome) + '</b>' +
@@ -555,6 +556,7 @@ window.MODULOS.pacientes = {
         (r.responsavel_legal ? '<span class="selo selo-ok">Resp. legal</span>' : '') +
         (r.autorizado_buscar ? '<span class="selo selo-neutro">Busca</span>' : '') +
         (r.usuario_id ? '<span class="selo selo-ok">Portal</span>' : '<span class="selo selo-neutro">Sem portal</span>') +
+        (perm('pacientes') === 'E' ? '<button class="btn-chip" onclick="MODULOS.pacientes.modalResponsavel(\'' + r.id + '\')">&#9998; Editar</button>' : '') +
         '  </div>' +
         '</div>').join('')
       : '<p class="sub">Nenhum responsavel cadastrado.</p>') +
@@ -570,23 +572,129 @@ window.MODULOS.pacientes = {
   htmlDocumentos(p) {
     const encs = (p.encaminhamentos || []).sort((a, b) => b.criado_em.localeCompare(a.criado_em));
     return '<div class="cartao faixa-ambar">' +
-      '<h3>Encaminhamentos medicos</h3>' +
+      '<h3>Encaminhamentos medicos' +
+      (perm('pacientes') === 'E' ? ' <button class="btn-chip" style="margin-left:8px" onclick="MODULOS.pacientes.modalEncaminhamento(null)">+ Registrar</button>' : '') + '</h3>' +
       (encs.length ? encs.map(e =>
         '<div class="linha-doc">' +
         '  <div><b>' + escaparHtml(e.medico || 'Medico nao informado') + '</b>' +
         '  <small>' + (e.sessoes_semanais ? e.sessoes_semanais + ' sessoes/semana &middot; ' : '') +
            new Date(e.criado_em).toLocaleDateString('pt-BR') + '</small></div>' +
+        '<div class="pac-selos">' +
         (e.arquivo_path
-          ? '<button class="btn btn-fantasma" onclick="MODULOS.pacientes.abrirPdf(\'' +
-            e.arquivo_path + '\')">Ver PDF</button>'
+          ? '<button class="btn-chip" onclick="MODULOS.pacientes.abrirPdf(\'' + e.arquivo_path + '\')">Ver PDF</button>'
           : '<span class="selo selo-neutro">Sem arquivo</span>') +
-        '</div>').join('')
+        (perm('pacientes') === 'E' ? '<button class="btn-chip" onclick="MODULOS.pacientes.modalEncaminhamento(\'' + e.id + '\')">&#9998; Editar</button>' : '') +
+        '</div></div>').join('')
       : '<p class="sub">Nenhum encaminhamento registrado.</p>') +
       '</div>' +
       '<div class="cartao">' +
       '<h3>Termos e outros documentos</h3>' +
       '<p class="sub">Termo de Responsabilidade Parental e Autorizacao de Uso de Imagem entram com o portal da familia (Sprint 3).</p>' +
       '</div>';
+  },
+
+  // ─────────────── Responsavel: adicionar / editar ───────────────
+  modalResponsavel(id) {
+    const p = this.paciente;
+    const r = id ? (p.responsaveis || []).find(x => x.id === id) : {};
+    const v = k => escaparHtml(r[k] || '');
+    abrirModal((id ? 'Editar responsavel' : 'Novo responsavel') + ' &middot; ' + escaparHtml(p.nome),
+      '<div class="grade-form">' +
+      '  <div class="campo c2"><label>Nome completo *</label><input id="rp-nome" value="' + v('nome') + '"></div>' +
+      '  <div class="campo"><label>Parentesco</label><select id="rp-parentesco">' +
+      ['', 'M\u00e3e', 'Pai', 'Av\u00f3', 'Av\u00f4', 'Tia', 'Tio', 'Madrasta', 'Padrasto', 'Respons\u00e1vel legal', 'Outro'].map(o =>
+        '<option value="' + o + '"' + (o === (r.parentesco || '') ? ' selected' : '') + '>' + (o || 'Selecione') + '</option>').join('') + '</select></div>' +
+      '  <div class="campo"><label>CPF</label><input id="rp-cpf" inputmode="numeric" value="' + (r.cpf ? formatarCPF(r.cpf) : '') + '"></div>' +
+      '  <div class="campo"><label>Telefone / WhatsApp</label><input id="rp-fone" inputmode="tel" value="' + v('telefone') + '"></div>' +
+      '  <div class="campo"><label>E-mail</label><input id="rp-email" type="email" value="' + v('email') + '"></div>' +
+      '  <div class="campo c2" style="display:flex; gap:16px; flex-wrap:wrap; align-items:center">' +
+      '    <label class="check"><input type="checkbox" id="rp-principal"' + (r.principal ? ' checked' : '') + '> Principal (aparece no card e nos relatorios)</label>' +
+      '    <label class="check"><input type="checkbox" id="rp-legal"' + (r.responsavel_legal ? ' checked' : '') + '> Responsavel legal</label>' +
+      '    <label class="check"><input type="checkbox" id="rp-busca"' + (r.autorizado_buscar ? ' checked' : '') + '> Autorizado a buscar</label></div>' +
+      '</div>' +
+      (r.usuario_id ? '<p class="sub" style="margin-top:6px">Este responsavel tem acesso ao portal; o login nao muda por aqui (Usuarios e Acessos).</p>' : '') +
+      '<div class="mensagem-erro" id="rp-erro"></div>' +
+      '<div class="barra-acoes">' +
+      (id ? '<button class="btn btn-fantasma" onclick="MODULOS.pacientes.removerResponsavel(\'' + id + '\')">Remover</button>' : '') +
+      '<button class="btn btn-fantasma" onclick="fecharModal()">Cancelar</button>' +
+      '<button class="btn btn-primario" id="rp-salvar" onclick="MODULOS.pacientes.salvarResponsavel(' + (id ? '\'' + id + '\'' : 'null') + ')">Salvar</button></div>', true);
+  },
+
+  async salvarResponsavel(id) {
+    const erro = document.getElementById('rp-erro'); erro.classList.remove('visivel');
+    const nome = document.getElementById('rp-nome').value.trim();
+    if (!nome) { erro.textContent = 'Informe o nome.'; erro.classList.add('visivel'); return; }
+    const cpf = document.getElementById('rp-cpf').value.replace(/\D/g, '');
+    if (cpf && !validarCPF(cpf)) { erro.textContent = 'CPF invalido.'; erro.classList.add('visivel'); return; }
+    const dados = {
+      nome, parentesco: document.getElementById('rp-parentesco').value || null, cpf: cpf || null,
+      telefone: document.getElementById('rp-fone').value.trim() || null,
+      email: document.getElementById('rp-email').value.trim().toLowerCase() || null,
+      principal: document.getElementById('rp-principal').checked,
+      responsavel_legal: document.getElementById('rp-legal').checked,
+      autorizado_buscar: document.getElementById('rp-busca').checked
+    };
+    const botao = document.getElementById('rp-salvar'); botao.disabled = true;
+    try {
+      if (dados.principal) {
+        const { error: e0 } = await sb.from('responsaveis').update({ principal: false }).eq('paciente_id', this.paciente.id);
+        if (e0) throw new Error(e0.message);
+      }
+      const q = id ? sb.from('responsaveis').update(dados).eq('id', id)
+                   : sb.from('responsaveis').insert(Object.assign({ paciente_id: this.paciente.id }, dados));
+      const { error } = await q;
+      if (error) throw new Error(error.message);
+      fecharModal();
+      this.telaDetalhe(this.paciente.id, 'visao');
+    } catch (e) { erro.textContent = e.message; erro.classList.add('visivel'); botao.disabled = false; }
+  },
+
+  async removerResponsavel(id) {
+    const r = (this.paciente.responsaveis || []).find(x => x.id === id);
+    if (r && r.usuario_id) { popAviso('Este responsavel tem acesso ao portal. Desative o acesso em Usuarios e Acessos antes de remover.'); return; }
+    if (!await popConfirmar('Remover este responsavel do cadastro?', { ok: 'Remover' })) return;
+    const { error } = await sb.from('responsaveis').delete().eq('id', id);
+    if (error) { popAviso('Nao consegui remover: ' + error.message); return; }
+    fecharModal();
+    this.telaDetalhe(this.paciente.id, 'visao');
+  },
+
+  // ─────────────── Encaminhamento medico: registrar / editar ───────────────
+  modalEncaminhamento(id) {
+    const p = this.paciente;
+    const e = id ? (p.encaminhamentos || []).find(x => x.id === id) : {};
+    abrirModal((id ? 'Editar encaminhamento' : 'Registrar encaminhamento medico') + ' &middot; ' + escaparHtml(p.nome),
+      '<div class="grade-form">' +
+      '  <div class="campo c2"><label>Medico(a) solicitante *</label><input id="en-medico" value="' + escaparHtml(e.medico || '') + '" placeholder="Ex.: Dra. Miriam Barbosa Borges"></div>' +
+      '  <div class="campo"><label>Sessoes por semana</label><input id="en-sessoes" type="number" min="1" max="10" value="' + (e.sessoes_semanais || '') + '"></div>' +
+      '  <div class="campo c3"><label>PDF do encaminhamento ' + (e.arquivo_path ? '<small class="sub">(ja tem arquivo; envie outro para substituir)</small>' : '<small class="sub">(opcional)</small>') + '</label><input type="file" id="en-pdf" accept="application/pdf"></div>' +
+      '</div>' +
+      '<div class="mensagem-erro" id="en-erro"></div>' +
+      '<div class="barra-acoes"><button class="btn btn-fantasma" onclick="fecharModal()">Cancelar</button>' +
+      '<button class="btn btn-primario" id="en-salvar" onclick="MODULOS.pacientes.salvarEncaminhamento(' + (id ? '\'' + id + '\'' : 'null') + ')">Salvar</button></div>', true);
+  },
+
+  async salvarEncaminhamento(id) {
+    const erro = document.getElementById('en-erro'); erro.classList.remove('visivel');
+    const medico = document.getElementById('en-medico').value.trim();
+    if (!medico) { erro.textContent = 'Informe o medico solicitante.'; erro.classList.add('visivel'); return; }
+    const botao = document.getElementById('en-salvar'); botao.disabled = true; botao.textContent = 'Salvando...';
+    try {
+      const dados = { medico, sessoes_semanais: parseInt(document.getElementById('en-sessoes').value, 10) || null };
+      const arquivo = document.getElementById('en-pdf').files[0];
+      if (arquivo) {
+        const caminho = 'pacientes/' + this.paciente.id + '/encaminhamento_' + Date.now() + '.pdf';
+        const { error: eU } = await sb.storage.from('documentos').upload(caminho, arquivo, { contentType: 'application/pdf' });
+        if (eU) throw new Error('PDF: ' + eU.message);
+        dados.arquivo_path = caminho;
+      }
+      const q = id ? sb.from('encaminhamentos').update(dados).eq('id', id)
+                   : sb.from('encaminhamentos').insert(Object.assign({ paciente_id: this.paciente.id, criado_por: this.sessao.user.id }, dados));
+      const { error } = await q;
+      if (error) throw new Error(error.message);
+      fecharModal();
+      this.telaDetalhe(this.paciente.id, 'documentos');
+    } catch (e) { erro.textContent = e.message; erro.classList.add('visivel'); botao.disabled = false; botao.textContent = 'Salvar'; }
   },
 
   async abrirPdf(caminho) {

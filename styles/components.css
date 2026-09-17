@@ -2364,3 +2364,12 @@
 .ciclo-etapa.pend > b { background: var(--st-warn); color: #fff; }
 .ciclo-etapa > div > span { display: block; font-weight: 800; font-size: 12.5px; }
 .ciclo-etapa > div > small { display: block; font-size: 11.5px; color: var(--ink-muted); margin: 2px 0 6px; }
+
+/* ── Atribuir programa: lista com busca ────────────────────────────── */
+.at-lista { max-height: 300px; overflow-y: auto; border: 1.5px solid var(--line); border-radius: 12px; padding: 4px; }
+.at-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; border-radius: 9px; cursor: pointer; }
+.at-item:hover { background: var(--surface-alt); }
+.at-item.marcado { background: var(--acao-soft); outline: 1.5px solid var(--acao); }
+.at-item .at-nome { font-weight: 700; font-size: 13px; }
+.at-item .at-nome small { display: block; font-weight: 600; font-size: 11px; color: var(--ink-muted); }
+.at-item .area-chip { font-style: normal; white-space: nowrap; }

@@ -443,11 +443,12 @@ window.MODULOS.programas = {
         '<div class="barra-acoes"><button class="btn btn-primario" onclick="fecharModal()">Ok</button></div>');
       return;
     }
+    this._bibAtivos = ativos;
     abrirModal('Adicionar programa a este paciente',
-      '<div class="campo"><label>Programa da biblioteca *</label><select id="at-prog">' +
-      ativos.map(p => '<option value="' + p.id + '">' +
-        escaparHtml(p.area + ' - ' + p.nome + ' (' + (p.tentativas_padrao || 10) + ' tentativas)') + '</option>').join('') +
-      '</select></div>' +
+      '<div class="campo"><label>Programa da biblioteca * <small class="sub">(digite para buscar por nome ou area)</small></label>' +
+      '<input id="at-busca" placeholder="Ex.: pareamento, mando, motora..." autocomplete="off" oninput="MODULOS.programas.filtrarAtribuir(this.value)" style="margin-bottom:6px">' +
+      '<div class="at-lista" id="at-lista">' + this.htmlListaAtribuir(ativos, '') + '</div>' +
+      '<input type="hidden" id="at-prog" value="' + (ativos[0] ? ativos[0].id : '') + '"></div>' +
       '<div class="campo"><label>Situacao inicial</label><select id="at-status">' +
       '<option value="em_intervencao">Em intervencao (entra na ficha)</option>' +
       '<option value="na_fila">Na fila</option></select></div>' +
@@ -461,7 +462,32 @@ window.MODULOS.programas = {
       '</div>');
   },
 
+  // lista clicavel com busca (substitui o select longo)
+  htmlListaAtribuir(lista, termo) {
+    const n = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    const t = n(termo).trim();
+    const filtrados = lista.filter(p => !t || n(p.nome).includes(t) || n(p.area).includes(t));
+    const sel = document.getElementById('at-prog') ? document.getElementById('at-prog').value : (lista[0] ? lista[0].id : '');
+    if (!filtrados.length) return '<p class="sub" style="padding:8px">Nenhum programa com esse nome.</p>';
+    return filtrados.slice(0, 60).map(p => {
+      const cor = this.CORES_AREA[p.area] || '#64748B';
+      return '<div class="at-item' + (p.id === sel ? ' marcado' : '') + '" onclick="MODULOS.programas.escolherAtribuir(\'' + p.id + '\', this)">' +
+        '<span class="at-nome">' + escaparHtml(p.nome) + '<small>' + (p.tentativas_padrao || 10) + ' tentativas' + (p.objetivo ? ' &middot; ' + escaparHtml(p.objetivo.slice(0, 70)) : '') + '</small></span>' +
+        '<i class="area-chip" style="background:' + cor + '1A; color:' + cor + '">' + escaparHtml(p.area) + '</i></div>';
+    }).join('') + (filtrados.length > 60 ? '<p class="sub" style="padding:6px 8px">+ ' + (filtrados.length - 60) + ' programa(s) - refine a busca</p>' : '');
+  },
+  filtrarAtribuir(termo) {
+    const alvo = document.getElementById('at-lista');
+    if (alvo) alvo.innerHTML = this.htmlListaAtribuir(this._bibAtivos || [], termo);
+  },
+  escolherAtribuir(id, el) {
+    document.getElementById('at-prog').value = id;
+    document.querySelectorAll('.at-item').forEach(x => x.classList.remove('marcado'));
+    if (el) el.classList.add('marcado');
+  },
+
   async salvarAtribuicao(pacienteId) {
+    if (!document.getElementById('at-prog').value) { popAviso('Escolha um programa na lista.'); return; }
     const erro = document.getElementById('at-erro');
     erro.classList.remove('visivel');
     const tent = parseInt(document.getElementById('at-tent').value, 10);

@@ -94,7 +94,7 @@ window.MODULOS.avaliacoes = {
       '</div>' +
       '<div id="av-venc"></div>' +
       '<div class="toolbar" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center">' +
-      '  <input id="av-busca" placeholder="&#128269; Buscar paciente..." style="flex:1; min-width:220px" ' +
+      '  <input id="av-busca" placeholder="Buscar paciente..." style="flex:1; min-width:220px" ' +
       '    oninput="MODULOS.avaliacoes.filtrarQuadro()">' +
       '  <label class="check" style="margin:0"><input type="checkbox" id="av-so-pend" onchange="MODULOS.avaliacoes.filtrarQuadro()"> So com pendencia</label>' +
       '  <button class="btn-chip" onclick="MODULOS.avaliacoes.verCatalogo(\'qadi\')">Itens QADI-R</button>' +

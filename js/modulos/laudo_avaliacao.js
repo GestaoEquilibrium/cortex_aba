@@ -13,7 +13,7 @@ window.MODULOS = window.MODULOS || {};
 window.MODULOS.laudo_avaliacao = {
 
   el() { return document.getElementById('pagina'); },
-  podeGerir() { return perm('relatorios') === 'E' || ['direcao', 'coordenador', 'suporte'].includes(window.CORTEX_SESSAO.profile.perfil); },
+  podeGerir() { return perm('avaliacoes.relatorio') === 'E' || ['direcao', 'coordenador', 'suporte'].includes(window.CORTEX_SESSAO.profile.perfil); },
   ASSINATURA_PADRAO: { nome: 'Wessilon Marques de Sousa', titulo: 'Neuropsic\u00f3logo e Analista do Comportamento \u00b7 CRP 04/53832' },
   NOME_PROT: { qadi: 'Question\u00e1rio estruturado (QUEST)', ss: 'Socially Savvy Checklist', portage: 'Invent\u00e1rio Portage' },
 
@@ -399,6 +399,7 @@ window.MODULOS.laudo_avaliacao = {
 
   // botao para a aba Avaliacao: ultima aplicacao concluida do protocolo
   btn(concluidas, protocolo) {
+    if (perm('avaliacoes.relatorio') === '') return '';
     const lista = concluidas.filter(a => a.protocolo === protocolo)
       .sort((a, b) => String(b.concluido_em || '').localeCompare(String(a.concluido_em || '')));
     if (!lista.length) return '';

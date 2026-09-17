@@ -140,7 +140,7 @@ window.MODULOS.agenda = {
 
   // ───────────────────── VISAO POR APLICADOR (call center: reservas de horario) ─────────────────────
   podeReservar() {
-    return ['callcenter', 'direcao', 'coordenador', 'suporte'].includes(this.sessao.profile.perfil) || this.gere();
+    return perm('agenda.reservas') === 'E' || ['callcenter', 'direcao', 'suporte'].includes(this.sessao.profile.perfil);
   },
 
   hm(t) { return String(t || '').slice(0, 5); },
@@ -504,7 +504,7 @@ window.MODULOS.agenda = {
     const dataFmt = new Date(s.data + 'T12:00:00').toLocaleDateString('pt-BR');
     const aberta = !['concluida', 'falta', 'cancelada'].includes(s.status);
 
-    const podeOperar = perm('agenda') === 'E';
+    const podeOperar = perm('agenda.status') === 'E';
     // aplicador da propria sessao (ou da carteira) marca Concluida / Falta sem ter a agenda liberada
     const meus = ehEquipe() ? await meusPacientesIds() : new Set();
     const ehMinha = ehEquipe() && (s.aplicador_id === window.CORTEX_SESSAO.user.id || meus.has(s.pacientes.id));

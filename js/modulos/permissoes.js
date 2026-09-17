@@ -15,52 +15,69 @@ window.MODULOS.permissoes = {
     ['coordenador', 'Coordenador'],
     ['terapeuta', 'Terapeuta'],
     ['aplicador', 'Aplicador'],
+    ['callcenter', 'Call center'],
     ['callcenter', 'Call Center'],
     ['recepcao', 'Recepcao']
   ],
 
+  // Modulo (chave) + subchaves. Subchave em branco HERDA o nivel do modulo.
   CHAVES: [
-    { chave: 'inicio', rotulo: 'Inicio (painel da equipe)',
-      dica: 'V ou E: acessa o painel com KPIs e notificacoes.' },
-    { chave: 'pacientes', rotulo: 'Pacientes',
-      dica: 'V: consulta lista e prontuario. E: tambem admite, edita dados e foto.' },
-    { chave: 'pacientes_designar', rotulo: 'Designar profissional',
-      dica: 'E: pode designar o aplicador/terapeuta responsavel.' },
-    { chave: 'agenda', rotulo: 'Agenda (dia/semana/mes)',
-      dica: 'V: visualiza. E: check-in, iniciar, finalizar, falta e WhatsApp.' },
-    { chave: 'agenda_grade', rotulo: 'Grade fixa e salas',
-      dica: 'E: cria/edita horarios recorrentes e salas.' },
-    { chave: 'eventos', rotulo: 'Supervisao e reunioes',
-      dica: 'E: agenda supervisoes/reunioes e lavra ATAs. Os avisos do dia chegam a todos os participantes.' },
-    { chave: 'gerencial', rotulo: 'Relatorios gerenciais',
-      dica: 'E: gera e exporta relatorios (atendimentos, pacientes, guias) em planilha e PDF.' },
-    { chave: 'guias', rotulo: 'Guias (convenio)',
-      dica: 'E: cadastra autorizacoes e confere o funil da agenda com o convenio. Modulo da direcao.' },
-    { chave: 'auditoria', rotulo: 'Auditoria',
-      dica: 'V: consulta a trilha de tudo que foi feito no sistema.' },
-    { chave: 'chat', rotulo: 'Chat de Suporte',
-      dica: 'E: fala com o suporte tecnico pelo sistema.' },
-    { chave: 'termos', rotulo: 'Termos digitais',
-      dica: 'V: consulta aceites. E: cria e edita os termos do portal.' },
-    { chave: 'rh', rotulo: 'RH (pasta funcional)',
-      dica: 'V: consulta fichas. E: gere colaboradores e documentos.' },
-    { chave: 'faltas', rotulo: 'Gestao de Faltas',
-      dica: 'V: consulta o painel. E: tambem dispara os alertas de consecutivas.' },
-    { chave: 'presenca', rotulo: 'Lista de Presenca',
-      dica: 'V: gera e imprime as folhas semanais.' },
-    { chave: 'plano', rotulo: 'Plano Terapeutico',
-      dica: 'V: consulta. E: elabora e renova (Formulario 01) e recebe alertas de vencimento.' },
-    { chave: 'avaliacoes', rotulo: 'Avaliacoes (QADI-R)',
-      dica: 'V: consulta resultados. E: aplica e conclui avaliacoes.' },
-    { chave: 'programas', rotulo: 'Programas e alvos',
-      dica: 'V: consulta. E: gere a biblioteca e os programas/alvos dos pacientes.' },
-    { chave: 'evolucao', rotulo: 'Folha de aplicacao e evolucao',
-      dica: 'E: registra tentativas na sessao e escreve a evolucao diaria.' },
-    { chave: 'relatorios', rotulo: 'Relatorio mensal (Form. 07)',
-      dica: 'V: consulta. E: elabora e libera no portal da familia.' },
-    { chave: 'pei', rotulo: 'PEI e Devolutiva',
-      dica: 'V: consulta. E: elabora PEI e relatorio de devolutiva.' }
+    { chave: 'inicio', rotulo: 'Inicio (painel)', dica: 'V ou E: acessa o painel com pendencias e avisos.' },
+    { chave: 'pacientes', rotulo: 'Pacientes', dica: 'V: consulta lista e prontuario. E: tudo abaixo.', subs: [
+      ['pacientes.editar', 'Admitir e editar dados/foto'],
+      ['pacientes.responsaveis', 'Editar responsaveis e encaminhamentos'],
+      ['pacientes_designar', 'Designar profissionais'],
+      ['pacientes.link_cadastro', 'Enviar link de cadastro pela familia'],
+      ['pacientes.auditoria', 'Aba Auditoria do prontuario'] ] },
+    { chave: 'agenda', rotulo: 'Agenda', dica: 'V: visualiza. E: opera.', subs: [
+      ['agenda.geral', 'Ver agenda geral (fora da propria carteira)'],
+      ['agenda.status', 'Check-in, iniciar, concluir, falta'],
+      ['agenda.cancelar', 'Cancelar e reabrir sessao'],
+      ['agenda.criar', 'Criar sessao e encaixe'],
+      ['agenda_grade', 'Grade fixa e salas'],
+      ['agenda.reservas', 'Por aplicador e reservas de horario'] ] },
+    { chave: 'avaliacoes', rotulo: 'Avaliacoes', dica: 'V: consulta resultados. E: aplica.', subs: [
+      ['avaliacoes.qadi', 'Aplicar QADI-R'],
+      ['avaliacoes.ss', 'Aplicar Socially Savvy'],
+      ['avaliacoes.portage', 'Aplicar Portage'],
+      ['avaliacoes.cancelar', 'Cancelar aplicacao em andamento'],
+      ['avaliacoes.relatorio', 'Gerar relatorio de avaliacao'],
+      ['pei', 'Devolutiva e PEI (ver linha PEI)'] ] },
+    { chave: 'programas', rotulo: 'Programas', dica: 'V: consulta. E: tudo abaixo.', subs: [
+      ['programas.atribuir', 'Atribuir programa a crianca'],
+      ['programas.lancar_pei', 'Lancar programa a partir da meta do PEI'],
+      ['programas.biblioteca', 'Criar e editar programas da biblioteca'],
+      ['programas.apagar', 'Apagar programa da crianca / sessao realizada'],
+      ['evolucao', 'Aplicar (ficha) e escrever evolucao'],
+      ['comportamentos', 'Registrar comportamentos interferentes'] ] },
+    { chave: 'plano', rotulo: 'Plano Terapeutico', dica: 'V: consulta. E: elabora e renova.', subs: [
+      ['plano.elaborar', 'Elaborar e renovar plano'] ] },
+    { chave: 'pei', rotulo: 'PEI e Devolutiva', dica: 'V: consulta. E: elabora.', subs: [
+      ['pei.elaborar', 'Elaborar PEI'],
+      ['pei.devolutiva', 'Relatorio de devolutiva'] ] },
+    { chave: 'relatorios', rotulo: 'Relatorios da crianca', dica: 'V: ve relatorios. E: elabora.', subs: [
+      ['relatorios.sessao', 'Relatorio da sessao e compilados'],
+      ['relatorios.mensal', 'Elaborar relatorio mensal'],
+      ['relatorios.gerar', 'Gerar e travar'],
+      ['relatorios.portal', 'Liberar/enviar documentos ao portal'] ] },
+    { chave: 'eventos', rotulo: 'Supervisao e reunioes', dica: 'V: ve. E: cria.', subs: [
+      ['eventos.criar', 'Criar supervisoes, reunioes e ATA'],
+      ['eventos.demandas', 'Criar demandas e parabens'] ] },
+    { chave: 'coordenacao', rotulo: 'Coordenacao', dica: 'V ou E: painel da equipe.', subs: [
+      ['coordenacao.geral', 'Escopo Geral (ver fora da propria equipe)'] ] },
+    { chave: 'presenca', rotulo: 'Lista de Presenca', dica: 'V: gera e imprime.' },
+    { chave: 'faltas', rotulo: 'Gestao de Faltas', dica: 'V: consulta. E: dispara alertas.' },
+    { chave: 'guias', rotulo: 'Guias (convenio)', dica: 'E: cadastra autorizacoes.' },
+    { chave: 'gerencial', rotulo: 'Relatorios gerenciais', dica: 'E: gera e exporta.', subs: [
+      ['gerencial.importar', 'Importar CSV do outro sistema'] ] },
+    { chave: 'rh', rotulo: 'RH', dica: 'V: consulta. E: gere.' },
+    { chave: 'termos', rotulo: 'Termos digitais', dica: 'V: aceites. E: cria termos.' },
+    { chave: 'auditoria', rotulo: 'Auditoria (geral)', dica: 'V: trilha de tudo.' },
+    { chave: 'chat', rotulo: 'Chat de suporte', dica: 'E: fala com o suporte.' },
+    { chave: 'portal_msg', rotulo: 'Conversa com a familia', dica: 'E: responde mensagens e caderninho.' }
   ],
+  ehSub(chave) { return chave.includes('.') || ['pacientes_designar', 'agenda_grade', 'evolucao', 'comportamentos'].includes(chave); },
+  aberto: {},
 
   el: null,
   matriz: {},
@@ -95,18 +112,29 @@ window.MODULOS.permissoes = {
     const cab = this.PERFIS.map(([, rotulo]) =>
       '<th class="centro">' + rotulo + '</th>').join('');
 
-    const corpo = this.CHAVES.map(l =>
-      '<tr><td><b>' + l.rotulo + '</b><br><small style="color:var(--ink-soft)">' +
-      l.dica + '</small></td>' +
-      this.PERFIS.map(([perfil]) => {
-        const v = this.matriz[l.chave + '|' + perfil] || '';
-        const classe = v === 'E' ? 'perm-e' : v === 'V' ? 'perm-v' : 'perm-n';
-        const texto = v === 'E' ? 'E' : v === 'V' ? 'V' : '&mdash;';
-        return '<td class="centro"><button type="button" class="perm ' + classe +
-          (editavel ? ' perm-clic' : '') + '" ' +
-          (editavel ? 'onclick="MODULOS.permissoes.alternar(\'' + l.chave + '\', \'' + perfil + '\', this)"' : 'disabled') +
-          '>' + texto + '</button></td>';
-      }).join('') + '</tr>').join('');
+    const celula = (chave, perfil, pai) => {
+      const proprio = this.matriz[chave + '|' + perfil];
+      const herdado = pai ? (this.matriz[pai + '|' + perfil] || '') : '';
+      const v = proprio !== undefined ? proprio : herdado;
+      const classe = v === 'E' ? 'perm-e' : v === 'V' ? 'perm-v' : 'perm-n';
+      const texto = v === 'E' ? 'E' : v === 'V' ? 'V' : '&mdash;';
+      return '<td class="centro"><button type="button" class="perm ' + classe + (proprio === undefined && pai ? ' perm-herdado' : '') +
+        (editavel ? ' perm-clic' : '') + '" title="' + (proprio === undefined && pai ? 'herdado do modulo - clique para definir' : '') + '" ' +
+        (editavel ? 'onclick="MODULOS.permissoes.alternar(\'' + chave + '\', \'' + perfil + '\', this' + (pai ? ', \'' + pai + '\'' : '') + ')"' : 'disabled') +
+        '>' + texto + '</button></td>';
+    };
+    const corpo = this.CHAVES.map(l => {
+      const temSubs = l.subs && l.subs.length;
+      const ab = !!this.aberto[l.chave];
+      return '<tr class="perm-modulo"><td>' +
+        (temSubs ? '<button type="button" class="perm-toggle" onclick="MODULOS.permissoes.abrir(\'' + l.chave + '\')">' + (ab ? '&#9662;' : '&#9656;') + '</button> ' : '<span class="perm-toggle vazio"></span> ') +
+        '<b>' + l.rotulo + '</b>' + (temSubs ? ' <small class="sub">' + l.subs.length + ' acoes</small>' : '') +
+        '<br><small style="color:var(--ink-soft); margin-left:26px">' + l.dica + '</small></td>' +
+        this.PERFIS.map(([perfil]) => celula(l.chave, perfil, null)).join('') + '</tr>' +
+        (temSubs && ab ? l.subs.map(([sc, rot]) =>
+          '<tr class="perm-sub"><td><span style="margin-left:26px">&#8627; ' + rot + '</span></td>' +
+          this.PERFIS.map(([perfil]) => celula(sc, perfil, l.chave)).join('') + '</tr>').join('') : '');
+    }).join('');
 
     document.getElementById('perm-corpo').innerHTML =
       '<div class="cartao" style="overflow-x:auto">' +
@@ -115,6 +143,7 @@ window.MODULOS.permissoes = {
       '    <span class="selo selo-roxo"><b>V</b>&nbsp;Somente ve</span>' +
       '    <span class="selo selo-neutro">&mdash;&nbsp;Sem acesso</span>' +
       '    <span class="selo selo-warn">Suporte: sempre E em tudo</span>' +
+      '    <span class="selo selo-info">Subchave tracejada = herda do modulo</span>' +
       '  </div>' +
       '  <table class="tabela-presenca tabela-perm">' +
       '    <thead><tr><th>Funcionalidade</th>' + cab + '</tr></thead>' +
@@ -128,8 +157,12 @@ window.MODULOS.permissoes = {
       'proprio, fixo e isolado por vinculo com a crianca.</p></div>';
   },
 
-  async alternar(chave, perfil, botao) {
-    const atual = this.matriz[chave + '|' + perfil] || '';
+  abrir(chave) { this.aberto[chave] = !this.aberto[chave]; this.desenhar(); },
+
+  async alternar(chave, perfil, botao, pai) {
+    const proprio = this.matriz[chave + '|' + perfil];
+    // subchave herdada: o primeiro clique define a partir do valor herdado; ciclo E -> V -> (heranca/nenhum) -> E
+    const atual = proprio !== undefined ? proprio : (pai ? (this.matriz[pai + '|' + perfil] || '') : '');
     const proximo = atual === 'E' ? 'V' : atual === 'V' ? '' : 'E';
 
     botao.disabled = true;
@@ -147,7 +180,7 @@ window.MODULOS.permissoes = {
         this.matriz[chave + '|' + perfil] = proximo;
       }
     } catch (e) {
-      alert('Erro ao salvar: ' + e.message);
+      popAviso('Erro ao salvar: ' + e.message);
     }
     this.desenhar();
   }

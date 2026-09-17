@@ -96,7 +96,7 @@ window.MODULOS.programas = {
   // ─────────────── Biblioteca ───────────────
 
   async renderBiblioteca() {
-    const podeE = perm('programas') === 'E';
+    const podeE = perm('programas.biblioteca') === 'E';
     document.getElementById('prog-titulo').textContent = 'Biblioteca de Programas';
     document.getElementById('prog-sub').textContent =
       'A coordenacao define, por programa, o numero de tentativas e os niveis de ajuda usados.';
@@ -331,7 +331,7 @@ window.MODULOS.programas = {
   // ═══════════════════ ABA PROGRAMAS DO PRONTUARIO ═══════════════════
 
   async htmlProgramasPaciente(pacienteId) {
-    const podeE = perm('programas') === 'E';
+    const podeE = perm('programas.atribuir') === 'E';
     this._pacProgPaciente = pacienteId;
 
     const { data } = await sb.from('paciente_programas')
@@ -417,7 +417,7 @@ window.MODULOS.programas = {
         (perm('programas') === 'E' ? '. Toque no cartao e ajuste em Tentativas.' : '') + '">' +
         (pp.tentativas || pp.programas.tentativas_padrao || 10) + ' tentativas' + (pp.tentativas ? ' *' : '') + '</span>' +
         '</div>' +
-        (['direcao', 'coordenador', 'suporte'].includes(window.CORTEX_SESSAO.profile.perfil)
+        (perm('programas.apagar') === 'E' && ['direcao', 'coordenador', 'suporte'].includes(window.CORTEX_SESSAO.profile.perfil)
           ? '<button class="prog-apagar" title="Remover este programa do paciente (coordenacao)" ' +
             'onclick="event.stopPropagation(); MODULOS.programas.apagarDoPaciente(\'' + pp.id + '\', \'' +
             escaparHtml(pp.programas.nome).replace(/'/g, '') + '\')">&#10005;</button>'
@@ -1237,7 +1237,7 @@ window.MODULOS.programas = {
         '<button type="button" class="btn btn-primario atd-btn" ' +
         'onclick="event.stopPropagation(); MODULOS.programas.docEvolucaoDiaria(\'' + s.id + '\')">' +
         '&#128202; Ver relatorio</button>' +
-        (['direcao', 'coordenador', 'suporte'].includes(window.CORTEX_SESSAO.profile.perfil)
+        (perm('programas.apagar') === 'E' && ['direcao', 'coordenador', 'suporte'].includes(window.CORTEX_SESSAO.profile.perfil)
           ? '<button class="btn-chip" style="color:#E9586A; border-color:#F5C2C9" title="Apagar esta sessao e todos os registros dela (gestao)" ' +
             'onclick="event.stopPropagation(); MODULOS.programas.apagarSessao(\'' + s.id + '\', \'' +
             (s.data || '') + '\')">&#10005;</button>'

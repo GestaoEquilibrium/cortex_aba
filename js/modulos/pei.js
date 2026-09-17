@@ -12,7 +12,7 @@ window.MODULOS.pei = {
   PODE_GERIR: ['direcao', 'coordenador', 'terapeuta', 'suporte'],
 
   el() { return document.getElementById('pagina'); },
-  podeGerir() { return perm('pei') === 'E'; },
+  podeGerir() { return perm('pei.elaborar') === 'E'; },
 
   // ─────────────── TEXTOS FIXOS (modelo da clinica) ───────────────
   PRAZOS: ['Curto (1 a 2 meses)', 'M\u00e9dio (3 a 4 meses)', 'Longo (5 a 6 meses)'],
@@ -327,7 +327,7 @@ window.MODULOS.pei = {
           (this.podeGerir()
             ? ' <button class="btn-chip nao-imprime" style="margin-left:6px" ' +
               'title="Cria um programa na biblioteca a partir desta meta e coloca na fila do paciente." ' +
-              'onclick="MODULOS.pei.lancarPrograma(\'' + m.id + '\')">&#9654; Lancar</button>'
+              (perm('programas.lancar_pei') === 'E' ? 'onclick="MODULOS.pei.lancarPrograma(\'' + m.id + '\')">&#9654; Lancar</button>' : 'disabled title="Sem permissao para lancar programas">&#9654; Lancar</button>')
             : '') + '</td>' +
           '<td style="width:auto; text-align:left; padding:6px 10px">' + escaparHtml(m.recurso || '-') + '</td>' +
           '<td style="width:auto">' + escaparHtml(m.prazo || '-') + '</td></tr>').join('') +

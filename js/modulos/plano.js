@@ -9,7 +9,7 @@ window.MODULOS = window.MODULOS || {};
 window.MODULOS.plano = {
 
   el() { return document.getElementById('pagina'); },
-  podeGerir() { return perm('plano') === 'E'; },
+  podeGerir() { return perm('plano.elaborar') === 'E'; },
 
   // ─────────────── CICLO DE REAVALIACAO (item 5) ───────────────
   // Avaliacao (6 meses) -> Plano -> PEI -> Programas: mostra em que etapa a crianca esta e o que vence.

@@ -10,7 +10,7 @@ window.MODULOS = window.MODULOS || {};
 window.MODULOS.relatorios = {
 
   el() { return document.getElementById('pagina'); },
-  podeGerir() { return perm('relatorios') === 'E'; },
+  podeGerir() { return perm('relatorios.mensal') === 'E'; },
 
   mesRotulo(mes) {
     const d = new Date(mes + '-15T12:00:00');
@@ -221,8 +221,8 @@ window.MODULOS.relatorios = {
       '    <h2>Relatorio de Evolucao Mensal &middot; ' + this.mesRotulo(mes) + '</h2>' +
       '    <p class="sub">' + escaparHtml(pac.nome) + (editavel ? ' &middot; rascunho salvo automaticamente' : travado ? ' &middot; gerado em ' + (rel.gerado_em ? new Date(rel.gerado_em).toLocaleString('pt-BR') : '-') + ' (travado)' : '') + '</p></div>' +
       '  <div style="display:flex; gap:8px; flex-wrap:wrap">' +
-      (editavel ? '<button class="btn btn-primario" onclick="MODULOS.relatorios.gerarTravar()">&#128274; Gerar e travar</button>' : '') +
-      (travado && rel.status !== 'liberado' && this.podeGerir() ? '<button class="btn btn-fantasma" onclick="MODULOS.relatorios.liberar()">Liberar no portal</button>' : '') +
+      (editavel && perm('relatorios.gerar') === 'E' ? '<button class="btn btn-primario" onclick="MODULOS.relatorios.gerarTravar()">&#128274; Gerar e travar</button>' : '') +
+      (travado && rel.status !== 'liberado' && perm('relatorios.portal') === 'E' ? '<button class="btn btn-fantasma" onclick="MODULOS.relatorios.liberar()">Liberar no portal</button>' : '') +
       '  <button class="btn btn-fantasma" onclick="MODULOS.relatorios.docMensal()">&#128196; Folha / Imprimir</button>' +
       '  </div></div>' +
 

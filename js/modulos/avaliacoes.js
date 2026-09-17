@@ -373,7 +373,7 @@ window.MODULOS.avaliacoes = {
   // Reutilizado pela aba Avaliacao do prontuario
   // Botao "Devolutiva" da ultima aplicacao concluida do protocolo (qualquer protocolo)
   btnDevolutiva(concluidas, protocolo) {
-    if (perm('pei') !== 'E') return '';
+    if (perm('pei.devolutiva') !== 'E') return '';
     const lista = concluidas.filter(a => a.protocolo === protocolo)
       .sort((a, b) => String(b.concluido_em || '').localeCompare(String(a.concluido_em || '')));
     if (!lista.length) return '';
@@ -486,10 +486,11 @@ window.MODULOS.avaliacoes = {
       .eq('paciente_id', pacienteId)
       .order('iniciado_em', { ascending: false });
 
-    const podeQadi = perm('avaliacoes') === 'E';
-    const podeSS = podeQadi || perm('evolucao') === 'E';
+    const podeQadi = perm('avaliacoes.qadi') === 'E';
+    const podeSS = perm('avaliacoes.ss') === 'E' || perm('evolucao') === 'E';
+    const podePortage = perm('avaliacoes.portage') === 'E';
     let acoes = '';
-    if (podeQadi || podeSS) {
+    if (podeQadi || podeSS || podePortage) {
       acoes = '<div class="aba-acoes">' +
         (podeQadi
           ? '<button class="btn btn-primario" title="Inicia uma aplicacao QADI-R deste paciente, em janela por cima do prontuario." ' +
@@ -498,7 +499,7 @@ window.MODULOS.avaliacoes = {
           ? '<button class="btn btn-primario" ' +
             'title="Inicia uma aplicacao Socially Savvy deste paciente, em janela por cima do prontuario." ' +
             'onclick="MODULOS.avaliacoes.iniciarDoProntuario(\'' + pacienteId + '\', \'ss\')">+ Socially Savvy</button>' : '') +
-        (podeQadi
+        (podePortage
           ? '<button class="btn btn-primario" title="Guia Portage: 479 itens em 5 areas por faixa etaria (Sim / As vezes / Nao / NA)." ' +
             'onclick="MODULOS.avaliacoes.iniciarDoProntuario(\'' + pacienteId + '\', \'portage\')">+ Portage</button>' : '') +
         '</div>';
@@ -518,7 +519,7 @@ window.MODULOS.avaliacoes = {
           '<div class="linha-doc"><div><b>' + (x.protocolo === 'ss' ? 'Socially Savvy' : x.protocolo === 'portage' ? 'Portage' : 'QADI-R') + '</b>' +
           '<small>Iniciada em ' + new Date(x.iniciado_em).toLocaleDateString('pt-BR') + '</small></div>' +
           '<div class="pac-selos">' +
-          (['direcao', 'coordenador', 'suporte'].includes(window.CORTEX_SESSAO.profile.perfil)
+          (perm('avaliacoes.cancelar') === 'E'
             ? '<button class="btn-chip" title="Cancelar e apagar esta aplicacao" onclick="MODULOS.avaliacoes.cancelarAvaliacao(\'' + x.id + '\', \'' +
               (x.protocolo === 'ss' ? 'Socially Savvy' : x.protocolo === 'portage' ? 'Portage' : 'QADI-R') + '\', \'' + pacienteId + '\')">&#10005; Cancelar</button>' : '') +
           '<button class="btn-chip cheio" onclick="MODULOS.avaliacoes.abrirJanela(\'' + x.id + '\')">Continuar</button>' +

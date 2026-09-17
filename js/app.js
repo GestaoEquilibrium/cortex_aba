@@ -54,7 +54,7 @@ const NAVEGACAO = [
   {
     grupo: 'GESTAO',
     itens: [
-      { id: 'coordenacao', rotulo: 'Coordenacao', perfis: ['coordenador', 'direcao', 'suporte'] },
+      { id: 'coordenacao', rotulo: 'Coordenacao', chave: 'coordenacao' },
       { id: 'presenca', rotulo: 'Lista de Presenca',  chave: 'presenca' },
       { id: 'faltas',   rotulo: 'Gestao de Faltas',   chave: 'faltas' },
       { id: 'termos',   rotulo: 'Termos digitais',    chave: 'termos' },
@@ -322,9 +322,13 @@ async function carregarPermissoes(perfil) {
 }
 
 // perm('pacientes') -> 'E' | 'V' | ''
+// Subchaves ('programas.atribuir') herdam do modulo ('programas') enquanto nao forem definidas.
 function perm(chave) {
   if (CORTEX_PERM_TUDO) return 'E';
-  return CORTEX_PERMS[chave] || '';
+  if (CORTEX_PERMS[chave] !== undefined) return CORTEX_PERMS[chave] || '';
+  const i = chave.indexOf('.');
+  if (i > 0) return CORTEX_PERMS[chave.slice(0, i)] || '';
+  return '';
 }
 
 // ── Modais (janela suspensa) ────────────────────────────────────────────
@@ -337,7 +341,9 @@ const ROTULO_DOC_PORTAL = {
 
 function podeEnviarPortal() {
   const p = window.CORTEX_SESSAO?.profile;
-  return p && (p.perfil === 'direcao' || p.perfil === 'coordenador');
+  if (!p) return false;
+  if (CORTEX_PERM_TUDO) return true;
+  return perm('relatorios.portal') === 'E';
 }
 
 function portalBtn() {
@@ -494,6 +500,7 @@ const ESCOPO = {
   ehCoord() { return window.CORTEX_SESSAO?.profile?.perfil === 'coordenador'; },
   ativo() {
     if (!this.ehCoord()) return false;
+    if (perm('coordenacao.geral') === '') return true;
     try { return localStorage.getItem('cortex_escopo') !== 'geral'; } catch (e) { return true; }
   },
   async carregar(forcar, coordId) {
@@ -537,6 +544,7 @@ const ESCOPO = {
   },
   html() {
     if (!this.ehCoord()) return '';
+    if (perm('coordenacao.geral') === '') return '';   // sem direito ao Geral: fica so na equipe
     const eq = this.ativo();
     return '<div class="toggle-visao escopo-toggle" title="Ver so a minha equipe ou tudo">' +
       '<button type="button" class="' + (eq ? 'ativo' : '') + '" onclick="ESCOPO.alternar(\'equipe\')">Minha equipe</button>' +

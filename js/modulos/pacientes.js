@@ -24,14 +24,14 @@ window.MODULOS.pacientes = {
   // ───────────────────────────── LISTA ─────────────────────────────
 
   async telaLista() {
-    const podeAdmitir = perm('pacientes') === 'E';
+    const podeAdmitir = perm('pacientes.editar') === 'E';
 
     this.el.innerHTML =
       '<div class="pagina-cabecalho">' +
       '  <div><h2>Pacientes</h2><p class="sub" id="pac-contagem">Carregando...</p></div>' +
       (podeAdmitir
         ? '<div style="display:flex; gap:8px; flex-wrap:wrap">' +
-          '<button class="btn btn-fantasma" onclick="MODULOS.pacientes.modalLinkCadastro()">&#128279; Enviar link de cadastro</button>' +
+          (perm('pacientes.link_cadastro') === 'E' ? '<button class="btn btn-fantasma" onclick="MODULOS.pacientes.modalLinkCadastro()">&#128279; Enviar link de cadastro</button>' : '') +
           '<button class="btn btn-primario" onclick="MODULOS.pacientes.telaNova()">+ Nova admissao</button></div>'
         : '') +
       '</div>' +
@@ -333,7 +333,7 @@ window.MODULOS.pacientes = {
     if (error || !p) { this.telaLista(); return; }
     this.paciente = p;
 
-    const podeAdmitir = perm('pacientes') === 'E';
+    const podeAdmitir = perm('pacientes.editar') === 'E';
     const sexo = p.sexo === 'M' ? 'Masculino' : p.sexo === 'F' ? 'Feminino' : '-';
 
     let foto = '';
@@ -384,7 +384,7 @@ window.MODULOS.pacientes = {
       '</div>' +
 
       '<div class="abas" id="pac-abas">' +
-      this.ABAS.filter(a => !a.gestao || ['direcao', 'coordenador', 'suporte'].includes(this.sessao.profile.perfil)).map(a =>
+      this.ABAS.filter(a => !a.gestao || perm('pacientes.auditoria') !== '' || ['direcao', 'coordenador', 'suporte'].includes(this.sessao.profile.perfil)).map(a =>
         '<button class="aba" data-aba="' + a.id + '" onclick="MODULOS.pacientes.abrirAba(\'' + a.id + '\')">' +
         a.rotulo + this.pontoEtapa(a.id) + '</button>').join('') +
       '</div>' +
@@ -544,7 +544,7 @@ window.MODULOS.pacientes = {
 
       '<div class="cartao">' +
       '<h3>Responsaveis e acompanhantes' +
-      (perm('pacientes') === 'E' ? ' <button class="btn-chip" style="margin-left:8px" onclick="MODULOS.pacientes.modalResponsavel(null)">+ Adicionar</button>' : '') + '</h3>' +
+      (perm('pacientes.responsaveis') === 'E' ? ' <button class="btn-chip" style="margin-left:8px" onclick="MODULOS.pacientes.modalResponsavel(null)">+ Adicionar</button>' : '') + '</h3>' +
       (resps.length ? resps.map(r =>
         '<div class="linha-doc">' +
         '  <div><b>' + escaparHtml(r.nome) + '</b>' +
@@ -556,7 +556,7 @@ window.MODULOS.pacientes = {
         (r.responsavel_legal ? '<span class="selo selo-ok">Resp. legal</span>' : '') +
         (r.autorizado_buscar ? '<span class="selo selo-neutro">Busca</span>' : '') +
         (r.usuario_id ? '<span class="selo selo-ok">Portal</span>' : '<span class="selo selo-neutro">Sem portal</span>') +
-        (perm('pacientes') === 'E' ? '<button class="btn-chip" onclick="MODULOS.pacientes.modalResponsavel(\'' + r.id + '\')">&#9998; Editar</button>' : '') +
+        (perm('pacientes.responsaveis') === 'E' ? '<button class="btn-chip" onclick="MODULOS.pacientes.modalResponsavel(\'' + r.id + '\')">&#9998; Editar</button>' : '') +
         '  </div>' +
         '</div>').join('')
       : '<p class="sub">Nenhum responsavel cadastrado.</p>') +
@@ -573,7 +573,7 @@ window.MODULOS.pacientes = {
     const encs = (p.encaminhamentos || []).sort((a, b) => b.criado_em.localeCompare(a.criado_em));
     return '<div class="cartao faixa-ambar">' +
       '<h3>Encaminhamentos medicos' +
-      (perm('pacientes') === 'E' ? ' <button class="btn-chip" style="margin-left:8px" onclick="MODULOS.pacientes.modalEncaminhamento(null)">+ Registrar</button>' : '') + '</h3>' +
+      (perm('pacientes.responsaveis') === 'E' ? ' <button class="btn-chip" style="margin-left:8px" onclick="MODULOS.pacientes.modalEncaminhamento(null)">+ Registrar</button>' : '') + '</h3>' +
       (encs.length ? encs.map(e =>
         '<div class="linha-doc">' +
         '  <div><b>' + escaparHtml(e.medico || 'Medico nao informado') + '</b>' +
@@ -583,7 +583,7 @@ window.MODULOS.pacientes = {
         (e.arquivo_path
           ? '<button class="btn-chip" onclick="MODULOS.pacientes.abrirPdf(\'' + e.arquivo_path + '\')">Ver PDF</button>'
           : '<span class="selo selo-neutro">Sem arquivo</span>') +
-        (perm('pacientes') === 'E' ? '<button class="btn-chip" onclick="MODULOS.pacientes.modalEncaminhamento(\'' + e.id + '\')">&#9998; Editar</button>' : '') +
+        (perm('pacientes.responsaveis') === 'E' ? '<button class="btn-chip" onclick="MODULOS.pacientes.modalEncaminhamento(\'' + e.id + '\')">&#9998; Editar</button>' : '') +
         '</div></div>').join('')
       : '<p class="sub">Nenhum encaminhamento registrado.</p>') +
       '</div>' +

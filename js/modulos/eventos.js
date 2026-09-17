@@ -12,7 +12,8 @@ window.MODULOS.eventos = {
   el: null,
   lista: [],
 
-  podeE() { return ['direcao', 'coordenador'].includes(window.CORTEX_SESSAO.profile.perfil); },
+  podeE() { return perm('eventos.criar') === 'E'; },
+  podeDemanda() { return perm('eventos.demandas') === 'E'; },
 
   async render(el) {
     this.el = el;
@@ -341,7 +342,7 @@ window.MODULOS.eventos = {
     alvo.innerHTML =
       '<div class="cartao"><div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px">' +
       '<h3 style="margin:0">Demandas <span class="selo selo-neutro">' + abertas.length + ' aberta(s)</span></h3>' +
-      (this.podeE()
+      (this.podeDemanda()
         ? '<div class="pac-selos">' +
           '<button class="btn btn-fantasma" onclick="MODULOS.eventos.modalDemanda(\'demanda\')">+ Demanda</button>' +
           '<button class="btn btn-primario" onclick="MODULOS.eventos.modalDemanda(\'parabens\')">&#127881; Parabens pro AT</button>' +

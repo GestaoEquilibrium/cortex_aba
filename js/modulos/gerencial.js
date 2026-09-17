@@ -67,7 +67,7 @@ window.MODULOS.gerencial = {
 
       '<div id="ge-resultado"></div>' +
 
-      (['direcao', 'coordenador', 'suporte'].includes(window.CORTEX_SESSAO.profile.perfil)
+      (perm('gerencial.importar') === 'E'
         ? '<div class="cartao" style="margin-top:14px"><h3>Importar atendimentos do outro sistema</h3>' +
           '<p class="sub" style="margin-bottom:8px">Exportacao "atendimentos_prontuario_*.csv": cria/atualiza as sessoes da agenda (status, aplicador) ' +
           'e traz as evolucoes escritas la, sem sobrescrever o que ja foi escrito aqui. Pode repetir: nao duplica.</p>' +

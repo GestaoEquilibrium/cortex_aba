@@ -281,3 +281,10 @@
     .deq-uma-pagina .deq-assinatura, .deq-uma-pagina .deq-rodape, .deq-uma-pagina .deq-local { break-before: avoid; page-break-before: avoid; }
     .deq-uma-pagina .deq-caixa, .deq-uma-pagina h2 { break-inside: avoid; }
 }
+
+/* rodape repetido em todas as paginas (montado na hora da impressao pelo app.js) */
+table.deq-pagina { width: 100%; border-collapse: collapse; }
+table.deq-pagina > tbody > tr > td, table.deq-pagina > tfoot > tr > td { padding: 0; border: none; vertical-align: top; }
+table.deq-pagina > tfoot { display: table-footer-group; }
+table.deq-pagina > tfoot > tr > td { padding-top: 6mm; }
+table.deq-pagina .deq-rodape { margin-top: 0; }

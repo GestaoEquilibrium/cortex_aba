@@ -380,6 +380,34 @@ function agendarPop(fn, atraso) {
   setTimeout(() => tentar(0), atraso);
 }
 
+// ─────────────── Impressao: rodape no pe de TODAS as paginas ───────────────
+// O Chrome nao respeita position:fixed dentro das margens do papel, mas repete <tfoot> em cada
+// pagina e reserva o espaco. Na hora de imprimir, cada documento vira uma tabela com o rodape no tfoot;
+// depois volta ao normal.
+window.addEventListener('beforeprint', () => {
+  document.querySelectorAll('.doc-eq').forEach(doc => {
+    if (doc.dataset.tabelado) return;
+    const rod = Array.from(doc.children).find(c => c.classList.contains('deq-rodape'));
+    if (!rod) return;
+    const tb = document.createElement('table'); tb.className = 'deq-pagina';
+    const tfoot = document.createElement('tfoot'); const trf = document.createElement('tr'); const tdf = document.createElement('td');
+    const tbody = document.createElement('tbody'); const trb = document.createElement('tr'); const tdb = document.createElement('td');
+    Array.from(doc.children).forEach(c => { if (c !== rod) tdb.appendChild(c); });
+    tdf.appendChild(rod); trf.appendChild(tdf); tfoot.appendChild(trf); trb.appendChild(tdb); tbody.appendChild(trb);
+    tb.appendChild(tfoot); tb.appendChild(tbody);
+    doc.appendChild(tb); doc.dataset.tabelado = '1';
+  });
+});
+window.addEventListener('afterprint', () => {
+  document.querySelectorAll('.doc-eq[data-tabelado]').forEach(doc => {
+    const tb = doc.querySelector(':scope > table.deq-pagina'); if (!tb) return;
+    const tdb = tb.querySelector('tbody > tr > td'), tdf = tb.querySelector('tfoot > tr > td');
+    Array.from(tdb.children).forEach(c => doc.appendChild(c));
+    Array.from(tdf.children).forEach(c => doc.appendChild(c));
+    tb.remove(); delete doc.dataset.tabelado;
+  });
+});
+
 function abrirModal(titulo, html, larga, tipo) {
   fecharModal();
   const t = TIPOS_POP[tipo];

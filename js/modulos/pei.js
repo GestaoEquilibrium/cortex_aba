@@ -14,6 +14,21 @@ window.MODULOS.pei = {
   el() { return document.getElementById('pagina'); },
   podeGerir() { return perm('pei') === 'E'; },
 
+  // ─────────────── TEXTOS FIXOS (modelo da clinica) ───────────────
+  PRAZOS: ['Curto (1 a 2 meses)', 'M\u00e9dio (3 a 4 meses)', 'Longo (5 a 6 meses)'],
+  ASSINATURA_PADRAO: { nome: 'Wessilon Marques de Sousa', titulo: 'Psic\u00f3logo e Analista do Comportamento \u00b7 CRP 04/53832' },
+  NOME_PROT_PEI: { qadi: 'question\u00e1rio estruturado com base em ferramentas padronizadas de avalia\u00e7\u00e3o do desenvolvimento infantil: VB-MAPP, Invent\u00e1rio Portage, Bayley Scales of Infant and Toddler Development \u2013 Third Edition (Bayley-III) e Vineland Adaptive Behavior Scales \u2013 Second Edition (Vineland-II)',
+                   ss: 'protocolo Socially Savvy Checklist', portage: 'Invent\u00e1rio Portage Operacionalizado' },
+  finalidadePadrao(primeiro, protocolo, freq, areas) {
+    const f = freq ? parseInt(freq, 10) : null;
+    return 'O objetivo deste plano de ensino \u00e9 promover o desenvolvimento das habilidades de ' + primeiro + ' com base nas informa\u00e7\u00f5es obtidas a partir da avalia\u00e7\u00e3o realizada com o ' +
+      (this.NOME_PROT_PEI[protocolo] || 'protocolo aplicado') + '. O plano prop\u00f5e uma interven\u00e7\u00e3o estruturada, com prazos e metas espec\u00edficas, divididos em ciclos de curto, m\u00e9dio e longo prazo. ' +
+      (f ? 'A interven\u00e7\u00e3o ser\u00e1 conduzida em ' + f + ' sess' + (f > 1 ? '\u00f5es semanais' : '\u00e3o semanal') + ' de 45 minutos' + (f > 1 ? ', totalizando ' + (f * 45) + ' minutos de atendimento semanal' : '') + '. ' : '') +
+      'O foco do plano \u00e9 aprimorar habilidades essenciais para o desenvolvimento de ' + primeiro + ', incluindo os treinos de ' + areas.join(', ').replace(/, ([^,]*)$/, ' e $1') +
+      '. Al\u00e9m das habilidades b\u00e1sicas de aten\u00e7\u00e3o como esperar e manter contato visual, com a adapta\u00e7\u00e3o do ensino conforme o progresso nas \u00e1reas avaliadas.';
+  },
+  RODAPE_FIXO: 'A programa\u00e7\u00e3o inicial para a reavalia\u00e7\u00e3o est\u00e1 prevista para ocorrer em 6 meses, per\u00edodo durante o qual ser\u00e1 monitorado o progresso das habilidades trabalhadas. A flexibilidade do plano visa otimizar os resultados e adaptar a interven\u00e7\u00e3o de acordo com o ritmo de aprendizagem da crian\u00e7a.\n\nOs dados mencionados foram discutidos em detalhes com os respons\u00e1veis pela crian\u00e7a, sendo v\u00e1lidos por um per\u00edodo de at\u00e9 seis meses a partir da data presente. Permanecemos \u00e0 disposi\u00e7\u00e3o para quaisquer d\u00favidas ou esclarecimentos adicionais que possam ser necess\u00e1rios.',
+
   // ─────────────────── ABA PEI DO PRONTUARIO ───────────────────
 
   async htmlDoPaciente(pacienteId) {
@@ -116,7 +131,10 @@ window.MODULOS.pei = {
       listaAreas = MODULOS.avaliacoes.AREAS;
     }
 
-    this._construtor = { avaliacaoId, planoId: planoBase ? planoBase.id : null, paciente: pac, candidatas, seq: 0, ehSS };
+    const { data: pl } = planoBase ? await sb.from('planos_terapeuticos').select('frequencia_semanal').eq('id', planoBase.id).single() : { data: null };
+    const protocolo = avInfo ? avInfo.protocolo : null;
+    this._construtor = { avaliacaoId, planoId: planoBase ? planoBase.id : null, paciente: pac, candidatas, seq: 0, ehSS, protocolo,
+      freq: pl ? pl.frequencia_semanal : null, listaAreas };
 
     const hoje = new Date();
     const fim = new Date(hoje); fim.setMonth(fim.getMonth() + 6);
@@ -128,6 +146,8 @@ window.MODULOS.pei = {
     Object.entries(porArea).forEach(([area, itens]) => {
       blocos += '<div class="cartao"><h3>' + area +
         ' <span class="selo selo-warn">' + itens.length + ' candidata(s)</span></h3>' +
+        '<div class="campo" style="margin-bottom:8px"><label>Recursos da area <small class="sub">(materiais; vale para todas as metas de ' + escaparHtml(area) + ')</small></label>' +
+        '<input class="pm-recurso-area" data-area="' + escaparHtml(area) + '" placeholder="Ex.: cartoes de objetos, espelho, bonecos, livros, rotina visual"></div>' +
         '<div id="pei-area-' + this.slug(area) + '">' +
         itens.map(c => this.htmlMetaLinha(area, c)).join('') +
         '</div>' +
@@ -149,8 +169,8 @@ window.MODULOS.pei = {
 
       '<div class="cartao faixa-azul"><h3>Identificacao (Formulario 02)</h3>' +
       '<div class="grade-form">' +
-      '  <div class="campo c3"><label>Finalidade</label>' +
-      '    <textarea id="pei-finalidade" rows="2">' + (!this._construtor.avaliacaoId ? '' : this._construtor.ehSS ? 'Desenvolver habilidades sociais identificadas no Socially Savvy Checklist, promovendo participacao conjunta, linguagem social e autorregulacao.' : 'Desenvolver habilidades essenciais identificadas na avaliacao QADI-R, promovendo autonomia, comunicacao e interacao social.') + '</textarea></div>' +
+      '  <div class="campo c3"><label>Finalidade <small class="sub">(texto do modelo, ja com protocolo e frequencia; ajuste se quiser)</small></label>' +
+      '    <textarea id="pei-finalidade" rows="4">' + escaparHtml(this.finalidadePadrao(pac.nome.split(' ')[0], this._construtor.protocolo, this._construtor.freq, listaAreas)) + '</textarea></div>' +
       '  <div class="campo"><label>Periodo - inicio</label>' +
       '    <input type="date" id="pei-inicio" value="' + hoje.toISOString().slice(0, 10) + '"></div>' +
       '  <div class="campo"><label>Periodo - fim</label>' +
@@ -158,7 +178,7 @@ window.MODULOS.pei = {
       '  <div class="campo"><label>Responsavel tecnico (assina)</label>' +
       '    <select id="pei-prof">' +
       (equipe || []).map(m => '<option value="' + m.id + '"' +
-        (m.id === pac.aplicador_id ? ' selected' : '') + '>' + escaparHtml(m.nome) + '</option>').join('') +
+        ((equipe || []).some(x => /^wessilon/i.test(x.nome)) ? (/^wessilon/i.test(m.nome) ? ' selected' : '') : (m.id === pac.aplicador_id ? ' selected' : '')) + '>' + escaparHtml(m.nome) + '</option>').join('') +
       '    </select></div>' +
       '</div></div>' +
 
@@ -183,8 +203,7 @@ window.MODULOS.pei = {
       (c.origem ? '<small class="pm-origem">' + c.origem + '</small>' : '') +
       (c.faixa ? '<small class="pm-origem">QADI-R &middot; ' + escaparHtml(c.faixa) + '</small>' : '') +
       '  <div class="pei-rp">' +
-      '    <input class="pm-recurso" placeholder="Recurso (ex.: pareamento com figuras, DTT)">' +
-      '    <input class="pm-prazo" placeholder="Prazo (ex.: 3 meses)">' +
+      '    <select class="pm-prazo">' + this.PRAZOS.map((p, i) => '<option value="' + escaparHtml(p) + '"' + (i === 0 ? ' selected' : '') + '>' + escaparHtml(p) + '</option>').join('') + '</select>' +
       '  </div>' +
       '</div></div>';
   },
@@ -205,11 +224,12 @@ window.MODULOS.pei = {
       if (!m.querySelector('input[type="checkbox"]').checked) return;
       const texto = m.querySelector('.pm-meta').value.trim();
       if (!texto) return;
+      const recArea = document.querySelector('.pm-recurso-area[data-area="' + m.dataset.area.replace(/"/g, '&quot;') + '"]');
       metas.push({
         area: m.dataset.area,
         meta: texto,
-        recurso: m.querySelector('.pm-recurso').value.trim() || null,
-        prazo: m.querySelector('.pm-prazo').value.trim() || null,
+        recurso: recArea && recArea.value.trim() ? recArea.value.trim() : null,
+        prazo: m.querySelector('.pm-prazo').value || null,
         origem_questao_id: m.dataset.questao ? parseInt(m.dataset.questao, 10) : null,
         origem_ss_id: m.dataset.ss ? parseInt(m.dataset.ss, 10) : null,
         ordem: i + 1
@@ -599,20 +619,21 @@ window.MODULOS.pei = {
     metas.forEach(m => { (porArea[m.area] = porArea[m.area] || []).push(m); });
     const cores = ['deq-teal', 'deq-amarelo', 'deq-rosa', ''];
 
-    const blocos = Object.entries(porArea).map(([area, lista], ix) =>
-      '<h2 style="margin-top:12px"><span class="ponto ' + cores[ix % 4] + '"></span>' + escaparHtml(area) +
-      ' <small>&middot; ' + lista.length + ' meta(s)</small></h2>' +
-      '<div class="deq-caixa">' +
-      '<table style="width:100%; border-collapse:collapse; font-size:12px">' +
-      '<tr><th style="text-align:left; padding:7px 12px; background:var(--eq-azul); color:#fff; font-size:10.5px; letter-spacing:.06em">META</th>' +
-      '<th style="text-align:left; padding:7px 12px; background:var(--eq-azul); color:#fff; font-size:10.5px; letter-spacing:.06em; width:220px">RECURSO</th>' +
-      '<th style="text-align:left; padding:7px 12px; background:var(--eq-azul); color:#fff; font-size:10.5px; letter-spacing:.06em; width:95px">PRAZO</th></tr>' +
-      lista.map(m =>
+    // Tabela unica: AREA DE ESTIMULO | META (lista) | RECURSO (da area) | PRAZO (um por meta)
+    const td = 'padding:7px 9px; border:1px solid var(--eq-linha); vertical-align:top; line-height:1.5; font-size:11px';
+    const blocos = '<table style="width:100%; border-collapse:collapse; margin-top:8px">' +
+      '<tr>' + ['&Aacute;REA DE EST&Iacute;MULO', 'META', 'RECURSO', 'PRAZO'].map((h, i) =>
+        '<th style="text-align:' + (i === 0 || i === 3 ? 'center' : 'left') + '; padding:7px 9px; background:var(--eq-azul); color:#fff; font-size:10px; letter-spacing:.06em; border:1px solid var(--eq-azul)' +
+        (i === 0 ? '; width:17%' : i === 2 ? '; width:27%' : i === 3 ? '; width:15%' : '') + '">' + h + '</th>').join('') + '</tr>' +
+      Object.entries(porArea).map(([area, lista]) =>
         '<tr>' +
-        '<td style="padding:7px 12px; border-top:1px solid var(--eq-linha); line-height:1.55">' + escaparHtml(m.meta) + '</td>' +
-        '<td style="padding:7px 12px; border-top:1px solid var(--eq-linha)">' + escaparHtml(m.recurso || '&mdash;') + '</td>' +
-        '<td style="padding:7px 12px; border-top:1px solid var(--eq-linha)">' + escaparHtml(m.prazo || '&mdash;') + '</td></tr>').join('') +
-      '</table></div>').join('');
+        '<td style="' + td + '; text-align:center; font-weight:800; color:var(--eq-azul-escuro); text-transform:uppercase">' + escaparHtml(area) + '</td>' +
+        '<td style="' + td + '">' + lista.map(m => '&ndash; ' + escaparHtml(m.meta).replace(/;?$/, ';')).join('<br>') + '</td>' +
+        '<td style="' + td + '">' + escaparHtml((lista.find(m => m.recurso) || {}).recurso || '&mdash;') + '</td>' +
+        '<td style="' + td + '; text-align:center">' + [...new Set(lista.map(m => m.prazo).filter(Boolean))].map(p => escaparHtml(p)).join('<br>') + '</td>' +
+        '</tr>').join('') + '</table>';
+    const idade = (() => { const a = new Date(pei.pacientes.data_nascimento + 'T12:00:00'), b = new Date(pei.periodo_inicio ? pei.periodo_inicio + 'T12:00:00' : Date.now());
+      let m = (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth()); if (b.getDate() < a.getDate()) m--; return Math.floor(m / 12) + ' anos e ' + (m % 12) + ' meses'; })();
 
     window._docPortal = { paciente_id: pei.paciente_id, tipo: 'pei', titulo: 'PEI' };
     document.getElementById('doc-eq-corpo').innerHTML =
@@ -631,22 +652,20 @@ window.MODULOS.pei = {
       '  <span class="deq-pilula">' + fmt(pei.periodo_inicio) + ' &ndash; ' + fmt(pei.periodo_fim) + '</span>' +
       '</div>' +
 
-      '<h2><span class="ponto deq-teal"></span>Identifica&ccedil;&atilde;o</h2>' +
-      '<div class="deq-caixa deq-dados" style="grid-template-columns:2fr 1fr 1.4fr">' +
+      '<div class="deq-caixa deq-dados" style="grid-template-columns:2fr 1.3fr 1fr 1.4fr">' +
       '  <div style="border-bottom:none"><small>Paciente</small><b>' + escaparHtml(pei.pacientes.nome) + '</b></div>' +
-      '  <div style="border-bottom:none"><small>Nascimento</small><b>' + fmt(pei.pacientes.data_nascimento) + '</b></div>' +
-      '  <div style="border-bottom:none"><small>Respons&aacute;vel T&eacute;cnico</small><b>' +
-           escaparHtml(pei.profissional ? pei.profissional.nome : '&mdash;') + '</b></div>' +
+      '  <div style="border-bottom:none"><small>Data de nascimento</small><b>' + fmt(pei.pacientes.data_nascimento) + ' (' + idade + ')</b></div>' +
+      '  <div style="border-bottom:none"><small>Data do PEI</small><b>' + fmt(pei.periodo_inicio) + '</b></div>' +
+      '  <div style="border-bottom:none"><small>Respons&aacute;vel pelo PEI</small><b>' + escaparHtml(pei.profissional ? pei.profissional.nome : this.ASSINATURA_PADRAO.nome) + '</b></div>' +
       '</div>' +
-
       (pei.finalidade
         ? '<h2><span class="ponto deq-amarelo"></span>Finalidade</h2>' +
           '<div class="deq-caixa deq-texto" style="min-height:0">' + escaparHtml(pei.finalidade) + '</div>' : '') +
-
       blocos +
-
-      '<div class="deq-assinatura">' + escaparHtml(pei.profissional ? pei.profissional.nome : '') +
-      '<br>Respons&aacute;vel T&eacute;cnico / N&ordm; do Registro de Classe</div>' +
+      '<div class="deq-caixa deq-texto" style="margin-top:10px">' + escaparHtml(this.RODAPE_FIXO).replace(/\n/g, '<br>') + '</div>' +
+      '<div class="deq-local">Uberl&acirc;ndia, ' + new Date((pei.periodo_inicio || new Date().toISOString().slice(0, 10)) + 'T12:00:00').toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' }) + '.</div>' +
+      '<div class="deq-assinatura">' + escaparHtml(pei.profissional ? pei.profissional.nome : this.ASSINATURA_PADRAO.nome) +
+      '<br><small>' + (pei.profissional && pei.profissional.nome !== this.ASSINATURA_PADRAO.nome ? 'Respons&aacute;vel pelo PEI' : escaparHtml(this.ASSINATURA_PADRAO.titulo)) + '</small></div>' +
 
       '<div class="deq-rodape">' +
       '  <span>Equilibrium Terapia Infantil &middot; Uberl&acirc;ndia/MG</span>' +

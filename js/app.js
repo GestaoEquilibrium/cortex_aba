@@ -118,6 +118,7 @@ async function iniciarApp() {
   }
 
   montarSidebar(profile.perfil);
+  montarBarraCelular(profile);
 
   // Primeiro acesso: foto + troca de senha obrigatorias (bloqueante)
   if (window.MODULOS && MODULOS.primeiro && MODULOS.primeiro.precisa(profile)) {
@@ -203,6 +204,83 @@ function montarSidebar(perfil) {
   });
 }
 
+// ─────────────── CELULAR: barra inferior + cabecalho + folha "Mais" ───────────────
+// Mesmos icones do sistema (ICONES). Ate 720px a sidebar some e esta barra assume.
+const BARRA_CELULAR = [
+  { id: 'inicio',    rotulo: 'Inicio' },
+  { id: 'agenda',    rotulo: 'Agenda' },
+  { id: 'pacientes', rotulo: 'Criancas' },
+  { id: 'aplicar',   rotulo: 'Aplicar', acao: 'aplicarHoje' },
+  { id: 'mais',      rotulo: 'Mais',   acao: 'menuMais' }
+];
+function montarBarraCelular(profile) {
+  document.getElementById('barra-celular')?.remove();
+  document.getElementById('cab-celular')?.remove();
+  if (profile.perfil === 'familia') return;
+  const permitido = id => NAVEGACAO.some(g => g.itens.some(i => i.id === id && (i.chave ? perm(i.chave) !== '' : i.perfis.includes(profile.perfil))));
+  const cab = document.createElement('header');
+  cab.className = 'cab-celular'; cab.id = 'cab-celular';
+  cab.innerHTML = '<div class="cab-cel-marca">' + document.querySelector('.marca .simbolo').outerHTML + '<b>CORTEX <span class="mao">aba</span></b></div>' +
+    '<div class="cab-cel-tit" id="cab-cel-tit"></div>' +
+    '<button class="cab-cel-avatar" onclick="MODULOS.perfil?.abrir?.()" title="Meu perfil">' + document.getElementById('avatar').innerHTML + '</button>';
+  document.body.appendChild(cab);
+  const nav = document.createElement('nav');
+  nav.className = 'barra-celular'; nav.id = 'barra-celular';
+  nav.innerHTML = BARRA_CELULAR.filter(b => b.acao || permitido(b.id)).map(b =>
+    '<button type="button" data-cel="' + b.id + '" onclick="' + (b.acao ? b.acao + '()' : 'abrirModulo(\'' + b.id + '\')') + '">' +
+    '<span class="icone">' + (ICONES[b.id] || ICONES_CEL[b.id] || '') + '</span><span>' + b.rotulo + '</span></button>').join('');
+  document.body.appendChild(nav);
+  marcarBarraCelular(window._moduloAtual || 'inicio');
+}
+const ICONES_CEL = {
+  aplicar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M10 8.5v7l5.5-3.5z"/></svg>',
+  mais:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>'
+};
+function marcarBarraCelular(id) {
+  document.querySelectorAll('.barra-celular button').forEach(b => b.classList.toggle('ativo', b.dataset.cel === id));
+  const t = document.getElementById('cab-cel-tit');
+  if (t) { const item = NAVEGACAO.flatMap(g => g.itens).find(i => i.id === id); t.textContent = item ? item.rotulo : ''; }
+}
+// "Mais": folha com o menu completo (mesmos itens e icones da sidebar)
+function menuMais() {
+  document.getElementById('folha-mais')?.remove();
+  const f = document.createElement('div');
+  f.className = 'folha-mais'; f.id = 'folha-mais';
+  f.innerHTML = '<div class="folha-mais-fundo" onclick="document.getElementById(\'folha-mais\').remove()"></div>' +
+    '<div class="folha-mais-corpo"><div class="folha-mais-puxador"></div>' +
+    document.getElementById('sidebar-nav').innerHTML +
+    '<button class="nav-item" onclick="document.getElementById(\'folha-mais\').remove(); sair()"><span class="icone">' +
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 4H5v16h5"/><path d="M14 8l4 4-4 4"/><line x1="18" y1="12" x2="9" y2="12"/></svg></span><span>Sair</span></button></div>';
+  document.body.appendChild(f);
+  f.querySelectorAll('a.nav-item').forEach(a => a.addEventListener('click', e => { e.preventDefault(); f.remove(); abrirModulo(a.dataset.modulo); }));
+  marcarBarraCelular('mais');
+}
+// "Aplicar": sessoes de hoje do aplicador, um toque para abrir a ficha
+async function aplicarHoje() {
+  marcarBarraCelular('aplicar');
+  const pagina = document.getElementById('pagina');
+  window._moduloAtual = 'aplicar';
+  const t = document.getElementById('cab-cel-tit'); if (t) t.textContent = 'Aplicar hoje';
+  pagina.innerHTML = '<div class="cartao"><p class="sub">Buscando as sessoes de hoje...</p></div>';
+  const d = new Date();
+  const hoje = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  const eu = window.CORTEX_SESSAO.user.id;
+  let { data: sess } = await sb.from('sessoes')
+    .select('id, hora_inicio, status, paciente_id, aplicador_id, pacientes(nome, foto_path)')
+    .eq('data', hoje).not('status', 'in', '("cancelada")').order('hora_inicio');
+  sess = sess || [];
+  if (ehEquipe()) { const meus = await meusPacientesIds(); sess = sess.filter(s => s.aplicador_id === eu || meus.has(s.paciente_id)); }
+  const ST = { agendada: ['selo-neutro', 'agendada'], checkin: ['selo-info', 'chegou'], em_atendimento: ['selo-warn', 'em atendimento'], concluida: ['selo-ok', 'concluida'], falta: ['selo-bad', 'falta'] };
+  pagina.innerHTML = '<div class="pagina-cabecalho"><div><h2>Aplicar hoje</h2><p class="sub">' + d.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' }) + ' &middot; ' + sess.length + ' sessao(oes)</p></div></div>' +
+    (sess.length ? sess.map(s => {
+      const st = ST[s.status] || ['selo-neutro', s.status];
+      return '<div class="cartao cel-sessao" onclick="MODULOS.programas.abrirFolhaProntuario(\'' + s.paciente_id + '\')">' +
+        '<div class="avatar-paciente ' + corAvatar(s.pacientes.nome) + '">' + s.pacientes.nome.split(' ').slice(0, 2).map(x => x[0]).join('').toUpperCase() + '</div>' +
+        '<div class="cel-sessao-txt"><b>' + escaparHtml(s.pacientes.nome) + '</b><small>' + String(s.hora_inicio).slice(0, 5) + ' &middot; toque para abrir a ficha</small></div>' +
+        '<span class="selo ' + st[0] + '">' + st[1] + '</span></div>';
+    }).join('') : '<div class="cartao"><div class="vazio"><strong>Nenhuma sessao hoje</strong>Quando houver, ela aparece aqui e um toque abre a ficha.</div></div>');
+}
+
 // Classe de cor do avatar (av-1..av-6) estavel por nome
 function corAvatar(nome) {
   let h = 0;
@@ -217,6 +295,9 @@ function abrirModulo(id) {
   const pagina = document.getElementById('pagina');
   pagina.innerHTML = '';
   window._moduloAtual = id;
+  if (typeof marcarBarraCelular === 'function') marcarBarraCelular(id);
+  document.getElementById('folha-mais')?.remove();
+  window.scrollTo(0, 0);
 
   const modulo = window.MODULOS[id];
   if (modulo && typeof modulo.render === 'function') {

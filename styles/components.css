@@ -2385,3 +2385,85 @@
 .perm-toggle.vazio { display: inline-block; border: none; background: transparent; }
 .tabela-perm .perm-sub td { background: var(--surface-alt); font-size: 12px; padding-top: 4px; padding-bottom: 4px; }
 .perm.perm-herdado { border-style: dashed; opacity: .75; }
+
+/* ══════════════ TABLET (721-1024px): sidebar so com icones, fixa ══════════════ */
+@media (min-width: 721px) and (max-width: 1024px) {
+    .sidebar { position: fixed; width: calc(var(--sidebar-mini) - var(--sidebar-margem)); margin: 0; height: auto; }
+    .sidebar .nome, .sidebar .nav-grupo-titulo, .sidebar .nav-item span:not(.icone), .sidebar .cartao-usuario .quem, .sidebar .botao-icone.so-expandida { display: none; }
+    .sidebar-topo { justify-content: center; padding-left: 8px; padding-right: 8px; }
+    .nav-item { justify-content: center; padding-left: 0; padding-right: 0; }
+    .cartao-usuario { justify-content: center; padding: 8px; }
+    .app-main { margin-left: calc(var(--sidebar-mini) + var(--sidebar-margem)); padding: 14px 16px 28px; }
+    .cab-celular, .barra-celular { display: none; }
+}
+/* ══════════════ CELULAR (ate 720px): barra inferior + cabecalho ══════════════ */
+.cab-celular, .barra-celular { display: none; }
+@media (max-width: 720px) {
+    .sidebar { display: none !important; }
+    .app-main { margin-left: 0 !important; padding: 64px 12px calc(76px + env(safe-area-inset-bottom)); }
+    .cab-celular {
+        display: flex; align-items: center; gap: 10px;
+        position: fixed; top: 0; left: 0; right: 0; z-index: 40;
+        height: 54px; padding: 0 12px calc(0px + env(safe-area-inset-top));
+        background: var(--side-bg); color: #fff;
+        box-shadow: 0 4px 14px rgba(20, 17, 50, .25);
+    }
+    .cab-cel-marca { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 14px; }
+    .cab-cel-marca .simbolo { width: 30px; height: 30px; border-radius: 9px; background: #F3B63D; color: var(--indigo); display: inline-flex; align-items: center; justify-content: center; }
+    .cab-cel-marca .simbolo svg { width: 18px; height: 18px; }
+    .cab-cel-marca .mao { color: #F3B63D; font-family: 'Caveat', cursive; font-size: 17px; }
+    .cab-cel-tit { flex: 1; text-align: center; font-size: 13px; font-weight: 700; color: #D9D6F5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .cab-cel-avatar { width: 34px; height: 34px; border-radius: 50%; border: 2px solid rgba(255,255,255,.35); background: #534AB7; color: #fff; font-weight: 800; font-size: 12px; overflow: hidden; display: inline-flex; align-items: center; justify-content: center; padding: 0; }
+    .barra-celular {
+        display: flex; justify-content: space-around; align-items: stretch;
+        position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+        background: var(--surface); border-top: 1px solid var(--line);
+        padding: 6px 4px calc(8px + env(safe-area-inset-bottom));
+        box-shadow: 0 -4px 14px rgba(20, 24, 60, .08);
+    }
+    .barra-celular button {
+        flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px;
+        border: none; background: transparent; padding: 4px 2px; font: inherit; font-size: 10.5px; font-weight: 700;
+        color: var(--ink-soft); cursor: pointer; border-radius: 10px;
+    }
+    .barra-celular button .icone { width: 40px; height: 26px; border-radius: 13px; display: inline-flex; align-items: center; justify-content: center; transition: background .15s; }
+    .barra-celular button .icone svg { width: 20px; height: 20px; }
+    .barra-celular button.ativo { color: var(--indigo); }
+    .barra-celular button.ativo .icone { background: #EEEDFE; }
+    [data-modo="escuro"] .barra-celular button.ativo { color: #CECBF6; }
+    [data-modo="escuro"] .barra-celular button.ativo .icone { background: rgba(124,111,208,.25); }
+    /* folha "Mais" */
+    .folha-mais { position: fixed; inset: 0; z-index: 60; }
+    .folha-mais-fundo { position: absolute; inset: 0; background: rgba(20,17,50,.55); }
+    .folha-mais-corpo { position: absolute; left: 0; right: 0; bottom: 0; max-height: 82vh; overflow-y: auto; background: var(--surface); border-radius: 22px 22px 0 0; padding: 8px 12px calc(16px + env(safe-area-inset-bottom)); animation: folha-sobe .22s ease; }
+    .folha-mais-puxador { width: 40px; height: 4px; border-radius: 2px; background: var(--line-strong); margin: 4px auto 10px; }
+    .folha-mais-corpo .nav-grupo-titulo { color: var(--ink-soft); padding: 12px 10px 4px; }
+    .folha-mais-corpo .nav-item { color: var(--ink); width: 100%; border: none; background: transparent; text-align: left; display: flex; align-items: center; gap: 12px; padding: 12px 10px; font: inherit; font-size: 14px; font-weight: 600; border-radius: 12px; }
+    .folha-mais-corpo .nav-item .icone { color: var(--ink-muted); }
+    .folha-mais-corpo .nav-item.ativa { background: #EEEDFE; color: var(--indigo); }
+    @keyframes folha-sobe { from { transform: translateY(30px); opacity: 0; } to { transform: none; opacity: 1; } }
+    /* conteudo em uma coluna, tudo largo */
+    .pagina-cabecalho { flex-direction: column; align-items: stretch; gap: 8px; }
+    .pagina-cabecalho h2 { font-size: 19px; }
+    .toolbar { flex-direction: column; align-items: stretch; }
+    .toolbar input, .toolbar select { width: 100%; }
+    .grade-pacientes, .grade-visao, .grade-form, .rm-split, .grade-2col { grid-template-columns: 1fr !important; }
+    .cartao { padding: 12px; }
+    .btn { padding: 11px 14px; font-size: 13.5px; }
+    .btn-chip { padding: 8px 12px; }
+    .abas { overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; }
+    .aba { white-space: nowrap; }
+    .capa { flex-direction: column; text-align: center; }
+    .capa-acoes { justify-content: center; }
+    table:not(.ag-eq) { display: block; overflow-x: auto; }
+    .folha-overlay { padding: 0; }
+    .folha-pagina { border-radius: 0; max-width: none !important; min-height: 100vh; padding: 12px; }
+    .modal { max-width: 96vw; max-height: 88vh; overflow-y: auto; }
+    .rm-previa { display: none; }
+    .escopo-toggle { margin-left: 0; }
+    .ficha-passos { overflow-x: auto; flex-wrap: nowrap; }
+    .cel-sessao { display: flex; align-items: center; gap: 12px; cursor: pointer; }
+    .cel-sessao .cel-sessao-txt { flex: 1; min-width: 0; }
+    .cel-sessao b { display: block; font-size: 14px; }
+    .cel-sessao small { color: var(--ink-muted); font-size: 12px; }
+}

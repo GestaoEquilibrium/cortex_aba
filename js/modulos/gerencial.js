@@ -132,8 +132,12 @@ window.MODULOS.gerencial = {
     ]);
     const pacs = (rPac.data || []).map(p => ({ ...p, n: this.normNome(p.nome) }));
     const profs = (rProf.data || []).map(p => ({ ...p, n: this.normNome(p.nome) }));
+    // pares lembrados de importacoes anteriores (nome do outro sistema -> crianca)
+    const { data: rAlias } = await sb.from('importacao_alias').select('nome_externo, paciente_id');
+    const alias = {}; (rAlias || []).forEach(a => { alias[this.normNome(a.nome_externo)] = a.paciente_id; });
     const achaPac = nome => {
       const n = this.normNome(nome);
+      if (alias[n]) { const p = pacs.find(x => x.id === alias[n]); if (p) return p; }
       return pacs.find(p => p.n === n) || pacs.find(p => n.startsWith(p.n) || p.n.startsWith(n)) || null;
     };
     const achaProf = nome => {
@@ -182,17 +186,30 @@ window.MODULOS.gerencial = {
     const erro = document.getElementById('imp-erro'); erro.classList.remove('visivel');
     const botao = document.getElementById('imp-btn'); botao.disabled = true;
     const passo = t => { botao.textContent = t; };
-    document.querySelectorAll('[data-imp-pac]').forEach(s => { I.mapaPac[s.dataset.impPac] = s.value ? I.pacs.find(p => p.id === s.value) : null; });
+    const novosAlias = [];
+    document.querySelectorAll('[data-imp-pac]').forEach(s => {
+      I.mapaPac[s.dataset.impPac] = s.value ? I.pacs.find(p => p.id === s.value) : null;
+      if (s.value) novosAlias.push({ nome_externo: s.dataset.impPac, paciente_id: s.value });
+    });
+    if (novosAlias.length) await sb.from('importacao_alias').upsert(novosAlias, { onConflict: 'nome_externo' });
     document.querySelectorAll('[data-imp-prof]').forEach(s => { I.mapaProf[s.dataset.impProf] = s.value ? I.profs.find(p => p.id === s.value) : null; });
 
     try {
-      const regs = I.regs.filter(r => I.mapaPac[r.paciente]);
+      let regs = I.regs.filter(r => I.mapaPac[r.paciente]);
       const pulados = I.regs.length - regs.length;
       const datas = regs.map(r => r.data).sort();
       const pacIds = [...new Set(regs.map(r => I.mapaPac[r.paciente].id))];
 
       // 1) sessoes: upsert pela chave (paciente, data, hora)
       passo('Gravando sessoes...');
+      // duplicidades do outro sistema (mesma crianca, data e hora): fica a de status mais avancado
+      const peso = { concluida: 4, falta: 3, checkin: 2, agendada: 1, cancelada: 0 };
+      const unicos = {};
+      regs.forEach(r => {
+        const k = I.mapaPac[r.paciente].id + '|' + r.data + '|' + r.hora;
+        if (!unicos[k] || (peso[r.status] || 0) > (peso[unicos[k].status] || 0)) unicos[k] = r;
+      });
+      regs = Object.values(unicos);
       const linhas = regs.map(r => ({
         paciente_id: I.mapaPac[r.paciente].id, data: r.data, hora_inicio: r.hora, duracao_min: 40,
         aplicador_id: I.mapaProf[r.profissional] ? I.mapaProf[r.profissional].id : null,

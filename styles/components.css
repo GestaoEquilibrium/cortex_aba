@@ -2540,3 +2540,11 @@
 .cat-cores { display: flex; flex-wrap: wrap; gap: 8px; }
 .cat-cor { width: 30px; height: 30px; border-radius: 50%; border: 3px solid transparent; cursor: pointer; }
 .cat-cor.ativo { border-color: var(--ink); box-shadow: 0 0 0 2px #fff inset; }
+
+/* ── Janela da sessao: abas, confirmacao e rodape ──────────────────── */
+.sess-abas { margin: 10px 0 12px; }
+.sess-conf { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 10px; padding: 10px 12px; border: 1.5px dashed var(--line); border-radius: 12px; }
+.sess-conf small { font-size: 10px; font-weight: 800; letter-spacing: .08em; color: var(--ink-soft); width: 100%; }
+.sess-rodape-meta { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--line); font-size: 11px; color: var(--ink-soft); }
+.st-btn.st-azul { border-color: #BFDBFE; color: #1D4ED8; }
+.st-btn.st-azul.atual { background: #1468B2; border-color: #1468B2; color: #fff; }

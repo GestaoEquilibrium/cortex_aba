@@ -292,7 +292,7 @@ window.MODULOS.agenda = {
     if (!pacId) { erro.textContent = 'Escolha o paciente cadastrado para confirmar.'; erro.classList.add('visivel'); return; }
     const { data: nova, error } = await sb.from('sessoes').insert({
       paciente_id: pacId, data: r.data, hora_inicio: r.hora_inicio, duracao_min: this.durDe(r.aplicador_id),
-      aplicador_id: r.aplicador_id, status: 'agendada'
+      aplicador_id: r.aplicador_id, status: 'agendada', criado_por: this.sessao.user.id
     }).select('id').single();
     if (error) { erro.textContent = 'Sessao: ' + error.message; erro.classList.add('visivel'); return; }
     await sb.from('reservas_agenda').update({ status: 'confirmado', paciente_id: pacId, sessao_id: nova.id,
@@ -489,99 +489,185 @@ window.MODULOS.agenda = {
 
   // ───────────────────────── JANELA DA SESSAO ─────────────────────────
 
-  async abrirSessao(id) {
+  // ─────────────── JANELA DA SESSAO (abas: Resumo · Paciente · Guias · Historico) ───────────────
+  MOTIVOS_CANCEL: [
+    ['paciente', 'Desmarcado pelo paciente'],
+    ['clinica', 'Desmarcado pela clinica'],
+    ['profissional', 'Profissional ausente'],
+    ['nao_autorizado', 'Nao autorizado (convenio)']
+  ],
+
+  async abrirSessao(id, aba) {
     const { data: s } = await sb.from('sessoes')
-      .select('*, pacientes(id, nome, data_nascimento, foto_path), profissional:profiles!sessoes_aplicador_id_fkey(nome), salas(nome)')
+      .select('*, pacientes(id, nome, data_nascimento, foto_path, convenio, carteirinha, nivel, cid), profissional:profiles!sessoes_aplicador_id_fkey(nome), salas(nome), criador:profiles!sessoes_criado_por_fkey(nome)')
       .eq('id', id).single();
     if (!s) return;
+    const pac = s.pacientes;
+    const [rResp, rGuias, rAud] = await Promise.all([
+      sb.from('responsaveis').select('nome, telefone, email, parentesco, principal').eq('paciente_id', pac.id).order('principal', { ascending: false }),
+      sb.from('guias').select('id, numero, qtd_autorizada, vigencia_inicio, vigencia_fim, convenio, obs').eq('paciente_id', pac.id).order('vigencia_fim', { ascending: false }),
+      sb.from('auditoria').select('usuario_nome, criado_em, acao').eq('tabela', 'sessoes').or('dados_depois->>id.eq.' + id + ',dados_antes->>id.eq.' + id).order('criado_em', { ascending: false }).limit(1)
+    ]);
+    const resps = rResp.data || [];
+    const resp = resps.find(r => r.telefone) || resps[0] || null;
+    const guias = rGuias.data || [];
+    const ultAud = rAud.data && rAud.data[0];
 
-    const { data: resps } = await sb.from('responsaveis')
-      .select('nome, telefone, principal')
-      .eq('paciente_id', s.pacientes.id)
-      .order('principal', { ascending: false });
-    const resp = (resps || []).find(r => r.telefone) || (resps || [])[0] || null;
+    // saldo das guias (sessoes concluidas dentro da vigencia)
+    const { data: consumo } = guias.length
+      ? await sb.from('sessoes').select('id, data, status').eq('paciente_id', pac.id)
+          .gte('data', guias.map(g => g.vigencia_inicio).sort()[0]).lte('data', guias.map(g => g.vigencia_fim).sort().reverse()[0])
+      : { data: [] };
+    guias.forEach(g => {
+      const dentro = (consumo || []).filter(x => x.data >= g.vigencia_inicio && x.data <= g.vigencia_fim);
+      g.atendidas = dentro.filter(x => x.status === 'concluida').length;
+      g.agendadas = dentro.filter(x => !['concluida', 'falta', 'cancelada'].includes(x.status)).length;
+      g.saldo = g.qtd_autorizada - g.atendidas;
+      g.vigente = g.vigencia_inicio <= s.data && s.data <= g.vigencia_fim;
+    });
+    const guiaVigente = guias.find(g => g.vigente && g.saldo > 0) || null;
+    const guiaSemSaldo = !guiaVigente && guias.find(g => g.vigente) || null;
 
-    const dataFmt = new Date(s.data + 'T12:00:00').toLocaleDateString('pt-BR');
     const aberta = !['concluida', 'falta', 'cancelada'].includes(s.status);
-
     const podeOperar = perm('agenda.status') === 'E';
-    // aplicador da propria sessao (ou da carteira) marca Concluida / Falta sem ter a agenda liberada
+    const podeCancelar = perm('agenda.cancelar') === 'E';
     const meus = ehEquipe() ? await meusPacientesIds() : new Set();
-    const ehMinha = ehEquipe() && (s.aplicador_id === window.CORTEX_SESSAO.user.id || meus.has(s.pacientes.id));
-
+    const ehMinha = ehEquipe() && (s.aplicador_id === window.CORTEX_SESSAO.user.id || meus.has(pac.id));
     let fotoUrl = null;
-    if (s.pacientes.foto_path) {
-      try {
-        const { data: u } = await sb.storage.from('documentos')
-          .createSignedUrl(s.pacientes.foto_path, 600);
-        fotoUrl = u ? u.signedUrl : null;
-      } catch (e) {}
-    }
+    if (pac.foto_path) { try { const { data: u } = await sb.storage.from('documentos').createSignedUrl(pac.foto_path, 600); fotoUrl = u ? u.signedUrl : null; } catch (e) {} }
 
-    const STATUS = [
-      ['agendada',       'Agendada',        ''],
-      ['checkin',        'Chegou (check-in)', ''],
-      ['em_atendimento', 'Em atendimento',  ''],
-      ['concluida',      'Concluida',       'st-verde'],
-      ['falta',          'Falta',           'st-vermelho'],
-      ['cancelada',      'Cancelada',       'st-cinza']
-    ];
-    const listaStatus = STATUS.map(([v, rotulo, cor]) => {
-      const atual = s.status === v;
-      const liberado = podeOperar || (ehMinha && ['concluida', 'falta'].includes(v));
-      return '<button type="button" class="st-btn ' + cor + (atual ? ' atual' : '') + '" ' +
-        (atual || !liberado ? 'disabled' : 'onclick="MODULOS.agenda.mudarStatusSeguro(\'' + id + '\', \'' + v + '\')"') +
-        '>' + (atual ? '&#10003; ' : '') + rotulo + '</button>';
-    }).join('');
-
-    let whats = '';
-    if (podeOperar && aberta && resp && resp.telefone) {
-      whats = '<button class="btn btn-fantasma" style="width:100%" onclick="MODULOS.agenda.abrirWhats(\'' + id + '\')">' +
-        '&#128172; Enviar confirmacao no WhatsApp</button>';
-    }
-
-    this._sessaoModal = { s, resp };
-
+    this._sessaoModal = { s, resp, guias, guiaVigente };
     const dExt = new Date(s.data + 'T12:00:00');
     const mesCurto = dExt.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '');
+    const fmt = d => d ? d.split('-').reverse().join('/') : '-';
+    const fim = (() => { const [h, m] = s.hora_inicio.split(':').map(Number); const t = h * 60 + m + (s.duracao_min || 40); return String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0'); })();
+
+    // ── status: fluxo normal + faltou + cancelamentos com motivo
+    const btnSt = (v, rot, cor, ativo, acao) =>
+      '<button type="button" class="st-btn ' + cor + (ativo ? ' atual' : '') + '" ' + (ativo || !acao ? 'disabled' : 'onclick="' + acao + '"') + '>' + (ativo ? '&#10003; ' : '') + rot + '</button>';
+    const lib = v => podeOperar || (ehMinha && ['concluida', 'falta'].includes(v));
+    const fluxo = [['agendada', 'Agendada', ''], ['checkin', 'Check-in (chegou)', 'st-azul'], ['em_atendimento', 'Em atendimento', ''], ['concluida', 'Concluida', 'st-verde'], ['falta', 'Faltou', 'st-vermelho']]
+      .map(([v, rot, cor]) => btnSt(v, rot, cor, s.status === v, lib(v) ? "MODULOS.agenda.mudarStatusSeguro('" + id + "', '" + v + "')" : null)).join('');
+    const cancel = this.MOTIVOS_CANCEL.map(([m, rot]) =>
+      btnSt('cancelada', rot, 'st-cinza', s.status === 'cancelada' && s.motivo_cancelamento === m, podeCancelar ? "MODULOS.agenda.cancelarCom('" + id + "', '" + m + "')" : null)).join('');
+    const reabrir = !aberta && podeCancelar ? '<button type="button" class="st-btn" onclick="MODULOS.agenda.mudarStatusSeguro(\'' + id + '\', \'agendada\')">&#8634; Reabrir como agendada</button>' : '';
+
+    // ── confirmacao
+    const conf = s.confirmacao === 'confirmada' ? '<span class="selo selo-ok">CONFIRMADA</span>' : s.confirmacao === 'desmarcada' ? '<span class="selo selo-bad">DESMARCADA PELA FAMILIA</span>' : '<span class="selo selo-neutro">SEM CONFIRMACAO</span>';
+    const base = window.location.origin + window.location.pathname.replace(/[^/]*$/, '');
+    const link = s.confirmacao_token ? base + 'confirmar.html?t=' + s.confirmacao_token : '';
+    const blocoConf = aberta && podeOperar ? '<div class="sess-conf"><small>CONFIRMAR POR</small>' +
+      (resp && resp.telefone ? '<button class="btn-chip cheio" onclick="MODULOS.agenda.abrirWhats(\'' + id + '\')">WhatsApp</button>' : '<span class="sub">sem telefone</span>') +
+      (link ? '<button class="btn-chip" onclick="navigator.clipboard.writeText(\'' + link + '\').then(function(){ popAviso(\'Link de confirmacao copiado.\'); })" title="Copiar link">&#10697; copiar link</button>' : '') +
+      (resp && resp.email ? '<a class="btn-chip" href="mailto:' + escaparHtml(resp.email) + '?subject=' + encodeURIComponent('Confirmacao de sessao - ' + pac.nome.split(' ')[0]) + '&body=' + encodeURIComponent('Ola! Confirme a sessao de ' + pac.nome.split(' ')[0] + ' em ' + fmt(s.data) + ' as ' + s.hora_inicio.slice(0, 5) + ': ' + link) + '">E-mail</a>' : '') +
+      '</div>' : '';
+
+    // ── guia da sessao
+    const guiaTxt = s.guia_id && guias.find(g => g.id === s.guia_id)
+      ? (g => '<b>Guia ' + escaparHtml(g.numero) + '</b> &middot; saldo ' + g.saldo + ' de ' + g.qtd_autorizada)(guias.find(g => g.id === s.guia_id))
+      : guiaVigente ? '<b>Guia ' + escaparHtml(guiaVigente.numero) + '</b> vigente &middot; saldo ' + guiaVigente.saldo + ' de ' + guiaVigente.qtd_autorizada + ' <small class="sub">(vincula no check-in)</small>'
+      : guiaSemSaldo ? '<b style="color:var(--st-bad)">Guia ' + escaparHtml(guiaSemSaldo.numero) + ' sem saldo</b>'
+      : (pac.convenio && !/particular/i.test(pac.convenio) ? '<b style="color:var(--st-warn)">Sem guia autorizada para esta data</b>' : '<span class="sub">Particular &middot; sem guia</span>');
+
+    const aba0 = aba || 'resumo';
+    const tab = (idT, rot) => '<button type="button" class="aba' + (aba0 === idT ? ' ativa' : '') + '" onclick="MODULOS.agenda.abrirSessao(\'' + id + '\', \'' + idT + '\')">' + rot + '</button>';
+
+    let corpo = '';
+    if (aba0 === 'resumo') {
+      corpo =
+        '<div class="sess-grid">' +
+        '  <div class="sess-col">' +
+        '    <p class="st-titulo">Data e horario</p>' +
+        '    <div class="sess-quando"><div class="dia-badge"><b>' + s.data.slice(8) + '</b><span>' + mesCurto + '</span></div>' +
+        '      <div><b>' + dExt.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) + '</b>' +
+        '      <p class="sub">' + s.hora_inicio.slice(0, 5) + ' &ndash; ' + fim + ' (' + (s.duracao_min || 40) + ' min)</p></div></div>' +
+        '    <div class="grade-visao" style="grid-template-columns:1fr 1fr">' +
+        '      <div class="caixa-info"><small>Procedimento</small><b>Psicoterapia ABA &middot; Sess&atilde;o</b></div>' +
+        '      <div class="caixa-info"><small>Convenio</small><b>' + escaparHtml(pac.convenio || 'Particular') + (pac.carteirinha ? '<br><small class="sub">' + escaparHtml(pac.carteirinha) + '</small>' : '') + '</b></div>' +
+        '      <div class="caixa-info"><small>Aplicador</small><b>' + escaparHtml(s.profissional ? s.profissional.nome : '-') + '</b></div>' +
+        '      <div class="caixa-info"><small>Sala</small><b>' + escaparHtml(s.salas ? s.salas.nome : '-') + '</b></div>' +
+        '    </div>' +
+        '    <div class="caixa-info" style="margin-top:8px"><small>Guia</small>' + guiaTxt + '</div>' +
+        '    <div class="caixa-info" style="margin-top:8px"><small>Observacoes ' + (podeOperar ? '<button class="btn-chip" style="margin-left:6px" onclick="MODULOS.agenda.editarObs(\'' + id + '\')">&#9998;</button>' : '') + '</small>' +
+        '      <div id="sess-obs" style="font-size:13px; line-height:1.5">' + (s.observacoes ? escaparHtml(s.observacoes).replace(/\n/g, '<br>') : '<span class="sub">&mdash;</span>') + '</div></div>' +
+        blocoConf +
+        '  </div>' +
+        '  <div class="sess-col">' +
+        '    <p class="st-titulo">Alterar status</p>' + fluxo +
+        '    <p class="st-titulo" style="margin-top:10px">Cancelar com motivo</p>' + cancel + reabrir +
+        '  </div>' +
+        '</div>' +
+        '<div class="sess-rodape-meta"><span>Criado por <b>' + escaparHtml(s.criador ? s.criador.nome : (s.id_externo ? 'importacao' : '-')) + '</b>' + (s.criado_em ? ' &middot; ' + new Date(s.criado_em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '') + '</span>' +
+        '<span>Atualizado por <b>' + escaparHtml(ultAud ? ultAud.usuario_nome || 'sistema' : '-') + '</b>' + (ultAud ? ' &middot; ' + new Date(ultAud.criado_em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '') + '</span></div>';
+    } else if (aba0 === 'paciente') {
+      const idade = pac.data_nascimento ? calcularIdade(pac.data_nascimento) : '-';
+      corpo = '<div class="grade-visao" style="grid-template-columns:1fr 1fr">' +
+        '<div class="caixa-info"><small>Nascimento</small><b>' + fmt(pac.data_nascimento) + ' (' + idade + ')</b></div>' +
+        '<div class="caixa-info"><small>Nivel ABA</small><b>' + escaparHtml(pac.nivel || '-') + '</b></div>' +
+        '<div class="caixa-info"><small>Convenio</small><b>' + escaparHtml(pac.convenio || 'Particular') + '</b></div>' +
+        '<div class="caixa-info"><small>Carteirinha</small><b>' + escaparHtml(pac.carteirinha || '-') + '</b></div>' +
+        '<div class="caixa-info"><small>CID-11</small><b>' + escaparHtml(pac.cid || '-') + '</b></div></div>' +
+        '<p class="st-titulo" style="margin-top:12px">Responsaveis</p>' +
+        (resps.length ? resps.map(r => '<div class="linha-doc"><div><b>' + escaparHtml(r.nome) + '</b><small>' + escaparHtml(r.parentesco || '') + (r.telefone ? ' &middot; ' + escaparHtml(r.telefone) : '') + (r.email ? ' &middot; ' + escaparHtml(r.email) : '') + '</small></div>' +
+          (r.principal ? '<span class="selo selo-ok">principal</span>' : '') + '</div>').join('') : '<p class="sub">Nenhum responsavel cadastrado.</p>') +
+        '<div class="barra-acoes"><button class="btn btn-fantasma" onclick="fecharModal(); MODULOS.pacientes.telaDetalhe(\'' + pac.id + '\')">Abrir prontuario</button></div>';
+    } else if (aba0 === 'guias') {
+      corpo = (guias.length ? guias.map(g => {
+        const pct = g.qtd_autorizada ? Math.min(100, Math.round(g.atendidas * 100 / g.qtd_autorizada)) : 0;
+        return '<div class="cartao" style="padding:10px 12px; margin-bottom:8px' + (g.vigente ? '; border-color:var(--acao)' : '') + '">' +
+          '<div style="display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap"><b>Guia ' + escaparHtml(g.numero) + '</b>' +
+          '<span class="pac-selos">' + (g.vigente ? '<span class="selo selo-ok">vigente</span>' : g.vigencia_fim < s.data ? '<span class="selo selo-neutro">vencida</span>' : '<span class="selo selo-info">futura</span>') +
+          (s.guia_id === g.id ? '<span class="selo selo-info">desta sessao</span>' : '') + '</span></div>' +
+          '<small class="sub">' + escaparHtml(g.convenio || pac.convenio || '') + ' &middot; vigencia ' + fmt(g.vigencia_inicio) + ' a ' + fmt(g.vigencia_fim) + '</small>' +
+          '<div style="display:flex; align-items:center; gap:10px; margin-top:6px"><div style="flex:1; height:8px; background:var(--surface-alt); border-radius:5px; overflow:hidden"><div style="height:100%; width:' + pct + '%; background:' + (pct >= 100 ? 'var(--st-bad)' : pct >= 80 ? '#D97706' : '#15803D') + '"></div></div>' +
+          '<small><b>' + g.atendidas + '</b> atendidas &middot; <b>' + g.agendadas + '</b> a realizar &middot; saldo <b style="color:' + (g.saldo <= 0 ? 'var(--st-bad)' : g.saldo <= 5 ? '#D97706' : '#15803D') + '">' + g.saldo + '</b></small></div>' +
+          (podeOperar && aberta && s.guia_id !== g.id && g.saldo > 0 ? '<div class="barra-acoes" style="margin-top:6px"><button class="btn-chip" onclick="MODULOS.agenda.vincularGuia(\'' + id + '\', \'' + g.id + '\')">Usar esta guia nesta sessao</button></div>' : '') +
+          '</div>';
+      }).join('') : '<p class="sub">Nenhuma guia cadastrada para esta crianca.</p>') +
+        (perm('guias') === 'E' ? '<div class="barra-acoes"><button class="btn btn-fantasma" onclick="fecharModal(); abrirModulo(\'guias\')">Cadastrar / gerir guias</button></div>' : '');
+    } else {
+      corpo = '<div class="sess-historico" id="sess-hist" style="max-height:none; font-size:12px"><small class="sub">Carregando historico...</small></div>';
+    }
 
     abrirModal('Sessao',
       '<div class="sess-cab">' +
-      '  <div class="sess-avatar">' +
-      (fotoUrl ? '<img src="' + fotoUrl + '" alt="">' :
-        escaparHtml(s.pacientes.nome.trim().split(/\s+/).map(x => x[0]).slice(0, 2).join('').toUpperCase())) +
-      '  </div>' +
-      '  <div class="sess-quem">' +
-      '    <strong>' + escaparHtml(s.pacientes.nome) + '</strong>' +
-      '    <span>' + (resp
-             ? escaparHtml(resp.nome.split(' ')[0]) + (resp.telefone ? ' &middot; ' + escaparHtml(resp.telefone) : '')
-             : 'Sem responsavel cadastrado') + '</span>' +
-      '  </div>' +
+      '  <div class="sess-avatar">' + (fotoUrl ? '<img src="' + fotoUrl + '" alt="">' : escaparHtml(pac.nome.trim().split(/\s+/).map(x => x[0]).slice(0, 2).join('').toUpperCase())) + '</div>' +
+      '  <div class="sess-quem"><strong>' + escaparHtml(pac.nome) + '</strong>' +
+      '    <span>' + (resp ? escaparHtml(resp.nome.split(' ')[0]) + (resp.telefone ? ' &middot; ' + escaparHtml(resp.telefone) : '') : 'Sem responsavel cadastrado') + '</span>' +
+      '    <span style="margin-top:4px">' + conf + '</span></div>' +
       '  <div class="sess-cab-acoes">' + this.selosSessao(s) +
-      '    <button class="btn-chip claro" onclick="fecharModal(); abrirModulo(\'pacientes\'); ' +
-      '      setTimeout(function(){ MODULOS.pacientes.telaDetalhe(\'' + s.pacientes.id + '\'); }, 50)">Prontuario</button>' +
-      '  </div>' +
+      '    <button class="btn-chip claro" onclick="fecharModal(); MODULOS.pacientes.telaDetalhe(\'' + pac.id + '\')">Prontuario</button></div>' +
       '</div>' +
+      '<div class="abas sess-abas">' + tab('resumo', 'Resumo') + tab('paciente', 'Dados do paciente') + tab('guias', 'Guias' + (guias.length ? ' <small>' + guias.length + '</small>' : '')) + tab('historico', 'Historico') + '</div>' +
+      corpo, true, 'agenda');
+    if (aba0 === 'historico') this.historicoSessao(s.id);
+  },
 
-      '<div class="sess-grid">' +
-      '  <div class="sess-col">' +
-      '    <div class="sess-quando">' +
-      '      <div class="dia-badge"><b>' + s.data.slice(8) + '</b><span>' + mesCurto + '</span></div>' +
-      '      <div><b>' + dExt.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' }) + '</b>' +
-      '      <p class="sub">' + s.hora_inicio.slice(0, 5) + ' &middot; ' + s.duracao_min + ' min</p></div>' +
-      '    </div>' +
-      '    <div class="caixa-info"><small>Aplicador</small><b>' +
-             escaparHtml(s.profissional ? s.profissional.nome : '-') + '</b></div>' +
-      '    <div class="caixa-info"><small>Sala</small><b>' + escaparHtml(s.salas ? s.salas.nome : '-') + '</b></div>' +
-      whats +
-      '  </div>' +
-      '  <div class="sess-col">' +
-      '    <p class="st-titulo">Alterar status</p>' +
-      listaStatus +
-      '  </div>' +
-      '</div>' +
-      '<div class="sess-historico" id="sess-hist"><small class="sub">Carregando historico...</small></div>');
-    this.historicoSessao(s.id);
+  async editarObs(id) {
+    const s = this._sessaoModal && this._sessaoModal.s; if (!s) return;
+    abrirModal('Observacoes da sessao',
+      '<div class="campo"><textarea id="obs-txt" rows="4">' + escaparHtml(s.observacoes || '') + '</textarea></div>' +
+      '<div class="barra-acoes"><button class="btn btn-fantasma" onclick="MODULOS.agenda.abrirSessao(\'' + id + '\')">Cancelar</button>' +
+      '<button class="btn btn-primario" onclick="MODULOS.agenda.salvarObs(\'' + id + '\')">Salvar</button></div>', false, 'agenda');
+  },
+  async salvarObs(id) {
+    const { error } = await sb.from('sessoes').update({ observacoes: document.getElementById('obs-txt').value.trim() || null }).eq('id', id);
+    if (error) { popAviso('Erro: ' + error.message); return; }
+    this.abrirSessao(id);
+  },
+
+  async cancelarCom(id, motivo) {
+    const rot = (this.MOTIVOS_CANCEL.find(m => m[0] === motivo) || [])[1] || 'Cancelar';
+    if (!await popConfirmar(rot + '?\n\nA sessao sai do funil da guia e nao conta como atendida.', { ok: rot, tipo: 'agenda' })) return;
+    const { error } = await sb.from('sessoes').update({ status: 'cancelada', motivo_cancelamento: motivo }).eq('id', id);
+    if (error) { popAviso('Erro: ' + error.message); return; }
+    this.abrirSessao(id); this.desenhar();
+  },
+
+  async vincularGuia(id, guiaId) {
+    const { error } = await sb.from('sessoes').update({ guia_id: guiaId }).eq('id', id);
+    if (error) { popAviso('Erro: ' + error.message); return; }
+    this.abrirSessao(id, 'guias');
   },
 
   // Rodape acumulativo: quem mexeu na sessao, quando e o que mudou (trilha de auditoria)
@@ -639,8 +725,23 @@ window.MODULOS.agenda = {
   },
 
   async statusModal(id, status) {
-    const { error } = await sb.from('sessoes').update({ status: status }).eq('id', id);
-    if (error) { alert('Erro: ' + error.message); return; }
+    const dados = { status: status };
+    const m = this._sessaoModal || {};
+    // Check-in / atendimento: amarra a guia vigente com saldo; sem guia, avisa e pergunta
+    if (['checkin', 'em_atendimento', 'concluida'].includes(status) && m.s && !m.s.guia_id) {
+      const pac = m.s.pacientes || {};
+      if (m.guiaVigente) dados.guia_id = m.guiaVigente.id;
+      else if (pac.convenio && !/particular/i.test(pac.convenio)) {
+        const seg = await popConfirmar('Esta crianca e de convenio (' + pac.convenio + ') e nao ha guia autorizada com saldo para esta data.\n\nRegistrar ' +
+          (status === 'checkin' ? 'o check-in' : status === 'concluida' ? 'a conclusao' : 'o atendimento') + ' mesmo assim? A sessao fica marcada como "sem guia" para a direcao conferir.',
+          { titulo: 'Sem guia autorizada', ok: 'Registrar mesmo assim', cancelar: 'Voltar', tipo: 'aviso' });
+        if (!seg) return;
+        dados.sem_guia = true;
+      }
+    }
+    if (status !== 'cancelada') dados.motivo_cancelamento = null;
+    const { error } = await sb.from('sessoes').update(dados).eq('id', id);
+    if (error) { popAviso('Erro: ' + error.message); return; }
     this.abrirSessao(id);
     this.desenhar();
   },

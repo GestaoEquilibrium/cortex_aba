@@ -683,7 +683,8 @@ window.MODULOS.programas = {
       data: this.hojeLocal(),
       hora_inicio: new Date().toTimeString().slice(0, 5) + ':00',
       aplicador_id: window.CORTEX_SESSAO.user.id,
-      status: 'em_atendimento'
+      status: 'em_atendimento',
+      criado_por: window.CORTEX_SESSAO.user.id
     }).select('id').single();
     if (error) {
       if (erro) { erro.textContent = 'Nao consegui criar o encaixe: ' + error.message; erro.classList.add('visivel'); }
@@ -2159,7 +2160,8 @@ window.MODULOS.programas = {
           data: document.getElementById('re-data').value,
           hora_inicio: (document.getElementById('re-hora').value || '08:00') + ':00',
           aplicador_id: window.CORTEX_SESSAO.user.id,
-          status: 'concluida'
+          status: 'concluida',
+          criado_por: window.CORTEX_SESSAO.user.id
         }).select('id').single();
         if (eN) throw new Error(eN.message);
         sessaoId = nova.id;

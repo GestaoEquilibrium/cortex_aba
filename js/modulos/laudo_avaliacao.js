@@ -58,7 +58,10 @@ window.MODULOS.laudo_avaliacao = {
       const areas = A.SS_AREAS.map(area => {
         const itens = A.itensSS.filter(i => i.area === area);
         const r = itens.reduce((s, i) => s + (mapa[i.id] || 0), 0), max = itens.length * 3;
-        return { area, pct: max ? Math.round(r * 100 / max) : null };
+        const tx = i => (i.texto || '').toLowerCase().replace(/\.$/, '');
+        return { area, pct: max ? Math.round(r * 100 / max) : null,
+          presentes: itens.filter(i => (mapa[i.id] || 0) >= 2).map(tx),
+          ausentes: itens.filter(i => mapa[i.id] !== undefined && mapa[i.id] <= 1).map(tx) };
       });
       const tot = areas.filter(a => a.pct !== null);
       return { areas, total: tot.length ? Math.round(tot.reduce((s, a) => s + a.pct, 0) / tot.length) : null, faixas: [] };
@@ -68,7 +71,10 @@ window.MODULOS.laudo_avaliacao = {
       const { data: resps } = await sb.from('portage_respostas').select('item_id, valor').eq('avaliacao_id', av.id);
       const mapa = {}; (resps || []).forEach(r => { mapa[r.item_id] = r.valor; });
       const calc = A.calcPortage(mapa);
-      const areas = calc.map(a => ({ area: a.area, pct: a.total === null ? null : a.total, idade: a.idade }));
+      const tx = i => (i.texto || '').toLowerCase().replace(/\.$/, '');
+      const areas = calc.map(a => ({ area: a.area, pct: a.total === null ? null : a.total, idade: a.idade,
+        presentes: A.itensPortage.filter(i => i.area === a.area && mapa[i.id] === 'S').map(tx),
+        ausentes: A.itensPortage.filter(i => i.area === a.area && mapa[i.id] === 'N').map(tx) }));
       const tot = areas.filter(a => a.pct !== null);
       return { areas, total: tot.length ? Math.round(tot.reduce((s, a) => s + a.pct, 0) / tot.length) : null, faixas: [] };
     }
@@ -79,8 +85,10 @@ window.MODULOS.laudo_avaliacao = {
     const areas = A.AREAS.map(area => {
       const qs = A.questoes.filter(q => faixas.includes(q.faixa) && q.area === area);
       const adq = qs.filter(q => mapa[q.id] === 'S').length;
-      const faltam = qs.filter(q => mapa[q.id] === 'N').slice(0, 3).map(q => (q.pergunta || '').toLowerCase()).filter(Boolean);
-      return { area, adq, esp: qs.length, pct: qs.length ? Math.round(adq * 100 / qs.length) : null, faltam };
+      const tx = q => (q.pergunta || '').toLowerCase().replace(/\?$/, '').replace(/\.$/, '');
+      const presentes = qs.filter(q => mapa[q.id] === 'S').map(tx).filter(Boolean);
+      const ausentes = qs.filter(q => mapa[q.id] === 'N').map(tx).filter(Boolean);
+      return { area, adq, esp: qs.length, pct: qs.length ? Math.round(adq * 100 / qs.length) : null, faltam: ausentes.slice(0, 3), presentes, ausentes };
     });
     const tAdq = areas.reduce((s, x) => s + x.adq, 0), tEsp = areas.reduce((s, x) => s + x.esp, 0);
     return { areas, total: tEsp ? Math.round(tAdq * 100 / tEsp) : null, faixas };
@@ -186,9 +194,14 @@ window.MODULOS.laudo_avaliacao = {
     let t = '';
     if (b && b.pct !== null) t += primeiro + ' obteve ' + a.pct + '% nesta \u00e1rea, em compara\u00e7\u00e3o a ' + b.pct + '% na avalia\u00e7\u00e3o anterior' + (a.pct > b.pct ? ', evidenciando avan\u00e7o. ' : a.pct < b.pct ? '; a diferen\u00e7a deve ser lida \u00e0 luz da mudan\u00e7a da faixa et\u00e1ria de refer\u00eancia. ' : ', mantendo o desempenho. ');
     else t += primeiro + ' obteve ' + a.pct + '% nesta \u00e1rea' + (a.pct >= 90 ? ', atingindo desempenho compat\u00edvel com os marcos esperados para a faixa et\u00e1ria. ' : a.pct >= 70 ? ', com habilidades majoritariamente estabelecidas. ' : ', o que a caracteriza como prioridade de interven\u00e7\u00e3o. ');
-    if (a.faltam && a.faltam.length) t += 'Ainda n\u00e3o apresenta dom\u00ednio de: ' + a.faltam.join('; ') + ', que devem compor as pr\u00f3ximas metas de ensino.';
     if (a.idade !== undefined) t += ' Idade de desenvolvimento estimada: ' + MODULOS.avaliacoes.fmtIdade(a.idade) + '.';
-    return t.trim();
+    // 2o paragrafo: o resultado de cada habilidade avaliada na area
+    const lista = arr => arr.join('; ');
+    const p2 = [];
+    if (a.presentes && a.presentes.length) p2.push('Habilidades presentes: ' + lista(a.presentes) + '.');
+    if (a.ausentes && a.ausentes.length) p2.push('Habilidades ainda n\u00e3o observadas, que devem compor as pr\u00f3ximas metas de ensino: ' + lista(a.ausentes) + '.');
+    if (!a.presentes && !a.ausentes && a.faltam && a.faltam.length) p2.push('Ainda n\u00e3o apresenta dom\u00ednio de: ' + lista(a.faltam) + '.');
+    return (t.trim() + (p2.length ? '\n\n' + p2.join(' ') : '')).trim();
   },
   rascunhoConclusao(d) {
     const primeiro = d.pac.nome.split(' ')[0];

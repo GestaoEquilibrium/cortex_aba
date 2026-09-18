@@ -1363,6 +1363,23 @@ window.MODULOS.programas = {
         .update({ status: 'concluida' }).eq('id', f.sessao.id);
       if (e3) throw new Error(e3.message);
 
+      // Crianca com 2+ horarios no mesmo dia: a evolucao vale para todos - conclui os demais e espelha o texto
+      try {
+        const { data: irmas } = await sb.from('sessoes').select('id, hora_inicio, status')
+          .eq('paciente_id', f.sessao.paciente_id).eq('data', f.sessao.data).neq('id', f.sessao.id)
+          .in('status', ['agendada', 'checkin', 'em_atendimento']);
+        if (irmas && irmas.length) {
+          const ids = irmas.map(x => x.id);
+          await sb.from('sessoes').update({ status: 'concluida' }).in('id', ids);
+          await sb.from('evolucoes').upsert(irmas.map(x => ({
+            sessao_id: x.id, paciente_id: f.sessao.paciente_id, aplicador_id: window.CORTEX_SESSAO.user.id,
+            texto: texto, destinacao: document.getElementById('fe-destinacao').value.trim() || null, espelho_de: f.sessao.id
+          })), { onConflict: 'sessao_id' });
+          popAviso('Evolucao lancada. Os outros ' + irmas.length + ' horario(s) de hoje desta crianca (' +
+            irmas.map(x => String(x.hora_inicio).slice(0, 5)).join(', ') + ') foram concluidos com a mesma evolucao.');
+        }
+      } catch (e) { /* nao trava o encerramento */ }
+
       fecharModal();
       if (this._overlay) this.fecharFolha(true);
       else abrirModulo('agenda');
@@ -2184,9 +2201,11 @@ window.MODULOS.programas = {
       '<p class="sub" style="margin-bottom:10px">Um grafico por programa com todas as tentativas de todas as sessoes do periodo, cada dia numa cor.</p>' +
       '<div class="grade-form">' +
       '<div class="campo"><label>Tipo</label><select id="rc-tipo">' +
+      '<option value="semanal">Semanal (7 dias)</option>' +
       '<option value="mensal">Mensal (mes escolhido)</option>' +
       '<option value="semestral">Semestral (evolucao por meses)</option></select></div>' +
       '<div class="campo"><label>Mes de referencia</label><input type="month" id="rc-mes" value="' + mes + '"></div>' +
+      '<div class="campo"><label>Semana que termina em <small>(so para o semanal)</small></label><input type="date" id="rc-dia" value="' + new Date().toISOString().slice(0, 10) + '"></div>' +
       '</div>' +
       '<div class="barra-acoes"><button class="btn btn-primario" ' +
       'onclick="fecharModal(); MODULOS.programas.docCompilado(\'' + pacienteId + '\', ' +
@@ -2196,7 +2215,7 @@ window.MODULOS.programas = {
       const btn = document.querySelector('#modal-fundo .btn-primario');
       if (btn) btn.onclick = () => {
         const tipo = document.getElementById('rc-tipo').value;
-        const m = document.getElementById('rc-mes').value;
+        const m = tipo === 'semanal' ? document.getElementById('rc-dia').value : document.getElementById('rc-mes').value;
         fecharModal();
         this.docCompilado(pacienteId, tipo, m);
       };
@@ -2205,13 +2224,21 @@ window.MODULOS.programas = {
 
   async docCompilado(pacienteId, tipo, mesRef) {
     tipo = tipo || 'mensal';
-    mesRef = mesRef || new Date().toISOString().slice(0, 7);
-    const fimD = new Date(mesRef + '-01T12:00:00');
-    fimD.setMonth(fimD.getMonth() + 1); fimD.setDate(0);
-    const fim = fimD.toISOString().slice(0, 10);
-    const iniD = new Date(mesRef + '-01T12:00:00');
-    if (tipo === 'semestral') iniD.setMonth(iniD.getMonth() - 5);
-    const ini = iniD.toISOString().slice(0, 10);
+    let ini, fim;
+    if (tipo === 'semanal') {
+      const fimD = new Date((mesRef || new Date().toISOString().slice(0, 10)) + 'T12:00:00');
+      const iniD = new Date(fimD); iniD.setDate(fimD.getDate() - 6);
+      ini = iniD.toISOString().slice(0, 10); fim = fimD.toISOString().slice(0, 10);
+    } else {
+      mesRef = mesRef || new Date().toISOString().slice(0, 7);
+      const fimD = new Date(mesRef + '-01T12:00:00');
+      fimD.setMonth(fimD.getMonth() + 1); fimD.setDate(0);
+      fim = fimD.toISOString().slice(0, 10);
+      const iniD = new Date(mesRef + '-01T12:00:00');
+      if (tipo === 'semestral') iniD.setMonth(iniD.getMonth() - 5);
+      ini = iniD.toISOString().slice(0, 10);
+    }
+    const ROT = { semanal: ['semanal', 'Semanal', 'SEMANAL', 'na semana'], mensal: ['mensal', 'Mensal', 'MENSAL', 'no m&ecirc;s'], semestral: ['semestral', 'Semestral', 'SEMESTRAL', 'no semestre'] }[tipo];
 
     document.getElementById('doc-eq-overlay')?.remove();
     const ov = document.createElement('div');
@@ -2263,8 +2290,8 @@ window.MODULOS.programas = {
     const fmtD = d => d.split('-').reverse().join('/');
     let corpo = '';
 
-    if (tipo === 'mensal') {
-      corpo += '<h2 style="margin-top:14px"><span class="ponto deq-azul"></span>Programas &middot; tentativa a tentativa no m&ecirc;s <small>&middot; uma cor por dia</small></h2>' +
+    if (tipo === 'mensal' || tipo === 'semanal') {
+      corpo += '<h2 style="margin-top:14px"><span class="ponto deq-azul"></span>Programas &middot; tentativa a tentativa ' + ROT[3] + ' <small>&middot; uma cor por dia</small></h2>' +
         '<div class="deq-grade2">';
       Object.entries(porProg).forEach(([ppId, sesMap]) => {
         const pp = ppDe[ppId];
@@ -2346,17 +2373,17 @@ window.MODULOS.programas = {
     }
 
     window._docPortal = { paciente_id: pacienteId, tipo: 'outro',
-      titulo: 'Relatorio Compilado ' + (tipo === 'mensal' ? 'Mensal' : 'Semestral') };
+      titulo: 'Relatorio Compilado ' + ROT[1] };
     document.getElementById('doc-eq-corpo').innerHTML =
       '<div class="pagina-cabecalho nao-imprime">' +
       '  <div><button class="btn-voltar" onclick="document.getElementById(\'doc-eq-overlay\').remove()">&larr; Fechar</button>' +
-      '  <h2>Relatorio compilado &middot; ' + (tipo === 'mensal' ? 'mensal' : 'semestral') + '</h2></div>' +
+      '  <h2>Relatorio compilado &middot; ' + ROT[0] + '</h2></div>' +
       '  <button class="btn btn-primario" onclick="window.print()">&#128424; Imprimir / PDF</button>' +
       portalBtn() +
       '</div>' +
       '<div class="doc-eq">' +
       '<div class="deq-cab"><img src="icones/equilibrium.png" alt="Equilibrium">' +
-      '<div class="deq-cab-t"><h1>RELAT&Oacute;RIO COMPILADO &middot; ' + (tipo === 'mensal' ? 'MENSAL' : 'SEMESTRAL') + '</h1>' +
+      '<div class="deq-cab-t"><h1>RELAT&Oacute;RIO COMPILADO &middot; ' + ROT[2] + '</h1>' +
       '<p>Equilibrium Terapia Infantil &middot; ' + fmtD(ini) + ' a ' + fmtD(fim) + ' &middot; ' +
       sessoes.length + ' sessao(oes) concluida(s)</p></div></div>' +
       '<div class="deq-caixa deq-dados" style="grid-template-columns:1fr 1fr; margin-top:8px">' +

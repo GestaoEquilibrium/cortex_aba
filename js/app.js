@@ -621,7 +621,7 @@ const ESCOPO = {
   ehCoord() { return window.CORTEX_SESSAO?.profile?.perfil === 'coordenador'; },
   ativo() {
     if (!this.ehCoord()) return false;
-    if (perm('coordenacao.geral') === '') return true;
+    if (CORTEX_PERMS['coordenacao.geral'] === '') return true;
     try { return localStorage.getItem('cortex_escopo') !== 'geral'; } catch (e) { return true; }
   },
   async carregar(forcar, coordId) {
@@ -665,7 +665,7 @@ const ESCOPO = {
   },
   html() {
     if (!this.ehCoord()) return '';
-    if (perm('coordenacao.geral') === '') return '';   // sem direito ao Geral: fica so na equipe
+    if (CORTEX_PERMS['coordenacao.geral'] === '') return '';   // so some quando NEGADO explicitamente em Permissoes
     const eq = this.ativo();
     return '<div class="toggle-visao escopo-toggle" title="Ver so a minha equipe ou tudo">' +
       '<button type="button" class="' + (eq ? 'ativo' : '') + '" onclick="ESCOPO.alternar(\'equipe\')">Minha equipe</button>' +

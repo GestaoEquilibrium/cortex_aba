@@ -666,8 +666,16 @@ window.MODULOS.programas = {
       sb.from('fichas_config').select('paciente_programa_id, tentativas, selecionado').eq('sessao_id', sessaoId)
     ]);
 
-    if (s.status === 'concluida' && !['direcao', 'coordenador', 'suporte'].includes(window.CORTEX_SESSAO.profile.perfil)) {
-      popAviso('Esta sessao ja foi encerrada. Para lancar novos programas, escolha outra sessao ou crie um encaixe.');
+    // Sessao encerrada NUNCA reabre para aplicar (para ninguem): os registros dela sao definitivos.
+    if (s.status === 'concluida') {
+      const hora = String(s.hora_inicio || '').slice(0, 5);
+      abrirModal('Sessao ja encerrada',
+        '<p class="sub" style="margin-bottom:12px">A sessao de <b>' + new Date(s.data + 'T12:00:00').toLocaleDateString('pt-BR') + ' as ' + hora +
+        '</b> foi encerrada e seus programas nao podem ser alterados. Para aplicar de novo, use outra sessao ou crie um encaixe.</p>' +
+        '<div class="barra-acoes">' +
+        '<button class="btn btn-fantasma" onclick="fecharModal(); MODULOS.programas.docEvolucaoDiaria(\'' + sessaoId + '\')">Ver relatorio</button>' +
+        '<button class="btn btn-primario" onclick="fecharModal(); MODULOS.programas.abrirFolhaProntuario(\'' + s.paciente_id + '\')">Escolher outra sessao</button>' +
+        '</div>', false, 'agenda');
       return;
     }
     const pps = rPps.data || [];

@@ -1082,14 +1082,17 @@ window.MODULOS.programas = {
     this.desenharFolha();
   },
 
+  // navegar nunca pode travar por falha de gravacao: salva o que der e segue (o erro aparece no pop-up)
+  async salvarSemTravar() { try { await this.salvarFichas(true); } catch (e) { /* ja avisado */ } },
+
   async voltarSelecao() {
-    await this.salvarFichas(true);
+    await this.salvarSemTravar();
     this._folha.etapa = 'selecionar';
     this.desenharFolha();
   },
 
   async irPara(i) {
-    await this.salvarFichas(true);
+    await this.salvarSemTravar();
     this._folha.idx = i;
     this._folha.tIdx = undefined;
     this.desenharFolha();

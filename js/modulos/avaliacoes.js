@@ -255,8 +255,111 @@ window.MODULOS.avaliacoes = {
     this.telaAplicacao();
   },
 
+  celular() { return window.innerWidth <= 720; },
+
+  // ─────────────── CELULAR: um item por tela (QADI / SS / Portage) ───────────────
+  // Monta uma lista linear de itens do "bloco" atual (faixa do QADI, area do SS, area+faixa do Portage)
+  // e mostra um por vez com botoes grandes; salva a cada toque e avanca.
+  _mIdx: 0,
+  itensCelular() {
+    const av = this.avaliacao;
+    if (av.protocolo === 'ss') {
+      const area = this._ssArea || this.SS_AREAS[0];
+      return { bloco: area, itens: this.itensSS.filter(i => i.area === area).map(i => ({ id: i.id, texto: i.texto, sub: i.codigo, resp: this.respSS[i.id] })),
+        opcoes: [['0', '0', '#94A3B8', 'Nunca / nao faz'], ['1', '1', '#E9586A', 'Raramente'], ['2', '2', '#F3B63D', 'As vezes'], ['3', '3', '#16A34A', 'Sempre / dominado']],
+        blocos: this.SS_AREAS.map(a => [a, a, this.itensSS.filter(i => i.area === a && this.respSS[i.id] !== undefined).length + '/' + this.itensSS.filter(i => i.area === a).length]),
+        total: this.itensSS.length, feitos: Object.keys(this.respSS).length };
+    }
+    if (av.protocolo === 'portage') {
+      const itens = this.itensPortage.filter(i => i.area === this._pArea && i.faixa === this._pFaixa);
+      return { bloco: this._pArea + ' \u00b7 ' + this.P_FAIXAS[this._pFaixa], itens: itens.map(i => ({ id: i.id, texto: i.texto, sub: 'item ' + i.ordem, resp: this._pResp[i.id] })),
+        opcoes: [['S', 'Sim', '#16A34A', ''], ['AV', 'As vezes', '#F59E0B', ''], ['N', 'Nao', '#E11D48', ''], ['NA', 'NA', '#94A3B8', 'nao se aplica']],
+        blocos: this.P_AREAS.flatMap(a => this.P_FAIXAS.map((f, fi) => { const l = this.itensPortage.filter(x => x.area === a && x.faixa === fi); return l.length ? [a + '|' + fi, a + ' \u00b7 ' + f, l.filter(x => this._pResp[x.id]).length + '/' + l.length] : null; }).filter(Boolean)),
+        total: this.itensPortage.length, feitos: Object.keys(this._pResp).length };
+    }
+    const qs = this.questoes.filter(q => q.faixa === this.faixaAtual);
+    return { bloco: this.faixaAtual, itens: qs.map(q => ({ id: q.id, texto: q.pergunta, sub: q.area, resp: this.respostas[q.id] })),
+      opcoes: [['S', 'SIM', '#16A34A', ''], ['N', 'N\u00c3O', '#E11D48', ''], ['NA', 'Nao se aplica', '#94A3B8', '']],
+      blocos: this.FAIXAS.map(f => [f, f, this.questoes.filter(q => q.faixa === f && this.respostas[q.id]).length + '/' + this.questoes.filter(q => q.faixa === f).length]),
+      total: this.questoes.length, feitos: Object.keys(this.respostas).length };
+  },
+  telaCelular() {
+    const av = this.avaliacao;
+    const d = this.itensCelular();
+    if (!d.itens.length) { this._mIdx = 0; }
+    if (this._mIdx >= d.itens.length) this._mIdx = Math.max(0, d.itens.findIndex(i => i.resp === undefined));
+    if (this._mIdx < 0) this._mIdx = 0;
+    const i = d.itens[this._mIdx];
+    const nome = av.protocolo === 'ss' ? 'Socially Savvy' : av.protocolo === 'portage' ? 'Portage' : 'QADI-R';
+    const blocoAtual = av.protocolo === 'portage' ? this._pArea + '|' + this._pFaixa : av.protocolo === 'ss' ? (this._ssArea || this.SS_AREAS[0]) : this.faixaAtual;
+    const feitosBloco = d.itens.filter(x => x.resp !== undefined).length;
+    const concluir = av.protocolo === 'ss' ? 'concluirSS' : av.protocolo === 'portage' ? 'concluirPortage' : 'concluir';
+    this.el.innerHTML =
+      '<div class="cel-ficha">' +
+      '<div class="cel-ficha-topo"><button class="btn-voltar" onclick="MODULOS.avaliacoes.fecharJanela()">&larr;</button>' +
+      '<div class="cel-ficha-tit"><b>' + nome + ' &middot; ' + escaparHtml(av.pacientes ? av.pacientes.nome.split(' ').slice(0, 2).join(' ') : '') + '</b>' +
+      '<small>' + d.feitos + '/' + d.total + ' respondidos &middot; salva sozinho</small></div></div>' +
+      '<select class="cel-bloco" onchange="MODULOS.avaliacoes.mudarBlocoCelular(this.value)">' +
+      d.blocos.map(([v, r, n]) => '<option value="' + escaparHtml(v) + '"' + (v === blocoAtual ? ' selected' : '') + '>' + escaparHtml(r) + ' \u00b7 ' + n + '</option>').join('') + '</select>' +
+      '<div class="prog-fina"><i style="width:' + (d.itens.length ? Math.round(feitosBloco * 100 / d.itens.length) : 0) + '%"></i></div>' +
+      (i
+        ? '<div class="cel-ficha-cont"><b>Item ' + (this._mIdx + 1) + ' de ' + d.itens.length + '</b><small>' + escaparHtml(i.sub || '') + '</small></div>' +
+          '<div class="cartao cel-item"><small>' + escaparHtml(i.sub || '') + '</small><p>' + escaparHtml(i.texto) + '</p></div>' +
+          '<div class="cel-resp' + (d.opcoes.length === 3 ? ' tres' : '') + '">' +
+          d.opcoes.map(([v, r, cor, dica]) => '<button class="cel-nv' + (String(i.resp) === v ? ' ativo' : '') + '" style="--nv:' + cor + '" onclick="MODULOS.avaliacoes.responderCelular(\'' + v + '\')"><b>' + r + '</b>' + (dica ? '<span>' + dica + '</span>' : '') + '</button>').join('') +
+          '</div>'
+        : '<div class="cartao"><p class="sub">Nenhum item neste bloco.</p></div>') +
+      '<div class="cel-nav">' +
+      '<button class="btn btn-fantasma" onclick="MODULOS.avaliacoes.irItem(' + (this._mIdx - 1) + ')"' + (this._mIdx === 0 ? ' disabled' : '') + '>&lsaquo; Anterior</button>' +
+      (this._mIdx < d.itens.length - 1
+        ? '<button class="btn btn-fantasma" onclick="MODULOS.avaliacoes.irItem(' + (this._mIdx + 1) + ')">Proximo &rsaquo;</button>'
+        : '<button class="btn btn-primario" onclick="MODULOS.avaliacoes.proximoBloco()">Proximo bloco &rsaquo;</button>') +
+      '</div>' +
+      '<div class="cel-rodape"><span class="sub" style="font-size:11.5px">' + escaparHtml(d.bloco) + ' &middot; ' + feitosBloco + '/' + d.itens.length + '</span>' +
+      '<button class="btn-chip cheio" onclick="MODULOS.avaliacoes.' + concluir + '()">Concluir aplicacao</button></div>' +
+      '</div>';
+  },
+  irItem(i) { const d = this.itensCelular(); this._mIdx = Math.max(0, Math.min(d.itens.length - 1, i)); this.telaCelular(); },
+  mudarBlocoCelular(v) {
+    const av = this.avaliacao;
+    if (av.protocolo === 'portage') { const [a, f] = v.split('|'); this._pArea = a; this._pFaixa = parseInt(f, 10); }
+    else if (av.protocolo === 'ss') this._ssArea = v;
+    else this.faixaAtual = v;
+    this._mIdx = 0; this.telaCelular();
+  },
+  proximoBloco() {
+    const d = this.itensCelular();
+    const av = this.avaliacao;
+    const atual = av.protocolo === 'portage' ? this._pArea + '|' + this._pFaixa : av.protocolo === 'ss' ? (this._ssArea || this.SS_AREAS[0]) : this.faixaAtual;
+    const k = d.blocos.findIndex(b => b[0] === atual);
+    if (k >= 0 && k < d.blocos.length - 1) this.mudarBlocoCelular(d.blocos[k + 1][0]);
+    else popAviso('Este era o ultimo bloco. Se terminou, toque em Concluir aplicacao.');
+  },
+  async responderCelular(v) {
+    const av = this.avaliacao;
+    const d = this.itensCelular();
+    const i = d.itens[this._mIdx]; if (!i) return;
+    let error;
+    if (av.protocolo === 'ss') {
+      const pts = parseInt(v, 10);
+      this.respSS[i.id] = pts;
+      ({ error } = await sb.from('ss_respostas').upsert({ avaliacao_id: av.id, item_id: i.id, pontos: pts }, { onConflict: 'avaliacao_id,item_id' }));
+    } else if (av.protocolo === 'portage') {
+      this._pResp[i.id] = v;
+      ({ error } = await sb.from('portage_respostas').upsert({ avaliacao_id: av.id, item_id: i.id, valor: v }, { onConflict: 'avaliacao_id,item_id' }));
+    } else {
+      this.respostas[i.id] = v;
+      ({ error } = await sb.from('avaliacao_respostas').upsert({ avaliacao_id: av.id, questao_id: i.id, resposta: v }, { onConflict: 'avaliacao_id,questao_id' }));
+    }
+    if (error) { popAviso('Falha ao salvar: ' + error.message); return; }
+    if (navigator.vibrate) navigator.vibrate(10);
+    if (this._mIdx < d.itens.length - 1) this._mIdx++;
+    this.telaCelular();
+  },
+
   telaAplicacao() {
     const av = this.avaliacao;
+    if (this.celular()) { this.telaCelular(); return; }
 
     const abasFaixas = this.FAIXAS.map(f => {
       const qs = this.questoes.filter(q => q.faixa === f);
@@ -1041,6 +1144,7 @@ window.MODULOS.avaliacoes = {
 
   telaAplicacaoSS() {
     const av = this.avaliacao;
+    if (this.celular()) { this.telaCelular(); return; }
     const total = this.itensSS.length;
     const feitas = Object.keys(this.respSS).length;
 
@@ -1289,6 +1393,7 @@ window.MODULOS.avaliacoes = {
   desenharPortage() {
     const alvo = document.getElementById('aval-corpo');
     if (!alvo) return;
+    if (this.celular()) { this.el = alvo; this.telaCelular(); return; }
     const av = this.avaliacao;
     const respondidos = Object.keys(this._pResp).length;
     const itens = this.itensPortage.filter(i => i.area === this._pArea && i.faixa === this._pFaixa);

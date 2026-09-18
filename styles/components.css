@@ -2509,3 +2509,15 @@
 
 .cel-passos { flex-wrap: wrap; }
 .cel-passos i { min-width: 26px; }
+
+/* ── Avaliacao no celular: um item por tela ───────────────────────── */
+.cel-bloco { width: 100%; }
+.prog-fina { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.prog-fina i { display: block; height: 100%; background: var(--st-ok); border-radius: 3px; transition: width .2s; }
+.cel-item { padding: 16px 14px; min-height: 110px; }
+.cel-item small { display: block; font-size: 10px; font-weight: 800; letter-spacing: .08em; color: var(--ink-soft); margin-bottom: 6px; }
+.cel-item p { font-size: 17px; font-weight: 700; line-height: 1.4; margin: 0; }
+.cel-resp { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.cel-resp.tres .cel-nv:first-child, .cel-resp.tres .cel-nv:nth-child(2) { min-height: 72px; }
+.cel-resp.tres .cel-nv:last-child { grid-column: 1 / -1; min-height: 48px; flex-direction: row; }
+.cel-resp .cel-nv b { font-size: 20px; }

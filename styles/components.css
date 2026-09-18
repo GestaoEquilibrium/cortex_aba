@@ -2535,3 +2535,8 @@
     .heroi.portal h1 { font-size: 20px; }
     .portal-azulejos { grid-template-columns: 1fr 1fr; }
 }
+
+/* ── Categorias de programas ──────────────────────────────────────── */
+.cat-cores { display: flex; flex-wrap: wrap; gap: 8px; }
+.cat-cor { width: 30px; height: 30px; border-radius: 50%; border: 3px solid transparent; cursor: pointer; }
+.cat-cor.ativo { border-color: var(--ink); box-shadow: 0 0 0 2px #fff inset; }

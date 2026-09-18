@@ -95,17 +95,70 @@ window.MODULOS.programas = {
 
   // ─────────────── Biblioteca ───────────────
 
+  // ─────────────── Categorias (areas) cadastraveis ───────────────
+  PALETA_AREA: ['#0EA5E9', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#F97316', '#6366F1', '#14B8A6', '#84CC16', '#7C3AED', '#E11D48', '#0D9488', '#D97706', '#2563EB', '#64748B'],
+  async carregarAreas() {
+    const { data } = await sb.from('programa_areas').select('nome, cor, ordem, ativo').order('ordem').order('nome');
+    if (!data || !data.length) return;
+    const ativas = data.filter(a => a.ativo !== false);
+    this.AREAS = ativas.map(a => a.nome);
+    ativas.forEach(a => { if (a.cor) this.CORES_AREA[a.nome] = a.cor; });
+    this._areasTodas = data;
+  },
+  modalCategoria(nome) {
+    const a = nome ? (this._areasTodas || []).find(x => x.nome === nome) : null;
+    const cor = a && a.cor ? a.cor : this.PALETA_AREA[(this.AREAS.length) % this.PALETA_AREA.length];
+    abrirModal(a ? 'Editar categoria' : 'Nova categoria de programas',
+      '<div class="campo"><label>Nome da categoria *</label><input id="cat-nome" value="' + escaparHtml(a ? a.nome : '') + '" placeholder="Ex.: Comunicacao alternativa"' + (a ? ' disabled' : '') + '></div>' +
+      '<div class="campo"><label>Cor</label><div class="cat-cores">' +
+      this.PALETA_AREA.map(c => '<button type="button" class="cat-cor' + (c === cor ? ' ativo' : '') + '" style="background:' + c + '" onclick="document.querySelectorAll(\'.cat-cor\').forEach(b => b.classList.remove(\'ativo\')); this.classList.add(\'ativo\'); document.getElementById(\'cat-cor\').value = \'' + c + '\'"></button>').join('') +
+      '</div><input type="hidden" id="cat-cor" value="' + cor + '"></div>' +
+      (a ? '<label class="check"><input type="checkbox" id="cat-ativo"' + (a.ativo !== false ? ' checked' : '') + '> Categoria ativa (aparece ao criar programas)</label>' : '') +
+      '<div class="mensagem-erro" id="cat-erro"></div>' +
+      '<div class="barra-acoes"><button class="btn btn-fantasma" onclick="fecharModal()">Cancelar</button>' +
+      '<button class="btn btn-primario" onclick="MODULOS.programas.salvarCategoria(' + (a ? '\'' + escaparHtml(a.nome) + '\'' : 'null') + ')">Salvar</button></div>');
+  },
+  async salvarCategoria(nomeExistente) {
+    const erro = document.getElementById('cat-erro'); erro.classList.remove('visivel');
+    const nome = nomeExistente || document.getElementById('cat-nome').value.trim();
+    if (!nome) { erro.textContent = 'Informe o nome.'; erro.classList.add('visivel'); return; }
+    const ativoEl = document.getElementById('cat-ativo');
+    const dados = { nome, cor: document.getElementById('cat-cor').value, ativo: ativoEl ? ativoEl.checked : true,
+      ordem: nomeExistente ? undefined : (this._areasTodas || []).length + 1 };
+    if (dados.ordem === undefined) delete dados.ordem;
+    const { error } = await sb.from('programa_areas').upsert(dados, { onConflict: 'nome' });
+    if (error) { erro.textContent = error.message; erro.classList.add('visivel'); return; }
+    fecharModal();
+    await this.carregarAreas();
+    this.renderBiblioteca();
+  },
+
+  _buscaBib: '',
+  filtrarBiblioteca(termo) { this._buscaBib = termo; this.desenharBiblioteca(); },
+
   async renderBiblioteca() {
     const podeE = perm('programas.biblioteca') === 'E';
     document.getElementById('prog-titulo').textContent = 'Biblioteca de Programas';
     document.getElementById('prog-sub').textContent =
       'A coordenacao define, por programa, o numero de tentativas e os niveis de ajuda usados.';
     document.getElementById('prog-acao-topo').innerHTML = podeE
-      ? '<button class="btn btn-primario" onclick="MODULOS.programas.modalPrograma()">+ Novo programa</button>' : '';
+      ? '<button class="btn btn-fantasma" onclick="MODULOS.programas.modalCategoria()">+ Nova categoria</button> ' +
+        '<button class="btn btn-primario" onclick="MODULOS.programas.modalPrograma()">+ Novo programa</button>' : '';
 
     await this.carregarBiblioteca();
+    this.desenharBiblioteca();
+  },
+
+  desenharBiblioteca() {
+    const podeE = perm('programas.biblioteca') === 'E';
     const alvo = document.getElementById('prog-conteudo');
     if (!alvo) return;
+    const n = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    const t = n(this._buscaBib).trim();
+    const lista = this.biblioteca.filter(p => !t || n(p.nome).includes(t) || n(p.area).includes(t) || n(p.objetivo).includes(t) || n(p.procedimento).includes(t));
+    const busca = '<div class="toolbar"><input type="text" id="bib-busca" placeholder="Buscar programa por nome, categoria ou objetivo..." value="' + escaparHtml(this._buscaBib) + '" ' +
+      'oninput="MODULOS.programas.filtrarBiblioteca(this.value)" style="flex:1; min-width:240px">' +
+      '<span class="selo selo-neutro" style="align-self:center">' + lista.length + ' de ' + this.biblioteca.length + '</span></div>';
 
     if (this.biblioteca.length === 0) {
       alvo.innerHTML = '<div class="cartao"><div class="vazio">' +
@@ -113,14 +166,17 @@ window.MODULOS.programas = {
         'Crie o primeiro programa de ensino.</div></div>';
       return;
     }
+    if (!lista.length) { alvo.innerHTML = busca + '<div class="cartao"><p class="sub">Nenhum programa com esse termo.</p></div>'; return; }
 
     const porArea = {};
-    this.biblioteca.forEach(p => { (porArea[p.area] = porArea[p.area] || []).push(p); });
+    lista.forEach(p => { (porArea[p.area] = porArea[p.area] || []).push(p); });
+    const ordem = a => { const i = this.AREAS.indexOf(a); return i < 0 ? 999 : i; };
 
-    alvo.innerHTML = Object.entries(porArea).map(([area, lista]) => {
+    alvo.innerHTML = busca + Object.entries(porArea).sort((a, b) => ordem(a[0]) - ordem(b[0])).map(([area, lista]) => {
       const cor = this.CORES_AREA[area] || '#64748B';
       return '<div class="cartao"><h3><span class="area-chip" style="background:' + cor + '1A; color:' + cor + '">' +
-        escaparHtml(area) + '</span> <span class="selo selo-neutro">' + lista.length + '</span></h3>' +
+        escaparHtml(area) + '</span> <span class="selo selo-neutro">' + lista.length + '</span>' +
+        (podeE ? ' <button class="btn-chip" style="margin-left:6px" onclick="MODULOS.programas.modalCategoria(\'' + escaparHtml(area) + '\')" title="Cor e situacao da categoria">&#9998;</button>' : '') + '</h3>' +
         lista.map(p =>
           '<div class="linha-doc"><div><b>' + escaparHtml(p.nome) + '</b>' +
           '<small>' + escaparHtml(p.objetivo || '') + '</small></div>' +
@@ -135,6 +191,7 @@ window.MODULOS.programas = {
   },
 
   async carregarBiblioteca() {
+    try { await this.carregarAreas(); } catch (e) { /* tabela ainda nao criada: usa a lista fixa */ }
     const { data } = await sb.from('programas')
       .select('*').order('area').order('nome');
     this.biblioteca = data || [];
@@ -148,7 +205,7 @@ window.MODULOS.programas = {
       '<div class="grade-form">' +
       '  <div class="campo c2"><label>Nome *</label><input id="bp-nome" value="' + escaparHtml(p ? p.nome : '') + '"></div>' +
       '  <div class="campo"><label>Area *</label><select id="bp-area">' +
-      this.AREAS.map(a => '<option' + (p && p.area === a ? ' selected' : '') + '>' + a + '</option>').join('') +
+      [...new Set(this.AREAS.concat(p && p.area ? [p.area] : []))].map(a => '<option' + (p && p.area === a ? ' selected' : '') + '>' + escaparHtml(a) + '</option>').join('') +
       '  </select></div>' +
       '  <div class="campo"><label>N&ordm; de tentativas *</label>' +
       '    <div class="stepper">' +

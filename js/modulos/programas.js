@@ -1399,8 +1399,8 @@ window.MODULOS.programas = {
     if (!alvo) return;
 
     const { data: ss } = await sb.from('sessoes')
-      .select('id, data, hora_inicio, status, evolucoes(texto)')
-      .eq('paciente_id', pacienteId).lte('data', new Date().toISOString().slice(0, 10))
+      .select('id, data, hora_inicio, status, evolucoes!evolucoes_sessao_id_fkey(texto)')
+      .eq('paciente_id', pacienteId).lte('data', this.hojeLocal())
       .not('status', 'in', '("falta","cancelada")')
       .order('data', { ascending: false }).order('hora_inicio', { ascending: false })
       .limit(8);
@@ -1581,7 +1581,7 @@ window.MODULOS.programas = {
 
   async htmlEvolucoes(pacienteId) {
     const { data: evs } = await sb.from('evolucoes')
-      .select('id, texto, criado_em, sessao_id, aplicador:profiles!evolucoes_aplicador_id_fkey(nome), sessoes(data, hora_inicio)')
+      .select('id, texto, criado_em, sessao_id, aplicador:profiles!evolucoes_aplicador_id_fkey(nome), sessoes:sessoes!evolucoes_sessao_id_fkey(data, hora_inicio)')
       .eq('paciente_id', pacienteId)
       .order('criado_em', { ascending: false })
       .limit(30);

@@ -579,42 +579,40 @@ window.MODULOS.programas = {
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   },
 
+  // Iniciar atendimento: mostra as sessoes da crianca (hoje em destaque, ultimos 14 dias e proximos 7)
+  // e o aplicador escolhe em qual sessao vai lancar. Sem sessao? Pode criar um encaixe agora (ninguem fica travado).
   async abrirFolhaProntuario(pacienteId) {
-    const hoje = this.hojeLocal();   // data LOCAL (em UTC, a partir das 21h ja era "amanha")
+    const hoje = this.hojeLocal();
+    const de = new Date(); de.setDate(de.getDate() - 14);
+    const ate = new Date(); ate.setDate(ate.getDate() + 7);
+    const f = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
     const eu = window.CORTEX_SESSAO.user.id;
-    const { data: doDia, error: eS } = await sb.from('sessoes')
-      .select('id, status, hora_inicio, aplicador_id, profissional:profiles!sessoes_aplicador_id_fkey(nome)')
-      .eq('paciente_id', pacienteId).eq('data', hoje)
-      .not('status', 'in', '("falta","cancelada")')
-      .order('hora_inicio');
-    if (eS) { popAviso('Nao consegui consultar a agenda de hoje: ' + eS.message); return; }
-    const lista = doDia || [];
-    // prioridade: sessao minha em aberto > qualquer em aberto > minha concluida > qualquer
-    const aberta = st => ['agendada', 'checkin', 'em_atendimento'].includes(st);
-    const escolhida = lista.find(x => x.aplicador_id === eu && aberta(x.status)) || lista.find(x => aberta(x.status)) ||
-      lista.find(x => x.aplicador_id === eu) || lista[0];
-
-    let sessaoId = escolhida ? escolhida.id : null;
-    if (!sessaoId) {
-      const gestao = ['direcao', 'coordenador', 'suporte'].includes(window.CORTEX_SESSAO.profile.perfil);
-      const agora = new Date().toTimeString().slice(0, 5);
-      abrirModal('Sem sessao agendada hoje',
-        '<p style="margin-bottom:8px">O atendimento e sempre vinculado a uma sessao da <b>Agenda</b>: ' +
-        'assim os programas e a evolucao ficam presos a data e ao horario certos.</p>' +
-        (gestao
-          ? '<p class="sub" style="margin-bottom:14px">Voce pode criar um <b>encaixe</b> agora: ele entra na Agenda de hoje as <b>' +
-            agora + '</b>, vinculado a voce, e a ficha de aplicacao abre em seguida.</p>' +
-            '<div class="mensagem-erro" id="enc-erro"></div>' +
-            '<div class="barra-acoes">' +
-            '  <button class="btn btn-fantasma" onclick="fecharModal()">Agora nao</button>' +
-            '  <button class="btn btn-primario" id="enc-criar" onclick="MODULOS.programas.criarEncaixe(\'' + pacienteId + '\')">Criar encaixe e abrir a ficha</button>' +
-            '</div>'
-          : '<p class="sub" style="margin-bottom:14px">Peca a coordenacao para agendar (ou criar um encaixe) e volte aqui.</p>' +
-            '<div class="barra-acoes"><button class="btn btn-primario" onclick="fecharModal()">Entendi</button></div>'),
-        false, 'agenda');
-      return;
-    }
-    this.abrirFolha(sessaoId, true);
+    const { data: lista, error: eS } = await sb.from('sessoes')
+      .select('id, data, status, hora_inicio, aplicador_id, profissional:profiles!sessoes_aplicador_id_fkey(nome)')
+      .eq('paciente_id', pacienteId).gte('data', f(de)).lte('data', f(ate))
+      .not('status', 'in', '("cancelada")').order('data', { ascending: false }).order('hora_inicio');
+    if (eS) { popAviso('Nao consegui consultar a agenda: ' + eS.message); return; }
+    const sess = lista || [];
+    const ST = { agendada: ['selo-neutro', 'agendada'], checkin: ['selo-info', 'chegou'], em_atendimento: ['selo-warn', 'em atendimento'], concluida: ['selo-ok', 'concluida'], falta: ['selo-bad', 'falta'] };
+    const fmt = d => d === hoje ? 'Hoje' : new Date(d + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
+    const linha = x => {
+      const st = ST[x.status] || ['selo-neutro', x.status];
+      const minha = x.aplicador_id === eu;
+      return '<div class="linha-doc sess-escolha' + (x.data === hoje ? ' hoje' : '') + '">' +
+        '<div><b>' + fmt(x.data) + ' as ' + String(x.hora_inicio).slice(0, 5) + '</b><small>' +
+        escaparHtml(x.profissional ? x.profissional.nome.split(' ').slice(0, 2).join(' ') : 'sem aplicador') + (minha ? ' (voce)' : '') + '</small></div>' +
+        '<div class="pac-selos"><span class="selo ' + st[0] + '">' + st[1] + '</span>' +
+        (x.status === 'falta' ? '' : '<button class="btn-chip cheio" onclick="fecharModal(); MODULOS.programas.abrirFolha(\'' + x.id + '\', true)">Lancar nesta</button>') +
+        '</div></div>';
+    };
+    const deHoje = sess.filter(x => x.data === hoje), outras = sess.filter(x => x.data !== hoje);
+    abrirModal('Em qual sessao vai lancar?',
+      (deHoje.length ? '<h4 style="margin:0 0 4px">Hoje</h4>' + deHoje.map(linha).join('') : '<p class="sub">Nenhuma sessao agendada hoje para esta crianca.</p>') +
+      (outras.length ? '<h4 style="margin:12px 0 4px">Outras sessoes <small class="sub">(14 dias atras ate 7 dias a frente)</small></h4>' + outras.map(linha).join('') : '') +
+      '<div class="mensagem-erro" id="enc-erro"></div>' +
+      '<div class="barra-acoes" style="justify-content:space-between">' +
+      '  <button class="btn btn-fantasma" id="enc-criar" onclick="MODULOS.programas.criarEncaixe(\'' + pacienteId + '\')">+ Encaixe agora (' + new Date().toTimeString().slice(0, 5) + ')</button>' +
+      '  <button class="btn btn-fantasma" onclick="fecharModal()">Fechar</button></div>', true, 'agenda');
   },
 
   async criarEncaixe(pacienteId) {
@@ -630,7 +628,7 @@ window.MODULOS.programas = {
     }).select('id').single();
     if (error) {
       if (erro) { erro.textContent = 'Nao consegui criar o encaixe: ' + error.message; erro.classList.add('visivel'); }
-      if (botao) { botao.disabled = false; botao.textContent = 'Criar encaixe e abrir a ficha'; }
+      if (botao) { botao.disabled = false; botao.textContent = '+ Encaixe agora'; }
       return;
     }
     fecharModal();

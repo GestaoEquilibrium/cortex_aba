@@ -274,7 +274,7 @@ async function aplicarHoje() {
   pagina.innerHTML = '<div class="pagina-cabecalho"><div><h2>Aplicar hoje</h2><p class="sub">' + d.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' }) + ' &middot; ' + sess.length + ' sessao(oes)</p></div></div>' +
     (sess.length ? sess.map(s => {
       const st = ST[s.status] || ['selo-neutro', s.status];
-      return '<div class="cartao cel-sessao" onclick="MODULOS.programas.abrirFolhaProntuario(\'' + s.paciente_id + '\')">' +
+      return '<div class="cartao cel-sessao" onclick="MODULOS.programas.abrirFolha(\'' + s.id + '\', true)">' +
         '<div class="avatar-paciente ' + corAvatar(s.pacientes.nome) + '">' + s.pacientes.nome.split(' ').slice(0, 2).map(x => x[0]).join('').toUpperCase() + '</div>' +
         '<div class="cel-sessao-txt"><b>' + escaparHtml(s.pacientes.nome) + '</b><small>' + String(s.hora_inicio).slice(0, 5) + ' &middot; toque para abrir a ficha</small></div>' +
         '<span class="selo ' + st[0] + '">' + st[1] + '</span></div>';

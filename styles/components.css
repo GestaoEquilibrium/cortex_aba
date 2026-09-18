@@ -2500,3 +2500,5 @@
 .cel-crianca { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
 .cel-crianca .avatar-paciente { width: 48px; height: 48px; font-size: 15px; }
 @media (max-width: 720px) { .sel-item .btn-chip.cheio { flex: none; } .sel-item .sel-nome { font-size: 13.5px; } }
+
+.sess-escolha.hoje { background: var(--acao-soft); border-radius: 10px; padding-left: 8px; padding-right: 8px; }

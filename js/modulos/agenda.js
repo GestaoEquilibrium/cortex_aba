@@ -503,15 +503,17 @@ window.MODULOS.agenda = {
       .eq('id', id).single();
     if (!s) return;
     const pac = s.pacientes;
-    const [rResp, rGuias, rAud] = await Promise.all([
+    // tudo em paralelo (a trilha de auditoria so e lida na aba Historico - e a consulta mais pesada)
+    const [rResp, rGuias, rMeus, rFoto] = await Promise.all([
       sb.from('responsaveis').select('nome, telefone, email, parentesco, principal').eq('paciente_id', pac.id).order('principal', { ascending: false }),
       sb.from('guias').select('id, numero, qtd_autorizada, vigencia_inicio, vigencia_fim, convenio, obs').eq('paciente_id', pac.id).order('vigencia_fim', { ascending: false }),
-      sb.from('auditoria').select('usuario_nome, criado_em, acao').eq('tabela', 'sessoes').or('dados_depois->>id.eq.' + id + ',dados_antes->>id.eq.' + id).order('criado_em', { ascending: false }).limit(1)
+      ehEquipe() ? meusPacientesIds() : Promise.resolve(new Set()),
+      pac.foto_path ? sb.storage.from('documentos').createSignedUrl(pac.foto_path, 600).catch(() => ({ data: null })) : Promise.resolve({ data: null })
     ]);
     const resps = rResp.data || [];
     const resp = resps.find(r => r.telefone) || resps[0] || null;
     const guias = rGuias.data || [];
-    const ultAud = rAud.data && rAud.data[0];
+    const ultAud = null;
 
     // saldo das guias (sessoes concluidas dentro da vigencia)
     const { data: consumo } = guias.length
@@ -531,10 +533,9 @@ window.MODULOS.agenda = {
     const aberta = !['concluida', 'falta', 'cancelada'].includes(s.status);
     const podeOperar = perm('agenda.status') === 'E';
     const podeCancelar = perm('agenda.cancelar') === 'E';
-    const meus = ehEquipe() ? await meusPacientesIds() : new Set();
+    const meus = rMeus || new Set();
     const ehMinha = ehEquipe() && (s.aplicador_id === window.CORTEX_SESSAO.user.id || meus.has(pac.id));
-    let fotoUrl = null;
-    if (pac.foto_path) { try { const { data: u } = await sb.storage.from('documentos').createSignedUrl(pac.foto_path, 600); fotoUrl = u ? u.signedUrl : null; } catch (e) {} }
+    const fotoUrl = rFoto && rFoto.data ? rFoto.data.signedUrl : null;
 
     this._sessaoModal = { s, resp, guias, guiaVigente };
     const dExt = new Date(s.data + 'T12:00:00');
@@ -598,7 +599,7 @@ window.MODULOS.agenda = {
         '  </div>' +
         '</div>' +
         '<div class="sess-rodape-meta"><span>Criado por <b>' + escaparHtml(s.criador ? s.criador.nome : (s.id_externo ? 'importacao' : '-')) + '</b>' + (s.criado_em ? ' &middot; ' + new Date(s.criado_em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '') + '</span>' +
-        '<span>Atualizado por <b>' + escaparHtml(ultAud ? ultAud.usuario_nome || 'sistema' : '-') + '</b>' + (ultAud ? ' &middot; ' + new Date(ultAud.criado_em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '') + '</span></div>';
+        '<span>Alteracoes: veja a aba <b>Historico</b></span></div>';
     } else if (aba0 === 'paciente') {
       const idade = pac.data_nascimento ? calcularIdade(pac.data_nascimento) : '-';
       corpo = '<div class="grade-visao" style="grid-template-columns:1fr 1fr">' +

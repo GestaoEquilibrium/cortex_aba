@@ -602,7 +602,9 @@ window.MODULOS.programas = {
         '<div><b>' + fmt(x.data) + ' as ' + String(x.hora_inicio).slice(0, 5) + '</b><small>' +
         escaparHtml(x.profissional ? x.profissional.nome.split(' ').slice(0, 2).join(' ') : 'sem aplicador') + (minha ? ' (voce)' : '') + '</small></div>' +
         '<div class="pac-selos"><span class="selo ' + st[0] + '">' + st[1] + '</span>' +
-        (x.status === 'falta' ? '' : '<button class="btn-chip cheio" onclick="fecharModal(); MODULOS.programas.abrirFolha(\'' + x.id + '\', true)">Lancar nesta</button>') +
+        (x.status === 'falta' ? '' : x.status === 'concluida'
+          ? '<button class="btn-chip" onclick="fecharModal(); MODULOS.programas.docEvolucaoDiaria(\'' + x.id + '\')">Ver relatorio</button>'
+          : '<button class="btn-chip cheio" onclick="fecharModal(); MODULOS.programas.abrirFolha(\'' + x.id + '\', true)">Lancar nesta</button>') +
         '</div></div>';
     };
     const deHoje = sess.filter(x => x.data === hoje), outras = sess.filter(x => x.data !== hoje);
@@ -664,6 +666,10 @@ window.MODULOS.programas = {
       sb.from('fichas_config').select('paciente_programa_id, tentativas, selecionado').eq('sessao_id', sessaoId)
     ]);
 
+    if (s.status === 'concluida' && !['direcao', 'coordenador', 'suporte'].includes(window.CORTEX_SESSAO.profile.perfil)) {
+      popAviso('Esta sessao ja foi encerrada. Para lancar novos programas, escolha outra sessao ou crie um encaixe.');
+      return;
+    }
     const pps = rPps.data || [];
     const cfg = {}, selecionados = {};
     (rCfg.data || []).forEach(c => { cfg[c.paciente_programa_id] = c.tentativas; selecionados[c.paciente_programa_id] = c.selecionado !== false; });
@@ -704,8 +710,8 @@ window.MODULOS.programas = {
         const g = fichas[id]; while (g.length < tentPrevistas[id]) g.push({ resposta: '', reforcador: '', estimulo: '' });
       } });
     }
-    // no celular a ficha abre pela tela da crianca quando ha escolha a fazer; sem permissao vai direto
-    const jaEscolheu = !podeConfig || ((rCfg.data || []).length > 0 && !this.celular());
+    // A ficha SEMPRE abre pela tela da crianca: quem configura marca/desmarca; quem so aplica escolhe por qual comecar
+    const jaEscolheu = false;
 
     this._folha = {
       sessao: s,
@@ -767,12 +773,12 @@ window.MODULOS.programas = {
       corpo += '<div class="ficha-passos">' +
         doDia.map((pp, i) => {
           const c = this.contarFicha(f.fichas[pp.id]);
-          return '<button type="button" class="passo' + (i === f.idx ? ' ativo' : '') + (c.preenchidas ? ' feito' : '') + '" ' +
+          return '<button type="button" class="fp-passo' + (i === f.idx ? ' ativo' : '') + (c.preenchidas ? ' feito' : '') + '" ' +
             'onclick="MODULOS.programas.irPara(' + i + ')" title="' + escaparHtml(pp.programas.nome) + '">' +
             '<b>' + (i + 1) + '</b><span>' + escaparHtml(pp.programas.nome.length > 22 ? pp.programas.nome.slice(0, 21) + '\u2026' : pp.programas.nome) + '</span>' +
             (c.preenchidas ? '<small>' + c.preenchidas + '/' + c.n + '</small>' : '') + '</button>';
         }).join('') +
-        (f.podeConfig ? '<button type="button" class="passo passo-mais" onclick="MODULOS.programas.voltarSelecao()" title="Escolher outros programas">&#9998; programas</button>' : '') +
+        (f.podeConfig ? '<button type="button" class="fp-passo fp-passo-mais" onclick="MODULOS.programas.voltarSelecao()" title="Escolher outros programas">&#9998; programas</button>' : '') +
         '</div>';
     }
 
@@ -891,7 +897,7 @@ window.MODULOS.programas = {
       ' &middot; programa ' + (f.idx + 1) + ' de ' + doDia.length + '</small></div>' +
       '  <span class="area-chip" style="background:' + cor + '1A; color:' + cor + '">' + escaparHtml(p.area) + '</span></div>' +
       '<div class="cel-passos">' + grade.map((l, i) =>
-        '<i class="' + (i === t ? 'on' : '') + '" style="' + (l.resposta ? 'background:' + this.corUi(l.resposta) : '') + '" onclick="MODULOS.programas.irTentativa(' + i + ')" title="' + (i + 1) + (l.resposta ? ' · ' + l.resposta : '') + '"></i>').join('') + '</div>' +
+        '<i class="' + (i === t ? 'on' : '') + (l.resposta ? ' feita' : '') + '" style="' + (l.resposta ? 'background:' + this.corUi(l.resposta) : '') + '" onclick="MODULOS.programas.irTentativa(' + i + ')"><span>' + (i + 1) + '</span></i>').join('') + '</div>' +
       '<div class="cel-ficha-cont"><b>Tentativa ' + (t + 1) + ' de ' + grade.length + '</b><small>' + c.corretos + '/' + c.preenchidas + ' C &middot; ' + c.pct + '% ' +
       (f.tentPrevistas[pp.id] !== grade.length ? '&middot; programa preve ' + f.tentPrevistas[pp.id] : '') + '</small>' +
       (f.podeConfig ? '<button class="btn-chip" onclick="MODULOS.programas.modalTentativasCel(\'' + pp.id + '\')">' + grade.length + ' tent.</button>' : '<span class="selo selo-neutro">' + grade.length + ' tent.</span>') + '</div>' +
@@ -956,7 +962,7 @@ window.MODULOS.programas = {
           '<div><h2 style="margin:0">' + escaparHtml(s.pacientes.nome) + '</h2><small class="sub">' + (s.pacientes.data_nascimento ? calcularIdade(s.pacientes.data_nascimento) + ' &middot; ' : '') + 'toque em Aplicar no programa, ou marque varios e Comecar</small></div></div>'
         : '<h2>O que vamos aplicar hoje &middot; ' + escaparHtml(s.pacientes.nome) + '</h2>') +
       '<p class="sub">' + new Date(s.data + 'T12:00:00').toLocaleDateString('pt-BR') + ' as ' + s.hora_inicio.slice(0, 5) +
-      ' &middot; Marque os programas desta sessao. Depois eles aparecem um de cada vez.</p></div></div>' +
+      (f.podeConfig ? ' &middot; Marque os programas desta sessao. Depois eles aparecem um de cada vez.' : ' &middot; Programas configurados pela coordenacao. Toque em Aplicar no que vai comecar.') + '</p></div></div>' +
       (f.faixaComp || '') +
       '<div class="cartao"><div class="sel-lista">' +
       f.programas.map(pp => {
@@ -964,29 +970,31 @@ window.MODULOS.programas = {
         const marcado = semConfig ? true : !!f.selecionados[pp.id];
         const c = this.contarFicha(f.fichas[pp.id]);
         return '<label class="sel-item' + (marcado ? ' marcado' : '') + '">' +
-          '<input type="checkbox" value="' + pp.id + '"' + (marcado ? ' checked' : '') + ' onchange="this.closest(\'.sel-item\').classList.toggle(\'marcado\', this.checked)">' +
+          (f.podeConfig
+            ? '<input type="checkbox" value="' + pp.id + '"' + (marcado ? ' checked' : '') + ' onchange="this.closest(\'.sel-item\').classList.toggle(\'marcado\', this.checked)">'
+            : '<input type="checkbox" value="' + pp.id + '" checked disabled style="opacity:.4">') +
           '<span class="sel-nome">' + escaparHtml(p.nome) + '<small>' + escaparHtml(p.area) + ' &middot; preve ' + f.tentPrevistas[pp.id] + ' tentativas' +
           (c.preenchidas ? ' &middot; <b style="color:var(--st-ok)">' + c.preenchidas + '/' + c.n + ' feitas</b>' : '') +
           (p.procedimento && !this.celular() ? ' &middot; ' + escaparHtml(p.procedimento.slice(0, 80)) : '') + '</small></span>' +
-          (this.celular()
-            ? '<button type="button" class="btn-chip cheio" onclick="event.preventDefault(); MODULOS.programas.aplicarDireto(\'' + pp.id + '\')">Aplicar &rsaquo;</button>'
-            : '<i class="area-chip" style="background:' + cor + '1A; color:' + cor + '">' + escaparHtml(p.area) + '</i>') + '</label>';
+          '<button type="button" class="btn-chip cheio" onclick="event.preventDefault(); MODULOS.programas.aplicarDireto(\'' + pp.id + '\')">Aplicar &rsaquo;</button></label>';
       }).join('') + '</div>' +
       '<p class="sub" style="margin-top:8px">Os que ficarem de fora entram no encerramento como <b>nao aplicados</b>, com um campo para o motivo.</p>' +
       '<div class="barra-acoes">' +
-      '<button class="btn btn-fantasma" onclick="document.querySelectorAll(\'.sel-item input\').forEach(c => { c.checked = true; c.closest(\'.sel-item\').classList.add(\'marcado\'); })">Marcar todos</button>' +
-      '<button class="btn btn-primario" onclick="MODULOS.programas.comecarAplicacao()">Comecar &rsaquo;</button></div></div>';
+      (f.podeConfig ? '<button class="btn btn-fantasma" onclick="document.querySelectorAll(\'.sel-item input\').forEach(c => { c.checked = true; c.closest(\'.sel-item\').classList.add(\'marcado\'); })">Marcar todos</button>' : '') +
+      '<button class="btn btn-primario" onclick="MODULOS.programas.comecarAplicacao()">Comecar pelo primeiro &rsaquo;</button></div></div>';
   },
 
   // celular: toca em "Aplicar" num programa e vai direto para ele (marca-o como selecionado)
   async aplicarDireto(ppId) {
     const f = this._folha;
-    const marcados = new Set(Array.from(document.querySelectorAll('.sel-item input:checked')).map(c => c.value));
-    marcados.add(ppId);
-    f.programas.forEach(pp => { f.selecionados[pp.id] = marcados.has(pp.id); });
-    const linhas = f.programas.map(pp => ({ sessao_id: f.sessao.id, paciente_programa_id: pp.id,
-      tentativas: f.fichas[pp.id].length, selecionado: !!f.selecionados[pp.id] }));
-    await sb.from('fichas_config').upsert(linhas, { onConflict: 'sessao_id,paciente_programa_id' });
+    if (f.podeConfig) {
+      const marcados = new Set(Array.from(document.querySelectorAll('.sel-item input:checked')).map(c => c.value));
+      marcados.add(ppId);
+      f.programas.forEach(pp => { f.selecionados[pp.id] = marcados.has(pp.id); });
+      const linhas = f.programas.map(pp => ({ sessao_id: f.sessao.id, paciente_programa_id: pp.id,
+        tentativas: f.fichas[pp.id].length, selecionado: !!f.selecionados[pp.id] }));
+      await sb.from('fichas_config').upsert(linhas, { onConflict: 'sessao_id,paciente_programa_id' });
+    }
     f.etapa = 'aplicar';
     f.idx = Math.max(0, this.programasDoDia().findIndex(pp => pp.id === ppId));
     f.tIdx = undefined;
@@ -995,6 +1003,7 @@ window.MODULOS.programas = {
 
   async comecarAplicacao() {
     const f = this._folha;
+    if (!f.podeConfig) { f.etapa = 'aplicar'; f.idx = 0; f.tIdx = undefined; this.desenharFolha(); return; }
     const marcados = new Set(Array.from(document.querySelectorAll('.sel-item input:checked')).map(c => c.value));
     if (!marcados.size) { popAviso('Marque pelo menos um programa para comecar.'); return; }
     f.programas.forEach(pp => { f.selecionados[pp.id] = marcados.has(pp.id); });
@@ -1276,13 +1285,13 @@ window.MODULOS.programas = {
         if (e1) throw new Error(e1.message);
       }
 
-      const { error: e2 } = await sb.from('evolucoes').insert({
+      const { error: e2 } = await sb.from('evolucoes').upsert({
         sessao_id: f.sessao.id,
         paciente_id: f.sessao.paciente_id,
         aplicador_id: window.CORTEX_SESSAO.user.id,
         texto: texto,
         destinacao: document.getElementById('fe-destinacao').value.trim() || null
-      });
+      }, { onConflict: 'sessao_id' });
       if (e2) throw new Error(e2.message);
 
       const { error: e3 } = await sb.from('sessoes')

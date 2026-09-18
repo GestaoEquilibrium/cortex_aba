@@ -2320,13 +2320,13 @@
 
 /* ── Ficha: passos (um programa por vez) e selecao do dia ───────────── */
 .ficha-passos { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
-.ficha-passos .passo { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border: 1.5px solid var(--line); border-radius: 999px; background: var(--surface); font: inherit; font-size: 12px; cursor: pointer; color: var(--ink-muted); transition: all .15s; }
-.ficha-passos .passo b { width: 20px; height: 20px; border-radius: 50%; background: var(--surface-alt); display: inline-flex; align-items: center; justify-content: center; font-size: 11px; }
-.ficha-passos .passo small { font-weight: 700; color: var(--st-ok); }
-.ficha-passos .passo.feito b { background: var(--st-ok-bg); color: var(--st-ok); }
-.ficha-passos .passo.ativo { border-color: var(--acao); background: var(--acao-soft); color: var(--acao); font-weight: 700; }
-.ficha-passos .passo.ativo b { background: var(--acao); color: #fff; }
-.ficha-passos .passo-mais { border-style: dashed; }
+.ficha-passos .fp-passo { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border: 1.5px solid var(--line); border-radius: 999px; background: var(--surface); font: inherit; font-size: 12px; cursor: pointer; color: var(--ink-muted); transition: all .15s; }
+.ficha-passos .fp-passo b { width: 20px; height: 20px; border-radius: 50%; background: var(--surface-alt); display: inline-flex; align-items: center; justify-content: center; font-size: 11px; }
+.ficha-passos .fp-passo small { font-weight: 700; color: var(--st-ok); }
+.ficha-passos .fp-passo.feito b { background: var(--st-ok-bg); color: var(--st-ok); }
+.ficha-passos .fp-passo.ativo { border-color: var(--acao); background: var(--acao-soft); color: var(--acao); font-weight: 700; }
+.ficha-passos .fp-passo.ativo b { background: var(--acao); color: #fff; }
+.ficha-passos .fp-passo-mais { border-style: dashed; }
 .ficha-nav { margin-top: 12px; justify-content: space-between; }
 .sel-lista { display: flex; flex-direction: column; gap: 6px; }
 .sel-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1.5px solid var(--line); border-radius: 12px; cursor: pointer; }
@@ -2476,9 +2476,10 @@
 .cel-ficha-tit b { display: block; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cel-ficha-tit small { color: var(--ink-muted); font-size: 11.5px; }
 .cel-passos { display: flex; gap: 4px; }
-.cel-passos i { flex: 1; height: 7px; border-radius: 4px; background: var(--line); cursor: pointer; }
+.cel-passos i { flex: 1; height: 22px; border-radius: 7px; background: var(--line); cursor: pointer; display: flex; align-items: center; justify-content: center; font-style: normal; font-size: 10px; font-weight: 800; color: var(--ink-muted); }
+.cel-passos i.feita { color: #fff; }
 .cel-passos i.ok { background: var(--st-ok); }
-.cel-passos i.on { background: var(--acao); box-shadow: 0 0 0 2px var(--acao-soft); }
+.cel-passos i.on { outline: 2.5px solid var(--acao); outline-offset: 1px; }
 .cel-ficha-cont { display: flex; align-items: center; gap: 10px; }
 .cel-ficha-cont b { font-size: 15px; }
 .cel-ficha-cont small { flex: 1; color: var(--ink-muted); font-size: 12px; }
@@ -2502,3 +2503,9 @@
 @media (max-width: 720px) { .sel-item .btn-chip.cheio { flex: none; } .sel-item .sel-nome { font-size: 13.5px; } }
 
 .sess-escolha.hoje { background: var(--acao-soft); border-radius: 10px; padding-left: 8px; padding-right: 8px; }
+
+.ficha-passos .fp-passo { flex: 0 0 auto; }
+.ficha-passos .fp-passo > span { white-space: nowrap; max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
+
+.cel-passos { flex-wrap: wrap; }
+.cel-passos i { min-width: 26px; }

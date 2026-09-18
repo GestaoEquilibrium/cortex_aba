@@ -438,7 +438,7 @@ window.MODULOS.avaliacoes = {
     this.avaliacao.oral = valor;
     botao.parentElement.querySelectorAll('.seg').forEach(b => b.classList.remove('ativo'));
     botao.classList.add('ativo');
-    await sb.from('avaliacoes').update({ oral: valor }).eq('id', this.avaliacao.id);
+    { const { error: _e } = await sb.from('avaliacoes').update({ oral: valor }).eq('id', this.avaliacao.id); if (_e) popAviso('Nao foi possivel gravar (avaliacoes): ' + _e.message); }
   },
 
   _obsTimer: null,
@@ -447,7 +447,7 @@ window.MODULOS.avaliacoes = {
     this._obsTimer = setTimeout(async () => {
       const v = document.getElementById('av-obs').value;
       this.avaliacao.observacoes = v;
-      await sb.from('avaliacoes').update({ observacoes: v }).eq('id', this.avaliacao.id);
+      { const { error: _e } = await sb.from('avaliacoes').update({ observacoes: v }).eq('id', this.avaliacao.id); if (_e) popAviso('Nao foi possivel gravar (avaliacoes): ' + _e.message); }
     }, 600);
   },
 
@@ -1235,7 +1235,7 @@ window.MODULOS.avaliacoes = {
         duracao: document.getElementById('ss-duracao')?.value || null
       };
       Object.assign(this.avaliacao, dados);
-      await sb.from('avaliacoes').update(dados).eq('id', this.avaliacao.id);
+      { const { error: _e } = await sb.from('avaliacoes').update(dados).eq('id', this.avaliacao.id); if (_e) popAviso('Nao foi possivel gravar (avaliacoes): ' + _e.message); }
     }, 600);
   },
 
@@ -1440,8 +1440,8 @@ window.MODULOS.avaliacoes = {
   async concluirPortage() {
     const n = Object.keys(this._pResp).length;
     if (!await popConfirmar('Concluir a aplicacao com ' + n + ' item(ns) respondido(s)? Itens em branco contam como nao alcancados nas faixas aplicadas.')) return;
-    await sb.from('avaliacoes').update({ status: 'concluida', concluido_em: new Date().toISOString() })
-      .eq('id', this.avaliacao.id);
+    { const { error: _e } = await sb.from('avaliacoes').update({ status: 'concluida', concluido_em: new Date().toISOString() })
+      .eq('id', this.avaliacao.id); if (_e) popAviso('Nao foi possivel gravar (avaliacoes): ' + _e.message); }
     this.fecharJanela();
     this.docPortage(this.avaliacao.paciente_id);
   },

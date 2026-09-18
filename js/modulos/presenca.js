@@ -19,7 +19,7 @@ window.MODULOS.presenca = {
     this.el = el;
     this.sessao = sessao;
 
-    const hoje = new Date().toISOString().slice(0, 10);
+    const hoje = hojeLocal();
 
     el.innerHTML =
       '<div class="pagina-cabecalho nao-imprime">' +

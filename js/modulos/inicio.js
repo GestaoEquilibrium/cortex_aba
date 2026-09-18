@@ -121,7 +121,7 @@ window.MODULOS.inicio = {
     if (!alvo) return;
     const eu = window.CORTEX_SESSAO.user.id;
     const perfil = window.CORTEX_SESSAO.profile.perfil;
-    const hoje = new Date().toISOString().slice(0, 10);
+    const hoje = hojeLocal();
     const cartoes = [];
 
     // Minhas sessoes sem evolucao

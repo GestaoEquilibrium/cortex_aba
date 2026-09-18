@@ -93,7 +93,7 @@ window.MODULOS.coordenacao = {
 
   async desenharAvisos(eq) {
     const alvo = document.getElementById('co-avisos');
-    const hoje = new Date().toISOString().slice(0, 10);
+    const hoje = hojeLocal();
     const amanha = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
     const eu = this._coordId || window.CORTEX_SESSAO.user.id;
     const [rEv, venc, rDem] = await Promise.all([

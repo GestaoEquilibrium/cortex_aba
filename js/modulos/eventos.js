@@ -44,7 +44,7 @@ window.MODULOS.eventos = {
 
   desenhar() {
     const alvo = document.getElementById('ev-lista');
-    const hoje = new Date().toISOString().slice(0, 10);
+    const hoje = hojeLocal();
     const fut = this.lista.filter(e => e.data >= hoje);
     const pas = this.lista.filter(e => e.data < hoje).reverse();
 
@@ -85,7 +85,7 @@ window.MODULOS.eventos = {
       '    <input id="ev-titulo" placeholder="Ex.: Supervisao dos programas do Miguel" value="' +
            escaparHtml(e ? e.titulo : '') + '"></div>' +
       '  <div class="campo"><label>Data *</label>' +
-      '    <input type="date" id="ev-data" value="' + (e ? e.data : new Date().toISOString().slice(0, 10)) + '"></div>' +
+      '    <input type="date" id="ev-data" value="' + (e ? e.data : hojeLocal()) + '"></div>' +
       '  <div class="campo"><label>Hora</label>' +
       '    <input type="time" id="ev-hora" step="300" value="' + (e && e.hora ? e.hora.slice(0, 5) : '') + '"></div>' +
       '  <div class="campo"><label>Com quem</label><select id="ev-prof">' +
@@ -126,7 +126,7 @@ window.MODULOS.eventos = {
 
   async excluir(id) {
     if (!await popConfirmar('Excluir este evento?')) return;
-    await sb.from('eventos').delete().eq('id', id);
+    { const { error: _e } = await sb.from('eventos').delete().eq('id', id); if (_e) popAviso('Nao foi possivel gravar (eventos): ' + _e.message); }
     fecharModal();
     await this.carregar();
     this.desenhar();
@@ -229,7 +229,7 @@ window.MODULOS.eventos = {
   async popupAvisos() {
     const eu = window.CORTEX_SESSAO.user.id;
     const perfil = window.CORTEX_SESSAO.profile.perfil;
-    const hoje = new Date().toISOString().slice(0, 10);
+    const hoje = hojeLocal();
     const amanha = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
 
     const { data: evs } = await sb.from('eventos')
@@ -415,7 +415,7 @@ window.MODULOS.eventos = {
   },
 
   async concluirDemanda(id, botao) {
-    await sb.from('demandas').update({ feita_em: new Date().toISOString() }).eq('id', id);
+    { const { error: _e } = await sb.from('demandas').update({ feita_em: new Date().toISOString() }).eq('id', id); if (_e) popAviso('Nao foi possivel gravar (demandas): ' + _e.message); }
     if (botao) { botao.outerHTML = '<span class="selo selo-ok">Feita &#10003;</span>'; }
   }
 };

@@ -226,7 +226,7 @@ window.MODULOS.comportamentos = {
     const { error } = await sb.from('comportamento_registros').insert({
       comportamento_id: compId,
       sessao_id: sessaoId || null,
-      data: new Date().toISOString().slice(0, 10),
+      data: hojeLocal(),
       quantidade: c.medida === 'frequencia' ? valor : null,
       duracao_seg: c.medida === 'duracao' ? valor : null,
       antecedente: document.getElementById('rg-a').value.trim() || null,

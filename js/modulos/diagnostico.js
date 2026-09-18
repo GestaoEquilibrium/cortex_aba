@@ -112,7 +112,7 @@ window.MODULOS.diagnostico = {
 
   async checarPendencias() {
     const alvo = document.getElementById('dg-pendencias');
-    const hoje = new Date().toISOString().slice(0, 10);
+    const hoje = hojeLocal();
     const seteDias = new Date(Date.now() - 7 * 86400000).toISOString();
     const pend = [];
 
@@ -216,7 +216,7 @@ window.MODULOS.diagnostico = {
       const blob = new Blob([conteudo], { type: 'application/json' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = 'cortex_backup_' + new Date().toISOString().slice(0, 10) + '.json';
+      a.download = 'cortex_backup_' + hojeLocal() + '.json';
       a.click();
       URL.revokeObjectURL(a.href);
 

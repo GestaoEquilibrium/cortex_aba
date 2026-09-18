@@ -249,7 +249,7 @@ window.MODULOS.laudo_avaliacao = {
     if (!rel.conclusao) auto.conclusao = this.rascunhoConclusao(d);
     if (!rel.assinatura_nome) { auto.assinatura_nome = this.ASSINATURA_PADRAO.nome; auto.assinatura_titulo = this.ASSINATURA_PADRAO.titulo; }
     if (rel.status === 'rascunho' && Object.keys(auto).length) {
-      await sb.from('relatorios_avaliacao').update(auto).eq('id', rel.id);
+      { const { error: _e } = await sb.from('relatorios_avaliacao').update(auto).eq('id', rel.id); if (_e) popAviso('Nao foi possivel gravar (relatorios_avaliacao): ' + _e.message); }
       Object.assign(rel, auto);
     }
     if (rel.incluir_anexos === null || rel.incluir_anexos === undefined) rel.incluir_anexos = d.completo;

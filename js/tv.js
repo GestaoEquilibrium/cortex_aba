@@ -60,7 +60,7 @@ async function cicloTV() {
     return;
   }
 
-  const hoje = new Date().toISOString().slice(0, 10);
+  const hoje = (function(){ const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); })();
 
   // Garante que a grade do dia virou sessoes (idempotente)
   if (TV_PRIMEIRA_CARGA) {

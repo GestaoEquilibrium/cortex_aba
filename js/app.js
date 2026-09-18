@@ -373,6 +373,13 @@ function calcularIdade(dataNasc) {
   return anos + 'a ' + meses + 'm';
 }
 
+// Datas de HOJE em horario local (toISOString e UTC: a partir das 21h no Brasil ja virava "amanha")
+function hojeLocal() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function mesLocal() { return hojeLocal().slice(0, 7); }
+
 function escaparHtml(t) {
   const d = document.createElement('div');
   d.textContent = t == null ? '' : String(t);

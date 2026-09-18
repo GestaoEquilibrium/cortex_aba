@@ -605,7 +605,7 @@ window.MODULOS.programas = {
   },
 
   async mudarPrograma(status) {
-    await sb.from('paciente_programas').update({ status: status }).eq('id', this._ppAtual.id);
+    { const { error: _e } = await sb.from('paciente_programas').update({ status: status }).eq('id', this._ppAtual.id); if (_e) popAviso('Nao foi possivel gravar (paciente_programas): ' + _e.message); }
     fecharModal();
     this.recarregarAbaProgramas();
   },
@@ -796,7 +796,7 @@ window.MODULOS.programas = {
     this._folha.faixaComp = await MODULOS.comportamentos.faixaFolha(s.paciente_id, sessaoId);
 
     if (s.status === 'checkin' || s.status === 'agendada') {
-      await sb.from('sessoes').update({ status: 'em_atendimento' }).eq('id', sessaoId);
+      { const { error: _e } = await sb.from('sessoes').update({ status: 'em_atendimento' }).eq('id', sessaoId); if (_e) popAviso('Nao foi possivel gravar (sessoes): ' + _e.message); }
     }
 
     this.desenharFolha();
@@ -1059,7 +1059,7 @@ window.MODULOS.programas = {
       f.programas.forEach(pp => { f.selecionados[pp.id] = marcados.has(pp.id); });
       const linhas = f.programas.map(pp => ({ sessao_id: f.sessao.id, paciente_programa_id: pp.id,
         tentativas: f.fichas[pp.id].length, selecionado: !!f.selecionados[pp.id] }));
-      await sb.from('fichas_config').upsert(linhas, { onConflict: 'sessao_id,paciente_programa_id' });
+      { const { error: _e } = await sb.from('fichas_config').upsert(linhas, { onConflict: 'sessao_id,paciente_programa_id' }); if (_e) popAviso('Nao foi possivel gravar (fichas_config): ' + _e.message); }
     }
     f.etapa = 'aplicar';
     f.idx = Math.max(0, this.programasDoDia().findIndex(pp => pp.id === ppId));
@@ -1214,8 +1214,8 @@ window.MODULOS.programas = {
         if (r && !f.reforcadores.includes(r)) novos.add(r);
       }));
       if (novos.size) {
-        await sb.from('reforcadores').upsert(
-          [...novos].map(nome => ({ nome })), { onConflict: 'nome', ignoreDuplicates: true });
+        { const { error: _e } = await sb.from('reforcadores').upsert(
+          [...novos].map(nome => ({ nome })), { onConflict: 'nome', ignoreDuplicates: true }); if (_e) popAviso('Nao foi possivel gravar (reforcadores): ' + _e.message); }
         f.reforcadores.push(...novos);
       }
 
@@ -1371,11 +1371,11 @@ window.MODULOS.programas = {
           .in('status', ['agendada', 'checkin', 'em_atendimento']);
         if (irmas && irmas.length) {
           const ids = irmas.map(x => x.id);
-          await sb.from('sessoes').update({ status: 'concluida' }).in('id', ids);
-          await sb.from('evolucoes').upsert(irmas.map(x => ({
+          { const { error: _e } = await sb.from('sessoes').update({ status: 'concluida' }).in('id', ids); if (_e) popAviso('Nao foi possivel gravar (sessoes): ' + _e.message); }
+          { const { error: _e } = await sb.from('evolucoes').upsert(irmas.map(x => ({
             sessao_id: x.id, paciente_id: f.sessao.paciente_id, aplicador_id: window.CORTEX_SESSAO.user.id,
             texto: texto, destinacao: document.getElementById('fe-destinacao').value.trim() || null, espelho_de: f.sessao.id
-          })), { onConflict: 'sessao_id' });
+          })), { onConflict: 'sessao_id' }); if (_e) popAviso('Nao foi possivel gravar (evolucoes): ' + _e.message); }
           popAviso('Evolucao lancada. Os outros ' + irmas.length + ' horario(s) de hoje desta crianca (' +
             irmas.map(x => String(x.hora_inicio).slice(0, 5)).join(', ') + ') foram concluidos com a mesma evolucao.');
         }
@@ -1901,7 +1901,7 @@ window.MODULOS.programas = {
 
   async popupEvolucoesPendentes() {
     const eu = window.CORTEX_SESSAO.user.id;
-    const hoje = new Date().toISOString().slice(0, 10);
+    const hoje = hojeLocal();
     const { data: ss } = await sb.from('sessoes')
       .select('id, data, hora_inicio, status, paciente_id, pacientes(nome)')
       .eq('aplicador_id', eu).lte('data', hoje)
@@ -1954,7 +1954,7 @@ window.MODULOS.programas = {
     const eu = coordId || sess.user.id;
     const veTudo = !coordId && ['direcao', 'suporte'].includes(perfil);
 
-    const hoje = new Date().toISOString().slice(0, 10);
+    const hoje = hojeLocal();
     const desde = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
 
     const [rPac, rProf, rEm] = await Promise.all([
@@ -2060,7 +2060,7 @@ window.MODULOS.programas = {
       });
       if (e1) throw new Error(e1.message);
       if (document.getElementById('er-concluir').checked) {
-        await sb.from('sessoes').update({ status: 'concluida' }).eq('id', sessaoId);
+        { const { error: _e } = await sb.from('sessoes').update({ status: 'concluida' }).eq('id', sessaoId); if (_e) popAviso('Nao foi possivel gravar (sessoes): ' + _e.message); }
       }
       fecharModal();
       this.popupEvolucoesPendentes();
@@ -2079,8 +2079,8 @@ window.MODULOS.programas = {
       'para voce escolher qual recebe a evolucao (as meninas lancam retroativo, entao a data manda).</p>' +
       '<div class="grade-form">' +
       '  <div class="campo"><label>Data da sessao *</label>' +
-      '    <input type="date" id="re-data" value="' + new Date().toISOString().slice(0, 10) + '" ' +
-      '      max="' + new Date().toISOString().slice(0, 10) + '" ' +
+      '    <input type="date" id="re-data" value="' + hojeLocal() + '" ' +
+      '      max="' + hojeLocal() + '" ' +
       '      onchange="MODULOS.programas.buscarSessoesDoDia()"></div>' +
       '</div>' +
       '<div id="re-lista"><p class="sub">Escolha a data.</p></div>' +
@@ -2177,7 +2177,7 @@ window.MODULOS.programas = {
       if (e1) throw new Error(e1.message);
 
       if (escolha.value !== 'nova' && document.getElementById('re-concluir').checked) {
-        await sb.from('sessoes').update({ status: 'concluida' }).eq('id', sessaoId);
+        { const { error: _e } = await sb.from('sessoes').update({ status: 'concluida' }).eq('id', sessaoId); if (_e) popAviso('Nao foi possivel gravar (sessoes): ' + _e.message); }
       }
 
       fecharModal();
@@ -2198,7 +2198,7 @@ window.MODULOS.programas = {
             '#0E4E86', '#2AA7B5', '#D9930D', '#BE123C', '#5B4FB0', '#2F7A55'],
 
   modalCompilado(pacienteId) {
-    const mes = new Date().toISOString().slice(0, 7);
+    const mes = mesLocal();
     abrirModal('Relatorio compilado',
       '<p class="sub" style="margin-bottom:10px">Um grafico por programa com todas as tentativas de todas as sessoes do periodo, cada dia numa cor.</p>' +
       '<div class="grade-form">' +
@@ -2207,7 +2207,7 @@ window.MODULOS.programas = {
       '<option value="mensal">Mensal (mes escolhido)</option>' +
       '<option value="semestral">Semestral (evolucao por meses)</option></select></div>' +
       '<div class="campo"><label>Mes de referencia</label><input type="month" id="rc-mes" value="' + mes + '"></div>' +
-      '<div class="campo"><label>Semana que termina em <small>(so para o semanal)</small></label><input type="date" id="rc-dia" value="' + new Date().toISOString().slice(0, 10) + '"></div>' +
+      '<div class="campo"><label>Semana que termina em <small>(so para o semanal)</small></label><input type="date" id="rc-dia" value="' + hojeLocal() + '"></div>' +
       '</div>' +
       '<div class="barra-acoes"><button class="btn btn-primario" ' +
       'onclick="fecharModal(); MODULOS.programas.docCompilado(\'' + pacienteId + '\', ' +
@@ -2228,11 +2228,11 @@ window.MODULOS.programas = {
     tipo = tipo || 'mensal';
     let ini, fim;
     if (tipo === 'semanal') {
-      const fimD = new Date((mesRef || new Date().toISOString().slice(0, 10)) + 'T12:00:00');
+      const fimD = new Date((mesRef || hojeLocal()) + 'T12:00:00');
       const iniD = new Date(fimD); iniD.setDate(fimD.getDate() - 6);
       ini = iniD.toISOString().slice(0, 10); fim = fimD.toISOString().slice(0, 10);
     } else {
-      mesRef = mesRef || new Date().toISOString().slice(0, 7);
+      mesRef = mesRef || mesLocal();
       const fimD = new Date(mesRef + '-01T12:00:00');
       fimD.setMonth(fimD.getMonth() + 1); fimD.setDate(0);
       fim = fimD.toISOString().slice(0, 10);

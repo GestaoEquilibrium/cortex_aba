@@ -264,7 +264,7 @@ window.MODULOS.pei = {
       // nova rodada: o PEI anterior sai de "ativo"; programas do anterior ficam a criterio da coordenacao
       const { data: antigos } = await sb.from('peis').select('id').eq('paciente_id', ctx.paciente.id).eq('status', 'ativo').neq('id', pei.id);
       if (antigos && antigos.length) {
-        await sb.from('peis').update({ status: 'encerrado' }).in('id', antigos.map(a => a.id));
+        { const { error: _e } = await sb.from('peis').update({ status: 'encerrado' }).in('id', antigos.map(a => a.id)); if (_e) popAviso('Nao foi possivel gravar (peis): ' + _e.message); }
         const { data: pps } = await sb.from('paciente_programas').select('id').eq('paciente_id', ctx.paciente.id)
           .in('pei_id', antigos.map(a => a.id)).in('status', ['em_intervencao', 'na_fila']);
         if (pps && pps.length) {
@@ -495,7 +495,7 @@ window.MODULOS.pei = {
         analises: analises,
         conclusao: document.getElementById('dev-conclusao')?.value || null
       };
-      await sb.from('relatorios_devolutiva').update(dados).eq('id', this._devolutiva.id);
+      { const { error: _e } = await sb.from('relatorios_devolutiva').update(dados).eq('id', this._devolutiva.id); if (_e) popAviso('Nao foi possivel gravar (relatorios_devolutiva): ' + _e.message); }
       Object.assign(this._devolutiva, dados);
     }, 700);
   },
@@ -677,7 +677,7 @@ window.MODULOS.pei = {
           '<div class="deq-caixa deq-texto" style="min-height:0">' + escaparHtml(pei.finalidade) + '</div>' : '') +
       blocos +
       '<div class="deq-caixa deq-texto" style="margin-top:10px">' + escaparHtml(this.RODAPE_FIXO).replace(/\n/g, '<br>') + '</div>' +
-      '<div class="deq-local">Uberl&acirc;ndia, ' + new Date((pei.periodo_inicio || new Date().toISOString().slice(0, 10)) + 'T12:00:00').toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' }) + '.</div>' +
+      '<div class="deq-local">Uberl&acirc;ndia, ' + new Date((pei.periodo_inicio || hojeLocal()) + 'T12:00:00').toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' }) + '.</div>' +
       '<div class="deq-assinatura">' + escaparHtml(pei.profissional ? pei.profissional.nome : this.ASSINATURA_PADRAO.nome) +
       '<br><small>' + (pei.profissional && pei.profissional.nome !== this.ASSINATURA_PADRAO.nome ? 'Respons&aacute;vel pelo PEI' : escaparHtml(this.ASSINATURA_PADRAO.titulo)) + '</small></div>' +
 

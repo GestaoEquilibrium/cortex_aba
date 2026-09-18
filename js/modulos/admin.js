@@ -229,7 +229,7 @@ window.MODULOS.admin = {
       if (!resp.ok) throw new Error(corpo.erro || 'Falha ao criar o acesso.');
 
       if (atende && corpo.usuario_id) {
-        await sb.from('profiles').update({ atende_pacientes: true }).eq('id', corpo.usuario_id);
+        { const { error: _e } = await sb.from('profiles').update({ atende_pacientes: true }).eq('id', corpo.usuario_id); if (_e) popAviso('Nao foi possivel gravar (profiles): ' + _e.message); }
       }
 
       this._cred = { nome: nome, email: email, senha: senha, perfil: perfil };
@@ -323,7 +323,7 @@ window.MODULOS.admin = {
     // todas as equipes em equipe_membros (varias coordenadoras por aplicador)
     const { error: eDel } = await sb.from('equipe_membros').delete().eq('aplicador_id', id);
     if (!eDel && equipes.length) {
-      await sb.from('equipe_membros').insert(equipes.map(c => ({ coordenador_id: c, aplicador_id: id })));
+      { const { error: _e } = await sb.from('equipe_membros').insert(equipes.map(c => ({ coordenador_id: c, aplicador_id: id }))); if (_e) popAviso('Nao foi possivel gravar (equipe_membros): ' + _e.message); }
     }
     fecharModal();
     await this.carregar();
@@ -358,7 +358,7 @@ window.MODULOS.admin = {
       if (!resp.ok) throw new Error(corpo.erro || 'Falha ao redefinir.');
 
       // Forca a troca (e conferencia da foto) no proximo login
-      await sb.from('profiles').update({ primeiro_acesso: true }).eq('id', id);
+      { const { error: _e } = await sb.from('profiles').update({ primeiro_acesso: true }).eq('id', id); if (_e) popAviso('Nao foi possivel gravar (profiles): ' + _e.message); }
 
       abrirModal('&#128273; Nova senha gerada',
         '<div class="cred-cartao">' +
@@ -412,7 +412,7 @@ window.MODULOS.admin = {
       erro.classList.add('visivel');
       return;
     }
-    await sb.from('profiles').update({ email: novo }).eq('id', userId);
+    { const { error: _e } = await sb.from('profiles').update({ email: novo }).eq('id', userId); if (_e) popAviso('Nao foi possivel gravar (profiles): ' + _e.message); }
     fecharModal();
     alert('E-mail alterado. A pessoa ja entra com o novo endereco.');
     this.render(this.el);

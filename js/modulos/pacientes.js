@@ -130,7 +130,7 @@ window.MODULOS.pacientes = {
 
     // Proxima sessao de cada um (uma consulta so)
     try {
-      const hoje = new Date().toISOString().slice(0, 10);
+      const hoje = hojeLocal();
       const { data: prox } = await sb.from('sessoes')
         .select('paciente_id, data, hora_inicio')
         .gte('data', hoje)
@@ -1254,7 +1254,7 @@ window.MODULOS.pacientes = {
       // 1. Paciente
       passo('Salvando paciente...');
       const { data: pac, error: e1 } = await sb.from('pacientes').insert({
-        admitido_em: new Date().toISOString().slice(0, 10),
+        admitido_em: hojeLocal(),
         nome: document.getElementById('f-nome').value.trim(),
         data_nascimento: document.getElementById('f-nasc').value,
         cpf: cpfPaciente || null,

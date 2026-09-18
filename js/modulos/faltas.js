@@ -16,7 +16,7 @@ window.MODULOS.faltas = {
 
   async render(el) {
     this.el = el;
-    const mesAtual = new Date().toISOString().slice(0, 7);
+    const mesAtual = mesLocal();
 
     el.innerHTML =
       '<div class="pagina-cabecalho nao-imprime">' +
@@ -40,7 +40,7 @@ window.MODULOS.faltas = {
     const fimD = new Date(mes + '-01T12:00:00');
     fimD.setMonth(fimD.getMonth() + 1); fimD.setDate(0);
     const fim = fimD.toISOString().slice(0, 10);
-    const hoje = new Date().toISOString().slice(0, 10);
+    const hoje = hojeLocal();
 
     // Historico fechado (concluida/falta) para a sequencia atual + dados do mes
     let [{ data: historico }, { data: doMes }, { data: pacs }] = await Promise.all([
@@ -120,8 +120,8 @@ window.MODULOS.faltas = {
         notifs.push({ destinatario_perfil: 'coordenador', titulo: 'Faltas consecutivas: ' + p.nome, corpo });
       });
       await sb.from('notificacoes').insert(notifs);
-      await sb.from('faltas_alertas').insert(
-        novos.map(p => ({ paciente_id: p.id, streak: p.streak })));
+      { const { error: _e } = await sb.from('faltas_alertas').insert(
+        novos.map(p => ({ paciente_id: p.id, streak: p.streak }))); if (_e) popAviso('Nao foi possivel gravar (faltas_alertas): ' + _e.message); }
     } catch (e) { /* alerta nunca trava o painel */ }
   },
 

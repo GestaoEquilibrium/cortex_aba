@@ -370,7 +370,7 @@ window.MODULOS.gerencial = {
         ['Em avaliacao', lista.filter(p => p.status === 'avaliacao').length],
         ['Encerrados', lista.filter(p => p.status === 'encerrado').length]
       ],
-      cab, linhas, arquivo: 'pacientes_' + new Date().toISOString().slice(0, 10)
+      cab, linhas, arquivo: 'pacientes_' + hojeLocal()
     };
     this.mostrar();
   },
@@ -415,7 +415,7 @@ window.MODULOS.gerencial = {
       ],
       cab: ['Paciente', 'Convenio', 'Guia', 'Carteirinha', 'Vigencia inicio', 'Vigencia fim',
             'Autorizadas', 'Atendidas', 'Faltas', 'Saldo'],
-      linhas, arquivo: 'guias_' + new Date().toISOString().slice(0, 10)
+      linhas, arquivo: 'guias_' + hojeLocal()
     };
     this.mostrar();
   },

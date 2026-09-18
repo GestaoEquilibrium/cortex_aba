@@ -200,7 +200,7 @@ window.MODULOS.portal = {
   _tokens: {},
 
   async htmlAgenda(pacienteId, nomeCrianca) {
-    const hoje = new Date().toISOString().slice(0, 10);
+    const hoje = hojeLocal();
     const limite = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10);
 
     const { data } = await sb.from('sessoes')
@@ -304,7 +304,7 @@ window.MODULOS.portal = {
       ' fora da clinica: algo que conseguiu fazer, uma palavra nova, uma refeicao... A equipe acompanha tudo.</p>' +
       '<div class="grade-form">' +
       '  <div class="campo"><label>Dia</label><input type="date" id="cad-data" ' +
-      '    value="' + new Date().toISOString().slice(0, 10) + '" max="' + new Date().toISOString().slice(0, 10) + '"></div>' +
+      '    value="' + hojeLocal() + '" max="' + hojeLocal() + '"></div>' +
       '  <div class="campo c2"><label>O que aconteceu?</label>' +
       '    <input id="cad-texto" placeholder="Ex.: comeu sozinho com a colher no almoco"></div>' +
       '  <div class="campo c2"><label>Foto (opcional)</label>' +

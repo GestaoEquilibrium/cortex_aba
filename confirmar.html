@@ -105,7 +105,7 @@
         '<div class="conf-botoes">' +
         '<button class="btn btn-primario" onclick="responder(\'sim\')">Confirmar presenca</button>' +
         '<button class="btn btn-fantasma" style="color:var(--st-bad); border-color:var(--st-bad)" ' +
-        'onclick="if(confirm(\'Desmarcar esta sessao?\')) responder(\'nao\')">Preciso desmarcar</button>' +
+        'onclick="perguntarDesmarcar()">Preciso desmarcar</button>' +
         '</div>';
     }
 
@@ -127,6 +127,16 @@
         }
       }
     })();
-  </script>
+  
+    function perguntarDesmarcar() {
+      document.getElementById('cx-desmarcar')?.remove();
+      const f = document.createElement('div'); f.id = 'cx-desmarcar'; f.className = 'modal-fundo';
+      f.innerHTML = '<div class="modal pop-aviso"><div class="modal-topo"><h3>Desmarcar esta sessao?</h3></div><div class="modal-corpo">' +
+        '<p class="pop-texto">A clinica sera avisada e o horario sera liberado.</p>' +
+        '<div class="barra-acoes"><button class="btn btn-fantasma" onclick="document.getElementById(\'cx-desmarcar\').remove()">Voltar</button>' +
+        '<button class="btn btn-primario" onclick="document.getElementById(\'cx-desmarcar\').remove(); responder(\'nao\')">Desmarcar</button></div></div></div>';
+      document.body.appendChild(f);
+    }
+</script>
 </body>
 </html>

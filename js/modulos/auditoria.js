@@ -35,7 +35,7 @@ window.MODULOS.auditoria = {
 
   async render(el) {
     this.el = el;
-    const hoje = new Date().toISOString().slice(0, 10);
+    const hoje = hojeLocal();
     const seteAtras = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
 
     el.innerHTML =

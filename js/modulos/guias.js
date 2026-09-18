@@ -21,7 +21,7 @@ window.MODULOS.guias = {
   async render(el, sessao) {
     this.el = el;
     this.sessao = sessao;
-    if (!this._mes) this._mes = new Date().toISOString().slice(0, 7);
+    if (!this._mes) this._mes = mesLocal();
     this.telaLista();
   },
 
@@ -80,7 +80,7 @@ window.MODULOS.guias = {
       usoPorGuia[g.id] = null;
     }
 
-    const hoje = new Date().toISOString().slice(0, 10);
+    const hoje = hojeLocal();
 
     alvo.innerHTML =
       '<div class="grade-visao" style="margin-bottom:14px">' +

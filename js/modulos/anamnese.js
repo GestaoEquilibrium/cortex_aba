@@ -264,7 +264,7 @@ window.MODULOS.anamnese = {
       }
 
       this.secaoAtual++;
-      await sb.from('anamneses').update({ secao_atual: this.secaoAtual }).eq('id', this.anamneseId);
+      { const { error: _e } = await sb.from('anamneses').update({ secao_atual: this.secaoAtual }).eq('id', this.anamneseId); if (_e) popAviso('Nao foi possivel gravar (anamneses): ' + _e.message); }
       this.telaSecao();
     } catch (e) {
       erro.textContent = e.message;

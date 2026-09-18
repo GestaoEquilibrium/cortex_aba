@@ -30,7 +30,7 @@ window.MODULOS.agenda = {
   async render(el, sessao) {
     this.el = el;
     this.sessao = sessao;
-    this.dataRef = new Date().toISOString().slice(0, 10);
+    this.dataRef = hojeLocal();
     // call center abre direto na visao por aplicador (reservas)
     this.visao = sessao.profile.perfil === 'callcenter' ? 'equipe' : 'dia';
     await this.carregarBase();
@@ -127,7 +127,7 @@ window.MODULOS.agenda = {
   },
 
   irHoje() {
-    this.dataRef = new Date().toISOString().slice(0, 10);
+    this.dataRef = hojeLocal();
     this.desenhar();
   },
 
@@ -295,8 +295,8 @@ window.MODULOS.agenda = {
       aplicador_id: r.aplicador_id, status: 'agendada', criado_por: this.sessao.user.id
     }).select('id').single();
     if (error) { erro.textContent = 'Sessao: ' + error.message; erro.classList.add('visivel'); return; }
-    await sb.from('reservas_agenda').update({ status: 'confirmado', paciente_id: pacId, sessao_id: nova.id,
-      confirmado_por: this.sessao.user.id, confirmado_em: new Date().toISOString() }).eq('id', id);
+    { const { error: _e } = await sb.from('reservas_agenda').update({ status: 'confirmado', paciente_id: pacId, sessao_id: nova.id,
+      confirmado_por: this.sessao.user.id, confirmado_em: new Date().toISOString() }).eq('id', id); if (_e) popAviso('Nao foi possivel gravar (reservas_agenda): ' + _e.message); }
     fecharModal(); this.desenharEquipe();
   },
 
@@ -403,7 +403,7 @@ window.MODULOS.agenda = {
     let html = '<div class="agenda-grade">';
     datas.forEach((dt, i) => {
       const doDia = (sessoes || []).filter(s => s.data === dt);
-      const hoje = dt === new Date().toISOString().slice(0, 10);
+      const hoje = dt === hojeLocal();
       html += '<div class="agenda-dia' + (hoje ? ' hoje' : '') + '">' +
         '<div class="agenda-dia-titulo">' + this.DIAS[i + 1] + ' ' +
         dt.slice(8, 10) + '/' + dt.slice(5, 7) +
@@ -452,7 +452,7 @@ window.MODULOS.agenda = {
     const gradePorDow = {};
     this.grade.forEach(h => { gradePorDow[h.dia_semana] = (gradePorDow[h.dia_semana] || 0) + 1; });
 
-    const hoje = new Date().toISOString().slice(0, 10);
+    const hoje = hojeLocal();
     let html = '<div class="cartao"><div class="mes-grade">' +
       ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab', 'Dom'].map(d =>
         '<div class="mes-cab">' + d + '</div>').join('');
@@ -1092,7 +1092,7 @@ window.MODULOS.agenda = {
 
     this.el.innerHTML =
       '<div class="pagina-cabecalho">' +
-      '  <div><button class="btn-voltar" onclick="MODULOS.agenda.telaSemana()">&larr; Agenda</button>' +
+      '  <div><button class="btn-voltar" onclick="abrirModulo(\'agenda\')">&larr; Agenda</button>' +
       '  <h2>Horarios dos aplicadores</h2>' +
       '  <p class="sub">Jornada semanal, sessoes fixas e espacos livres. A carga e o total de sessoes fixas por semana.</p></div>' +
       '  <div style="display:flex; gap:8px; flex-wrap:wrap">' +
@@ -1239,7 +1239,7 @@ window.MODULOS.agenda = {
   },
 
   async removerBloco(id, profId) {
-    await sb.from('jornadas').delete().eq('id', id);
+    { const { error: _e } = await sb.from('jornadas').delete().eq('id', id); if (_e) popAviso('Nao foi possivel gravar (jornadas): ' + _e.message); }
     await this.carregarBase();
     this.modalJornada(profId);
     if (document.getElementById('hor-grade')) this.desenharHorarios();
@@ -1480,11 +1480,11 @@ window.MODULOS.agenda = {
         if (error) throw new Error(this.traduzErro(error.message) + ' (' + this.DIAS[s.dia] + ' ' + s.hora + ')');
         inseridos.push(g.id);
       }
-      await sb.from('indicativos').update({
+      { const { error: _e } = await sb.from('indicativos').update({
         status: 'confirmado',
         decidido_por: window.CORTEX_SESSAO.user.id,
         decidido_em: new Date().toISOString()
-      }).eq('id', id);
+      }).eq('id', id); if (_e) popAviso('Nao foi possivel gravar (indicativos): ' + _e.message); }
 
       try {
         const notifs = [{
@@ -1515,11 +1515,11 @@ window.MODULOS.agenda = {
 
   async recusarIndicativo(id) {
     if (!await popConfirmar('Recusar este indicativo? Ele some da fila (a coordenacao pode gerar outro).')) return;
-    await sb.from('indicativos').update({
+    { const { error: _e } = await sb.from('indicativos').update({
       status: 'recusado',
       decidido_por: window.CORTEX_SESSAO.user.id,
       decidido_em: new Date().toISOString()
-    }).eq('id', id);
+    }).eq('id', id); if (_e) popAviso('Nao foi possivel gravar (indicativos): ' + _e.message); }
     fecharModal();
     this.popupIndicativos();
   },

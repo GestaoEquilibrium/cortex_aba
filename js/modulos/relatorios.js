@@ -28,7 +28,7 @@ window.MODULOS.relatorios = {
       .order('mes', { ascending: false });
     const lista = data || [];
 
-    const mesAtual = new Date().toISOString().slice(0, 7);
+    const mesAtual = mesLocal();
 
     let html = '';
     if (this.podeGerir()) {
@@ -198,7 +198,7 @@ window.MODULOS.relatorios = {
     if (!rel.desafios) auto.desafios = this.rascunhoDesafios(dados, pac.nome);
     if (!rel.conclusao) auto.conclusao = this.rascunhoConclusao(dados, pac.nome);
     if (rel.status === 'rascunho' && Object.keys(auto).length) {
-      await sb.from('relatorios_mensais').update(auto).eq('id', rel.id);
+      { const { error: _e } = await sb.from('relatorios_mensais').update(auto).eq('id', rel.id); if (_e) popAviso('Nao foi possivel gravar (relatorios_mensais): ' + _e.message); }
       Object.assign(rel, auto);
     }
     if (rel.mostrar_canceladas === null || rel.mostrar_canceladas === undefined) rel.mostrar_canceladas = true;
@@ -490,7 +490,7 @@ window.MODULOS.relatorios = {
       .select('id, data, hora_inicio, status')
       .eq('paciente_id', pacienteId)
       .not('status', 'in', '("falta","cancelada")')
-      .lte('data', new Date().toISOString().slice(0, 10))
+      .lte('data', hojeLocal())
       .order('data', { ascending: false }).order('hora_inicio', { ascending: false })
       .limit(20);
     const lista = data || [];

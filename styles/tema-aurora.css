@@ -1,0 +1,266 @@
+/* ============================================================================
+   CORTEX aba - styles/tema-aurora.css  ·  "Aurora" (fiel ao CORTEX neuro)
+   Camada visual carregada DEPOIS de components.css. So aparencia, interacao e
+   animacao - nenhuma regra de negocio. Reversivel: troque por tema-indigo.css.
+   Referencia: cortex-v2.css do CORTEX neuro (navy, azul/roxo, molas, vidro).
+   ============================================================================ */
+
+:root {
+    --fonte: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+    --navy:       #141F3C;
+    --navy-deep:  #0A1428;
+    --az:         #2F6FED;
+    --rx:         #7C4DFF;
+    --am:         #F59E0B;
+    --vd:         #22C55E;
+    --cy:         #06B6D4;
+    --rs:         #EC4899;
+    --vm:         #EF4444;
+
+    --side-bg:    #0A1428;
+    --side-bg-2:  #1B2A54;
+    --side-ink:   rgba(255,255,255,.82);
+    --side-soft:  rgba(255,255,255,.55);
+
+    --bg:          #ECEEF3;
+    --surface:     #FFFFFF;
+    --surface-alt: #FAFBFD;
+    --line:        #E2E8F0;
+    --line-strong: #CBD5E1;
+
+    --raio:    20px;
+    --raio-sm: 14px;
+    --raio-xs: 10px;
+
+    --shadow-xs: 0 1px 2px rgba(15,23,42,.05);
+    --shadow-sm: 0 1px 2px rgba(15,23,42,.05), 0 2px 6px rgba(15,23,42,.05);
+    --shadow-md: 0 2px 4px rgba(20,31,60,.05), 0 8px 18px rgba(20,31,60,.08);
+    --shadow-lg: 0 4px 8px rgba(20,31,60,.06), 0 16px 32px rgba(20,31,60,.12);
+    --shadow-float: 0 10px 20px rgba(20,31,60,.07), 0 30px 60px rgba(20,31,60,.14);
+    --shadow-card-hover: 0 6px 12px rgba(20,31,60,.07), 0 18px 36px rgba(20,31,60,.13);
+    --glow-blue:   0 8px 24px rgba(47,111,237,.32);
+    --glow-purple: 0 8px 24px rgba(124,77,255,.32);
+
+    --glass-bg:     rgba(255,255,255,.82);
+    --glass-border: rgba(255,255,255,.65);
+    --glass-blur:   saturate(180%) blur(20px);
+    --scrim:        rgba(10,20,40,.48);
+
+    --t-fast:   .15s ease;
+    --t-base:   .25s cubic-bezier(.4,0,.2,1);
+    --t-bounce: .3s cubic-bezier(.34,1.56,.64,1);
+    --t-spring: .45s cubic-bezier(.22,1,.36,1);
+
+    --grad-primary: linear-gradient(135deg, #1B3A7A 0%, #2F6FED 100%);
+    --grad-hover:   linear-gradient(135deg, #142B5C 0%, #2559C8 100%);
+    --grad-aurora:  linear-gradient(135deg, #2F6FED 0%, #7C4DFF 55%, #EC4899 100%);
+    --gd-heroi:     linear-gradient(135deg, #1B3A7A 0%, #2F6FED 60%, #7C4DFF 100%);
+    --gd-login:     linear-gradient(150deg, #0A1428 0%, #1B2A54 55%, #2F6FED 140%);
+    --dot-cor: rgba(20,31,60,.07);
+}
+/* cor de acao por perfil: opcao A (fiel) usa o azul do neuro na gestao; os outros perfis mantem a sua */
+[data-tema="gestao"] { --acao: #2F6FED; --acao-forte: #1E4FC2; --acao-soft: rgba(47,111,237,.14); }
+[data-modo="escuro"] {
+    --side-bg: #060D1C; --side-bg-2: #12203F;
+    --bg: #0B1120; --surface: #121A2E; --surface-alt: #182238; --line: #223052; --line-strong: #2E3E66;
+    --glass-bg: rgba(18,26,46,.82); --glass-border: rgba(255,255,255,.08); --dot-cor: rgba(255,255,255,.05);
+}
+[data-modo="escuro"][data-tema="gestao"] { --acao-soft: rgba(47,111,237,.24); }
+
+body { font-family: var(--fonte); letter-spacing: -.005em; }
+h1, h2, h3, .pagina-cabecalho h2 { letter-spacing: -.02em; }
+
+/* ── Sidebar flutuante com aurora ───────────────────────────────────── */
+.sidebar {
+    background: linear-gradient(165deg, var(--side-bg-2) 0%, var(--side-bg) 100%);
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 26px;
+    box-shadow: var(--shadow-float);
+    overflow: hidden;
+    transition: width var(--t-spring), margin var(--t-spring), transform var(--t-spring);
+}
+.sidebar::before {
+    content: ''; position: absolute; inset: -40% -30% auto -30%; height: 260px;
+    background: radial-gradient(closest-side, rgba(124,77,255,.55), transparent 70%),
+                radial-gradient(closest-side, rgba(47,111,237,.45), transparent 70%);
+    background-position: 20% 0, 85% 20%; background-repeat: no-repeat; background-size: 70% 100%, 70% 100%;
+    filter: blur(18px); opacity: .55; pointer-events: none;
+}
+.sidebar > * { position: relative; z-index: 1; }
+.sidebar-topo { padding: 18px 14px 12px; }
+.marca .simbolo {
+    width: 38px; height: 38px; border-radius: 12px;
+    background: var(--grad-primary); color: #fff;
+    box-shadow: var(--glow-blue);
+    transition: transform var(--t-bounce), box-shadow var(--t-base);
+}
+.marca:hover .simbolo { transform: rotate(-8deg) scale(1.06); }
+.marca .nome { font-size: 16px; font-weight: 800; color: #fff; }
+.marca .nome .mao { color: #F3B63D; }
+.botao-icone { width: 30px; height: 30px; border-radius: 9px; background: rgba(255,255,255,.10); color: #fff; transition: background var(--t-base), transform var(--t-bounce); }
+.botao-icone:hover { background: rgba(255,255,255,.2); transform: scale(1.06); }
+
+.nav-grupo-titulo { font-size: 10px; letter-spacing: .12em; color: var(--side-soft); padding: 16px 12px 6px; }
+.nav-item {
+    --nav-accent: var(--az);
+    padding: 10px 11px; border-radius: var(--raio-xs);
+    color: var(--side-ink); font-size: 13.5px; font-weight: 500;
+    position: relative; overflow: hidden;
+    transition: all var(--t-base);
+}
+.nav-item::before {
+    content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+    width: 3px; height: 0; background: var(--nav-accent); border-radius: 0 4px 4px 0;
+    transition: height var(--t-base);
+}
+.nav-item .icone { transition: transform var(--t-base), color var(--t-base); color: rgba(255,255,255,.75); }
+.nav-item:hover { background: rgba(255,255,255,.10); color: #fff; transform: translateX(3px); }
+.nav-item:hover::before { height: 62%; }
+.nav-item:hover .icone { color: var(--nav-accent); transform: scale(1.14); }
+.nav-item.ativa { background: rgba(255,255,255,.96); color: var(--navy); font-weight: 650; box-shadow: 0 6px 18px rgba(0,0,0,.22); }
+.nav-item.ativa::before { height: 0; }
+.nav-item.ativa:hover { background: #fff; transform: none; }
+.nav-item.ativa .icone { color: var(--nav-accent); transform: none; }
+[data-modo="escuro"] .nav-item.ativa { background: #E8F0FE; }
+
+.cartao-usuario { background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.10); border-radius: 14px; transition: background var(--t-base); }
+.cartao-usuario:hover { background: rgba(255,255,255,.14); }
+.avatar { background: var(--grad-primary); box-shadow: var(--glow-blue); }
+
+/* ── Entrada de tela ────────────────────────────────────────────────── */
+@keyframes tela-entrar { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.app-main > * { animation: tela-entrar .35s cubic-bezier(.22,1,.36,1) both; }
+
+.pagina-cabecalho h2 { font-size: 24px; font-weight: 800; }
+
+/* ── Botoes: degrade + glow + mola ─────────────────────────────────── */
+.btn {
+    border-radius: var(--raio-xs); font-weight: 600; padding: 10px 18px; font-size: 13px;
+    transition: transform var(--t-bounce), box-shadow var(--t-base), background var(--t-base), color var(--t-base), border-color var(--t-base);
+}
+.btn:hover { transform: translateY(-2px); }
+.btn:active { transform: translateY(0) scale(.985); }
+.btn-primario {
+    background: linear-gradient(135deg, color-mix(in srgb, var(--acao) 78%, #000) 0%, var(--acao) 100%);
+    color: #fff; border-color: transparent;
+    box-shadow: 0 8px 24px color-mix(in srgb, var(--acao) 32%, transparent);
+}
+.btn-primario:hover { box-shadow: 0 12px 30px color-mix(in srgb, var(--acao) 42%, transparent); }
+.btn-fantasma { background: var(--surface); border: 1px solid var(--line); color: var(--navy); box-shadow: var(--shadow-sm); }
+.btn-fantasma:hover { border-color: var(--acao); color: var(--acao); box-shadow: var(--shadow-md); }
+.btn-chip { border-radius: var(--raio-xs); box-shadow: var(--shadow-xs); transition: transform var(--t-bounce), box-shadow var(--t-base), border-color var(--t-base), color var(--t-base); }
+.btn-chip:hover { transform: translateY(-1px); box-shadow: var(--shadow-md); border-color: var(--acao); color: var(--acao); }
+.btn-chip.cheio { background: linear-gradient(135deg, color-mix(in srgb, var(--acao) 78%, #000), var(--acao)); border-color: transparent; color: #fff; box-shadow: 0 6px 16px color-mix(in srgb, var(--acao) 30%, transparent); }
+.btn-chip.cheio:hover { color: #fff; }
+[data-modo="escuro"] .btn-fantasma { color: #E2E8F0; }
+
+/* ── Cartoes vivos ─────────────────────────────────────────────────── */
+.cartao, .kpi, .capa, .abas, .caixa-info {
+    border-radius: var(--raio);
+    border: 1px solid rgba(226,232,240,.9);
+    box-shadow: var(--shadow-md);
+    transition: transform var(--t-spring), box-shadow var(--t-base), border-color var(--t-base);
+}
+.caixa-info { border-radius: var(--raio-sm); box-shadow: none; }
+.cartao-paciente:hover, .kpi:hover, .azulejo:hover, .cel-sessao:hover, .at-item:hover, .sel-item:hover {
+    transform: translateY(-4px); box-shadow: var(--shadow-card-hover); border-color: rgba(47,111,237,.28);
+}
+.kpi::before { width: 5px; }
+.kpi-valor { font-size: 30px; font-weight: 800; letter-spacing: -.03em; }
+.kpi-rotulo { font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; font-weight: 700; }
+
+/* avatares em degrade */
+.avatar-paciente, .capa-avatar { font-weight: 800; color: #fff; box-shadow: 0 4px 12px rgba(20,31,60,.18); }
+.av-1 { background: linear-gradient(135deg, #2F6FED, #5B93FF); }
+.av-2 { background: linear-gradient(135deg, #DB2777, #EC4899); }
+.av-3 { background: linear-gradient(135deg, #16A34A, #22C55E); }
+.av-4 { background: linear-gradient(135deg, #7C4DFF, #A78BFA); }
+.av-5 { background: linear-gradient(135deg, #0891B2, #06B6D4); }
+.av-6 { background: linear-gradient(135deg, #F59E0B, #FBBF24); }
+
+/* selos / chips */
+.selo { padding: 4px 11px; font-size: 11.5px; font-weight: 700; border-radius: 999px; }
+.selo-roxo { background: #F0EAFF; color: #6D28D9; }
+.selo-info { background: #E8F0FE; color: #1D4ED8; }
+.area-chip { border-radius: 999px; }
+
+/* abas do prontuario */
+.abas { padding: 6px; gap: 4px; }
+.aba { border-radius: var(--raio-xs); transition: background var(--t-base), color var(--t-base), transform var(--t-bounce); }
+.aba:hover { transform: translateY(-1px); }
+.aba.ativa { background: var(--acao-soft); color: var(--acao); }
+.aba.ativa .feita { color: var(--acao); }
+
+/* capa do paciente e heroi */
+.capa::before { height: 5px; background: var(--grad-aurora); }
+.capa-avatar { width: 66px; height: 66px; font-size: 22px; }
+.capa-info h2 { font-size: 22px; font-weight: 800; }
+.heroi { border-radius: var(--raio); background: var(--gd-heroi); box-shadow: var(--glow-purple); }
+
+/* ── Campos ────────────────────────────────────────────────────────── */
+.app-main input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]):not(.niv-btn),
+.app-main select, .app-main textarea,
+.folha-overlay input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), .folha-overlay select, .folha-overlay textarea,
+.modal input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), .modal select, .modal textarea {
+    padding: 10px 13px; border: 1.5px solid var(--line); border-radius: var(--raio-xs);
+    font: inherit; font-size: 13px; color: var(--ink); background: var(--surface); box-shadow: var(--shadow-xs);
+    transition: border-color var(--t-base), box-shadow var(--t-base), transform var(--t-fast);
+}
+.app-main select, .folha-overlay select, .modal select {
+    appearance: none; -webkit-appearance: none; padding-right: 34px; cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236B7A8C' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 12px center;
+}
+.app-main input:focus, .app-main select:focus, .app-main textarea:focus,
+.folha-overlay input:focus, .folha-overlay select:focus, .folha-overlay textarea:focus,
+.modal input:focus, .modal select:focus, .modal textarea:focus {
+    outline: none; border-color: var(--acao); box-shadow: 0 0 0 4px color-mix(in srgb, var(--acao) 16%, transparent);
+}
+.ficha-linha .ficha-est, .ficha-rapido .ficha-tent, .pm-prazo, .stepper input, .ag-eq input { padding: 6px 30px 6px 9px; font-size: 12px; border-radius: 9px; }
+.app-main input[type="checkbox"], .modal input[type="checkbox"], .folha-overlay input[type="checkbox"], .app-main input[type="radio"], .modal input[type="radio"] {
+    width: 17px; height: 17px; accent-color: var(--acao); cursor: pointer; vertical-align: middle;
+}
+label.check { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 600; color: var(--ink-muted); cursor: pointer; }
+.toolbar input[type="search"], .toolbar input[type="text"], .toolbar input:not([type]) {
+    padding-left: 38px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238B9AA8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: 13px center;
+}
+
+/* ── Vidro: modais, pop-ups, janelas ───────────────────────────────── */
+.modal-fundo { background: var(--scrim); backdrop-filter: blur(6px); }
+@keyframes cx-pop-in { from { opacity: 0; transform: translateY(14px) scale(.98); } to { opacity: 1; transform: none; } }
+.modal {
+    background: var(--glass-bg); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--glass-border); border-radius: var(--raio);
+    box-shadow: 0 8px 16px rgba(15,23,42,.08), 0 30px 60px rgba(15,23,42,.2);
+    animation: cx-pop-in .3s cubic-bezier(.22,1,.36,1);
+}
+.modal-fechar { border-radius: 9px; transition: transform var(--t-bounce), background var(--t-base); }
+.modal-fechar:hover { transform: rotate(90deg); }
+.folha-overlay { background: var(--scrim); backdrop-filter: blur(8px); }
+.folha-pagina { border-radius: var(--raio); box-shadow: 0 24px 70px rgba(10,20,40,.4); }
+.folha-mais-corpo { background: var(--glass-bg); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); border-top: 1px solid var(--glass-border); }
+
+/* ── Login ─────────────────────────────────────────────────────────── */
+.login-pagina .marca .simbolo { background: var(--grad-primary); color: #fff; }
+
+/* ── Celular: cabecalho e barra de vidro ───────────────────────────── */
+@media (max-width: 720px) {
+    .cab-celular { background: linear-gradient(165deg, var(--side-bg-2), var(--side-bg)); }
+    .cab-cel-marca .simbolo { background: var(--grad-primary); color: #fff; }
+    .barra-celular { background: var(--glass-bg); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); border-top: 1px solid var(--glass-border); }
+    .barra-celular button { transition: color var(--t-base), transform var(--t-bounce); }
+    .barra-celular button:active { transform: scale(.94); }
+    .barra-celular button .icone { transition: background var(--t-base), transform var(--t-bounce); }
+    .barra-celular button.ativo { color: var(--az); }
+    .barra-celular button.ativo .icone { background: #E8F0FE; transform: translateY(-1px); }
+    .cel-nv { transition: transform var(--t-bounce), box-shadow var(--t-base), background var(--t-base); }
+    .cel-nv:active { transform: scale(.96); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .app-main > *, .modal { animation: none; }
+    .nav-item, .btn, .cartao, .kpi { transition: none; }
+}

@@ -1235,8 +1235,9 @@ window.MODULOS.programas = {
   },
 
   sairDaFolha() {
+    // fecha SEMPRE, mesmo que o salvamento falhe (o erro ja aparece em pop-up)
     if (this._sujo) {
-      this.salvarFichas(false).then(() => this.fecharFolha(true));
+      this.salvarSemTravar().finally(() => this.fecharFolha(true));
     } else {
       this.fecharFolha(true);
     }

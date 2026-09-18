@@ -696,12 +696,23 @@ window.MODULOS.programas = {
 
     // programas com tentativa ja marcada contam como selecionados mesmo sem config
     Object.entries(fichas).forEach(([id, g]) => { if (g.some(l => l.resposta)) selecionados[id] = true; });
-    // no celular a ficha sempre abre pela tela da crianca (escolher o programa); no computador pula se ja escolheu
-    const jaEscolheu = (rCfg.data || []).length > 0 && !this.celular();
+    // Regra: quem configura (programas em intervencao e tentativas) e a coordenacao, na pasta da crianca.
+    // Aplicador so aplica o que esta configurado: sem selecao e sem mudar tentativas na ficha.
+    const podeConfig = perm('programas.atribuir') === 'E';
+    if (!podeConfig) {
+      pps.forEach(pp => { selecionados[pp.id] = true; fichas[pp.id].length = Math.max(fichas[pp.id].length, 0); });
+      Object.keys(cfg).forEach(id => { if (fichas[id] && fichas[id].length !== tentPrevistas[id]) {
+        // volta ao previsto pela coordenacao (mantendo o que ja foi marcado)
+        const g = fichas[id]; while (g.length < tentPrevistas[id]) g.push({ resposta: '', reforcador: '', estimulo: '' });
+      } });
+    }
+    // no celular a ficha abre pela tela da crianca quando ha escolha a fazer; sem permissao vai direto
+    const jaEscolheu = !podeConfig || ((rCfg.data || []).length > 0 && !this.celular());
 
     this._folha = {
       sessao: s,
       programas: pps,
+      podeConfig: podeConfig,
       selecionados: selecionados,
       etapa: jaEscolheu ? 'aplicar' : 'selecionar',
       idx: 0,
@@ -763,7 +774,7 @@ window.MODULOS.programas = {
             '<b>' + (i + 1) + '</b><span>' + escaparHtml(pp.programas.nome.length > 22 ? pp.programas.nome.slice(0, 21) + '\u2026' : pp.programas.nome) + '</span>' +
             (c.preenchidas ? '<small>' + c.preenchidas + '/' + c.n + '</small>' : '') + '</button>';
         }).join('') +
-        '<button type="button" class="passo passo-mais" onclick="MODULOS.programas.voltarSelecao()" title="Escolher outros programas">&#9998; programas</button>' +
+        (f.podeConfig ? '<button type="button" class="passo passo-mais" onclick="MODULOS.programas.voltarSelecao()" title="Escolher outros programas">&#9998; programas</button>' : '') +
         '</div>';
     }
 
@@ -788,10 +799,12 @@ window.MODULOS.programas = {
         (p.procedimento ? '<p class="sub" style="margin:2px 0 10px">' + escaparHtml(p.procedimento) + '</p>' : '') +
 
         '<div class="ficha-rapido">' +
-        '  <label>Tentativas nesta sessao ' +
-        '  <input type="number" min="1" max="40" class="ficha-tent" value="' + grade.length + '" ' +
-        '    onchange="MODULOS.programas.mudarTentativas(\'' + pp.id + '\', this.value)"></label>' +
-        '  <small class="sub">programa preve ' + f.tentPrevistas[pp.id] + '</small>' +
+        (f.podeConfig
+          ? '  <label>Tentativas nesta sessao ' +
+            '  <input type="number" min="1" max="40" class="ficha-tent" value="' + grade.length + '" ' +
+            '    onchange="MODULOS.programas.mudarTentativas(\'' + pp.id + '\', this.value)"></label>' +
+            '  <small class="sub">programa preve ' + f.tentPrevistas[pp.id] + '</small>'
+          : '  <small class="sub"><b>' + grade.length + ' tentativas</b> (definidas pela coordenacao)</small>') +
         '  <label>Estimulo padrao <small>(preenche as tentativas sem estimulo)</small> ' +
         '  <select onchange="MODULOS.programas.mudarEstimulo(\'' + pp.id + '\', this.value)">' +
              this.opcoesEstimulo(f.estimuloProg[pp.id]) + '</select></label>' +
@@ -883,7 +896,7 @@ window.MODULOS.programas = {
         '<i class="' + (i === t ? 'on' : '') + '" style="' + (l.resposta ? 'background:' + this.corUi(l.resposta) : '') + '" onclick="MODULOS.programas.irTentativa(' + i + ')" title="' + (i + 1) + (l.resposta ? ' · ' + l.resposta : '') + '"></i>').join('') + '</div>' +
       '<div class="cel-ficha-cont"><b>Tentativa ' + (t + 1) + ' de ' + grade.length + '</b><small>' + c.corretos + '/' + c.preenchidas + ' C &middot; ' + c.pct + '% ' +
       (f.tentPrevistas[pp.id] !== grade.length ? '&middot; programa preve ' + f.tentPrevistas[pp.id] : '') + '</small>' +
-      '<button class="btn-chip" onclick="MODULOS.programas.modalTentativasCel(\'' + pp.id + '\')">' + grade.length + ' tent.</button></div>' +
+      (f.podeConfig ? '<button class="btn-chip" onclick="MODULOS.programas.modalTentativasCel(\'' + pp.id + '\')">' + grade.length + ' tent.</button>' : '<span class="selo selo-neutro">' + grade.length + ' tent.</span>') + '</div>' +
       '<div class="cartao cel-est"><small>ESTIMULO</small><select onchange="MODULOS.programas.mudarLinha(\'' + pp.id + '\', ' + t + ', \'estimulo\', this.value)">' +
         this.opcoesEstimulo(linha.estimulo || f.estimuloProg[pp.id]) + '</select></div>' +
       '<div class="cel-niv-tit">NIVEL DE AJUDA &middot; um toque marca e avanca</div>' +
@@ -903,7 +916,7 @@ window.MODULOS.programas = {
           : '<button class="btn btn-primario" onclick="MODULOS.programas.telaFechamento()">Encerrar sessao</button>')) +
       '</div>' +
       '<div class="cel-rodape">' +
-      '  <button class="btn-chip" onclick="MODULOS.programas.voltarSelecao()">&#9998; programas</button>' +
+      (f.podeConfig ? '  <button class="btn-chip" onclick="MODULOS.programas.voltarSelecao()">&#9998; programas</button>' : '') +
       '  <button class="btn-chip" onclick="MODULOS.programas.salvarFichas(true)">Salvar rascunho</button>' +
       '  <button class="btn-chip" onclick="MODULOS.programas.telaFechamento()">Encerrar sessao</button>' +
       '</div></div>';
@@ -1048,6 +1061,7 @@ window.MODULOS.programas = {
   },
 
   async mudarTentativas(ppId, valor) {
+    if (!this._folha.podeConfig) { popAviso('O numero de tentativas e definido pela coordenacao na pasta da crianca.'); return; }
     const g = this._folha.fichas[ppId];
     const n = Math.max(1, Math.min(40, parseInt(valor, 10) || g.length));
     if (n < g.length) {

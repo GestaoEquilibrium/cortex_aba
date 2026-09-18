@@ -175,24 +175,12 @@ window.MODULOS.chat = {
 
   _miniAberto: false,
 
+  // Sem botao flutuante (decisao de Wess, set/2026): o Suporte fica so no menu/aba "Mais".
+  // Continua assinando as mensagens para a bolinha de nao lidas no item do menu.
   iniciarFlutuante() {
-    if (document.getElementById('chat-fab')) return;
+    document.getElementById('chat-fab')?.remove();
+    document.getElementById('chat-mini')?.remove();
     this.assinar();
-
-    const fab = document.createElement('button');
-    fab.id = 'chat-fab';
-    fab.className = 'chat-fab';
-    fab.title = 'Chat de Suporte';
-    fab.innerHTML = '&#128172;<span class="chat-fab-badge" id="chat-fab-badge" hidden></span>';
-    fab.onclick = () => this.alternarMini();
-    document.body.appendChild(fab);
-
-    const mini = document.createElement('div');
-    mini.id = 'chat-mini';
-    mini.className = 'chat-mini';
-    mini.hidden = true;
-    document.body.appendChild(mini);
-
     this.atualizarBadge();
   },
 

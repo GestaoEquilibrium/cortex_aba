@@ -216,7 +216,7 @@ const BARRA_CELULAR = [
 function montarBarraCelular(profile) {
   document.getElementById('barra-celular')?.remove();
   document.getElementById('cab-celular')?.remove();
-  if (profile.perfil === 'familia') return;
+  if (profile.perfil === 'familia') { montarBarraFamilia(); return; }
   const permitido = id => NAVEGACAO.some(g => g.itens.some(i => i.id === id && (i.chave ? perm(i.chave) !== '' : i.perfis.includes(profile.perfil))));
   const cab = document.createElement('header');
   cab.className = 'cab-celular'; cab.id = 'cab-celular';
@@ -232,10 +232,50 @@ function montarBarraCelular(profile) {
   document.body.appendChild(nav);
   marcarBarraCelular(window._moduloAtual || 'inicio');
 }
-const ICONES_CEL = {
+const ICONES_CEL = window.ICONES_CEL = {
+  documentos: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l4 4v14H6z"/><path d="M14.5 3v4.5H19"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="15" y2="16"/></svg>',
+  caderninho: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="2"/><line x1="8" y1="3" x2="8" y2="21"/><line x1="11" y1="8" x2="16" y2="8"/><line x1="11" y1="12" x2="16" y2="12"/></svg>',
+  conversa: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H9l-5 4z"/></svg>',
+  sair: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 4H5v16h5"/><path d="M14 8l4 4-4 4"/><line x1="18" y1="12" x2="9" y2="12"/></svg>',
   aplicar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M10 8.5v7l5.5-3.5z"/></svg>',
   mais:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>'
 };
+// Portal da familia no celular: cabecalho + barra propria (Inicio, Documentos, Caderninho, Conversa, Mais)
+function montarBarraFamilia() {
+  const cab = document.createElement('header');
+  cab.className = 'cab-celular'; cab.id = 'cab-celular';
+  cab.innerHTML = '<div class="cab-cel-marca">' + document.querySelector('.marca .simbolo').outerHTML + '<b>Equilibrium <span class="mao">fam&iacute;lia</span></b></div>' +
+    '<div class="cab-cel-tit" id="cab-cel-tit">Portal da familia</div>' +
+    '<button class="cab-cel-avatar" onclick="menuMaisFamilia()" title="Menu">' + document.getElementById('avatar').innerHTML + '</button>';
+  document.body.appendChild(cab);
+  const nav = document.createElement('nav');
+  nav.className = 'barra-celular'; nav.id = 'barra-celular';
+  const P = "MODULOS.portal";
+  nav.innerHTML = [
+    ['portal', 'Inicio', "abrirModulo('portal')", ICONES.inicio],
+    ['documentos', 'Documentos', P + ".atalho('docs')", ICONES_CEL.documentos],
+    ['caderninho', 'Caderninho', P + ".atalho('caderninho')", ICONES_CEL.caderninho],
+    ['conversa', 'Conversa', P + ".atalho('conversa')", ICONES_CEL.conversa],
+    ['mais', 'Mais', 'menuMaisFamilia()', ICONES_CEL.mais]
+  ].map(([id, rot, acao, ic]) => '<button type="button" data-cel="' + id + '" onclick="' + acao + '"><span class="icone">' + ic + '</span><span>' + rot + '</span></button>').join('');
+  document.body.appendChild(nav);
+  marcarBarraCelular('portal');
+}
+function menuMaisFamilia() {
+  document.getElementById('folha-mais')?.remove();
+  const f = document.createElement('div');
+  f.className = 'folha-mais'; f.id = 'folha-mais';
+  const item = (ic, rot, acao) => '<button class="nav-item" onclick="document.getElementById(\'folha-mais\').remove(); ' + acao + '"><span class="icone">' + ic + '</span><span>' + rot + '</span></button>';
+  f.innerHTML = '<div class="folha-mais-fundo" onclick="document.getElementById(\'folha-mais\').remove()"></div>' +
+    '<div class="folha-mais-corpo"><div class="folha-mais-puxador"></div>' +
+    item(ICONES.anamnese, 'Anamnese Global', "abrirModulo('anamnese')") +
+    item(ICONES.agenda, 'Agenda e presencas', "MODULOS.portal.atalho('agenda')") +
+    item(ICONES.termos, 'Termos e aceites', "MODULOS.portal.atalho('termos')") +
+    item(ICONES.admin, 'Meu perfil', "MODULOS.perfil?.abrir?.()") +
+    item(ICONES_CEL.sair, 'Sair', 'sair()') + '</div>';
+  document.body.appendChild(f);
+  marcarBarraCelular('mais');
+}
 function marcarBarraCelular(id) {
   document.querySelectorAll('.barra-celular button').forEach(b => b.classList.toggle('ativo', b.dataset.cel === id));
   const t = document.getElementById('cab-cel-tit');

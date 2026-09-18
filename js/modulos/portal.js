@@ -39,10 +39,17 @@ window.MODULOS.portal = {
       return;
     }
 
+    this._pacs = vinculos.map(v => v.pacientes).filter(Boolean);
+    this._pacAtual = this._pacAtual && this._pacs.some(p => p.id === this._pacAtual) ? this._pacAtual : (this._pacs[0] ? this._pacs[0].id : null);
     let html = '';
+    if (this._pacs.length > 1) {
+      html += '<div class="filtro-chips" style="margin-bottom:10px">' + this._pacs.map(p =>
+        '<button class="fchip' + (p.id === this._pacAtual ? ' ativo' : '') + '" onclick="MODULOS.portal._pacAtual = \'' + p.id + '\'; abrirModulo(\'portal\')">' + escaparHtml(p.nome.split(' ')[0]) + '</button>').join('') + '</div>';
+    }
     for (const v of vinculos) {
       const p = v.pacientes;
       if (!p) continue;
+      if (this._pacs.length > 1 && p.id !== this._pacAtual) continue;
 
       const { data: an } = await sb
         .from('anamneses')
@@ -78,21 +85,20 @@ window.MODULOS.portal = {
 
       const { count: nDocs } = await sb.from('portal_documentos')
         .select('id', { count: 'exact', head: true }).eq('paciente_id', p.id);
+      const IC = window.ICONES_CEL || {};
+      const nome1 = escaparHtml(p.nome.split(' ')[0]);
       const recursos =
-        '<div class="portal-recursos">' +
-        '<button class="btn btn-fantasma" onclick="MODULOS.portal.docsPortal(\'' + p.id + '\', \'' +
-          escaparHtml(p.nome.split(' ')[0]) + '\')">&#128196; Documentos' +
-          (nDocs ? ' <span class="fchip-n">' + nDocs + '</span>' : '') + '</button>' +
-        '<button class="btn btn-fantasma" onclick="MODULOS.portal.caderninho(\'' + p.id + '\', \'' +
-          escaparHtml(p.nome.split(' ')[0]) + '\')">&#128211; Caderninho</button>' +
-        '<button class="btn btn-fantasma" onclick="MODULOS.portal.conversa(\'' + p.id + '\', \'' +
-          escaparHtml(p.nome.split(' ')[0]) + '\')">&#128172; Conversar com a coordenacao</button>' +
+        '<div class="portal-azulejos">' +
+        '<button class="azulejo" onclick="MODULOS.portal.docsPortal(\'' + p.id + '\', \'' + nome1 + '\')"><span class="icone">' + (IC.documentos || '') + '</span><b>Documentos</b><small>' + (nDocs ? nDocs + ' disponivel(is)' : 'relatorios e planos') + '</small></button>' +
+        '<button class="azulejo" onclick="MODULOS.portal.caderninho(\'' + p.id + '\', \'' + nome1 + '\')"><span class="icone">' + (IC.caderninho || '') + '</span><b>Caderninho</b><small>recados e fotos do dia</small></button>' +
+        '<button class="azulejo" onclick="MODULOS.portal.conversa(\'' + p.id + '\', \'' + nome1 + '\')"><span class="icone">' + (IC.conversa || '') + '</span><b>Conversa</b><small>fale com a coordenacao</small></button>' +
+        '<button class="azulejo" onclick="MODULOS.anamnese.abrir(\'' + p.id + '\')"><span class="icone">' + (window.ICONES ? ICONES.anamnese : '') + '</span><b>Anamnese</b><small>' + (statusAn === 'concluida' ? 'concluida' : statusAn === 'em_andamento' ? 'continuar' : 'preencher') + '</small></button>' +
         '</div>';
 
       html +=
         '<div class="cartao faixa-azul">' +
         '  <div class="pac-topo" style="margin-bottom:14px">' +
-        '    <div class="avatar-paciente">' + escaparHtml(this.iniciais(p.nome)) + '</div>' +
+        '    <div class="avatar-paciente ' + (window.corAvatar ? corAvatar(p.nome) : '') + '">' + escaparHtml(this.iniciais(p.nome)) + '</div>' +
         '    <div class="pac-quem"><strong>' + escaparHtml(p.nome) + '</strong>' +
         '    <span>' + calcularIdade(p.data_nascimento) + '</span></div>' +
         '  </div>' +
@@ -104,6 +110,19 @@ window.MODULOS.portal = {
     }
 
     alvo.innerHTML = html;
+  },
+
+  // Atalhos da barra inferior (celular): usa a crianca em foco
+  atalho(qual) {
+    const p = (this._pacs || []).find(x => x.id === this._pacAtual) || (this._pacs || [])[0];
+    if (!p) { abrirModulo('portal'); return; }
+    const n = p.nome.split(' ')[0];
+    if (window.marcarBarraCelular) marcarBarraCelular(qual === 'docs' ? 'documentos' : qual);
+    if (qual === 'docs') return this.docsPortal(p.id, n);
+    if (qual === 'caderninho') return this.caderninho(p.id, n);
+    if (qual === 'conversa') return this.conversa(p.id, n);
+    if (qual === 'agenda') { abrirModulo('portal'); setTimeout(() => document.querySelector('.portal-agenda')?.scrollIntoView({ behavior: 'smooth' }), 400); return; }
+    if (qual === 'termos') { abrirModulo('portal'); setTimeout(() => document.querySelector('.portal-termos')?.scrollIntoView({ behavior: 'smooth' }), 400); return; }
   },
 
   // ── Termos digitais pendentes de aceite ──
@@ -121,7 +140,7 @@ window.MODULOS.portal = {
 
     pendentes.forEach(t => { this._termosCache[t.id] = t; });
 
-    return '<div class="portal-pendencia" style="margin-top:10px">' +
+    return '<div class="portal-pendencia portal-termos" style="margin-top:10px">' +
       '<b>&#128196; Termos aguardando o seu aceite</b>' +
       pendentes.map(t =>
         '<div class="linha-doc"><div><b>' + escaparHtml(t.titulo) + '</b></div>' +
@@ -200,7 +219,7 @@ window.MODULOS.portal = {
       return dias[dt.getDay()] + ' ' + dt.toLocaleDateString('pt-BR').slice(0, 5);
     };
 
-    return '<div style="margin-top:12px">' +
+    return '<div class="portal-agenda" style="margin-top:12px">' +
       '<b style="font-size:12.5px">Proximas sessoes</b>' +
       lista.map(s => {
         this._tokens[s.id] = s.confirmacao_token;

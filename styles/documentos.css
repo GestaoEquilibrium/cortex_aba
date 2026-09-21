@@ -302,3 +302,5 @@ table.deq-pagina .deq-rodape { margin-top: 0; }
 .deq-assinatura.assinado-icp::after { content: ''; display: block; border-top: 1.5px solid var(--eq-tinta); margin: 0 30px 5px; order: -1; }
 .deq-assinatura.assinado-icp { display: flex; flex-direction: column; }
 .deq-assinatura.assinado-icp .deq-carimbo-icp { order: -2; }
+
+.deq-freq-dias .deq-fh { display: block; font-size: 8px; color: var(--eq-cinza); font-weight: 600; margin-top: 1px; }

@@ -107,9 +107,10 @@ window.MODULOS.relatorios = {
       nome: f.paciente_programas?.programas?.nome || 'programa', motivo: f.motivo_nao_aplicado, data: dataDe[f.sessao_id] }));
     return {
       sessoes: lista,
-      concluidas: lista.filter(s => s.status === 'concluida').length,
-      faltas: lista.filter(s => s.status === 'falta').length,
-      canceladas: lista.filter(s => s.status === 'cancelada').length,
+      concluidas: new Set(lista.filter(s => s.status === 'concluida').map(s => s.data)).size,
+      faltas: new Set(lista.filter(s => s.status === 'falta').map(s => s.data)).size,
+      canceladas: new Set(lista.filter(s => s.status === 'cancelada').map(s => s.data)).size,
+      sessoesRealizadas: lista.filter(s => s.status === 'concluida').length,
       porProg, naoAplicados,
       evolucoes: evolucoes.map(e => ({ data: dataDe[e.sessao_id], texto: e.texto || '' })).sort((a, b) => a.data.localeCompare(b.data)),
       comportamentos: compRegs
@@ -232,8 +233,8 @@ window.MODULOS.relatorios = {
       '<div class="rm-form">' +
       '  <div class="cartao faixa-azul"><h3>Vem do sistema</h3>' +
       '  <div class="grade-visao">' +
-      '    <div class="caixa-info"><small>Sessoes realizadas</small><b>' + dados.concluidas + '</b></div>' +
-      '    <div class="caixa-info"><small>Faltas</small><b>' + dados.faltas + '</b></div>' +
+      '    <div class="caixa-info"><small>Dias com presenca</small><b>' + dados.concluidas + '</b><small class="sub">' + dados.sessoesRealizadas + ' sessao(oes)</small></div>' +
+      '    <div class="caixa-info"><small>Dias com falta</small><b>' + dados.faltas + '</b></div>' +
       '    <div class="caixa-info"><small>Canceladas</small><b>' + dados.canceladas + '</b></div>' +
       '    <div class="caixa-info"><small>Programas no mes</small><b>' + Object.keys(dados.porProg).length + '</b></div>' +
       '  </div>' +
@@ -342,11 +343,25 @@ window.MODULOS.relatorios = {
   },
 
   // ─────────────── HTML DA FOLHA (usado na previa, no documento e no snapshot) ───────────────
-  htmlFrequencia(dados, mostrarCanceladas) {
-    const porDow = {};
+  // Frequencia por DIA (nao por horario): crianca com 2 horarios no mesmo dia conta uma unica presenca ou falta.
+  // Regra do dia: alguma concluida -> P; senao alguma falta -> F; senao (so canceladas) -> cancelada.
+  diasFrequencia(dados, mostrarCanceladas) {
+    const porDia = {};
     dados.sessoes.forEach(s => {
-      if (s.status === 'cancelada' && !mostrarCanceladas) return;
       if (!['concluida', 'falta', 'cancelada'].includes(s.status)) return;
+      const d = porDia[s.data] = porDia[s.data] || { data: s.data, concluida: 0, falta: 0, cancelada: 0, horarios: [] };
+      d[s.status]++; d.horarios.push(String(s.hora_inicio).slice(0, 5));
+    });
+    return Object.values(porDia).map(d => ({
+      data: d.data, horarios: d.horarios,
+      status: d.concluida ? 'concluida' : d.falta ? 'falta' : 'cancelada'
+    })).filter(d => d.status !== 'cancelada' || mostrarCanceladas).sort((a, b) => a.data.localeCompare(b.data));
+  },
+
+  htmlFrequencia(dados, mostrarCanceladas) {
+    const dias = this.diasFrequencia(dados, mostrarCanceladas);
+    const porDow = {};
+    dias.forEach(s => {
       const dow = new Date(s.data + 'T12:00:00').getDay();
       (porDow[dow] = porDow[dow] || []).push(s);
     });
@@ -354,7 +369,7 @@ window.MODULOS.relatorios = {
     if (!cols.length) return '<p class="sub" style="text-align:center">Sem sess\u00f5es registradas no m\u00eas.</p>';
     const maxL = Math.max(...cols.map(c => porDow[c].length));
     let presencas = 0, faltas = 0;
-    dados.sessoes.forEach(s => { if (s.status === 'concluida') presencas++; if (s.status === 'falta') faltas++; });
+    dias.forEach(d => { if (d.status === 'concluida') presencas++; if (d.status === 'falta') faltas++; });
     let html = '<table class="deq-freq deq-freq-dias"><tr>' + cols.map(c => '<th>' + this.NOMES_DIA[c] + '</th>').join('') + '</tr>';
     for (let i = 0; i < maxL; i++) {
       html += '<tr>' + cols.map(c => {
@@ -362,7 +377,8 @@ window.MODULOS.relatorios = {
         if (!s) return '<td class="vazia"></td>';
         const d = s.data.slice(8, 10) + '/' + s.data.slice(5, 7);
         const st = s.status === 'concluida' ? '( X ) P (&nbsp;&nbsp;) F' : s.status === 'falta' ? '(&nbsp;&nbsp;) P ( X ) F' : '<span class="deq-fv">cancelada</span>';
-        return '<td><span class="deq-fdata">' + d + '</span> <span class="' + (s.status === 'concluida' ? 'deq-fp' : s.status === 'falta' ? 'deq-ff' : '') + '">' + st + '</span></td>';
+        return '<td title="' + s.horarios.join(', ') + '"><span class="deq-fdata">' + d + '</span> <span class="' + (s.status === 'concluida' ? 'deq-fp' : s.status === 'falta' ? 'deq-ff' : '') + '">' + st + '</span>' +
+          (s.horarios.length > 1 ? '<small class="deq-fh">' + s.horarios.length + ' hor&aacute;rios</small>' : '') + '</td>';
       }).join('') + '</tr>';
     }
     html += '</table><div class="deq-freq-rodape"><span>P: PRESEN\u00c7A / F: FALTA</span><span>Presen\u00e7as <b>' + presencas + '</b> \u00b7 Faltas <b>' + faltas + '</b>' +

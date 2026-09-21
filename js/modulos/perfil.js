@@ -21,12 +21,14 @@ window.MODULOS.perfil = {
 
     const eu = window.CORTEX_SESSAO.user.id;
     const { data: p } = await sb.from('profiles')
-      .select('id, nome, email, perfil, foto_path, telefone, data_nascimento, registro_classe, formacao, endereco')
+      .select('id, nome, email, perfil, foto_path, assinatura_path, telefone, data_nascimento, registro_classe, formacao, endereco')
       .eq('id', eu).single();
     if (!p) { ov.remove(); return; }
     this._p = p;
 
     let fotoUrl = null;
+    let assUrl = null;
+    if (p.assinatura_path) { const { data: a } = await sb.storage.from('documentos').createSignedUrl(p.assinatura_path, 3600); assUrl = a ? a.signedUrl : null; }
     if (p.foto_path) {
       const { data } = await sb.storage.from('documentos').createSignedUrl(p.foto_path, 3600);
       fotoUrl = data ? data.signedUrl : null;
@@ -56,6 +58,14 @@ window.MODULOS.perfil = {
       '  </div>' +
       '</div>' +
 
+      '<div class="cartao"><h3>Assinatura digital</h3>' +
+      '<p class="sub" style="margin-bottom:8px">Imagem da sua assinatura (PNG com fundo transparente, ou foto da assinatura em papel branco). Entra automaticamente nos documentos em que seu nome for escolhido como assinante.</p>' +
+      '<div style="display:flex; gap:14px; align-items:center; flex-wrap:wrap">' +
+      '  <div class="ass-previa" id="mp-ass-previa">' + (assUrl ? '<img src="' + assUrl + '" alt="">' : '<span class="sub">sem assinatura</span>') + '</div>' +
+      '  <div><button class="btn-chip" onclick="document.getElementById(\'mp-ass-arq\').click()">' + (assUrl ? 'Trocar assinatura' : 'Enviar assinatura') + '</button>' +
+      (assUrl ? ' <button class="btn-chip" onclick="MODULOS.perfil.removerAssinatura()">Remover</button>' : '') +
+      '  <input type="file" id="mp-ass-arq" accept="image/png,image/jpeg" style="display:none" onchange="MODULOS.perfil.trocarAssinatura(this)">' +
+      '  <div class="sub" id="mp-ass-msg" style="margin-top:6px"></div></div></div></div>' +
       '<div class="cartao"><div class="grade-form">' +
       '  <div class="campo c2"><label>Nome completo</label>' +
       '    <input id="mp-nome" value="' + escaparHtml(p.nome || '') + '"></div>' +
@@ -75,6 +85,31 @@ window.MODULOS.perfil = {
       '  <button class="btn btn-fantasma" onclick="document.getElementById(\'meu-perfil-overlay\').remove()">Cancelar</button>' +
       '  <button class="btn btn-primario" id="mp-salvar" onclick="MODULOS.perfil.salvar()">Salvar</button>' +
       '</div></div>';
+  },
+
+  async trocarAssinatura(input) {
+    const arquivo = input.files[0]; if (!arquivo) return;
+    const msg = document.getElementById('mp-ass-msg');
+    if (arquivo.size > 3 * 1024 * 1024) { msg.textContent = 'Ate 3 MB.'; return; }
+    msg.textContent = 'Enviando...';
+    const eu = window.CORTEX_SESSAO.user.id;
+    const ext = /png/i.test(arquivo.type) ? 'png' : 'jpg';
+    const caminho = 'perfil/' + eu + '/assinatura_' + Date.now() + '.' + ext;
+    const { error } = await sb.storage.from('documentos').upload(caminho, arquivo, { contentType: arquivo.type });
+    if (error) { msg.textContent = 'Falha: ' + error.message; return; }
+    const { error: e2 } = await sb.from('profiles').update({ assinatura_path: caminho }).eq('id', eu);
+    if (e2) { msg.textContent = 'Falha: ' + e2.message; return; }
+    msg.textContent = 'Assinatura salva.';
+    await carregarAssinaturas();
+    this.abrir();
+  },
+  async removerAssinatura() {
+    if (!await popConfirmar('Remover sua assinatura digital dos documentos?')) return;
+    const eu = window.CORTEX_SESSAO.user.id;
+    const { error } = await sb.from('profiles').update({ assinatura_path: null }).eq('id', eu);
+    if (error) { popAviso('Erro: ' + error.message); return; }
+    await carregarAssinaturas();
+    this.abrir();
   },
 
   async trocarFoto(input) {

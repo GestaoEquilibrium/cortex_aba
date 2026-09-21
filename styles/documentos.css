@@ -288,3 +288,9 @@ table.deq-pagina > tbody > tr > td, table.deq-pagina > tfoot > tr > td { padding
 table.deq-pagina > tfoot { display: table-footer-group; }
 table.deq-pagina > tfoot > tr > td { padding-top: 6mm; }
 table.deq-pagina .deq-rodape { margin-top: 0; }
+
+/* assinatura digital (imagem) */
+.deq-assinatura.com-imagem { position: relative; padding-top: 4px; }
+.deq-assinatura-img { display: block; max-height: 64px; max-width: 220px; margin: 0 auto -6px; object-fit: contain; mix-blend-mode: multiply; }
+.deq-assinatura.com-imagem { border-top: none; padding-top: 0; }
+.deq-ass-linha { display: block; width: 100%; border-top: 1.5px solid var(--eq-tinta); margin: 0 0 5px; }

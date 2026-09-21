@@ -379,7 +379,7 @@ window.MODULOS.laudo_avaliacao = {
       d.protocolos.map(blocoProt).join('') +
       sec('V.', 'Conclus&atilde;o') + '<div class="deq-caixa deq-texto">' + txt(rel.conclusao) + '<br><br>' + txt(this.CONCLUSAO_FIXA) + '</div>' +
       '<div class="deq-local">Uberl&acirc;ndia, ' + extenso + '.</div>' +
-      '<div class="deq-assinatura">' + escaparHtml(rel.assinatura_nome || this.ASSINATURA_PADRAO.nome) + '<br><small>' + escaparHtml(rel.assinatura_titulo || this.ASSINATURA_PADRAO.titulo) + '</small></div>' +
+      blocoAssinatura(rel.assinatura_nome || this.ASSINATURA_PADRAO.nome, escaparHtml(rel.assinatura_titulo || this.ASSINATURA_PADRAO.titulo)) +
       '<div class="deq-rodape"><span>Equilibrium Terapia Infantil &middot; Uberl&acirc;ndia/MG</span>' +
       '<span class="pontos"><i style="background:var(--eq-teal)"></i><i style="background:var(--eq-amarelo)"></i><i style="background:var(--eq-rosa)"></i><i style="background:var(--eq-azul)"></i></span>' +
       '<span>Documento gerado pelo CORTEX aba &middot; ' + fmt(dataAss) + '</span></div></div>' +

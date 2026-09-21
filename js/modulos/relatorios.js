@@ -402,7 +402,7 @@ window.MODULOS.relatorios = {
       bloco('deq-rosa', 'Desafios e plano de interven&ccedil;&atilde;o', rel.desafios) +
       bloco('deq-amarelo', 'Conclus&atilde;o', rel.conclusao) +
       '<div class="deq-local">Uberl&acirc;ndia-MG, ' + dataAss + '</div>' +
-      '<div class="deq-assinatura">' + escaparHtml(rel.assinatura_nome || this.ASSINATURA_PADRAO.nome) + '<br><small>' + escaparHtml(rel.assinatura_titulo || this.ASSINATURA_PADRAO.titulo) + '</small></div>' +
+      blocoAssinatura(rel.assinatura_nome || this.ASSINATURA_PADRAO.nome, escaparHtml(rel.assinatura_titulo || this.ASSINATURA_PADRAO.titulo)) +
       (rel.incluir_grafico !== false && Object.keys(dados.porProg).length
         ? '<div class="deq-quebra"></div><h2><span class="ponto deq-teal"></span>Anexo &middot; Evolu&ccedil;&atilde;o dos programas no m&ecirc;s <small>&middot; % de independ&ecirc;ncia por sess&atilde;o</small></h2>' +
           '<div class="deq-caixa">' + this.htmlGraficoMes(dados) + '</div>'

@@ -678,8 +678,8 @@ window.MODULOS.pei = {
       blocos +
       '<div class="deq-caixa deq-texto" style="margin-top:10px">' + escaparHtml(this.RODAPE_FIXO).replace(/\n/g, '<br>') + '</div>' +
       '<div class="deq-local">Uberl&acirc;ndia, ' + new Date((pei.periodo_inicio || hojeLocal()) + 'T12:00:00').toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' }) + '.</div>' +
-      '<div class="deq-assinatura">' + escaparHtml(pei.profissional ? pei.profissional.nome : this.ASSINATURA_PADRAO.nome) +
-      '<br><small>' + (pei.profissional && pei.profissional.nome !== this.ASSINATURA_PADRAO.nome ? 'Respons&aacute;vel pelo PEI' : escaparHtml(this.ASSINATURA_PADRAO.titulo)) + '</small></div>' +
+      blocoAssinatura(pei.profissional ? pei.profissional.nome : this.ASSINATURA_PADRAO.nome,
+        (pei.profissional && pei.profissional.nome !== this.ASSINATURA_PADRAO.nome ? 'Respons&aacute;vel pelo PEI' : escaparHtml(this.ASSINATURA_PADRAO.titulo))) +
 
       '<div class="deq-rodape">' +
       '  <span>Equilibrium Terapia Infantil &middot; Uberl&acirc;ndia/MG</span>' +

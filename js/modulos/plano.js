@@ -567,8 +567,8 @@ window.MODULOS.plano = {
       '<div class="deq-reaval"><small>Data prevista para reavalia&ccedil;&atilde;o</small>' +
       '<b>' + fmt(pl.vigencia_fim) + '</b></div>' +
 
-      '<div class="deq-assinatura">' + escaparHtml(pl.profissional ? pl.profissional.nome : 'Wessilon Marques de Sousa') +
-      '<br><small>' + (pl.profissional && !/^wessilon/i.test(pl.profissional.nome) ? 'Respons&aacute;vel T&eacute;cnico' : 'Psic&oacute;logo e Analista do Comportamento &middot; CRP 04/53832') + '</small></div>' +
+      blocoAssinatura(pl.profissional ? pl.profissional.nome : 'Wessilon Marques de Sousa',
+        (pl.profissional && !/^wessilon/i.test(pl.profissional.nome) ? 'Respons&aacute;vel T&eacute;cnico' : 'Psic&oacute;logo e Analista do Comportamento &middot; CRP 04/53832')) +
 
       '<div class="deq-rodape">' +
       '  <span>Equilibrium Terapia Infantil &middot; Uberl&acirc;ndia/MG</span>' +

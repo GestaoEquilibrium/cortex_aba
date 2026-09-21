@@ -119,6 +119,7 @@ async function iniciarApp() {
 
   montarSidebar(profile.perfil);
   montarBarraCelular(profile);
+  carregarAssinaturas();
 
   // Primeiro acesso: foto + troca de senha obrigatorias (bloqueante)
   if (window.MODULOS && MODULOS.primeiro && MODULOS.primeiro.precisa(profile)) {
@@ -371,6 +372,31 @@ function calcularIdade(dataNasc) {
   if (hoje.getDate() < n.getDate()) meses--;
   if (meses < 0) { anos--; meses += 12; }
   return anos + 'a ' + meses + 'm';
+}
+
+// ─────────────── Assinaturas digitais (imagem por profissional) ───────────────
+// Carregadas uma vez por sessao como data-URL (entram inteiras nos documentos e nos snapshots travados).
+window.ASSINATURAS = {};
+async function carregarAssinaturas() {
+  try {
+    const { data } = await sb.from('profiles').select('nome, assinatura_path').not('assinatura_path', 'is', null);
+    for (const p of data || []) {
+      try {
+        const { data: blob } = await sb.storage.from('documentos').download(p.assinatura_path);
+        if (!blob) continue;
+        const url = await new Promise(res => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(blob); });
+        window.ASSINATURAS[normalizarNomeAss(p.nome)] = url;
+      } catch (e) { /* segue sem esta */ }
+    }
+  } catch (e) { /* coluna ainda nao existe: sem assinaturas */ }
+}
+function normalizarNomeAss(n) { return String(n || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim(); }
+// bloco de assinatura dos documentos: imagem (se houver) + nome + titulo
+function blocoAssinatura(nome, titulo) {
+  const img = window.ASSINATURAS[normalizarNomeAss(nome)];
+  return '<div class="deq-assinatura' + (img ? ' com-imagem' : '') + '">' +
+    (img ? '<img class="deq-assinatura-img" src="' + img + '" alt=""><span class="deq-ass-linha"></span>' : '') +
+    escaparHtml(nome || '') + (titulo ? '<br><small>' + titulo + '</small>' : '') + '</div>';
 }
 
 // Datas de HOJE em horario local (toISOString e UTC: a partir das 21h no Brasil ja virava "amanha")

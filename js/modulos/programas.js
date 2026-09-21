@@ -134,7 +134,7 @@ window.MODULOS.programas = {
   },
 
   _buscaBib: '',
-  filtrarBiblioteca(termo) { this._buscaBib = termo; this.desenharBiblioteca(); },
+  filtrarBiblioteca(termo) { this._buscaBib = termo; this.desenharBiblioteca(true); },
 
   async renderBiblioteca() {
     const podeE = perm('programas.biblioteca') === 'E';
@@ -149,16 +149,22 @@ window.MODULOS.programas = {
     this.desenharBiblioteca();
   },
 
-  desenharBiblioteca() {
+  desenharBiblioteca(soLista) {
     const podeE = perm('programas.biblioteca') === 'E';
-    const alvo = document.getElementById('prog-conteudo');
-    if (!alvo) return;
+    const cont = document.getElementById('prog-conteudo');
+    if (!cont) return;
+    // a barra de busca fica fixa (redesenhar o campo a cada letra roubava o foco); so a lista muda
+    if (!soLista || !document.getElementById('bib-lista')) {
+      cont.innerHTML = '<div class="toolbar"><input type="text" id="bib-busca" placeholder="Buscar programa por nome, categoria ou objetivo..." value="' + escaparHtml(this._buscaBib) + '" ' +
+        'oninput="MODULOS.programas.filtrarBiblioteca(this.value)" style="flex:1; min-width:240px">' +
+        '<span class="selo selo-neutro" id="bib-cont" style="align-self:center"></span></div><div id="bib-lista"></div>';
+    }
+    const alvo = document.getElementById('bib-lista');
     const n = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
     const t = n(this._buscaBib).trim();
     const lista = this.biblioteca.filter(p => !t || n(p.nome).includes(t) || n(p.area).includes(t) || n(p.objetivo).includes(t) || n(p.procedimento).includes(t));
-    const busca = '<div class="toolbar"><input type="text" id="bib-busca" placeholder="Buscar programa por nome, categoria ou objetivo..." value="' + escaparHtml(this._buscaBib) + '" ' +
-      'oninput="MODULOS.programas.filtrarBiblioteca(this.value)" style="flex:1; min-width:240px">' +
-      '<span class="selo selo-neutro" style="align-self:center">' + lista.length + ' de ' + this.biblioteca.length + '</span></div>';
+    const busca = '';
+    const cont2 = document.getElementById('bib-cont'); if (cont2) cont2.textContent = lista.length + ' de ' + this.biblioteca.length;
 
     if (this.biblioteca.length === 0) {
       alvo.innerHTML = '<div class="cartao"><div class="vazio">' +

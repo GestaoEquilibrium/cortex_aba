@@ -545,11 +545,18 @@ async function gerarPdfAssinado(botao) {
     // graficos SVG viram imagem fixa (nao quebram entre paginas nem somem)
     clone.querySelectorAll('svg').forEach(sv => { sv.style.maxWidth = '100%'; sv.style.height = 'auto'; sv.setAttribute('width', sv.getAttribute('width') || '700'); });
     // carimbo da assinatura digital (a assinatura criptografica vai no arquivo; isto e o visivel)
+    // o carimbo entra EM CIMA da linha de assinatura, centralizado (no lugar da assinatura manuscrita)
     const carimbo = document.createElement('div');
     carimbo.className = 'deq-carimbo-icp';
     carimbo.innerHTML = '<b>Documento assinado digitalmente</b><br>WESSILON MARQUES DE SOUSA &middot; CPF ***.***.706-88 &middot; Certificado ICP-Brasil A1<br>' +
       new Date().toLocaleString('pt-BR') + ' &middot; verifique em validar.iti.gov.br';
-    (clone.querySelector('.deq-rodape') || clone).insertAdjacentElement(clone.querySelector('.deq-rodape') ? 'beforebegin' : 'beforeend', carimbo);
+    const ass = clone.querySelector('.deq-assinatura');
+    if (ass) {
+      ass.querySelectorAll('.deq-assinatura-img, .deq-ass-linha').forEach(e => e.remove());
+      ass.classList.remove('com-imagem');
+      ass.classList.add('assinado-icp');
+      ass.insertAdjacentElement('afterbegin', carimbo);
+    } else (clone.querySelector('.deq-rodape') || clone).insertAdjacentElement(clone.querySelector('.deq-rodape') ? 'beforebegin' : 'beforeend', carimbo);
     const wrap = document.createElement('div');
     wrap.style.cssText = 'position:fixed; left:-10000px; top:0; width:794px; background:#fff; padding:28px 32px;';
     wrap.appendChild(clone); document.body.appendChild(wrap);

@@ -630,6 +630,9 @@ window.MODULOS.avaliacoes = {
     }
 
     const concluidas = data.filter(x => x.status === 'concluida');
+    // relatorios de avaliacao ja gerados (para trocar "Relatorio" por "Documento")
+    const { data: rels } = await sb.from('relatorios_avaliacao').select('avaliacao_id, avaliacoes_ids, tipo, status').eq('paciente_id', pacienteId);
+    this._relAv = rels || [];
     let html = acoes;
     // Avaliacoes registradas fora do sistema (quadro geral importado): entram no vencimento, sem documento
     const externas = concluidas.filter(x => x.origem === 'importado');
@@ -653,7 +656,7 @@ window.MODULOS.avaliacoes = {
           ? '<div class="linha-doc"><div><b>Socially Savvy &middot; consolidado</b>' +
             '<small>' + nSS + ' aplicacao(oes) (AV1' + (nSS > 1 ? '-AV' + Math.min(nSS, 9) : '') + ') com datas, areas e graficos</small></div>' +
             '<div class="pac-selos">' +
-            '<button class="btn btn-primario" onclick="MODULOS.avaliacoes.docSS(\'' + pacienteId + '\')">&#128196; Ver documento</button>' +
+            '<button class="btn btn-fantasma" onclick="MODULOS.avaliacoes.docSS(\'' + pacienteId + '\')">&#128202; Consolidado</button>' +
             this.btnDevolutiva(concluidas, 'ss') + MODULOS.laudo_avaliacao.btn(concluidas, 'ss') +
             '</div>' +
             '</div>'
@@ -663,7 +666,7 @@ window.MODULOS.avaliacoes = {
             '<small>' + concluidas.filter(a => a.protocolo === 'portage').length +
             ' aplicacao(oes) &middot; % por faixa etaria e idades de desenvolvimento</small></div>' +
             '<div class="pac-selos">' +
-            '<button class="btn btn-primario" onclick="MODULOS.avaliacoes.docPortage(\'' + pacienteId + '\')">&#128196; Ver documento</button>' +
+            '<button class="btn btn-fantasma" onclick="MODULOS.avaliacoes.docPortage(\'' + pacienteId + '\')">&#128202; Consolidado</button>' +
             this.btnDevolutiva(concluidas, 'portage') + MODULOS.laudo_avaliacao.btn(concluidas, 'portage') +
             '</div></div>'
           : '') +
@@ -672,7 +675,7 @@ window.MODULOS.avaliacoes = {
             '<small>' + concluidas.filter(a => a.protocolo === 'qadi').length +
             ' aplicacao(oes) &middot; pontuacao adquirida x esperada por area (regra Equilibrium)</small></div>' +
             '<div class="pac-selos">' +
-            '<button class="btn btn-primario" onclick="MODULOS.avaliacoes.docQADI(\'' + pacienteId + '\')">&#128196; Ver documento</button>' +
+            '<button class="btn btn-fantasma" onclick="MODULOS.avaliacoes.docQADI(\'' + pacienteId + '\')">&#128202; Consolidado</button>' +
             this.btnDevolutiva(concluidas, 'qadi') + MODULOS.laudo_avaliacao.btn(concluidas, 'qadi') +
             '</div></div>'
           : '') +

@@ -402,6 +402,24 @@ window.MODULOS.laudo_avaliacao = {
   },
 
   // botao "Relatorio completo": ultima aplicacao concluida de cada protocolo, unidas
+  // relatorio ja gerado para este conjunto de avaliacoes?
+  geradoPara(ids, tipo) {
+    const rels = (MODULOS.avaliacoes && MODULOS.avaliacoes._relAv) || [];
+    return rels.find(r => r.tipo === tipo && r.status !== 'rascunho' &&
+      (r.avaliacoes_ids || [r.avaliacao_id]).length === ids.length && ids.every(id => (r.avaliacoes_ids || [r.avaliacao_id]).includes(id)));
+  },
+  // abre direto o documento travado (snapshot), sem passar pela tela de edicao
+  async abrirDocumento(ids) {
+    ids = Array.isArray(ids) ? ids : [ids];
+    const d = await this.dados(ids); if (!d) return;
+    const tipo = d.completo ? 'completo' : 'protocolo';
+    const { data: rel } = await sb.from('relatorios_avaliacao').select('*').eq('paciente_id', d.pac.id).eq('tipo', tipo)
+      .contains('avaliacoes_ids', ids).neq('status', 'rascunho').order('criado_em', { ascending: false }).limit(1).maybeSingle();
+    if (!rel) { this.abrirEditor(ids); return; }
+    this._rel = rel; this._d = d; this._anexos = {};
+    this.doc();
+  },
+
   btnCompleto(concluidas) {
     const porProt = {};
     concluidas.filter(a => ['qadi', 'ss', 'portage'].includes(a.protocolo) && a.origem !== 'importado').forEach(a => {
@@ -409,7 +427,11 @@ window.MODULOS.laudo_avaliacao = {
     });
     const ids = Object.values(porProt).map(a => a.id);
     if (ids.length < 2) return '';
-    return '<button class="btn btn-primario" onclick="MODULOS.laudo_avaliacao.abrirEditor([' + ids.map(id => "'" + id + "'").join(',') + '])">&#128203; Relat&oacute;rio completo (' + ids.length + ' protocolos)</button>';
+    const lista = '[' + ids.map(id => "'" + id + "'").join(',') + ']';
+    const g = this.geradoPara(ids, 'completo');
+    return g
+      ? '<button class="btn btn-primario" onclick="MODULOS.laudo_avaliacao.abrirDocumento(' + lista + ')">&#128196; Documento &middot; relat&oacute;rio completo <span class="selo selo-ok" style="margin-left:6px">gerado</span></button>'
+      : '<button class="btn btn-primario" onclick="MODULOS.laudo_avaliacao.abrirEditor(' + lista + ')">&#128203; Relat&oacute;rio completo (' + ids.length + ' protocolos)</button>';
   },
 
   // botao para a aba Avaliacao: ultima aplicacao concluida do protocolo
@@ -418,7 +440,10 @@ window.MODULOS.laudo_avaliacao = {
     const lista = concluidas.filter(a => a.protocolo === protocolo)
       .sort((a, b) => String(b.concluido_em || '').localeCompare(String(a.concluido_em || '')));
     if (!lista.length) return '';
-    return '<button class="btn-chip" title="Relatorio de avaliacao do desenvolvimento (modelo da clinica)" ' +
-      'onclick="MODULOS.laudo_avaliacao.abrirEditor(\'' + lista[0].id + '\')">&#128203; Relat&oacute;rio</button>';
+    const g = this.geradoPara([lista[0].id], 'protocolo');
+    return g
+      ? '<button class="btn-chip" title="Relatorio gerado e travado - abrir o documento" onclick="MODULOS.laudo_avaliacao.abrirDocumento(\'' + lista[0].id + '\')">&#128196; Documento</button>'
+      : '<button class="btn-chip" title="Escrever e gerar o relatorio de avaliacao (modelo da clinica)" ' +
+        'onclick="MODULOS.laudo_avaliacao.abrirEditor(\'' + lista[0].id + '\')">&#128203; Relat&oacute;rio</button>';
   }
 };

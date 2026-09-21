@@ -294,3 +294,7 @@ table.deq-pagina .deq-rodape { margin-top: 0; }
 .deq-assinatura-img { display: block; max-height: 64px; max-width: 220px; margin: 0 auto -6px; object-fit: contain; mix-blend-mode: multiply; }
 .deq-assinatura.com-imagem { border-top: none; padding-top: 0; }
 .deq-ass-linha { display: block; width: 100%; border-top: 1.5px solid var(--eq-tinta); margin: 0 0 5px; }
+
+/* carimbo do PDF assinado (ICP-Brasil) */
+.deq-carimbo-icp { margin: 14px 0 6px; padding: 8px 12px; border: 1.5px solid var(--eq-azul); border-radius: 8px; font-size: 9.5px; line-height: 1.5; color: var(--eq-azul-escuro); background: #F1F6FC; }
+.deq-carimbo-icp b { font-size: 10.5px; }

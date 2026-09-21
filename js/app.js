@@ -542,6 +542,14 @@ async function gerarPdfAssinado(botao) {
     // clone limpo, sem os botoes da tela
     const clone = doc.cloneNode(true);
     clone.querySelectorAll('.nao-imprime, button').forEach(e => e.remove());
+    // graficos SVG viram imagem fixa (nao quebram entre paginas nem somem)
+    clone.querySelectorAll('svg').forEach(sv => { sv.style.maxWidth = '100%'; sv.style.height = 'auto'; sv.setAttribute('width', sv.getAttribute('width') || '700'); });
+    // carimbo da assinatura digital (a assinatura criptografica vai no arquivo; isto e o visivel)
+    const carimbo = document.createElement('div');
+    carimbo.className = 'deq-carimbo-icp';
+    carimbo.innerHTML = '<b>Documento assinado digitalmente</b><br>WESSILON MARQUES DE SOUSA &middot; CPF ***.***.706-88 &middot; Certificado ICP-Brasil A1<br>' +
+      new Date().toLocaleString('pt-BR') + ' &middot; verifique em validar.iti.gov.br';
+    (clone.querySelector('.deq-rodape') || clone).insertAdjacentElement(clone.querySelector('.deq-rodape') ? 'beforebegin' : 'beforeend', carimbo);
     const wrap = document.createElement('div');
     wrap.style.cssText = 'position:fixed; left:-10000px; top:0; width:794px; background:#fff; padding:28px 32px;';
     wrap.appendChild(clone); document.body.appendChild(wrap);
@@ -549,7 +557,7 @@ async function gerarPdfAssinado(botao) {
       margin: [10, 10, 12, 10], filename: 'documento.pdf', image: { type: 'jpeg', quality: .95 },
       html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-      pagebreak: { mode: ['css', 'legacy'], avoid: ['.deq-caixa', 'table', '.deq-graf-item'] }
+      pagebreak: { mode: ['css', 'legacy'], avoid: ['.deq-caixa', 'table', '.deq-graf-item', 'svg', '.deq-assinatura', '.deq-carimbo-icp'] }
     }).from(clone).outputPdf('blob');
     wrap.remove();
     const b64 = await new Promise(res => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1]); r.readAsDataURL(blob); });

@@ -2548,3 +2548,5 @@
 .sess-rodape-meta { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--line); font-size: 11px; color: var(--ink-soft); }
 .st-btn.st-azul { border-color: #BFDBFE; color: #1D4ED8; }
 .st-btn.st-azul.atual { background: #1468B2; border-color: #1468B2; color: #fff; }
+
+.tabela-ger td.cel-longa { max-width: 340px; white-space: normal; font-size: 11.5px; line-height: 1.35; }

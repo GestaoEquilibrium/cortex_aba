@@ -295,10 +295,10 @@ window.MODULOS.gerencial = {
     if (!ini || !fim || fim < ini) throw new Error('Confira o periodo.');
 
     let q = sb.from('sessoes')
-      .select('data, hora_inicio, duracao_min, status, confirmacao, ' +
-              'pacientes(nome, convenio), profissional:profiles!sessoes_aplicador_id_fkey(nome)')
+      .select('id, id_externo, data, hora_inicio, duracao_min, status, confirmacao, motivo_cancelamento, ' +
+              'pacientes(nome, convenio), profissional:profiles!sessoes_aplicador_id_fkey(nome), evolucoes!evolucoes_sessao_id_fkey(texto)')
       .gte('data', ini).lte('data', fim)
-      .order('data').order('hora_inicio');
+      .order('data', { ascending: false }).order('hora_inicio', { ascending: false });
     const pac = document.getElementById('ge-pac').value;
     const apl = document.getElementById('ge-apl').value;
     const st = document.getElementById('ge-st').value;
@@ -319,14 +319,22 @@ window.MODULOS.gerencial = {
       if (s.status === 'cancelada') cont.canceladas++;
     });
 
-    const cab = ['Data', 'Hora', 'Paciente', 'Convenio', 'Aplicador', 'Duracao (min)', 'Situacao', 'Confirmada pela familia'];
-    const linhas = lista.map(s => [
-      this.fmt(s.data), s.hora_inicio.slice(0, 5),
-      s.pacientes ? s.pacientes.nome : '', s.pacientes ? s.pacientes.convenio || '' : '',
-      s.profissional ? s.profissional.nome : '', s.duracao_min,
-      this.ROTULO_STATUS[s.status] || s.status,
-      s.confirmacao === 'confirmada' ? 'Sim' : ''
-    ]);
+    // Mesmas colunas e rotulos da exportacao "atendimentos_prontuario" do outro sistema
+    const STATUS_EXT = { concluida: 'Concluido / Realizado', falta: 'Falta', checkin: 'Em Espera (Recepcao)', em_atendimento: 'Em Atendimento', agendada: 'Agendado' };
+    const statusExt = s => s.status === 'cancelada'
+      ? (s.motivo_cancelamento === 'clinica' || s.motivo_cancelamento === 'profissional' ? 'Cancelado (Clinica)' : 'Cancelado (Paciente)')
+      : s.status === 'agendada' && s.confirmacao === 'confirmada' ? 'Confirmado' : (STATUS_EXT[s.status] || s.status);
+    const evoDe = s => { const e = s.evolucoes; const t = Array.isArray(e) ? (e[0] && e[0].texto) : (e && e.texto); return t || ''; };
+    const cab = ['ID Agendamento', 'Data', 'Horario', 'Paciente', 'Profissional', 'Procedimento', 'Status', 'Convenio', 'Prontuario Evoluido?', 'Conteudo da Evolucao'];
+    const linhas = lista.map(s => {
+      const evo = evoDe(s);
+      return [
+        s.id_externo || s.id.slice(0, 8), this.fmt(s.data), s.hora_inicio.slice(0, 5),
+        s.pacientes ? s.pacientes.nome : '', s.profissional ? s.profissional.nome : '',
+        'Psicoterapia Em Aba - Sessao', statusExt(s), s.pacientes ? s.pacientes.convenio || 'Particular' : '',
+        evo ? 'Sim' : 'Nao', evo
+      ];
+    });
 
     this._dados = {
       titulo: 'Relatorio de Atendimentos',
@@ -336,7 +344,8 @@ window.MODULOS.gerencial = {
         ['Check-in realizados', cont.checkin], ['Atendidas', cont.atendidas],
         ['Faltas', cont.faltas], ['Canceladas', cont.canceladas]
       ],
-      cab, linhas, arquivo: 'atendimentos_' + ini + '_' + fim
+      cab, linhas, arquivo: 'atendimentos_prontuario_' + hojeLocal().replace(/-/g, '') + '_' + new Date().toTimeString().slice(0, 8).replace(/:/g, ''),
+      csvSemCabecalho: true
     };
     this.mostrar();
   },
@@ -441,7 +450,8 @@ window.MODULOS.gerencial = {
       '<div style="overflow:auto; max-height:56vh">' +
       '<table class="tabela-presenca"><thead><tr>' +
       d.cab.map(c => '<th>' + c + '</th>').join('') + '</tr></thead><tbody>' +
-      d.linhas.slice(0, 400).map(l => '<tr>' + l.map(v => '<td>' + escaparHtml(String(v ?? '')) + '</td>').join('') + '</tr>').join('') +
+      d.linhas.slice(0, 400).map(l => '<tr>' + l.map((v, i) => { const t = String(v ?? ''); const longo = t.length > 90;
+        return '<td' + (longo ? ' class="cel-longa" title="' + escaparHtml(t) + '"' : '') + '>' + escaparHtml(longo ? t.slice(0, 90) + '\u2026' : t) + '</td>'; }).join('') + '</tr>').join('') +
       '</tbody></table>' +
       (d.linhas.length > 400 ? '<p class="sub" style="margin-top:8px">Mostrando 400 de ' + d.linhas.length +
         ' na tela; a planilha e o PDF saem completos.</p>' : '') +
@@ -454,10 +464,9 @@ window.MODULOS.gerencial = {
       const t = String(v ?? '');
       return /[;"\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
     };
-    const csv = '\ufeff' +
-      d.titulo + ';' + d.sub + '\n\n' +
-      d.resumo.map(([r, v]) => r + ';' + v).join('\n') + '\n\n' +
-      d.cab.join(';') + '\n' +
+    const csv = '\ufeff' + (d.csvSemCabecalho ? '' :
+      d.titulo + ';' + d.sub + '\n\n' + d.resumo.map(([r, v]) => r + ';' + v).join('\n') + '\n\n') +
+      d.cab.map(esc).join(';') + '\n' +
       d.linhas.map(l => l.map(esc).join(';')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a');

@@ -501,10 +501,73 @@ function podeEnviarPortal() {
 }
 
 function portalBtn() {
-  if (!podeEnviarPortal() || !window._docPortal) return '';
-  return '  <button class="btn btn-fantasma" id="btn-enviar-portal" ' +
-    'title="Disponibiliza este documento, exatamente como esta, para a familia ver no portal." ' +
-    'onclick="enviarDocPortal(this)">&#128228; Enviar ao portal</button>';
+  if (!window._docPortal) return '';
+  const p = window.CORTEX_SESSAO && window.CORTEX_SESSAO.profile;
+  const podeAssinar = p && (p.perfil === 'direcao' || CORTEX_PERM_TUDO);
+  return (podeEnviarPortal()
+    ? '  <button class="btn btn-fantasma" id="btn-enviar-portal" ' +
+      'title="Disponibiliza este documento, exatamente como esta, para a familia ver no portal." ' +
+      'onclick="enviarDocPortal(this)">&#128228; Enviar ao portal</button>' : '') +
+    (podeAssinar
+    ? '  <button class="btn btn-fantasma" id="btn-pdf-assinado" title="Gera o PDF e assina com o certificado digital ICP-Brasil (A1) cadastrado no sistema" ' +
+      'onclick="gerarPdfAssinado(this)">&#128274; PDF assinado (ICP-Brasil)</button>' : '');
+}
+
+// ─────────────── PDF assinado com certificado digital A1 ───────────────
+// 1) monta o PDF do documento aqui no navegador (html2pdf, mesmo visual da impressao)
+// 2) manda para a Edge Function assinar-pdf, que assina com o certificado guardado nos secrets
+// 3) devolve o PDF assinado (download) e guarda uma copia em documentos/assinados
+async function carregarHtml2pdf() {
+  if (window.html2pdf) return;
+  await new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+    s.onload = res; s.onerror = () => rej(new Error('Nao foi possivel carregar o gerador de PDF.'));
+    document.head.appendChild(s);
+  });
+}
+async function gerarPdfAssinado(botao) {
+  const ctx = window._docPortal;
+  const doc = document.querySelector('#doc-eq-overlay .doc-eq, .folha-overlay .doc-eq, .folha-pagina .doc-eq');
+  if (!ctx || !doc) { popAviso('Documento nao encontrado.'); return; }
+  const rotulo = botao.innerHTML;
+  botao.disabled = true; botao.textContent = 'Montando o PDF...';
+  try {
+    await carregarHtml2pdf();
+    // clone limpo, sem os botoes da tela
+    const clone = doc.cloneNode(true);
+    clone.querySelectorAll('.nao-imprime, button').forEach(e => e.remove());
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'position:fixed; left:-10000px; top:0; width:794px; background:#fff; padding:28px 32px;';
+    wrap.appendChild(clone); document.body.appendChild(wrap);
+    const blob = await html2pdf().set({
+      margin: [10, 10, 12, 10], filename: 'documento.pdf', image: { type: 'jpeg', quality: .95 },
+      html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      pagebreak: { mode: ['css', 'legacy'], avoid: ['.deq-caixa', 'table', '.deq-graf-item'] }
+    }).from(clone).outputPdf('blob');
+    wrap.remove();
+    const b64 = await new Promise(res => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1]); r.readAsDataURL(blob); });
+
+    botao.textContent = 'Assinando com o certificado...';
+    const { data: sess } = await sb.auth.getSession();
+    const resp = await fetch(CORTEX_CONFIG.SUPABASE_URL + '/functions/v1/assinar-pdf', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + sess.session.access_token, 'apikey': CORTEX_CONFIG.SUPABASE_ANON_KEY },
+      body: JSON.stringify({ pdf_base64: b64, tipo: ctx.tipo, titulo: ctx.titulo, paciente_id: ctx.paciente_id })
+    });
+    const r = await resp.json();
+    if (!resp.ok || !r.ok) throw new Error(r.erro || ('HTTP ' + resp.status));
+    // download
+    const bin = atob(r.pdf_base64); const arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    const url = URL.createObjectURL(new Blob([arr], { type: 'application/pdf' }));
+    const a = document.createElement('a'); a.href = url; a.download = r.nome_arquivo || 'documento_assinado.pdf'; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    popAviso('PDF assinado digitalmente por ' + (r.assinante || 'certificado A1') + '. Uma copia ficou guardada em Documentos da crianca.' +
+      (r.aviso ? '\n\n' + r.aviso : ''));
+  } catch (e) {
+    popAviso('Nao consegui gerar o PDF assinado: ' + e.message);
+  } finally { botao.disabled = false; botao.innerHTML = rotulo; }
 }
 
 async function enviarDocPortal(botao) {

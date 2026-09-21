@@ -453,7 +453,8 @@ window.MODULOS.pacientes = {
 
     if (id === 'visao') { alvo.innerHTML = this.htmlVisaoGeral(p); return; }
     if (id === 'documentos') {
-      alvo.innerHTML = this.htmlDocumentos(p) + '<div id="pac-portal"><div class="cartao"><p class="sub">Carregando portal...</p></div></div>';
+      alvo.innerHTML = this.htmlDocumentos(p) + '<div id="pac-assinados"></div><div id="pac-portal"><div class="cartao"><p class="sub">Carregando portal...</p></div></div>';
+      this.listarAssinados(p.id);
       this.blocoPortal(p.id);
       return;
     }
@@ -567,6 +568,18 @@ window.MODULOS.pacientes = {
     return '<div class="caixa-info' + (larga ? ' larga' : '') + '">' +
       '<small>' + rotulo + '</small>' +
       '<b>' + (valor ? escaparHtml(valor) : '&mdash;') + '</b></div>';
+  },
+
+  // PDFs assinados com certificado digital (gerados nos documentos)
+  async listarAssinados(pacienteId) {
+    const alvo = document.getElementById('pac-assinados'); if (!alvo) return;
+    const { data } = await sb.from('documentos_assinados').select('id, tipo, titulo, arquivo_path, assinante, criado_em')
+      .eq('paciente_id', pacienteId).order('criado_em', { ascending: false }).limit(50);
+    if (!data || !data.length) return;
+    alvo.innerHTML = '<div class="cartao"><h3>PDFs assinados digitalmente <small class="sub">&middot; ICP-Brasil</small></h3>' +
+      data.map(d => '<div class="linha-doc"><div><b>' + escaparHtml(d.titulo || d.tipo) + '</b><small>' + escaparHtml(d.assinante || '') + ' &middot; ' +
+        new Date(d.criado_em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) + '</small></div>' +
+        '<div class="pac-selos"><span class="selo selo-ok">assinado</span><button class="btn-chip" onclick="MODULOS.pacientes.abrirPdf(\'' + d.arquivo_path + '\')">Abrir PDF</button></div></div>').join('') + '</div>';
   },
 
   htmlDocumentos(p) {

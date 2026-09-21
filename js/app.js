@@ -508,9 +508,14 @@ function portalBtn() {
     ? '  <button class="btn btn-fantasma" id="btn-enviar-portal" ' +
       'title="Disponibiliza este documento, exatamente como esta, para a familia ver no portal." ' +
       'onclick="enviarDocPortal(this)">&#128228; Enviar ao portal</button>' : '') +
-    (podeAssinar
-    ? '  <button class="btn btn-fantasma" id="btn-pdf-assinado" title="Gera o PDF e assina com o certificado digital ICP-Brasil (A1) cadastrado no sistema" ' +
-      'onclick="gerarPdfAssinado(this)">&#128274; PDF assinado (ICP-Brasil)</button>' : '');
+    (podeAssinar && window._docPortal.tipo !== 'avaliacao' ? pdfAssinadoBtn() : '');
+}
+// botao "PDF assinado": telas de geracao de relatorio (depois de gerar e travar) e documentos sem editor
+function pdfAssinadoBtn() {
+  const p = window.CORTEX_SESSAO && window.CORTEX_SESSAO.profile;
+  if (!p || !(p.perfil === 'direcao' || CORTEX_PERM_TUDO)) return '';
+  return '  <button class="btn btn-fantasma" id="btn-pdf-assinado" title="Gera o PDF e assina com o certificado digital ICP-Brasil (A1)" ' +
+    'onclick="gerarPdfAssinado(this)">&#128274; PDF assinado (ICP-Brasil)</button>';
 }
 
 // ─────────────── PDF assinado com certificado digital A1 ───────────────
@@ -528,7 +533,7 @@ async function carregarHtml2pdf() {
 }
 async function gerarPdfAssinado(botao) {
   const ctx = window._docPortal;
-  const doc = document.querySelector('#doc-eq-overlay .doc-eq, .folha-overlay .doc-eq, .folha-pagina .doc-eq');
+  const doc = document.querySelector('#doc-eq-overlay .doc-eq, .folha-overlay .doc-eq, .folha-pagina .doc-eq, #rm-previa .doc-eq, #la-previa .doc-eq');
   if (!ctx || !doc) { popAviso('Documento nao encontrado.'); return; }
   const rotulo = botao.innerHTML;
   botao.disabled = true; botao.textContent = 'Montando o PDF...';

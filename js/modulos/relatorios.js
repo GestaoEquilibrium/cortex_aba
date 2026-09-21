@@ -213,6 +213,7 @@ window.MODULOS.relatorios = {
 
     const travado = rel.status === 'gerado' || rel.status === 'liberado';
     const editavel = this.podeGerir() && !travado;
+    window._docPortal = { paciente_id: pacienteId, tipo: 'relatorio_mensal', titulo: 'Relatorio Mensal ' + this.mesRotulo(mes) };
     const opc = (id, rot, marcado) => '<label class="check" style="display:flex; gap:6px; align-items:center; font-size:12.5px"><input type="checkbox" id="rm-' + id + '"' + (marcado ? ' checked' : '') + (editavel ? '' : ' disabled') + ' onchange="MODULOS.relatorios.salvarAuto()"> ' + rot + '</label>';
 
     el.innerHTML =
@@ -223,7 +224,8 @@ window.MODULOS.relatorios = {
       '  <div style="display:flex; gap:8px; flex-wrap:wrap">' +
       (editavel && perm('relatorios.gerar') === 'E' ? '<button class="btn btn-primario" onclick="MODULOS.relatorios.gerarTravar()">&#128274; Gerar e travar</button>' : '') +
       (travado && rel.status !== 'liberado' && perm('relatorios.portal') === 'E' ? '<button class="btn btn-fantasma" onclick="MODULOS.relatorios.liberar()">Liberar no portal</button>' : '') +
-      '  <button class="btn btn-fantasma" onclick="MODULOS.relatorios.docMensal()">&#128196; Folha / Imprimir</button>' +
+      '  <button class="btn btn-fantasma" onclick="MODULOS.relatorios.docMensal()">&#128196; ' + (travado ? 'Documento' : 'Folha / Imprimir') + '</button>' +
+      (travado ? pdfAssinadoBtn() : '') +
       '  </div></div>' +
 
       '<div class="rm-split">' +

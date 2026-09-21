@@ -265,6 +265,7 @@ window.MODULOS.laudo_avaliacao = {
 
     const travado = rel.status !== 'rascunho';
     const editavel = this.podeGerir() && !travado;
+    window._docPortal = { paciente_id: d.pac.id, tipo: 'relatorio_avaliacao', titulo: 'Relatorio de Avaliacao' + (d.completo ? ' completo' : '') };
     const campo = (id, rot, valor, linhas) => editavel
       ? '<div class="campo" style="margin-bottom:10px"><label>' + rot + '</label><textarea id="la-' + id + '" rows="' + (linhas || 4) + '" style="resize:vertical" oninput="MODULOS.laudo_avaliacao.salvarAuto()">' + escaparHtml(valor || '') + '</textarea></div>'
       : '<div style="margin-bottom:10px"><b style="font-size:11.5px; text-transform:uppercase; letter-spacing:.04em">' + rot + '</b><p style="font-size:13px; line-height:1.7; white-space:pre-wrap; margin-top:3px">' + escaparHtml(valor || '') + '</p></div>';
@@ -281,7 +282,8 @@ window.MODULOS.laudo_avaliacao = {
       (editavel ? ' &middot; rascunho salvo automaticamente' : ' &middot; gerado em ' + (rel.gerado_em ? new Date(rel.gerado_em).toLocaleString('pt-BR') : '-') + ' (travado)') + '</p></div>' +
       '  <div style="display:flex; gap:8px; flex-wrap:wrap">' +
       (editavel ? '<button class="btn btn-primario" onclick="MODULOS.laudo_avaliacao.gerarTravar()">&#128274; Gerar e travar</button>' : '') +
-      '  <button class="btn btn-fantasma" onclick="MODULOS.laudo_avaliacao.doc()">&#128196; Folha / Imprimir</button></div></div>' +
+      '  <button class="btn btn-fantasma" onclick="MODULOS.laudo_avaliacao.doc()">&#128196; ' + (travado ? 'Documento' : 'Folha / Imprimir') + '</button>' +
+      (travado ? pdfAssinadoBtn() : '') + '</div></div>' +
       '<div class="rm-split"><div class="rm-form">' +
       '  <div class="cartao faixa-azul"><h3>Vem do sistema</h3><div class="grade-visao">' +
       d.protocolos.map(pr =>

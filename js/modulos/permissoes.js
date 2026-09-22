@@ -59,7 +59,8 @@ window.MODULOS.permissoes = {
       ['relatorios.sessao', 'Relatorio da sessao e compilados'],
       ['relatorios.mensal', 'Elaborar relatorio mensal'],
       ['relatorios.gerar', 'Gerar e travar'],
-      ['relatorios.portal', 'Liberar/enviar documentos ao portal'] ] },
+      ['relatorios.portal', 'Liberar/enviar documentos ao portal'],
+      ['relatorios.assinar', 'Gerar PDF assinado (certificado digital)'] ] },
     { chave: 'eventos', rotulo: 'Supervisao e reunioes', dica: 'V: ve. E: cria.', subs: [
       ['eventos.criar', 'Criar supervisoes, reunioes e ATA'],
       ['eventos.demandas', 'Criar demandas e parabens'] ] },

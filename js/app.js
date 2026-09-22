@@ -503,7 +503,7 @@ function podeEnviarPortal() {
 function portalBtn() {
   if (!window._docPortal) return '';
   const p = window.CORTEX_SESSAO && window.CORTEX_SESSAO.profile;
-  const podeAssinar = p && (p.perfil === 'direcao' || CORTEX_PERM_TUDO);
+  const podeAssinar = perm('relatorios.assinar') === 'E';
   return (podeEnviarPortal()
     ? '  <button class="btn btn-fantasma" id="btn-enviar-portal" ' +
       'title="Disponibiliza este documento, exatamente como esta, para a familia ver no portal." ' +
@@ -512,8 +512,8 @@ function portalBtn() {
 }
 // botao "PDF assinado": telas de geracao de relatorio (depois de gerar e travar) e documentos sem editor
 function pdfAssinadoBtn() {
-  const p = window.CORTEX_SESSAO && window.CORTEX_SESSAO.profile;
-  if (!p || !(p.perfil === 'direcao' || CORTEX_PERM_TUDO)) return '';
+  // permissao "Relatorios > PDF assinado" (herda de Relatorios): direcao e coordenacao por padrao
+  if (perm('relatorios.assinar') !== 'E') return '';
   return '  <button class="btn btn-fantasma" id="btn-pdf-assinado" title="Gera o PDF e assina com o certificado digital ICP-Brasil (A1)" ' +
     'onclick="gerarPdfAssinado(this)">&#128274; PDF assinado (ICP-Brasil)</button>';
 }

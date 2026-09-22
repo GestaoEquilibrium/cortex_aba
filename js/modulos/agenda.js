@@ -753,6 +753,13 @@ window.MODULOS.agenda = {
     if (status !== 'cancelada') dados.motivo_cancelamento = null;
     const { error } = await sb.from('sessoes').update(dados).eq('id', id);
     if (error) { popAviso('Erro: ' + error.message); return; }
+    // falta: programas entram na sessao com todas as tentativas FA (ja vale para o mensal e os graficos)
+    if (status === 'falta' && MODULOS.programas) {
+      const n = await MODULOS.programas.registrarFalta(id);
+      if (n) popAviso('Falta registrada. ' + n + ' programa(s) em intervencao entraram nesta sessao com todas as tentativas marcadas como FA (falta).');
+    } else if (m.s && m.s.status === 'falta' && status !== 'falta' && MODULOS.programas) {
+      await MODULOS.programas.desfazerFalta(id);
+    }
     this.abrirSessao(id);
     this.desenhar();
   },

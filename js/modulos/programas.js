@@ -637,6 +637,42 @@ window.MODULOS.programas = {
     }
   },
 
+  // Sessao com FALTA: os programas em intervencao da crianca entram na sessao com todas as tentativas = FA,
+  // sem ninguem aplicar nada - assim a falta ja fica gravada por programa para relatorios e graficos.
+  async registrarFalta(sessaoId) {
+    try {
+      const { data: s } = await sb.from('sessoes').select('id, paciente_id, status').eq('id', sessaoId).single();
+      if (!s || s.status !== 'falta') return 0;
+      const { data: ja } = await sb.from('programa_sessao_registros').select('id').eq('sessao_id', sessaoId).limit(1);
+      if (ja && ja.length) return 0;   // ja tem registros (idempotente)
+      const { data: pps } = await sb.from('paciente_programas').select('id, tentativas, programas(tentativas_padrao)')
+        .eq('paciente_id', s.paciente_id).eq('status', 'em_intervencao');
+      if (!pps || !pps.length) return 0;
+      const eu = window.CORTEX_SESSAO.user.id;
+      const tent = [], psr = [];
+      pps.forEach(pp => {
+        const n = pp.tentativas || (pp.programas && pp.programas.tentativas_padrao) || 10;
+        for (let i = 1; i <= n; i++) tent.push({ sessao_id: sessaoId, paciente_programa_id: pp.id, ordem: i, resposta: 'FA', acertou: null, registrado_por: eu });
+        psr.push({ sessao_id: sessaoId, paciente_programa_id: pp.id, tentativas: n, tentativas_sessao: n, tentativas_previstas: n,
+          corretos: 0, pct_corretos: 0, acertos: 0, pct_acertos: 0, nao_aplicado: true, motivo_nao_aplicado: 'Falta da crianca' });
+      });
+      const { error: e1 } = await sb.from('registros_tentativas').insert(tent);
+      if (e1) throw new Error(e1.message);
+      const { error: e2 } = await sb.from('programa_sessao_registros').upsert(psr, { onConflict: 'sessao_id,paciente_programa_id' });
+      if (e2) throw new Error(e2.message);
+      return pps.length;
+    } catch (e) { popAviso('A falta foi marcada, mas nao consegui gravar os programas com falta: ' + e.message); return 0; }
+  },
+  // ao reabrir uma sessao que estava como falta, os registros automaticos de FA saem
+  async desfazerFalta(sessaoId) {
+    try {
+      const { data: regs } = await sb.from('registros_tentativas').select('id, resposta').eq('sessao_id', sessaoId);
+      if (!regs || !regs.length || regs.some(r => r.resposta !== 'FA')) return;   // so apaga se for TUDO falta automatica
+      await sb.from('registros_tentativas').delete().eq('sessao_id', sessaoId);
+      await sb.from('programa_sessao_registros').delete().eq('sessao_id', sessaoId);
+    } catch (e) { /* silencioso */ }
+  },
+
   hojeLocal() {
     const d = new Date();
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');

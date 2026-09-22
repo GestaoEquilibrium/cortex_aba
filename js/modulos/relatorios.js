@@ -103,7 +103,7 @@ window.MODULOS.relatorios = {
       e.serie.push({ data: dataDe[f.sessao_id], pct: f.pct_corretos, corretos: f.corretos, n: f.tentativas_sessao || f.tentativas });
     });
     Object.values(porProg).forEach(e => e.serie.sort((a, b) => a.data.localeCompare(b.data)));
-    const naoAplicados = fotos.filter(f => f.nao_aplicado).map(f => ({
+    const naoAplicados = fotos.filter(f => f.nao_aplicado && f.motivo_nao_aplicado !== 'Falta da crianca').map(f => ({
       nome: f.paciente_programas?.programas?.nome || 'programa', motivo: f.motivo_nao_aplicado, data: dataDe[f.sessao_id] }));
     return {
       sessoes: lista,

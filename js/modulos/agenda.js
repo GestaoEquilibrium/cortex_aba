@@ -504,8 +504,9 @@ window.MODULOS.agenda = {
     if (!s) return;
     const pac = s.pacientes;
     // tudo em paralelo (a trilha de auditoria so e lida na aba Historico - e a consulta mais pesada)
-    const [rResp, rGuias, rMeus, rFoto] = await Promise.all([
+    const [rResp, rGuias, rMeus, rFoto, rEvo] = await Promise.all([
       sb.from('responsaveis').select('nome, telefone, email, parentesco, principal').eq('paciente_id', pac.id).order('principal', { ascending: false }),
+      sb.from('evolucoes').select('texto, destinacao, criado_em, espelho_de, aplicador:profiles!evolucoes_aplicador_id_fkey(nome)').eq('sessao_id', id).maybeSingle(),
       sb.from('guias').select('id, numero, qtd_autorizada, vigencia_inicio, vigencia_fim, convenio, obs').eq('paciente_id', pac.id).order('vigencia_fim', { ascending: false }),
       ehEquipe() ? meusPacientesIds() : Promise.resolve(new Set()),
       pac.foto_path ? sb.storage.from('documentos').createSignedUrl(pac.foto_path, 600).catch(() => ({ data: null })) : Promise.resolve({ data: null })
@@ -513,6 +514,7 @@ window.MODULOS.agenda = {
     const resps = rResp.data || [];
     const resp = resps.find(r => r.telefone) || resps[0] || null;
     const guias = rGuias.data || [];
+    const evo = rEvo && rEvo.data;
     const ultAud = null;
 
     // saldo das guias (sessoes concluidas dentro da vigencia)
@@ -589,6 +591,14 @@ window.MODULOS.agenda = {
         '      <div class="caixa-info"><small>Sala</small><b>' + escaparHtml(s.salas ? s.salas.nome : '-') + '</b></div>' +
         '    </div>' +
         '    <div class="caixa-info" style="margin-top:8px"><small>Guia</small>' + guiaTxt + '</div>' +
+        '    <div class="caixa-info" style="margin-top:8px"><small>Evolu&ccedil;&atilde;o di&aacute;ria' +
+        (evo ? ' &middot; ' + escaparHtml(evo.aplicador ? evo.aplicador.nome.split(' ').slice(0, 2).join(' ') : '') + (evo.espelho_de ? ' <span class="selo selo-neutro">mesma evolu&ccedil;&atilde;o do outro hor&aacute;rio</span>' : '') : '') + '</small>' +
+        (evo
+          ? '<div style="font-size:12.5px; line-height:1.55; white-space:pre-wrap; max-height:180px; overflow:auto">' + escaparHtml(evo.texto || '') + '</div>' +
+            (evo.destinacao ? '<small class="sub">Destina&ccedil;&atilde;o: ' + escaparHtml(evo.destinacao) + '</small>' : '') +
+            '<div style="margin-top:6px"><button class="btn-chip" onclick="fecharModal(); MODULOS.programas.docEvolucaoDiaria(\'' + id + '\')">&#128196; Relat&oacute;rio da sess&atilde;o</button></div>'
+          : '<span class="sub">' + (s.status === 'concluida' ? '<b style="color:var(--st-warn)">Sess&atilde;o conclu&iacute;da sem evolu&ccedil;&atilde;o</b>' : 'ainda n&atilde;o escrita') + '</span>') +
+        '</div>' +
         '    <div class="caixa-info" style="margin-top:8px"><small>Observacoes ' + (podeOperar ? '<button class="btn-chip" style="margin-left:6px" onclick="MODULOS.agenda.editarObs(\'' + id + '\')">&#9998;</button>' : '') + '</small>' +
         '      <div id="sess-obs" style="font-size:13px; line-height:1.5">' + (s.observacoes ? escaparHtml(s.observacoes).replace(/\n/g, '<br>') : '<span class="sub">&mdash;</span>') + '</div></div>' +
         blocoConf +

@@ -1295,11 +1295,23 @@ window.MODULOS.programas = {
       '<textarea id="fe-evolucao" rows="6">' + escaparHtml(resumo) + '</textarea></div>' +
       '<div class="campo"><label>Destinacao da crianca</label>' +
       '<input id="fe-destinacao" placeholder="Ex.: entregue a mae as 09:50, orientada sobre a atividade de casa"></div>' +
+      '<div id="fe-irmas"></div>' +
       '<div class="mensagem-erro" id="fe-erro"></div>' +
       '<div class="barra-acoes">' +
       '  <button class="btn btn-fantasma" onclick="fecharModal()">Voltar a ficha</button>' +
       '  <button class="btn btn-primario" id="fe-salvar" onclick="MODULOS.programas.encerrarSessao()">Concluir sessao</button>' +
       '</div>', true);
+    // outras sessoes desta crianca no mesmo dia: a evolucao pode valer para todas (marcadas por padrao)
+    (async () => {
+      const { data: irmas } = await sb.from('sessoes').select('id, hora_inicio, status, profissional:profiles!sessoes_aplicador_id_fkey(nome)')
+        .eq('paciente_id', f.sessao.paciente_id).eq('data', f.sessao.data).neq('id', f.sessao.id)
+        .in('status', ['agendada', 'checkin', 'em_atendimento']).order('hora_inicio');
+      const alvo = document.getElementById('fe-irmas');
+      if (!alvo || !irmas || !irmas.length) return;
+      alvo.innerHTML = '<div class="campo" style="margin-top:10px"><label>Esta evolucao vale tambem para <small class="sub">(outros horarios de hoje desta crianca; desmarque os que nao)</small></label>' +
+        irmas.map(x => '<label class="check" style="display:flex; margin:4px 0"><input type="checkbox" class="fe-irma" value="' + x.id + '" checked> ' +
+          String(x.hora_inicio).slice(0, 5) + ' &middot; ' + escaparHtml(x.profissional ? x.profissional.nome.split(' ').slice(0, 2).join(' ') : 'sem aplicador') + '</label>').join('') + '</div>';
+    })();
   },
 
   async encerrarSessao() {
@@ -1376,9 +1388,11 @@ window.MODULOS.programas = {
 
       // Crianca com 2+ horarios no mesmo dia: a evolucao vale para todos - conclui os demais e espelha o texto
       try {
-        const { data: irmas } = await sb.from('sessoes').select('id, hora_inicio, status')
+        const marcadas = new Set(Array.from(document.querySelectorAll('.fe-irma:checked')).map(c => c.value));
+        const { data: irmasTodas } = await sb.from('sessoes').select('id, hora_inicio, status')
           .eq('paciente_id', f.sessao.paciente_id).eq('data', f.sessao.data).neq('id', f.sessao.id)
           .in('status', ['agendada', 'checkin', 'em_atendimento']);
+        const irmas = (irmasTodas || []).filter(x => marcadas.has(x.id));
         if (irmas && irmas.length) {
           const ids = irmas.map(x => x.id);
           { const { error: _e } = await sb.from('sessoes').update({ status: 'concluida' }).in('id', ids); if (_e) popAviso('Nao foi possivel gravar (sessoes): ' + _e.message); }
@@ -2261,8 +2275,8 @@ window.MODULOS.programas = {
 
     const [rPac, rSes, rPei] = await Promise.all([
       sb.from('pacientes').select('nome, data_nascimento').eq('id', pacienteId).single(),
-      sb.from('sessoes').select('id, data').eq('paciente_id', pacienteId)
-        .eq('status', 'concluida').gte('data', ini).lte('data', fim).order('data'),
+      sb.from('sessoes').select('id, data, status').eq('paciente_id', pacienteId)
+        .in('status', ['concluida', 'falta']).gte('data', ini).lte('data', fim).order('data'),
       sb.from('peis').select('id, pei_metas(area, meta, prazo)').eq('paciente_id', pacienteId)
         .eq('status', 'ativo').maybeSingle()
     ]);
@@ -2274,6 +2288,8 @@ window.MODULOS.programas = {
         '<h2>Relatorio compilado</h2></div></div><div class="cartao"><p class="sub">Nenhuma sessao concluida no periodo.</p></div>';
       return;
     }
+    const faltas = sessoes.filter(s => s.status === 'falta');
+    sessoes = sessoes.filter(s => s.status === 'concluida');
     const ids = sessoes.map(s => s.id);
     const dataDe = {};
     sessoes.forEach(s => { dataDe[s.id] = s.data; });
@@ -2308,6 +2324,8 @@ window.MODULOS.programas = {
       Object.entries(porProg).forEach(([ppId, sesMap]) => {
         const pp = ppDe[ppId];
         if (!pp) return;
+        // dias de falta entram como bloco "F" (uma vez por dia), na ordem cronologica
+        [...new Set(faltas.map(f => f.data))].forEach(d => { sesMap['falta-' + d] = { data: d, lista: [], falta: true }; });
         const blocos = Object.entries(sesMap)
           .sort((a, b) => a[1].data.localeCompare(b[1].data) || a[0].localeCompare(b[0]));
         const tot = blocos.reduce((s, [, b]) => s + b.lista.length, 0);
@@ -2315,7 +2333,7 @@ window.MODULOS.programas = {
         const largo = tot > 12;
         corpo += '<div class="deq-graf-item' + (largo ? ' deq-graf-largo' : '') + '">' +
           '<div class="deq-graf-tit">' + escaparHtml(pp.programas.nome) +
-          ' <small>' + blocos.length + ' sess&otilde;es &middot; ' + cor + '/' + tot + ' C (' + (tot ? Math.round(cor * 100 / tot) : 0) + '%)</small></div>' +
+          ' <small>' + blocos.filter(([, b]) => !b.falta).length + ' sess&otilde;es' + (blocos.some(([, b]) => b.falta) ? ' &middot; <span style="color:#E11D48">' + blocos.filter(([, b]) => b.falta).length + ' falta(s)</span>' : '') + ' &middot; ' + cor + '/' + tot + ' C (' + (tot ? Math.round(cor * 100 / tot) : 0) + '%)</small></div>' +
           this.graficoCompilado(pp.programas.niveis, blocos, largo) + '</div>';
       });
       corpo += '</div>';
@@ -2415,8 +2433,10 @@ window.MODULOS.programas = {
     const niveis = this.ORDEM_GRAFICO.filter(n => this.normalizarNiveis(niveisPrograma).includes(n));
     const total = blocos.reduce((s, [, b]) => s + b.lista.length, 0);
     if (!total) return '<p class="sub">Sem tentativas.</p>';
+    const nFaltas = blocos.filter(([, b]) => b.falta).length;
     const W = largo ? 680 : 330, ESQ = 36, TOPO = 10, LIN = 19, BASE = TOPO + niveis.length * LIN;
-    const PX = (W - ESQ - 16 - blocos.length * 10) / total;
+    const LF = 22;  // largura reservada para cada bloco de falta
+    const PX = (W - ESQ - 16 - blocos.length * 10 - nFaltas * LF) / total;
     const H = BASE + 30;
     const yDe = s => TOPO + (niveis.length - 1 - niveis.indexOf(s)) * LIN + LIN / 2;
 
@@ -2429,6 +2449,16 @@ window.MODULOS.programas = {
     });
     let x = ESQ + 6;
     blocos.forEach(([, b], bi) => {
+      if (b.falta) {
+        // faixa vermelha tracejada com "F" e a data
+        svg += '<rect x="' + (x - 3) + '" y="' + TOPO + '" width="' + LF + '" height="' + (BASE - TOPO) + '" fill="#FEE2E2" stroke="#E11D48" stroke-dasharray="3 3" rx="4"/>' +
+          '<text x="' + (x + LF / 2 - 3) + '" y="' + (TOPO + (BASE - TOPO) / 2 + 5) + '" text-anchor="middle" font-size="13" font-weight="900" fill="#E11D48">F</text>' +
+          '<text x="' + (x + LF / 2 - 3) + '" y="' + (BASE + 14) + '" text-anchor="middle" font-size="9" font-weight="800" fill="#E11D48">' + b.data.slice(8, 10) + '/' + b.data.slice(5, 7) + '</text>' +
+          '<text x="' + (x + LF / 2 - 3) + '" y="' + (BASE + 24) + '" text-anchor="middle" font-size="8" fill="#E11D48">falta</text>';
+        x += LF + 10;
+        if (bi < blocos.length - 1) svg += '<line x1="' + (x - 5) + '" y1="' + TOPO + '" x2="' + (x - 5) + '" y2="' + BASE + '" stroke="#E4E8F0" stroke-dasharray="2 3"/>';
+        return;
+      }
       const cor = this.COR_DIA[bi % this.COR_DIA.length];
       const pts = [];
       b.lista.forEach(t => {

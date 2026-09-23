@@ -1409,14 +1409,18 @@ window.MODULOS.programas = {
         if (e1) throw new Error(e1.message);
       }
 
-      const { error: e2 } = await sb.from('evolucoes').upsert({
-        sessao_id: f.sessao.id,
-        paciente_id: f.sessao.paciente_id,
-        aplicador_id: window.CORTEX_SESSAO.user.id,
-        texto: texto,
-        destinacao: document.getElementById('fe-destinacao').value.trim() || null
-      }, { onConflict: 'sessao_id' });
-      if (e2) throw new Error(e2.message);
+      // evolucao: cria; se a sessao ja tem uma (espelho do outro horario, ou encerramento anterior), substitui
+      const evo = { sessao_id: f.sessao.id, paciente_id: f.sessao.paciente_id, aplicador_id: window.CORTEX_SESSAO.user.id,
+        texto: texto, destinacao: document.getElementById('fe-destinacao').value.trim() || null, espelho_de: null };
+      const { error: e2 } = await sb.from('evolucoes').insert(evo);
+      if (e2 && String(e2.code) === '23505') {
+        const { error: e3 } = await sb.from('evolucoes').update(evo).eq('sessao_id', f.sessao.id);
+        if (e3) throw new Error(/row-level security/i.test(e3.message)
+          ? 'Esta sessao ja tem uma evolucao gravada por outra pessoa e voce nao tem permissao para substitui-la. Peca a coordenacao para ajustar (o texto acima continua aqui).'
+          : e3.message);
+      } else if (e2) throw new Error(/row-level security/i.test(e2.message)
+        ? 'Sem permissao para gravar a evolucao desta sessao. Confira se a sessao esta no seu nome na Agenda.'
+        : e2.message);
 
       const { error: e3 } = await sb.from('sessoes')
         .update({ status: 'concluida' }).eq('id', f.sessao.id);

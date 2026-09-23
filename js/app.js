@@ -54,7 +54,7 @@ const NAVEGACAO = [
   {
     grupo: 'GESTAO',
     itens: [
-      { id: 'coordenacao', rotulo: 'Coordenacao', chave: 'coordenacao' },
+      { id: 'coordenacao', rotulo: 'Coordenacao', chave: 'coordenacao', perfis: ['coordenador', 'direcao', 'suporte'] },
       { id: 'presenca', rotulo: 'Lista de Presenca',  chave: 'presenca' },
       { id: 'faltas',   rotulo: 'Gestao de Faltas',   chave: 'faltas' },
       { id: 'termos',   rotulo: 'Termos digitais',    chave: 'termos' },
@@ -175,7 +175,7 @@ function montarSidebar(perfil) {
 
   NAVEGACAO.forEach(grupo => {
     const itensVisiveis = grupo.itens.filter(i =>
-      i.chave ? perm(i.chave) !== '' : i.perfis.includes(perfil));
+      i.chave ? (CORTEX_PERMS[i.chave] === undefined && i.perfis ? i.perfis.includes(perfil) : perm(i.chave) !== '') : i.perfis.includes(perfil));
     if (itensVisiveis.length === 0) return;
 
     const titulo = document.createElement('div');
@@ -218,7 +218,7 @@ function montarBarraCelular(profile) {
   document.getElementById('barra-celular')?.remove();
   document.getElementById('cab-celular')?.remove();
   if (profile.perfil === 'familia') { montarBarraFamilia(); return; }
-  const permitido = id => NAVEGACAO.some(g => g.itens.some(i => i.id === id && (i.chave ? perm(i.chave) !== '' : i.perfis.includes(profile.perfil))));
+  const permitido = id => NAVEGACAO.some(g => g.itens.some(i => i.id === id && (i.chave ? (CORTEX_PERMS[i.chave] === undefined && i.perfis ? i.perfis.includes(profile.perfil) : perm(i.chave) !== '') : i.perfis.includes(profile.perfil))));
   const cab = document.createElement('header');
   cab.className = 'cab-celular'; cab.id = 'cab-celular';
   cab.innerHTML = '<div class="cab-cel-marca">' + document.querySelector('.marca .simbolo').outerHTML + '<b>CORTEX <span class="mao">aba</span></b></div>' +

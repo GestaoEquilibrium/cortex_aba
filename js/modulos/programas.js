@@ -1337,6 +1337,19 @@ window.MODULOS.programas = {
       '  <button class="btn btn-fantasma" onclick="fecharModal()">Voltar a ficha</button>' +
       '  <button class="btn btn-primario" id="fe-salvar" onclick="MODULOS.programas.encerrarSessao()">Concluir sessao</button>' +
       '</div>', true);
+    // sessao que ja tem evolucao (encerrada antes e reaberta): traz o texto anterior para nao se perder
+    (async () => {
+      const { data: ant } = await sb.from('evolucoes').select('texto, destinacao, aplicador:profiles!evolucoes_aplicador_id_fkey(nome)').eq('sessao_id', f.sessao.id).maybeSingle();
+      const ta = document.getElementById('fe-evolucao');
+      if (!ant || !ta) return;
+      const marca = 'Comportamento e observacoes:';
+      const antigo = String(ant.texto || '');
+      const corpoAntigo = antigo.includes(marca) ? antigo.slice(antigo.indexOf(marca) + marca.length).trim() : antigo.trim();
+      if (corpoAntigo && !ta.value.includes(corpoAntigo)) ta.value = ta.value.replace(/Comportamento e observacoes:\s*$/, 'Comportamento e observacoes: ' + corpoAntigo);
+      const dest = document.getElementById('fe-destinacao'); if (dest && !dest.value && ant.destinacao) dest.value = ant.destinacao;
+      ta.insertAdjacentHTML('beforebegin', '<div class="mensagem-erro visivel" style="background:var(--st-warn-bg); color:#92400E; border-color:#FDE68A">Esta sessao ja tinha uma evolucao' +
+        (ant.aplicador ? ' (' + escaparHtml(ant.aplicador.nome.split(' ')[0]) + ')' : '') + '. O texto dela foi trazido para o campo; ao concluir, esta versao substitui a anterior.</div>');
+    })();
     // outras sessoes desta crianca no mesmo dia: a evolucao pode valer para todas (marcadas por padrao)
     (async () => {
       const { data: irmas } = await sb.from('sessoes').select('id, hora_inicio, status, profissional:profiles!sessoes_aplicador_id_fkey(nome)')

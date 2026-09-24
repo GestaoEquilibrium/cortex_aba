@@ -189,19 +189,38 @@ window.MODULOS.laudo_avaliacao = {
   rascunhoArea(d, a, pr) {
     pr = pr || d.protocolos[0];
     const primeiro = d.pac.nome.split(' ')[0];
+    const ela = d.pac.sexo === 'F';
     const b = pr.anterior ? pr.anterior.areas.find(x => x.area === a.area) : null;
     if (a.pct === null) return 'Esta \u00e1rea n\u00e3o foi avaliada nesta aplica\u00e7\u00e3o.';
-    let t = '';
-    if (b && b.pct !== null) t += primeiro + ' obteve ' + a.pct + '% nesta \u00e1rea, em compara\u00e7\u00e3o a ' + b.pct + '% na avalia\u00e7\u00e3o anterior' + (a.pct > b.pct ? ', evidenciando avan\u00e7o. ' : a.pct < b.pct ? '; a diferen\u00e7a deve ser lida \u00e0 luz da mudan\u00e7a da faixa et\u00e1ria de refer\u00eancia. ' : ', mantendo o desempenho. ');
-    else t += primeiro + ' obteve ' + a.pct + '% nesta \u00e1rea' + (a.pct >= 90 ? ', atingindo desempenho compat\u00edvel com os marcos esperados para a faixa et\u00e1ria. ' : a.pct >= 70 ? ', com habilidades majoritariamente estabelecidas. ' : ', o que a caracteriza como prioridade de interven\u00e7\u00e3o. ');
-    if (a.idade !== undefined) t += ' Idade de desenvolvimento estimada: ' + MODULOS.avaliacoes.fmtIdade(a.idade) + '.';
-    // 2o paragrafo: o resultado de cada habilidade avaliada na area
-    const lista = arr => arr.join('; ');
-    const p2 = [];
-    if (a.presentes && a.presentes.length) p2.push('Habilidades presentes: ' + lista(a.presentes) + '.');
-    if (a.ausentes && a.ausentes.length) p2.push('Habilidades ainda n\u00e3o observadas, que devem compor as pr\u00f3ximas metas de ensino: ' + lista(a.ausentes) + '.');
-    if (!a.presentes && !a.ausentes && a.faltam && a.faltam.length) p2.push('Ainda n\u00e3o apresenta dom\u00ednio de: ' + lista(a.faltam) + '.');
-    return (t.trim() + (p2.length ? '\n\n' + p2.join(' ') : '')).trim();
+    const nPres = (a.presentes || []).length, nAus = (a.ausentes || []).length, tot = nPres + nAus;
+    const areaL = a.area.toLowerCase();
+    // 1o paragrafo: leitura clinica, no tom dos relatorios da clinica
+    let t;
+    if (b && b.pct !== null) {
+      t = a.pct > b.pct
+        ? primeiro + ' apresentou evolu\u00e7\u00e3o em ' + areaL + ', passando de ' + b.pct + '% para ' + a.pct + '% dos marcos esperados. Os ganhos se expressam no dia a dia das sess\u00f5es, com respostas mais consistentes e menor necessidade de ajuda.'
+        : a.pct < b.pct
+        ? 'Em ' + areaL + ', ' + primeiro + ' obteve ' + a.pct + '% (anteriormente ' + b.pct + '%). A diferen\u00e7a n\u00e3o deve ser lida como perda de repert\u00f3rio: a faixa et\u00e1ria atual contempla habilidades mais complexas, que exigem maior autonomia, generaliza\u00e7\u00e3o e flexibilidade.'
+        : primeiro + ' manteve ' + a.pct + '% em ' + areaL + ', preservando o repert\u00f3rio j\u00e1 constru\u00eddo.';
+    } else {
+      t = a.pct >= 90
+        ? 'Em ' + areaL + ', ' + primeiro + ' alcan\u00e7ou ' + a.pct + '% dos marcos esperados, com desempenho compat\u00edvel com a faixa et\u00e1ria e boa consist\u00eancia nas respostas.'
+        : a.pct >= 70
+        ? 'Em ' + areaL + ', ' + primeiro + ' alcan\u00e7ou ' + a.pct + '% dos marcos esperados: a maior parte das habilidades j\u00e1 est\u00e1 estabelecida, restando consolidar as mais recentes e ampliar sua generaliza\u00e7\u00e3o.'
+        : 'Em ' + areaL + ', ' + primeiro + ' alcan\u00e7ou ' + a.pct + '% dos marcos esperados, o que aponta esta \u00e1rea como priorit\u00e1ria para a interven\u00e7\u00e3o no pr\u00f3ximo per\u00edodo.';
+    }
+    if (a.idade !== undefined) t += ' A idade de desenvolvimento estimada nesta \u00e1rea \u00e9 de ' + MODULOS.avaliacoes.fmtIdade(a.idade) + '.';
+    // 2o paragrafo: resultado por habilidade, de forma resumida (poucos exemplos, sem lista longa)
+    const ex = arr => arr.slice(0, 2).join(' e ');
+    let p2 = '';
+    if (tot) {
+      p2 = (ela ? 'Ela' : 'Ele') + ' j\u00e1 demonstra ' + nPres + ' das ' + tot + ' habilidades avaliadas' +
+        (nPres ? ', como ' + ex(a.presentes) : '') + '.';
+      if (nAus) p2 += ' As que ainda n\u00e3o foram observadas' + (nAus <= 2 ? ' (' + ex(a.ausentes) + ')' : ', a exemplo de ' + ex(a.ausentes) + ',') +
+        ' passam a compor as pr\u00f3ximas metas de ensino.';
+      else p2 += ' Todas as habilidades da faixa foram observadas.';
+    } else if (a.faltam && a.faltam.length) p2 = 'Ainda n\u00e3o apresenta dom\u00ednio de ' + ex(a.faltam) + ', que passam a compor as pr\u00f3ximas metas.';
+    return (t.trim() + (p2 ? '\n\n' + p2 : '')).trim();
   },
   rascunhoConclusao(d) {
     const primeiro = d.pac.nome.split(' ')[0];

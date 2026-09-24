@@ -389,12 +389,15 @@ window.MODULOS.relatorios = {
   htmlGraficoMes(dados) {
     const progs = Object.values(dados.porProg).filter(p => p.serie.length);
     if (!progs.length || !MODULOS.avaliacoes || !MODULOS.avaliacoes.gLinhas) return '';
-    const datas = [...new Set(progs.flatMap(p => p.serie.map(x => x.data)))].sort();
+    const faltas = [...new Set(dados.sessoes.filter(s => s.status === 'falta').map(s => s.data))];
+    const datas = [...new Set(progs.flatMap(p => p.serie.map(x => x.data)).concat(faltas))].sort();
     const series = progs.map((p, i) => ({
       nome: p.nome.length > 28 ? p.nome.slice(0, 27) + '\u2026' : p.nome, cor: this.COR_PROG[i % this.COR_PROG.length],
       valores: datas.map(d => { const x = p.serie.find(y => y.data === d); return x ? x.pct : null; })
     }));
-    return MODULOS.avaliacoes.gLinhas(datas.map(d => d.slice(8, 10) + '/' + d.slice(5, 7)), series, { legenda: true, altura: 240 });
+    const rotulos = datas.map(d => d.slice(8, 10) + '/' + d.slice(5, 7) + (faltas.includes(d) ? ' F' : ''));
+    const g = MODULOS.avaliacoes.gLinhas(rotulos, series, { legenda: true, altura: 240 });
+    return g + (faltas.length ? '<p class="sub" style="font-size:10px; margin-top:4px"><b style="color:#E11D48">F</b> = dia de falta (' + faltas.map(d => d.slice(8, 10) + '/' + d.slice(5, 7)).join(', ') + ')</p>' : '');
   },
 
   htmlMensal(rel, pac, resp, dados) {

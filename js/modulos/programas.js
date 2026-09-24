@@ -701,9 +701,10 @@ window.MODULOS.programas = {
         '<div><b>' + fmt(x.data) + ' as ' + String(x.hora_inicio).slice(0, 5) + '</b><small>' +
         escaparHtml(x.profissional ? x.profissional.nome.split(' ').slice(0, 2).join(' ') : 'sem aplicador') + (minha ? ' (voce)' : '') + '</small></div>' +
         '<div class="pac-selos"><span class="selo ' + st[0] + '">' + st[1] + '</span>' +
-        (x.status === 'falta' ? '' : x.status === 'concluida'
-          ? '<button class="btn-chip" onclick="fecharModal(); MODULOS.programas.docEvolucaoDiaria(\'' + x.id + '\')">Ver relatorio</button>'
-          : '<button class="btn-chip cheio" onclick="fecharModal(); MODULOS.programas.abrirFolha(\'' + x.id + '\', true)">Lancar nesta</button>') +
+        (x.status === 'concluida' ? '<button class="btn-chip" onclick="fecharModal(); MODULOS.programas.docEvolucaoDiaria(\'' + x.id + '\')">Relatorio</button>' : '') +
+        (x.status === 'falta' ? '' :
+          '<label class="check" title="Marque para lancar os mesmos programas e a evolucao em mais de uma sessao"><input type="checkbox" class="sess-multi" value="' + x.id + '"' + (x.data === hoje ? ' checked' : '') + '> junto</label>' +
+          '<button class="btn-chip cheio" onclick="fecharModal(); MODULOS.programas.abrirFolha(\'' + x.id + '\', true)">Lancar nesta</button>') +
         '</div></div>';
     };
     const deHoje = sess.filter(x => x.data === hoje), outras = sess.filter(x => x.data !== hoje);
@@ -711,9 +712,20 @@ window.MODULOS.programas = {
       (deHoje.length ? '<h4 style="margin:0 0 4px">Hoje</h4>' + deHoje.map(linha).join('') : '<p class="sub">Nenhuma sessao agendada hoje para esta crianca.</p>') +
       (outras.length ? '<h4 style="margin:12px 0 4px">Outras sessoes <small class="sub">(14 dias atras ate 7 dias a frente)</small></h4>' + outras.map(linha).join('') : '') +
       '<div class="mensagem-erro" id="enc-erro"></div>' +
+      '<p class="sub" style="margin-top:8px">Marcou mais de uma como <b>junto</b>? <b>Lancar nas selecionadas</b> aplica uma vez e grava os mesmos programas e a mesma evolucao em todas.</p>' +
       '<div class="barra-acoes" style="justify-content:space-between">' +
       '  <button class="btn btn-fantasma" id="enc-criar" onclick="MODULOS.programas.criarEncaixe(\'' + pacienteId + '\')">+ Encaixe agora (' + new Date().toTimeString().slice(0, 5) + ')</button>' +
-      '  <button class="btn btn-fantasma" onclick="fecharModal()">Fechar</button></div>', true, 'agenda');
+      '  <div style="display:flex; gap:8px"><button class="btn btn-fantasma" onclick="fecharModal()">Fechar</button>' +
+      '  <button class="btn btn-primario" onclick="MODULOS.programas.lancarSelecionadas()">Lancar nas selecionadas</button></div></div>', true, 'agenda');
+  },
+
+  // varias sessoes de uma vez: a primeira (mais antiga) recebe a aplicacao; as outras recebem copia no encerramento
+  lancarSelecionadas() {
+    const ids = Array.from(document.querySelectorAll('.sess-multi:checked')).map(c => c.value);
+    if (!ids.length) { popAviso('Marque ao menos uma sessao como "junto".'); return; }
+    fecharModal();
+    this._sessoesExtras = ids.slice(1);
+    this.abrirFolha(ids[0], true);
   },
 
   async criarEncaixe(pacienteId) {
@@ -766,18 +778,8 @@ window.MODULOS.programas = {
       sb.from('fichas_config').select('paciente_programa_id, tentativas, selecionado').eq('sessao_id', sessaoId)
     ]);
 
-    // Sessao encerrada NUNCA reabre para aplicar (para ninguem): os registros dela sao definitivos.
-    if (s.status === 'concluida') {
-      const hora = String(s.hora_inicio || '').slice(0, 5);
-      abrirModal('Sessao ja encerrada',
-        '<p class="sub" style="margin-bottom:12px">A sessao de <b>' + new Date(s.data + 'T12:00:00').toLocaleDateString('pt-BR') + ' as ' + hora +
-        '</b> foi encerrada e seus programas nao podem ser alterados. Para aplicar de novo, use outra sessao ou crie um encaixe.</p>' +
-        '<div class="barra-acoes">' +
-        '<button class="btn btn-fantasma" onclick="fecharModal(); MODULOS.programas.docEvolucaoDiaria(\'' + sessaoId + '\')">Ver relatorio</button>' +
-        '<button class="btn btn-primario" onclick="fecharModal(); MODULOS.programas.abrirFolhaProntuario(\'' + s.paciente_id + '\')">Escolher outra sessao</button>' +
-        '</div>', false, 'agenda');
-      return;
-    }
+    // Sessao ja concluida: pode lancar programas mesmo assim (regra de 24/09) - os registros existentes sao atualizados
+    if (s.status === 'concluida') this._avisoConcluida = true; else this._avisoConcluida = false;
     const pps = rPps.data || [];
     const cfg = {}, selecionados = {};
     (rCfg.data || []).forEach(c => { cfg[c.paciente_programa_id] = c.tentativas; selecionados[c.paciente_programa_id] = c.selecionado !== false; });
@@ -872,7 +874,7 @@ window.MODULOS.programas = {
     if (f.etapa === 'selecionar' && f.programas.length) { this.desenharSelecao(); return; }
     if (this.celular() && f.programas.length) { this.desenharFolhaCelular(); return; }
 
-    let corpo = f.faixaComp || '';
+    let corpo = (this._avisoConcluida ? '<div class="mensagem-erro visivel" style="background:var(--st-warn-bg); color:#92400E; border-color:#FDE68A; margin-bottom:10px">Esta sessao ja estava concluida. O que voce lancar aqui atualiza os registros dela.</div>' : '') + (f.faixaComp || '');
     const doDia = this.programasDoDia();
     if (f.idx >= doDia.length) f.idx = Math.max(0, doDia.length - 1);
     const atual = doDia[f.idx];
@@ -1352,14 +1354,18 @@ window.MODULOS.programas = {
     })();
     // outras sessoes desta crianca no mesmo dia: a evolucao pode valer para todas (marcadas por padrao)
     (async () => {
-      const { data: irmas } = await sb.from('sessoes').select('id, hora_inicio, status, profissional:profiles!sessoes_aplicador_id_fkey(nome)')
-        .eq('paciente_id', f.sessao.paciente_id).eq('data', f.sessao.data).neq('id', f.sessao.id)
-        .in('status', ['agendada', 'checkin', 'em_atendimento']).order('hora_inicio');
+      const extras = this._sessoesExtras || [];
+      let q = sb.from('sessoes').select('id, data, hora_inicio, status, profissional:profiles!sessoes_aplicador_id_fkey(nome)')
+        .eq('paciente_id', f.sessao.paciente_id).neq('id', f.sessao.id).order('data').order('hora_inicio');
+      q = extras.length ? q.or('id.in.(' + extras.join(',') + '),and(data.eq.' + f.sessao.data + ',status.in.(agendada,checkin,em_atendimento))')
+                        : q.eq('data', f.sessao.data).in('status', ['agendada', 'checkin', 'em_atendimento']);
+      const { data: irmas } = await q;
       const alvo = document.getElementById('fe-irmas');
       if (!alvo || !irmas || !irmas.length) return;
-      alvo.innerHTML = '<div class="campo" style="margin-top:10px"><label>Esta evolucao vale tambem para <small class="sub">(outros horarios de hoje desta crianca; desmarque os que nao)</small></label>' +
-        irmas.map(x => '<label class="check" style="display:flex; margin:4px 0"><input type="checkbox" class="fe-irma" value="' + x.id + '" checked> ' +
-          String(x.hora_inicio).slice(0, 5) + ' &middot; ' + escaparHtml(x.profissional ? x.profissional.nome.split(' ').slice(0, 2).join(' ') : 'sem aplicador') + '</label>').join('') + '</div>';
+      alvo.innerHTML = '<div class="campo" style="margin-top:10px"><label>Gravar os mesmos programas e esta evolucao tambem em <small class="sub">(desmarque as que nao)</small></label>' +
+        irmas.map(x => '<label class="check" style="display:flex; margin:4px 0"><input type="checkbox" class="fe-irma" value="' + x.id + '"' + (extras.includes(x.id) || x.data === f.sessao.data ? ' checked' : '') + '> ' +
+          (x.data !== f.sessao.data ? x.data.split('-').reverse().join('/') + ' ' : '') + String(x.hora_inicio).slice(0, 5) + ' &middot; ' + escaparHtml(x.profissional ? x.profissional.nome.split(' ').slice(0, 2).join(' ') : 'sem aplicador') +
+          (x.status === 'concluida' ? ' <span class="selo selo-neutro">ja concluida</span>' : '') + '</label>').join('') + '</div>';
     })();
   },
 
@@ -1441,20 +1447,28 @@ window.MODULOS.programas = {
 
       // Crianca com 2+ horarios no mesmo dia: a evolucao vale para todos - conclui os demais e espelha o texto
       try {
-        const marcadas = new Set(Array.from(document.querySelectorAll('.fe-irma:checked')).map(c => c.value));
-        const { data: irmasTodas } = await sb.from('sessoes').select('id, hora_inicio, status')
-          .eq('paciente_id', f.sessao.paciente_id).eq('data', f.sessao.data).neq('id', f.sessao.id)
-          .in('status', ['agendada', 'checkin', 'em_atendimento']);
-        const irmas = (irmasTodas || []).filter(x => marcadas.has(x.id));
+        const marcadas = Array.from(document.querySelectorAll('.fe-irma:checked')).map(c => c.value);
+        const { data: irmasTodas } = marcadas.length
+          ? await sb.from('sessoes').select('id, data, hora_inicio, status').in('id', marcadas) : { data: [] };
+        const irmas = irmasTodas || [];
         if (irmas && irmas.length) {
           const ids = irmas.map(x => x.id);
           { const { error: _e } = await sb.from('sessoes').update({ status: 'concluida' }).in('id', ids); if (_e) popAviso('Nao foi possivel gravar (sessoes): ' + _e.message); }
+          // copia dos programas (tentativas + resumo) para cada sessao marcada
+          const { data: tent } = await sb.from('registros_tentativas').select('paciente_programa_id, ordem, resposta, acertou, estimulo_id, reforcador').eq('sessao_id', f.sessao.id);
+          const { data: res } = await sb.from('programa_sessao_registros').select('paciente_programa_id, tentativas, tentativas_sessao, tentativas_previstas, corretos, pct_corretos, acertos, pct_acertos, nao_aplicado, motivo_nao_aplicado').eq('sessao_id', f.sessao.id);
+          for (const sid of ids) {
+            await sb.from('registros_tentativas').delete().eq('sessao_id', sid);
+            if (tent && tent.length) await sb.from('registros_tentativas').insert(tent.map(t => ({ ...t, sessao_id: sid, registrado_por: window.CORTEX_SESSAO.user.id })));
+            if (res && res.length) await sb.from('programa_sessao_registros').upsert(res.map(r => ({ ...r, sessao_id: sid })), { onConflict: 'sessao_id,paciente_programa_id' });
+          }
           { const { error: _e } = await sb.from('evolucoes').upsert(irmas.map(x => ({
             sessao_id: x.id, paciente_id: f.sessao.paciente_id, aplicador_id: window.CORTEX_SESSAO.user.id,
             texto: texto, destinacao: document.getElementById('fe-destinacao').value.trim() || null, espelho_de: f.sessao.id
           })), { onConflict: 'sessao_id' }); if (_e) popAviso('Nao foi possivel gravar (evolucoes): ' + _e.message); }
-          popAviso('Evolucao lancada. Os outros ' + irmas.length + ' horario(s) de hoje desta crianca (' +
-            irmas.map(x => String(x.hora_inicio).slice(0, 5)).join(', ') + ') foram concluidos com a mesma evolucao.');
+          popAviso('Programas e evolucao gravados tambem em ' + irmas.length + ' sessao(oes): ' +
+            irmas.map(x => x.data.split('-').reverse().join('/').slice(0, 5) + ' ' + String(x.hora_inicio).slice(0, 5)).join(', ') + '.');
+          this._sessoesExtras = [];
         }
       } catch (e) { /* nao trava o encerramento */ }
 

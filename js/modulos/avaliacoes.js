@@ -649,8 +649,9 @@ window.MODULOS.avaliacoes = {
 
     const concluidas = data.filter(x => x.status === 'concluida');
     // relatorios de avaliacao ja gerados (para trocar "Relatorio" por "Documento")
-    const { data: rels } = await sb.from('relatorios_avaliacao').select('avaliacao_id, avaliacoes_ids, tipo, status').eq('paciente_id', pacienteId);
+    const { data: rels } = await sb.from('relatorios_avaliacao').select('id, avaliacao_id, avaliacoes_ids, tipo, status, criado_em, gerado_em').eq('paciente_id', pacienteId).order('criado_em', { ascending: false });
     this._relAv = rels || [];
+    this._pacRelAv = pacienteId;
     let html = acoes;
     // Avaliacoes registradas fora do sistema (quadro geral importado): entram no vencimento, sem documento
     const externas = concluidas.filter(x => x.origem === 'importado');
@@ -699,7 +700,53 @@ window.MODULOS.avaliacoes = {
           : '') +
         '</div>';
     }
+    html += this.htmlRelatoriosAvaliacao(data);
     return html;
+  },
+
+  // ─────────────── Relatorios de avaliacao gravados (apagar para refazer: so coordenacao/direcao) ───────────────
+  podeApagarRelAv() {
+    const p = window.CORTEX_SESSAO && window.CORTEX_SESSAO.profile;
+    if (!p) return false;
+    if (typeof CORTEX_PERM_TUDO !== 'undefined' && CORTEX_PERM_TUDO) return true;
+    return ['coordenador', 'direcao'].includes(p.perfil) && perm('avaliacoes.relatorio') === 'E';
+  },
+  htmlRelatoriosAvaliacao(avs) {
+    const rels = this._relAv || [];
+    if (!rels.length) return '';
+    const NOME = { ss: 'Socially Savvy', qadi: 'QADI-R', portage: 'Portage' };
+    const pode = this.podeApagarRelAv();
+    const fmt = d => d ? new Date(d).toLocaleDateString('pt-BR') : '';
+    const linhas = rels.map(r => {
+      const ids = r.avaliacoes_ids && r.avaliacoes_ids.length ? r.avaliacoes_ids : [r.avaliacao_id];
+      const prots = ids.map(id => { const a = (avs || []).find(x => x.id === id); return a ? (NOME[a.protocolo] || a.protocolo) + ' ' + fmt(a.concluido_em) : '?'; });
+      const st = r.status === 'rascunho' ? '<span class="selo selo-warn">rascunho</span>' : '<span class="selo selo-ok">gerado ' + fmt(r.gerado_em) + '</span>';
+      const lista = '[' + ids.map(id => "'" + id + "'").join(',') + ']';
+      return '<div class="linha-doc">' +
+        (pode ? '<label class="check" style="margin-right:8px"><input type="checkbox" class="relav-chk" value="' + r.id + '"></label>' : '') +
+        '<div><b>' + (r.tipo === 'completo' ? 'Relatorio completo' : 'Relatorio de avaliacao') + '</b>' +
+        '<small>' + prots.join(' + ') + ' &middot; criado em ' + fmt(r.criado_em) + '</small></div>' +
+        '<div class="pac-selos">' + st +
+        '<button class="btn-chip" onclick="MODULOS.laudo_avaliacao.' + (r.status === 'rascunho' ? 'abrirEditor' : 'abrirDocumento') + '(' + lista + ')">Abrir</button>' +
+        '</div></div>';
+    }).join('');
+    return '<div class="cartao"><h3>Relatorios de avaliacao <span class="selo selo-neutro">' + rels.length + '</span></h3>' +
+      '<p class="sub" style="margin-bottom:8px">' + (pode ? 'Marque o(s) relatorio(s) que quer apagar para fazer de novo. Apagar nao mexe na avaliacao nem no que ja foi enviado ao portal.' : 'Relatorios elaborados a partir das avaliacoes concluidas.') + '</p>' +
+      linhas +
+      (pode ? '<div class="barra-acoes" style="margin-top:8px"><button class="btn btn-fantasma" onclick="MODULOS.avaliacoes.apagarRelAvSelecionados()">&#10005; Apagar selecionados</button></div>' : '') +
+      '</div>';
+  },
+  async apagarRelAvSelecionados() {
+    const ids = [...document.querySelectorAll('.relav-chk:checked')].map(c => c.value);
+    if (!ids.length) { popAviso('Marque ao menos um relatorio para apagar.'); return; }
+    const gerados = (this._relAv || []).filter(r => ids.includes(r.id) && r.status !== 'rascunho').length;
+    if (!await popConfirmar('Apagar ' + ids.length + ' relatorio(s) de avaliacao' + (gerados ? ' (' + gerados + ' ja gerado(s))' : '') + '?\n\nO texto escrito se perde e o relatorio volta a ser feito do zero. A avaliacao e os documentos ja enviados ao portal ou assinados continuam.',
+      { titulo: 'Apagar relatorios', ok: 'Apagar' })) return;
+    const { error, count } = await sb.from('relatorios_avaliacao').delete({ count: 'exact' }).in('id', ids);
+    if (error) { popAviso('Nao consegui apagar: ' + error.message); return; }
+    if (!count) { popAviso('Nada foi apagado (sem permissao no banco). Rode a policy relatorios_avaliacao_apagar_gestao.'); return; }
+    popAviso(count + ' relatorio(s) apagado(s).');
+    if (this._pacRelAv) MODULOS.pacientes.telaDetalhe(this._pacRelAv, 'avaliacao');
   },
 
   // ═══════════ DOCUMENTOS OFICIAIS DAS AVALIACOES (identidade Equilibrium) ═══════════

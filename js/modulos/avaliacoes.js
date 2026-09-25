@@ -491,7 +491,10 @@ window.MODULOS.avaliacoes = {
 
   // Reutilizado pela aba Avaliacao do prontuario
   // Botao "Devolutiva" da ultima aplicacao concluida do protocolo (qualquer protocolo)
+  // Devolutiva antiga (Sprint 8) desativada: o Relatorio de Avaliacao (laudo_avaliacao) a substitui.
   btnDevolutiva(concluidas, protocolo) {
+    return '';
+    // eslint-disable-next-line no-unreachable
     if (perm('pei.devolutiva') !== 'E') return '';
     const lista = concluidas.filter(a => a.protocolo === protocolo)
       .sort((a, b) => String(b.concluido_em || '').localeCompare(String(a.concluido_em || '')));
@@ -590,8 +593,7 @@ window.MODULOS.avaliacoes = {
         : '') +
       (av.status === 'concluida' && perm('pei') === 'E'
         ? '<div class="barra-acoes nao-imprime" style="margin-top:14px">' +
-          '<button class="btn btn-fantasma" onclick="MODULOS.pei.abrirDevolutiva(\'' + av.id + '\')">Relatorio de devolutiva</button>' +
-          '<span class="sub">O PEI e elaborado na aba PEI do prontuario do paciente.</span>' +
+          '<span class="sub">O Relatorio de Avaliacao sai pelo botao Relatorio da aba Avaliacao; o PEI e elaborado na aba PEI do prontuario.</span>' +
           '</div>'
         : '') +
       '</div>';

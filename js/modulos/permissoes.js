@@ -54,8 +54,7 @@ window.MODULOS.permissoes = {
     { chave: 'plano', rotulo: 'Plano Terapeutico', dica: 'V: consulta. E: elabora e renova.', subs: [
       ['plano.elaborar', 'Elaborar e renovar plano'] ] },
     { chave: 'pei', rotulo: 'PEI e Devolutiva', dica: 'V: consulta. E: elabora.', subs: [
-      ['pei.elaborar', 'Elaborar PEI'],
-      ['pei.devolutiva', 'Relatorio de devolutiva'] ] },
+      ['pei.elaborar', 'Elaborar PEI'] ] },
     { chave: 'relatorios', rotulo: 'Relatorios da crianca', dica: 'V: ve relatorios. E: elabora.', subs: [
       ['relatorios.sessao', 'Relatorio da sessao e compilados'],
       ['relatorios.mensal', 'Elaborar relatorio mensal'],

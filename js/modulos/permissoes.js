@@ -44,7 +44,7 @@ window.MODULOS.permissoes = {
       ['avaliacoes.relatorio', 'Gerar relatorio de avaliacao'],
       ['pei', 'Devolutiva e PEI (ver linha PEI)'] ] },
     { chave: 'programas', rotulo: 'Programas', dica: 'V: consulta. E: tudo abaixo.', subs: [
-      ['programas.menu', 'Menu Programas (biblioteca e estimulos)'],
+      ['programas.menu', 'Ver a lista de programas no menu Programas (sem ela, so Estimulos)'],
       ['programas.atribuir', 'Atribuir programa a crianca'],
       ['programas.lancar_pei', 'Lancar programa a partir da meta do PEI'],
       ['programas.biblioteca', 'Criar e editar programas da biblioteca'],

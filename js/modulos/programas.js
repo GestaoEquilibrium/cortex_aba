@@ -70,20 +70,17 @@ window.MODULOS.programas = {
   // ═══════════════════ MENU PROGRAMAS (Biblioteca | Estimulos) ═══════════════════
 
   async render(el) {
-    if (typeof podeMenuProgramas === 'function' && !podeMenuProgramas()) {
-      el.innerHTML = '<div class="cartao"><div class="vazio"><div class="simbolo-vazio">&#128274;</div>' +
-        '<strong>Biblioteca de programas</strong>A lista de programas e configurada pela coordenacao. ' +
-        'Os programas de cada crianca ficam na aba Programas do prontuario.</div></div>';
-      return;
-    }
+    // Sem 'programas.menu' (aplicadores): so a aba Estimulos; a lista de programas fica com a coordenacao
+    const soEstimulos = typeof podeMenuProgramas === 'function' && !podeMenuProgramas();
+    if (soEstimulos) this._subaba = 'estimulos';
     this._subaba = this._subaba || 'biblioteca';
     el.innerHTML =
       '<div class="pagina-cabecalho">' +
-      '  <div><h2 id="prog-titulo">Biblioteca de Programas</h2>' +
-      '  <p class="sub" id="prog-sub">Programas de ensino da clinica.</p></div>' +
+      '  <div><h2 id="prog-titulo">' + (soEstimulos ? 'Estimulos' : 'Biblioteca de Programas') + '</h2>' +
+      '  <p class="sub" id="prog-sub">' + (soEstimulos ? 'Banco de estimulos usados nas fichas. A lista de programas e configurada pela coordenacao.' : 'Programas de ensino da clinica.') + '</p></div>' +
       '  <div id="prog-acao-topo"></div>' +
       '</div>' +
-      '<div class="abas" style="margin-bottom:14px">' +
+      '<div class="abas" style="margin-bottom:14px' + (soEstimulos ? '; display:none' : '') + '">' +
       '  <button class="aba" data-sub="biblioteca" onclick="MODULOS.programas.trocarSubaba(\'biblioteca\')">Biblioteca</button>' +
       '  <button class="aba" data-sub="estimulos" onclick="MODULOS.programas.trocarSubaba(\'estimulos\')">Estimulos</button>' +
       '</div>' +
@@ -92,6 +89,7 @@ window.MODULOS.programas = {
   },
 
   trocarSubaba(sub) {
+    if (sub === 'biblioteca' && typeof podeMenuProgramas === 'function' && !podeMenuProgramas()) sub = 'estimulos';
     this._subaba = sub;
     document.querySelectorAll('.aba[data-sub]').forEach(b =>
       b.classList.toggle('ativa', b.dataset.sub === sub));

@@ -48,7 +48,7 @@ const NAVEGACAO = [
       { id: 'pacientes',  rotulo: 'Pacientes',  chave: 'pacientes' },
       { id: 'agenda',     rotulo: 'Agenda',     chave: 'agenda' },
       { id: 'avaliacoes', rotulo: 'Avaliacoes', chave: 'avaliacoes' },
-      { id: 'programas',  rotulo: 'Programas',  chave: 'programas.menu', perfis: ['coordenador', 'direcao', 'suporte'] }
+      { id: 'programas',  rotulo: 'Programas',  chave: 'programas' }
     ]
   },
   {

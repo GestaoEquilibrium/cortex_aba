@@ -315,6 +315,11 @@ window.MODULOS.laudo_avaliacao = {
       this._assinaturas.map(a => '<option value="' + escaparHtml(a.nome) + '"' + (a.nome === rel.assinatura_nome ? ' selected' : '') + '>' + escaparHtml(a.nome) + ' \u2014 ' + escaparHtml(a.titulo) + '</option>').join('') + '</select></div></div>' +
       '  <div class="cartao">' +
       campo('demanda', 'II. Descricao da demanda', rel.demanda, 3) +
+      (editavel
+        ? '<div class="campo" style="margin-bottom:10px"><label>III. Procedimento <small class="sub">(texto padrao da clinica; altere se precisar)</small> ' +
+          '<button type="button" class="btn-chip" style="margin-left:6px" onclick="MODULOS.laudo_avaliacao.restaurarProcedimento()">&#8634; Texto padrao</button></label>' +
+          '<textarea id="la-procedimento" rows="5" style="resize:vertical" oninput="MODULOS.laudo_avaliacao.salvarAuto()">' + escaparHtml((rel.procedimento || '').trim() || this.procedimentoPadrao(d)) + '</textarea></div>'
+        : (rel.procedimento ? '<div style="margin-bottom:10px"><b style="font-size:11.5px; text-transform:uppercase; letter-spacing:.04em">III. Procedimento (alterado)</b><p style="font-size:13px; line-height:1.7; white-space:pre-wrap; margin-top:3px">' + escaparHtml(rel.procedimento) + '</p></div>' : '')) +
       campo('analise', 'IV. Analise clinica (vinculo, engajamento, pares, comportamentos)', rel.analise, 7) +
       (d.protocolos.some(pr => pr.anterior) ? campo('comparativo', 'Analise comparativa das avaliacoes', rel.comparativo, 5) : '') +
       d.protocolos.map(pr => (d.completo ? '<h4 style="margin:12px 0 6px; color:var(--acao)">' + escaparHtml(this.NOME_PROT[pr.av.protocolo] || pr.av.protocolo) + '</h4>' : '') +
@@ -326,6 +331,13 @@ window.MODULOS.laudo_avaliacao = {
   },
 
   _timer: null,
+  procedimentoPadrao(d) {
+    return d.protocolos.map(pr => (this.PROCEDIMENTO[pr.av.protocolo] || '') + this.APLICACAO.replace('{N}', pr.nSessoes)).join('\n\n');
+  },
+  restaurarProcedimento() {
+    const el = document.getElementById('la-procedimento'); if (!el) return;
+    el.value = this.procedimentoPadrao(this._d); this.salvarAuto();
+  },
   colher() {
     const rel = this._rel, d = this._d;
     const v = id => document.getElementById('la-' + id)?.value.trim() || null;
@@ -334,7 +346,9 @@ window.MODULOS.laudo_avaliacao = {
     const ass = document.getElementById('la-ass');
     const a = ass ? this._assinaturas.find(x => x.nome === ass.value) : null;
     const anx = document.getElementById('la-anexos');
-    return { demanda: v('demanda') ?? rel.demanda, analise: v('analise') ?? rel.analise, comparativo: v('comparativo') ?? rel.comparativo,
+    const procEl = document.getElementById('la-procedimento');
+    const procedimento = procEl ? (procEl.value.trim() === this.procedimentoPadrao(d).trim() ? null : procEl.value.trim() || null) : rel.procedimento;
+    return { demanda: v('demanda') ?? rel.demanda, procedimento, analise: v('analise') ?? rel.analise, comparativo: v('comparativo') ?? rel.comparativo,
       areas, conclusao: v('conclusao') ?? rel.conclusao, incluir_anexos: anx ? anx.checked : rel.incluir_anexos,
       assinatura_nome: a ? a.nome : rel.assinatura_nome, assinatura_titulo: a ? a.titulo : rel.assinatura_titulo };
   },
@@ -375,7 +389,7 @@ window.MODULOS.laudo_avaliacao = {
     const txt = v => escaparHtml(v || '').replace(/\n/g, '<br>');
     const dataAss = rel.gerado_em ? new Date(rel.gerado_em) : new Date(d.av.concluido_em);
     const extenso = dataAss.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' });
-    const proc = d.protocolos.map(pr => (this.PROCEDIMENTO[pr.av.protocolo] || '') + this.APLICACAO.replace('{N}', pr.nSessoes)).join('\n\n');
+    const proc = (rel.procedimento || '').trim() || this.procedimentoPadrao(d);
     const blocoProt = pr => {
       const cats = pr.atual.areas.map(a => a.area);
       const series = [];

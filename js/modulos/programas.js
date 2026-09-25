@@ -70,6 +70,12 @@ window.MODULOS.programas = {
   // ═══════════════════ MENU PROGRAMAS (Biblioteca | Estimulos) ═══════════════════
 
   async render(el) {
+    if (typeof podeMenuProgramas === 'function' && !podeMenuProgramas()) {
+      el.innerHTML = '<div class="cartao"><div class="vazio"><div class="simbolo-vazio">&#128274;</div>' +
+        '<strong>Biblioteca de programas</strong>A lista de programas e configurada pela coordenacao. ' +
+        'Os programas de cada crianca ficam na aba Programas do prontuario.</div></div>';
+      return;
+    }
     this._subaba = this._subaba || 'biblioteca';
     el.innerHTML =
       '<div class="pagina-cabecalho">' +
@@ -926,6 +932,8 @@ window.MODULOS.programas = {
         '  <label>Nivel <select id="fr-niv-' + pp.id + '">' +
              niveis.map(v => '<option value="' + v + '">' + this.nomeNivel(v) + '</option>').join('') + '</select></label>' +
         '  <button class="btn-chip" onclick="MODULOS.programas.aplicarATodas(\'' + pp.id + '\')">Aplicar</button>' +
+        '  <label>Reforcador <input id="fr-ref-' + pp.id + '" list="lista-reforcadores" placeholder="digitar..." class="fr-ref"></label>' +
+        '  <button class="btn-chip" title="Poe este reforcador em todas as tentativas do programa" onclick="MODULOS.programas.reforcadorATodas(\'' + pp.id + '\')">Aplicar</button>' +
         '  <button class="btn-chip" onclick="MODULOS.programas.limparFicha(\'' + pp.id + '\')">Limpar tudo</button>' +
         '</div>' +
 
@@ -1018,8 +1026,9 @@ window.MODULOS.programas = {
       outros.map(n => '<button class="cel-nv' + (linha.resposta === n ? ' ativo' : '') + '" style="--nv:' + this.corUi(n) + '" onclick="MODULOS.programas.marcarCel(\'' + pp.id + '\', \'' + n + '\')"><b>' + n + '</b><span>' + escaparHtml(this.nomeNivel(n)) + '</span></button>').join('') +
       (niveis.includes('C') ? '<button class="cel-nv c' + (linha.resposta === 'C' ? ' ativo' : '') + '" style="--nv:' + this.corUi('C') + '" onclick="MODULOS.programas.marcarCel(\'' + pp.id + '\', \'C\')"><b>C</b><span>Correto (independente)</span></button>' : '') +
       '</div>' +
-      '<div class="cartao cel-ref"><small>REFORCADOR</small><input list="lista-reforcadores" value="' + escaparHtml(linha.reforcador || '') + '" placeholder="digitar..." ' +
-        'oninput="MODULOS.programas.mudarLinha(\'' + pp.id + '\', ' + t + ', \'reforcador\', this.value)"></div>' +
+      '<div class="cartao cel-ref"><small>REFORCADOR</small><div class="cel-ref-linha"><input id="cel-ref-' + pp.id + '" list="lista-reforcadores" value="' + escaparHtml(linha.reforcador || '') + '" placeholder="digitar..." ' +
+        'oninput="MODULOS.programas.mudarLinha(\'' + pp.id + '\', ' + t + ', \'reforcador\', this.value)">' +
+        '<button type="button" class="btn-chip" title="Usar este reforcador em todas as tentativas" onclick="MODULOS.programas.reforcadorATodasCel(\'' + pp.id + '\')">em todas</button></div></div>' +
       '<datalist id="lista-reforcadores">' + (f.reforcadores || []).map(r => '<option value="' + escaparHtml(typeof r === 'string' ? r : r.nome) + '">').join('') + '</datalist>' +
       '<div class="cel-nav">' +
       '  <button class="btn btn-fantasma" onclick="MODULOS.programas.irTentativa(' + (t - 1) + ')"' + (t === 0 ? ' disabled' : '') + '>&lsaquo; Anterior</button>' +
@@ -1218,6 +1227,24 @@ window.MODULOS.programas = {
     this._folha.fichas[ppId].forEach(l => { l.resposta = v; });
     this._sujo = true;
     this.desenharFolha();
+  },
+
+  // reforcador em todas as tentativas (mesma ideia do "Preencher rapido" de nivel)
+  reforcadorATodas(ppId, valor) {
+    let v = valor;
+    if (v === undefined) { const el = document.getElementById('fr-ref-' + ppId); v = el ? el.value : ''; }
+    v = (v || '').trim();
+    if (!v) { popAviso('Digite o reforcador antes de aplicar em todas as tentativas.'); return; }
+    this._folha.fichas[ppId].forEach(l => { l.reforcador = v; });
+    this._sujo = true;
+    this.desenharFolha();
+    if (navigator.vibrate) navigator.vibrate(12);
+  },
+  reforcadorATodasCel(ppId) {
+    const f = this._folha, grade = f.fichas[ppId];
+    const el = document.getElementById('cel-ref-' + ppId);
+    const v = ((el ? el.value : '') || grade[f.tIdx].reforcador || '').trim();
+    this.reforcadorATodas(ppId, v);
   },
 
   async limparFicha(ppId) {
@@ -1837,7 +1864,7 @@ window.MODULOS.programas = {
 
     // Avaliacoes concluidas na data da sessao (SS ganha mini-quadro por area)
     const { data: avsDia } = await sb.from('avaliacoes')
-      .select('id, protocolo, concluido_em')
+      .select('id, protocolo, concluido_em, areas_excluidas')
       .eq('paciente_id', s.paciente_id).eq('status', 'concluida');
     const doDia = (avsDia || []).filter(a =>
       a.concluido_em && a.concluido_em.slice(0, 10) === s.data);
@@ -1850,10 +1877,9 @@ window.MODULOS.programas = {
         const mapa = {};
         (resps || []).forEach(r => { mapa[r.item_id] = r.pontos; });
         avalHtml += '<div style="margin-bottom:6px"><b style="font-size:12px">Socially Savvy concluido nesta data</b>' +
-          MODULOS.avaliacoes.SS_AREAS.map(area => {
+          MODULOS.avaliacoes.ssAreasDe(av).map(area => {
             const itens = MODULOS.avaliacoes.itensSS.filter(i => i.area === area);
-            const r = itens.reduce((sm, i) => sm + (mapa[i.id] || 0), 0);
-            const pct = itens.length ? Math.round(r * 100 / (itens.length * 3)) : 0;
+            const pct = MODULOS.avaliacoes.ssPontuar(itens, mapa).pct || 0;
             return '<div style="display:flex; align-items:center; gap:8px; font-size:11px; margin-top:3px">' +
               '<span style="width:210px">' + area + '</span>' +
               '<span style="flex:1; height:7px; background:#E5EDF4; border-radius:5px; overflow:hidden">' +

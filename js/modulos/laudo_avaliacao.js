@@ -55,13 +55,13 @@ window.MODULOS.laudo_avaliacao = {
       await A.carregarItensSS();
       const { data: resps } = await sb.from('ss_respostas').select('item_id, pontos').eq('avaliacao_id', av.id);
       const mapa = {}; (resps || []).forEach(r => { mapa[r.item_id] = r.pontos; });
-      const areas = A.SS_AREAS.map(area => {
+      const areas = A.ssAreasDe(av).map(area => {
         const itens = A.itensSS.filter(i => i.area === area);
-        const r = itens.reduce((s, i) => s + (mapa[i.id] || 0), 0), max = itens.length * 3;
+        const p = A.ssPontuar(itens, mapa);
         const tx = i => (i.texto || '').toLowerCase().replace(/\.$/, '');
-        return { area, pct: max ? Math.round(r * 100 / max) : null,
+        return { area, pct: p.pct,
           presentes: itens.filter(i => (mapa[i.id] || 0) >= 2).map(tx),
-          ausentes: itens.filter(i => mapa[i.id] !== undefined && mapa[i.id] <= 1).map(tx) };
+          ausentes: itens.filter(i => mapa[i.id] !== undefined && mapa[i.id] >= 0 && mapa[i.id] <= 1).map(tx) };
       });
       const tot = areas.filter(a => a.pct !== null);
       return { areas, total: tot.length ? Math.round(tot.reduce((s, a) => s + a.pct, 0) / tot.length) : null, faixas: [] };
@@ -115,7 +115,7 @@ window.MODULOS.laudo_avaliacao = {
     ]);
     const protocolos = [];
     for (const a of avs) {
-      const { data: rAnt } = await sb.from('avaliacoes').select('id, protocolo, concluido_em').eq('paciente_id', pac.id).eq('protocolo', a.protocolo)
+      const { data: rAnt } = await sb.from('avaliacoes').select('id, protocolo, concluido_em, areas_excluidas').eq('paciente_id', pac.id).eq('protocolo', a.protocolo)
         .eq('status', 'concluida').lt('concluido_em', a.concluido_em).order('concluido_em', { ascending: false }).limit(1);
       const anteriorAv = rAnt && rAnt[0];
       const { data: rS } = await sb.from('sessoes').select('data').eq('paciente_id', pac.id).eq('status', 'concluida')
@@ -301,6 +301,7 @@ window.MODULOS.laudo_avaliacao = {
       (editavel ? ' &middot; rascunho salvo automaticamente' : ' &middot; gerado em ' + (rel.gerado_em ? new Date(rel.gerado_em).toLocaleString('pt-BR') : '-') + ' (travado)') + '</p></div>' +
       '  <div style="display:flex; gap:8px; flex-wrap:wrap">' +
       (editavel ? '<button class="btn btn-primario" onclick="MODULOS.laudo_avaliacao.gerarTravar()">&#128274; Gerar e travar</button>' : '') +
+      (travado && typeof podeReabrirRelatorio === 'function' && podeReabrirRelatorio() ? '<button class="btn btn-fantasma" title="So coordenacao/direcao: volta o relatorio para rascunho para corrigir" onclick="MODULOS.laudo_avaliacao.reabrir()">&#128275; Reabrir para editar</button>' : '') +
       '  <button class="btn btn-fantasma" onclick="MODULOS.laudo_avaliacao.doc()">&#128196; ' + (travado ? 'Documento' : 'Folha / Imprimir') + '</button>' +
       (travado ? pdfAssinadoBtn() : '') + '</div></div>' +
       '<div class="rm-split"><div class="rm-form">' +
@@ -347,6 +348,13 @@ window.MODULOS.laudo_avaliacao = {
   atualizarPrevia() {
     const alvo = document.getElementById('la-previa');
     if (alvo) alvo.innerHTML = this.html(this._rel, this._d);
+  },
+  async reabrir() {
+    if (!podeReabrirRelatorio()) return;
+    if (!await popConfirmar('Reabrir este relatorio de avaliacao para edicao?\n\nEle volta a rascunho. O que ja foi enviado ao portal ou assinado continua como estava; depois de corrigir, gere e trave de novo (e reenvie/reassine se precisar).', { titulo: 'Reabrir relatorio', ok: 'Reabrir' })) return;
+    const { data, error } = await sb.rpc('fn_reabrir_relatorio', { p_tabela: 'relatorios_avaliacao', p_id: this._rel.id });
+    if (error || (data && data.erro)) { popAviso('Nao consegui reabrir: ' + (error ? error.message : data.erro)); return; }
+    this.abrirEditor(this._rel.avaliacoes_ids && this._rel.avaliacoes_ids.length ? this._rel.avaliacoes_ids : this._rel.avaliacao_id);
   },
   async gerarTravar() {
     clearTimeout(this._timer);

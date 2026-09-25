@@ -48,7 +48,7 @@ const NAVEGACAO = [
       { id: 'pacientes',  rotulo: 'Pacientes',  chave: 'pacientes' },
       { id: 'agenda',     rotulo: 'Agenda',     chave: 'agenda' },
       { id: 'avaliacoes', rotulo: 'Avaliacoes', chave: 'avaliacoes' },
-      { id: 'programas',  rotulo: 'Programas',  chave: 'programas' }
+      { id: 'programas',  rotulo: 'Programas',  chave: 'programas.menu', perfis: ['coordenador', 'direcao', 'suporte'] }
     ]
   },
   {
@@ -475,6 +475,21 @@ async function carregarPermissoes(perfil) {
   (data || []).forEach(r => { CORTEX_PERMS[r.chave] = r.nivel; });
 }
 
+// Menu Programas (biblioteca/estimulos): chave propria 'programas.menu'. Sem linha na matriz, so gestao.
+function podeMenuProgramas() {
+  if (CORTEX_PERM_TUDO) return true;
+  if (CORTEX_PERMS['programas.menu'] !== undefined) return CORTEX_PERMS['programas.menu'] !== '';
+  const p = window.CORTEX_SESSAO && window.CORTEX_SESSAO.profile;
+  return !!p && ['coordenador', 'direcao', 'suporte'].includes(p.perfil);
+}
+// Reabrir relatorio travado: so coordenacao/direcao (chave 'relatorios.reabrir' + trava por perfil)
+function podeReabrirRelatorio() {
+  const p = window.CORTEX_SESSAO && window.CORTEX_SESSAO.profile;
+  if (!p) return false;
+  if (CORTEX_PERM_TUDO) return true;
+  if (!['coordenador', 'direcao'].includes(p.perfil)) return false;
+  return CORTEX_PERMS['relatorios.reabrir'] !== undefined ? CORTEX_PERMS['relatorios.reabrir'] === 'E' : true;
+}
 // perm('pacientes') -> 'E' | 'V' | ''
 // Subchaves ('programas.atribuir') herdam do modulo ('programas') enquanto nao forem definidas.
 function perm(chave) {

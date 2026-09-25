@@ -91,7 +91,7 @@ window.MODULOS.pei = {
     el.innerHTML = '<div class="cartao"><p class="sub">Preparando metas candidatas...</p></div>';
 
     const { data: avInfo } = avaliacaoId
-      ? await sb.from('avaliacoes').select('protocolo').eq('id', avaliacaoId).single()
+      ? await sb.from('avaliacoes').select('protocolo, areas_excluidas').eq('id', avaliacaoId).single()
       : { data: null };
     const ehSS = avInfo && avInfo.protocolo === 'ss';
 
@@ -110,8 +110,9 @@ window.MODULOS.pei = {
         .select('item_id, pontos').eq('avaliacao_id', avaliacaoId);
       const mapa = {};
       (resps || []).forEach(r => { mapa[r.item_id] = r.pontos; });
+      const areasAplic = MODULOS.avaliacoes.ssAreasDe(avInfo);
       candidatas = MODULOS.avaliacoes.itensSS
-        .filter(i => mapa[i.id] !== undefined && mapa[i.id] <= 2)
+        .filter(i => areasAplic.includes(i.area) && mapa[i.id] !== undefined && mapa[i.id] >= 0 && mapa[i.id] <= 2)
         .map(i => ({ area: i.area, ss_id: i.id, meta: i.texto,
                      marcada: mapa[i.id] === 2,
                      origem: 'Socially Savvy &middot; ' + i.codigo +

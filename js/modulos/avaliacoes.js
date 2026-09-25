@@ -12,6 +12,19 @@ window.MODULOS.avaliacoes = {
   SS_AREAS: ['Participacao Conjunta', 'Brincadeira Social', 'Autorregulacao',
              'Social/Emocional', 'Linguagem Social',
              'Comportamento de Sala de Aula/Grupo', 'Linguagem Nao-Verbal'],
+  // Socially Savvy: -1 = item nao aplicado (fora da conta); areas_excluidas (avaliacoes) = area inteira nao aplicada
+  SS_NA: -1,
+  ssAreasDe(av) {
+    const ex = (av && Array.isArray(av.areas_excluidas)) ? av.areas_excluidas : [];
+    return this.SS_AREAS.filter(a => !ex.includes(a));
+  },
+  // itens de uma area + mapa item_id -> pontos  =>  { r, max, pct (null se nada valido), na }
+  ssPontuar(itens, mapa) {
+    const validos = itens.filter(i => mapa[i.id] !== -1);
+    const r = validos.reduce((s, i) => s + (mapa[i.id] > 0 ? mapa[i.id] : 0), 0);
+    const max = validos.length * 3;
+    return { r, max, pct: max ? Math.round(r * 100 / max) : null, na: itens.length - validos.length };
+  },
   SS_ESCALA: [
     [0, 'Raramente ou nunca demonstra'],
     [1, 'Demonstra em poucas situacoes'],
@@ -265,10 +278,12 @@ window.MODULOS.avaliacoes = {
     const av = this.avaliacao;
     if (av.protocolo === 'ss') {
       const area = this._ssArea || this.SS_AREAS[0];
-      return { bloco: area, itens: this.itensSS.filter(i => i.area === area).map(i => ({ id: i.id, texto: i.texto, sub: i.codigo, resp: this.respSS[i.id] })),
-        opcoes: [['0', '0', '#94A3B8', 'Nunca / nao faz'], ['1', '1', '#E9586A', 'Raramente'], ['2', '2', '#F3B63D', 'As vezes'], ['3', '3', '#16A34A', 'Sempre / dominado']],
-        blocos: this.SS_AREAS.map(a => [a, a, this.itensSS.filter(i => i.area === a && this.respSS[i.id] !== undefined).length + '/' + this.itensSS.filter(i => i.area === a).length]),
-        total: this.itensSS.length, feitos: Object.keys(this.respSS).length };
+      const ex = (av.areas_excluidas || []);
+      const itensArea = ex.includes(area) ? [] : this.itensSS.filter(i => i.area === area);
+      return { bloco: area, itens: itensArea.map(i => ({ id: i.id, texto: i.texto, sub: i.codigo, resp: this.respSS[i.id] })),
+        opcoes: [['0', '0', '#94A3B8', 'Nunca / nao faz'], ['1', '1', '#E9586A', 'Raramente'], ['2', '2', '#F3B63D', 'As vezes'], ['3', '3', '#16A34A', 'Sempre / dominado'], ['-1', 'NA', '#64748B', 'Nao aplicado (fora da conta)']],
+        blocos: this.SS_AREAS.map(a => [a, a, ex.includes(a) ? 'nao aplicada' : this.itensSS.filter(i => i.area === a && this.respSS[i.id] !== undefined).length + '/' + this.itensSS.filter(i => i.area === a).length]),
+        total: this.itensSS.filter(i => !ex.includes(i.area)).length, feitos: Object.keys(this.respSS).length, areaExcluida: ex.includes(area) };
     }
     if (av.protocolo === 'portage') {
       const itens = this.itensPortage.filter(i => i.area === this._pArea && i.faixa === this._pFaixa);
@@ -305,10 +320,11 @@ window.MODULOS.avaliacoes = {
       (i
         ? '<div class="cel-ficha-cont"><b>Item ' + (this._mIdx + 1) + ' de ' + d.itens.length + '</b><small>' + escaparHtml(i.sub || '') + '</small></div>' +
           '<div class="cartao cel-item"><small>' + escaparHtml(i.sub || '') + '</small><p>' + escaparHtml(i.texto) + '</p></div>' +
-          '<div class="cel-resp' + (d.opcoes.length === 3 ? ' tres' : '') + '">' +
+          '<div class="cel-resp' + (d.opcoes.length === 3 ? ' tres' : d.opcoes.length === 5 ? ' cinco' : '') + '">' +
           d.opcoes.map(([v, r, cor, dica]) => '<button class="cel-nv' + (String(i.resp) === v ? ' ativo' : '') + '" style="--nv:' + cor + '" onclick="MODULOS.avaliacoes.responderCelular(\'' + v + '\')"><b>' + r + '</b>' + (dica ? '<span>' + dica + '</span>' : '') + '</button>').join('') +
           '</div>'
-        : '<div class="cartao"><p class="sub">Nenhum item neste bloco.</p></div>') +
+        : '<div class="cartao"><p class="sub">' + (d.areaExcluida ? 'Area marcada como <b>nao aplicada</b>: fica fora da pontuacao e do relatorio.' : 'Nenhum item neste bloco.') + '</p></div>') +
+      (av.protocolo === 'ss' ? '<div style="text-align:center; margin:6px 0"><button class="btn-chip" onclick="MODULOS.avaliacoes.alternarAreaSS(\'' + escaparHtml(d.bloco) + '\')">' + (d.areaExcluida ? '&#8634; Voltar a aplicar esta area' : '&#10005; Nao aplicar esta area') + '</button></div>' : '') +
       '<div class="cel-nav">' +
       '<button class="btn btn-fantasma" onclick="MODULOS.avaliacoes.irItem(' + (this._mIdx - 1) + ')"' + (this._mIdx === 0 ? ' disabled' : '') + '>&lsaquo; Anterior</button>' +
       (this._mIdx < d.itens.length - 1
@@ -869,7 +885,7 @@ window.MODULOS.avaliacoes = {
     const ov = this.abrirDocOverlay();
 
     const [rAvs, rPac] = await Promise.all([
-      sb.from('avaliacoes').select('id, concluido_em, contexto, duracao, avaliador:profiles!avaliacoes_avaliador_id_fkey(nome)')
+      sb.from('avaliacoes').select('id, concluido_em, contexto, duracao, areas_excluidas, avaliador:profiles!avaliacoes_avaliador_id_fkey(nome)')
         .eq('paciente_id', pacienteId).eq('protocolo', 'ss').eq('status', 'concluida')
         .order('concluido_em'),
       sb.from('pacientes').select('nome, data_nascimento').eq('id', pacienteId).single()
@@ -883,12 +899,16 @@ window.MODULOS.avaliacoes = {
     const mapa = {};
     (resps || []).forEach(r => { mapa[r.avaliacao_id + '|' + r.item_id] = r.pontos; });
 
-    // % por area em cada AV + total
+    // % por area em cada AV + total (area nao aplicada na AV = null; NA por item fora da conta)
+    const AREAS = this.SS_AREAS.filter(area => avs.some(av => this.ssAreasDe(av).includes(area)));
     const dados = avs.map(av => {
-      const porArea = this.SS_AREAS.map(area => {
+      const aplicadas = this.ssAreasDe(av);
+      const porArea = AREAS.map(area => {
+        if (!aplicadas.includes(area)) return { area, pct: null, r: 0, max: 0 };
         const itens = this.itensSS.filter(i => i.area === area);
-        const r = itens.reduce((s, i) => s + (mapa[av.id + '|' + i.id] || 0), 0);
-        return { area, pct: itens.length ? Math.round(r * 100 / (itens.length * 3)) : 0, r, max: itens.length * 3 };
+        const m = {}; itens.forEach(i => { if (mapa[av.id + '|' + i.id] !== undefined) m[i.id] = mapa[av.id + '|' + i.id]; });
+        const p = this.ssPontuar(itens, m);
+        return { area, pct: p.pct === null ? 0 : p.pct, r: p.r, max: p.max };
       });
       const totR = porArea.reduce((s, x) => s + x.r, 0);
       const totM = porArea.reduce((s, x) => s + x.max, 0);
@@ -900,18 +920,20 @@ window.MODULOS.avaliacoes = {
     // Tabela + graficos no formato da planilha SS (CONSOLIDADO): barras agrupadas, linhas e radar por AV
     const seriesAV = dados.map((d, i) => ({
       nome: 'AV' + (i + 1) + ' (' + fmtD(d.av.concluido_em) + ')', cor: this.COR_AV[i % 6],
-      valores: this.SS_AREAS.map(area => d.porArea.find(p => p.area === area).pct)
+      valores: AREAS.map(area => d.porArea.find(p => p.area === area).pct)
     }));
+    const naoAplicadas = this.SS_AREAS.filter(a => !AREAS.includes(a));
     const tabSS = this.gTabela(
       ['&Aacute;rea'].concat(dados.map((d, i) => 'AV' + (i + 1))),
-      this.SS_AREAS.map(area => [area].concat(dados.map(d => {
-        const x = d.porArea.find(p => p.area === area); return x.pct + '% <small>(' + x.r + '/' + x.max + ')</small>';
+      AREAS.map(area => [area].concat(dados.map(d => {
+        const x = d.porArea.find(p => p.area === area); return x.pct === null ? null : x.pct + '% <small>(' + x.r + '/' + x.max + ')</small>';
       }))).concat([['<b>Total geral</b>'].concat(dados.map(d => '<b>' + d.total + '%</b>'))]),
-      [null].concat(dados.map((d, i) => this.COR_AV[i % 6])));
+      [null].concat(dados.map((d, i) => this.COR_AV[i % 6]))) +
+      (naoAplicadas.length ? '<p style="font-size:10.5px; color:var(--eq-cinza); margin-top:4px">&Aacute;rea(s) n&atilde;o aplicada(s): ' + naoAplicadas.join(', ') + '.</p>' : '');
     const grafAreas = tabSS +
-      '<div style="margin-top:12px">' + this.gBarras(this.SS_AREAS, seriesAV) + '</div>' +
-      '<div style="margin-top:8px">' + this.gLinhas(this.SS_AREAS, seriesAV) + '</div>' +
-      '<div style="margin-top:8px">' + this.gRadar(this.SS_AREAS, seriesAV) + '</div>';
+      '<div style="margin-top:12px">' + this.gBarras(AREAS, seriesAV) + '</div>' +
+      '<div style="margin-top:8px">' + this.gLinhas(AREAS, seriesAV) + '</div>' +
+      '<div style="margin-top:8px">' + this.gRadar(AREAS, seriesAV) + '</div>';
 
     // Grafico 2: evolucao do total (bolinhas ligadas, nosso estilo)
     let grafTotal = '';
@@ -1148,17 +1170,27 @@ window.MODULOS.avaliacoes = {
   telaAplicacaoSS() {
     const av = this.avaliacao;
     if (this.celular()) { this.telaCelular(); return; }
-    const total = this.itensSS.length;
+    const total = this.itensSS.filter(i => !(av.areas_excluidas || []).includes(i.area)).length;
     const feitas = Object.keys(this.respSS).length;
 
+    const excl = av.areas_excluidas || [];
     let corpo = '';
     this.SS_AREAS.forEach(area => {
       const itens = this.itensSS.filter(i => i.area === area);
       if (!itens.length) return;
+      const fora = excl.includes(area);
       const feitasArea = itens.filter(i => this.respSS[i.id] !== undefined).length;
-      corpo += '<div class="cartao"><h3>' + area +
+      const chip = '<button type="button" class="btn-chip" style="margin-left:auto" onclick="MODULOS.avaliacoes.alternarAreaSS(\'' + escaparHtml(area) + '\')">' +
+        (fora ? '&#8634; Voltar a aplicar' : '&#10005; Nao aplicar esta area') + '</button>';
+      if (fora) {
+        corpo += '<div class="cartao" style="opacity:.75"><h3 style="display:flex; align-items:center; gap:8px">' + area +
+          ' <span class="selo selo-neutro">nao aplicada</span>' + chip + '</h3>' +
+          '<p class="sub">Esta area fica fora da pontuacao, dos graficos e do relatorio de avaliacao.</p></div>';
+        return;
+      }
+      corpo += '<div class="cartao"><h3 style="display:flex; align-items:center; gap:8px">' + area +
         ' <span class="selo selo-neutro" id="ss-cont-' + this.slugSS(area) + '">' +
-        feitasArea + '/' + itens.length + '</span></h3>' +
+        feitasArea + '/' + itens.length + '</span>' + chip + '</h3>' +
         itens.map(i =>
           '<div class="campo questao"><label><b style="color:var(--ink-muted); margin-right:6px">' +
           i.codigo + '</b>' + escaparHtml(i.texto) + '</label>' +
@@ -1168,6 +1200,9 @@ window.MODULOS.avaliacoes = {
             'title="' + this.SS_ESCALA[v][1] + '" ' +
             'onclick="MODULOS.avaliacoes.responderSS(this, ' + i.id + ', ' + v + ')">' + v + '</button>'
           ).join('') +
+          '<button type="button" class="seg seg-na' + (this.respSS[i.id] === -1 ? ' ativo' : '') + '" ' +
+            'title="Nao aplicado: este item fica fora da conta" ' +
+            'onclick="MODULOS.avaliacoes.responderSS(this, ' + i.id + ', -1)">NA</button>' +
           '</div></div>').join('') +
         '</div>';
     });
@@ -1194,6 +1229,7 @@ window.MODULOS.avaliacoes = {
       '</div>' +
       '<div class="niv-legenda" style="margin:4px 0 0">' +
       this.SS_ESCALA.map(([v, r]) => '<span class="niv-leg-item"><b>' + v + '</b> ' + r + '</span>').join('') +
+      '<span class="niv-leg-item"><b>NA</b> Nao aplicado (fora da conta)</span>' +
       '</div></div>' +
       corpo +
       '<div class="cartao"><div class="campo" style="margin:0"><label>Observacoes</label>' +
@@ -1202,6 +1238,46 @@ window.MODULOS.avaliacoes = {
   },
 
   slugSS(t) { return t.toLowerCase().replace(/[^a-z]/g, ''); },
+
+  // ─────────────── Areas nao aplicadas (avaliacoes.areas_excluidas) ───────────────
+  async salvarAreasSS(avId, areas, avLocal) {
+    const { error } = await sb.from('avaliacoes').update({ areas_excluidas: areas }).eq('id', avId);
+    if (error) { popAviso('Nao consegui guardar as areas: ' + error.message); return false; }
+    if (avLocal) avLocal.areas_excluidas = areas;
+    if (this.avaliacao && this.avaliacao.id === avId) this.avaliacao.areas_excluidas = areas;
+    return true;
+  },
+  async alternarAreaSS(area) {
+    const av = this.avaliacao; if (!av) return;
+    const atual = av.areas_excluidas || [];
+    const fora = atual.includes(area);
+    if (!fora && !await popConfirmar('Marcar "' + area + '" como nao aplicada?\n\nA area sai da pontuacao, dos graficos e do relatorio de avaliacao. Da para voltar atras.', { titulo: 'Nao aplicar area', ok: 'Nao aplicar' })) return;
+    const novas = fora ? atual.filter(a => a !== area) : atual.concat([area]);
+    if (!await this.salvarAreasSS(av.id, novas, av)) return;
+    this._mIdx = 0;
+    this.telaAplicacaoSS();
+  },
+  // depois de concluida: gestao ajusta as areas pelo resultado
+  async modalAreasSS(avId) {
+    const { data: av } = await sb.from('avaliacoes').select('id, areas_excluidas, status').eq('id', avId).single();
+    if (!av) return;
+    const ex = av.areas_excluidas || [];
+    abrirModal('Areas aplicadas nesta avaliacao',
+      '<p class="sub" style="margin-bottom:8px">Desmarque a area que nao foi aplicada. Ela sai da pontuacao, dos graficos e do relatorio de avaliacao.</p>' +
+      this.SS_AREAS.map(a => '<label class="check" style="display:flex; gap:8px; align-items:center; margin:6px 0"><input type="checkbox" class="ss-area-chk" value="' + escaparHtml(a) + '"' + (ex.includes(a) ? '' : ' checked') + '> ' + a + '</label>').join('') +
+      '<div class="barra-acoes"><button class="btn btn-fantasma" onclick="fecharModal()">Cancelar</button>' +
+      '<button class="btn btn-primario" onclick="MODULOS.avaliacoes.confirmarAreasSS(\'' + avId + '\')">Salvar</button></div>', false, 'evolucao');
+  },
+  async confirmarAreasSS(avId) {
+    const fora = [...document.querySelectorAll('.ss-area-chk')].filter(c => !c.checked).map(c => c.value);
+    if (fora.length >= this.SS_AREAS.length) { popAviso('Deixe ao menos uma area aplicada.'); return; }
+    if (!await this.salvarAreasSS(avId, fora)) return;
+    fecharModal();
+    const alvo = document.getElementById('av-resultado');
+    if (alvo) alvo.innerHTML = await this.htmlResultado(avId);
+    else if (this.avaliacao && this.avaliacao.id === avId && this.avaliacao.status !== 'concluida') this.telaAplicacaoSS();
+    else popAviso('Areas atualizadas. Reabra o resultado para ver a nova pontuacao.');
+  },
 
   async responderSS(botao, itemId, pontos) {
     const anterior = this.respSS[itemId];
@@ -1215,7 +1291,7 @@ window.MODULOS.avaliacoes = {
     if (error) {
       if (anterior === undefined) delete this.respSS[itemId];
       else this.respSS[itemId] = anterior;
-      alert('Falha ao salvar: ' + error.message);
+      popAviso('Falha ao salvar: ' + error.message);
       return;
     }
     const prog = document.getElementById('ss-progresso');
@@ -1243,11 +1319,13 @@ window.MODULOS.avaliacoes = {
   },
 
   async concluirSS() {
-    const total = this.itensSS.length;
-    const feitas = Object.keys(this.respSS).length;
+    const ex = (this.avaliacao && this.avaliacao.areas_excluidas) || [];
+    const itensAplic = this.itensSS.filter(i => !ex.includes(i.area));
+    const total = itensAplic.length;
+    const feitas = itensAplic.filter(i => this.respSS[i.id] !== undefined).length;
     if (feitas < total) {
-      alert('Faltam ' + (total - feitas) + ' item(ns) para pontuar. O Socially Savvy e concluido com os ' +
-        total + ' itens respondidos.');
+      popAviso('Faltam ' + (total - feitas) + ' item(ns) para pontuar. O Socially Savvy e concluido com os ' +
+        total + ' itens das areas aplicadas respondidos (use NA no item que nao foi aplicado).');
       return;
     }
     if (!await popConfirmar('Concluir a Avaliacao ' + this.numSS + ' do Socially Savvy? Depois ela fica somente leitura.')) return;
@@ -1269,21 +1347,24 @@ window.MODULOS.avaliacoes = {
     const mapa = {};
     (resps || []).forEach(r => { mapa[r.item_id] = r.pontos; });
 
-    const porArea = this.SS_AREAS.map(area => {
+    const porArea = this.ssAreasDe(av).map(area => {
       const itens = this.itensSS.filter(i => i.area === area);
-      const realizados = itens.reduce((s, i) => s + (mapa[i.id] || 0), 0);
-      const esperados = itens.length * 3;
-      return { area, realizados, esperados,
-               pct: esperados ? Math.round(realizados * 100 / esperados) : 0 };
+      const p = this.ssPontuar(itens, mapa);
+      return { area, realizados: p.r, esperados: p.max, na: p.na, pct: p.pct === null ? 0 : p.pct };
     });
     const totR = porArea.reduce((s, x) => s + x.realizados, 0);
-    const totE = porArea.reduce((s, x) => s + x.esperados, 0);
+    const totE = porArea.reduce((s, x) => s + x.esperados, 0) || 1;
+    const naoAplic = this.SS_AREAS.filter(a => !this.ssAreasDe(av).includes(a));
+    const podeAjustarAreas = perm('avaliacoes.ss') === 'E' || perm('avaliacoes.relatorio') === 'E';
+    const linhaAreas = '<p class="sub" style="margin:0 0 8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap">' +
+      (naoAplic.length ? '<span>Area(s) nao aplicada(s): <b>' + naoAplic.join(', ') + '</b></span>' : '<span>Todas as 7 areas aplicadas</span>') +
+      (podeAjustarAreas ? '<button class="btn-chip" onclick="MODULOS.avaliacoes.modalAreasSS(\'' + av.id + '\')">Ajustar areas</button>' : '') + '</p>';
 
     let tabela = '<table class="tabela-presenca"><thead><tr>' +
       '<th>Area de desenvolvimento social</th><th class="centro">Realizados</th>' +
       '<th class="centro">Esperados</th><th class="centro">%</th></tr></thead><tbody>' +
       porArea.map(x =>
-        '<tr><td>' + x.area + '</td><td class="centro">' + x.realizados + '</td>' +
+        '<tr><td>' + x.area + (x.na ? ' <small class="sub">(' + x.na + ' NA)</small>' : '') + '</td><td class="centro">' + x.realizados + '</td>' +
         '<td class="centro">' + x.esperados + '</td><td class="centro"><b>' + x.pct + '%</b></td></tr>').join('') +
       '<tr><td><b>TOTAL</b></td><td class="centro"><b>' + totR + '</b></td>' +
       '<td class="centro"><b>' + totE + '</b></td><td class="centro"><b>' +
@@ -1301,7 +1382,7 @@ window.MODULOS.avaliacoes = {
     // Consolidado: todas as aplicacoes concluidas do paciente
     let consolidado = '';
     const { data: todas } = await sb.from('avaliacoes')
-      .select('id, concluido_em').eq('paciente_id', av.paciente_id)
+      .select('id, concluido_em, areas_excluidas').eq('paciente_id', av.paciente_id)
       .eq('protocolo', 'ss').eq('status', 'concluida').order('concluido_em');
     if (todas && todas.length > 1) {
       const { data: todasResp } = await sb.from('ss_respostas')
@@ -1315,13 +1396,13 @@ window.MODULOS.avaliacoes = {
         todas.map((t, i) => '<th class="centro">AV ' + (i + 1) + '<br><small>' +
           new Date(t.concluido_em).toLocaleDateString('pt-BR').slice(0, 5) + '</small></th>').join('') +
         '</tr></thead><tbody>' +
-        this.SS_AREAS.map(area => {
+        this.SS_AREAS.filter(area => todas.some(t => this.ssAreasDe(t).includes(area))).map(area => {
           const itens = this.itensSS.filter(i => i.area === area);
           return '<tr><td>' + area + '</td>' +
             todas.map(t => {
-              const m = porAv[t.id] || {};
-              const r = itens.reduce((s, i) => s + (m[i.id] || 0), 0);
-              return '<td class="centro">' + Math.round(r * 100 / (itens.length * 3)) + '%</td>';
+              if (!this.ssAreasDe(t).includes(area)) return '<td class="centro">&mdash;</td>';
+              const p = this.ssPontuar(itens, porAv[t.id] || {});
+              return '<td class="centro">' + (p.pct === null ? '&mdash;' : p.pct + '%') + '</td>';
             }).join('') + '</tr>';
         }).join('') +
         '</tbody></table></div>';
@@ -1341,7 +1422,7 @@ window.MODULOS.avaliacoes = {
           (av.contexto ? 'Contexto: ' + escaparHtml(av.contexto) : '') +
           (av.contexto && av.duracao ? ' &middot; ' : '') +
           (av.duracao ? 'Duracao: ' + escaparHtml(av.duracao) : '') + '</p>' : '') +
-      tabela + grafico +
+      linhaAreas + tabela + grafico +
       (av.observacoes ? '<p class="sub" style="margin-top:10px">Obs.: ' + escaparHtml(av.observacoes) + '</p>' : '') +
       '</div>' + consolidado;
   },

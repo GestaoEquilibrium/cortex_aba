@@ -225,6 +225,7 @@ window.MODULOS.relatorios = {
       '  <div style="display:flex; gap:8px; flex-wrap:wrap">' +
       (editavel && perm('relatorios.gerar') === 'E' ? '<button class="btn btn-primario" onclick="MODULOS.relatorios.gerarTravar()">&#128274; Gerar e travar</button>' : '') +
       (travado && rel.status !== 'liberado' && perm('relatorios.portal') === 'E' ? '<button class="btn btn-fantasma" onclick="MODULOS.relatorios.liberar()">Liberar no portal</button>' : '') +
+      (travado && typeof podeReabrirRelatorio === 'function' && podeReabrirRelatorio() ? '<button class="btn btn-fantasma" title="So coordenacao/direcao: volta o relatorio para rascunho para corrigir" onclick="MODULOS.relatorios.reabrir()">&#128275; Reabrir para editar</button>' : '') +
       '  <button class="btn btn-fantasma" onclick="MODULOS.relatorios.docMensal()">&#128196; ' + (travado ? 'Documento' : 'Folha / Imprimir') + '</button>' +
       (travado ? pdfAssinadoBtn() : '') +
       '  </div></div>' +
@@ -321,6 +322,17 @@ window.MODULOS.relatorios = {
       texto: partes.join('\n\n'), html_snapshot: html, status: 'gerado',
       gerado_em: new Date().toISOString(), gerado_por: window.CORTEX_SESSAO.user.id })).eq('id', this._rel.id);
     if (error) { popAviso('Nao consegui gerar: ' + error.message); return; }
+    this.abrirEditor(this._rel.paciente_id, this._rel.mes.slice(0, 7));
+  },
+
+  async reabrir() {
+    if (!podeReabrirRelatorio()) return;
+    const noPortal = this._rel.status === 'liberado';
+    if (!await popConfirmar('Reabrir o relatorio de ' + this.mesRotulo(this._rel.mes.slice(0, 7)) + ' para edicao?\n\nEle volta a rascunho' +
+      (noPortal ? ' e a familia continua vendo no portal a versao que ja foi liberada' : '') + '. Depois de corrigir, gere e trave de novo' + (noPortal ? ' e libere outra vez' : '') + '.',
+      { titulo: 'Reabrir relatorio', ok: 'Reabrir' })) return;
+    const { data, error } = await sb.rpc('fn_reabrir_relatorio', { p_tabela: 'relatorios_mensais', p_id: this._rel.id });
+    if (error || (data && data.erro)) { popAviso('Nao consegui reabrir: ' + (error ? error.message : data.erro)); return; }
     this.abrirEditor(this._rel.paciente_id, this._rel.mes.slice(0, 7));
   },
 

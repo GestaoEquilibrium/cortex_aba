@@ -2520,6 +2520,14 @@
 .cel-resp { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .cel-resp.tres .cel-nv:first-child, .cel-resp.tres .cel-nv:nth-child(2) { min-height: 72px; }
 .cel-resp.tres .cel-nv:last-child { grid-column: 1 / -1; min-height: 48px; flex-direction: row; }
+.cel-resp.cinco .cel-nv:last-child { grid-column: 1 / -1; min-height: 44px; flex-direction: row; gap: 8px; }
+.cel-resp.cinco .cel-nv:last-child b { font-size: 15px; }
+.cel-ref-linha { display: flex; gap: 6px; align-items: center; }
+.cel-ref-linha input { flex: 1; min-width: 0; }
+.cel-ref-linha .btn-chip { white-space: nowrap; }
+.ficha-rapido .fr-ref { width: 130px; padding: 6px 8px; font-size: 12px; }
+.segmento .seg-na { color: var(--ink-soft); font-size: 11px; }
+.segmento .seg-na.ativo { background: #64748B; color: #fff; }
 .cel-resp .cel-nv b { font-size: 20px; }
 
 /* ── Portal da familia: azulejos ───────────────────────────────────── */

@@ -59,7 +59,8 @@ window.MODULOS.laudo_avaliacao = {
         const itens = A.itensSS.filter(i => i.area === area);
         const p = A.ssPontuar(itens, mapa);
         const tx = i => (i.texto || '').toLowerCase().replace(/\.$/, '');
-        return { area, pct: p.pct,
+        const n = v => itens.filter(i => mapa[i.id] === v).length;
+        return { area, pct: p.pct, niveis: { n3: n(3), n2: n(2), n1: n(1), n0: n(0), tot: n(0) + n(1) + n(2) + n(3) },
           presentes: itens.filter(i => (mapa[i.id] || 0) >= 2).map(tx),
           ausentes: itens.filter(i => mapa[i.id] !== undefined && mapa[i.id] >= 0 && mapa[i.id] <= 1).map(tx) };
       });
@@ -193,7 +194,7 @@ window.MODULOS.laudo_avaliacao = {
     const b = pr.anterior ? pr.anterior.areas.find(x => x.area === a.area) : null;
     if (a.pct === null) return 'Esta \u00e1rea n\u00e3o foi avaliada nesta aplica\u00e7\u00e3o.';
     const nPres = (a.presentes || []).length, nAus = (a.ausentes || []).length, tot = nPres + nAus;
-    const areaL = a.area.toLowerCase();
+    const areaL = this.nomeAreaDoc(a.area).toLowerCase();
     // 1o paragrafo: leitura clinica, no tom dos relatorios da clinica
     let t;
     if (b && b.pct !== null) {
@@ -213,7 +214,9 @@ window.MODULOS.laudo_avaliacao = {
     // 2o paragrafo: resultado por habilidade, de forma resumida (poucos exemplos, sem lista longa)
     const ex = arr => arr.slice(0, 2).join(' e ');
     let p2 = '';
-    if (tot) {
+    if (pr.av.protocolo === 'ss' && this.SS_DESC[a.area] && a.niveis && a.niveis.tot) {
+      p2 = this.paragrafoSS(a, ela);
+    } else if (tot) {
       p2 = (ela ? 'Ela' : 'Ele') + ' j\u00e1 demonstra ' + nPres + ' das ' + tot + ' habilidades avaliadas' +
         (nPres ? ', como ' + ex(a.presentes) : '') + '.';
       if (nAus) p2 += ' As que ainda n\u00e3o foram observadas' + (nAus <= 2 ? ' (' + ex(a.ausentes) + ')' : ', a exemplo de ' + ex(a.ausentes) + ',') +
@@ -221,6 +224,64 @@ window.MODULOS.laudo_avaliacao = {
       else p2 += ' Todas as habilidades da faixa foram observadas.';
     } else if (a.faltam && a.faltam.length) p2 = 'Ainda n\u00e3o apresenta dom\u00ednio de ' + ex(a.faltam) + ', que passam a compor as pr\u00f3ximas metas.';
     return (t.trim() + (p2 ? '\n\n' + p2 : '')).trim();
+  },
+  // Socially Savvy: descricao qualitativa por area (0 = nao possui, 1 = poucas vezes, 2 = tem mas inconsistente, 3 = consistente),
+  // no tom dos relatorios da clinica e sem transcrever os itens do protocolo.
+  SS_DESC: {
+    'Participacao Conjunta': {
+      forte: 'responde de forma consistente \u00e0s tentativas de intera\u00e7\u00e3o, orienta-se para o parceiro, acompanha o que lhe \u00e9 mostrado ou apontado e compartilha o interesse por objetos e eventos, alternando o olhar entre a pessoa e o item de interesse',
+      parcial: 'respostas de orienta\u00e7\u00e3o ao outro e de acompanhamento do olhar e do apontar',
+      foco: 'a iniciativa de compartilhar interesses (mostrar, apontar e comentar) e a manuten\u00e7\u00e3o do engajamento em atividades conjuntas por per\u00edodos mais longos' },
+    'Brincadeira Social': {
+      forte: 'brinca junto com os pares, aceita a entrada do outro na brincadeira, reveza materiais e turnos e sustenta jogos com regras e faz de conta de forma colaborativa',
+      parcial: 'brincadeira ao lado dos pares e trocas breves de materiais',
+      foco: 'o revezamento, a brincadeira cooperativa com regras e o faz de conta compartilhado com outras crian\u00e7as' },
+    'Autorregulacao': {
+      forte: 'tolera esperas e negativas, aceita transi\u00e7\u00f5es e mudan\u00e7as de rotina, segue combinados e utiliza estrat\u00e9gias adequadas para se acalmar e pedir ajuda diante de dificuldades',
+      parcial: 'aceita\u00e7\u00e3o de combinados e de transi\u00e7\u00f5es quando antecipadas pelo adulto',
+      foco: 'a toler\u00e2ncia \u00e0 frustra\u00e7\u00e3o diante de erros, perdas e da impossibilidade de acesso imediato ao que deseja, al\u00e9m da flexibilidade frente a mudan\u00e7as n\u00e3o antecipadas' },
+    'Social/Emocional': {
+      forte: 'reconhece e nomeia emo\u00e7\u00f5es em si e nos outros, expressa o que sente de forma adequada ao contexto e responde com empatia \u00e0s emo\u00e7\u00f5es das pessoas ao redor',
+      parcial: 'identifica\u00e7\u00e3o de emo\u00e7\u00f5es b\u00e1sicas e resposta ao afeto do outro',
+      foco: 'o reconhecimento e a nomea\u00e7\u00e3o das pr\u00f3prias emo\u00e7\u00f5es, a express\u00e3o adequada de sentimentos e a resposta emp\u00e1tica ao outro' },
+    'Linguagem Social': {
+      forte: 'cumprimenta, inicia e mant\u00e9m conversas, responde a perguntas, comenta e se mant\u00e9m no t\u00f3pico, adequando a comunica\u00e7\u00e3o ao interlocutor e ao contexto',
+      parcial: 'respostas a cumprimentos e a perguntas diretas',
+      foco: 'a iniciativa de conversar, a manuten\u00e7\u00e3o do t\u00f3pico por mais trocas e a espontaneidade da comunica\u00e7\u00e3o em diferentes contextos' },
+    'Comportamento de Sala de Aula/Grupo': {
+      forte: 'acompanha instru\u00e7\u00f5es dirigidas ao grupo, aguarda a vez, permanece na atividade pelo tempo esperado e participa de propostas coletivas, realizando transi\u00e7\u00f5es com autonomia',
+      parcial: 'perman\u00eancia em atividades de grupo e resposta a instru\u00e7\u00f5es coletivas com apoio',
+      foco: 'a aten\u00e7\u00e3o a instru\u00e7\u00f5es dirigidas ao grupo, a espera pela vez e a participa\u00e7\u00e3o sustentada em atividades coletivas' },
+    'Linguagem Nao-Verbal': {
+      forte: 'utiliza gestos, express\u00f5es faciais, orienta\u00e7\u00e3o corporal e tom de voz de forma coerente com o que comunica, e compreende os sinais n\u00e3o verbais dos outros',
+      parcial: 'uso de gestos e express\u00f5es faciais em situa\u00e7\u00f5es familiares',
+      foco: 'o uso e a leitura de sinais n\u00e3o verbais (gestos, express\u00f5es, dist\u00e2ncia e tom de voz) nas intera\u00e7\u00f5es' }
+  },
+  // nome da area como sai no documento (com acentos, no padrao dos relatorios antigos)
+  AREA_DOC: { 'Participacao Conjunta': 'Aten\u00e7\u00e3o Compartilhada', 'Autorregulacao': 'Autorregula\u00e7\u00e3o', 'Linguagem Nao-Verbal': 'Linguagem Social N\u00e3o-Verbal',
+    'Socializacao': 'Socializa\u00e7\u00e3o', 'Cognicao': 'Cogni\u00e7\u00e3o', 'Cognição': 'Cogni\u00e7\u00e3o' },
+  nomeAreaDoc(area) { return this.AREA_DOC[area] || area; },
+  paragrafoSS(a, ela) {
+    const D = this.SS_DESC[a.area], n = a.niveis, S = ela ? 'Ela' : 'Ele';
+    const deficit = n.n2 + n.n1 + n.n0;
+    const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+    if (a.pct >= 90) {
+      return S + ' ' + D.forte + '. Trata-se de uma habilidade plenamente estabelecida' +
+        (deficit ? ', recomendando-se apenas seguir ampliando ' + D.foco + ' em situa\u00e7\u00f5es de maior exig\u00eancia.' : ', que favorece a qualidade das intera\u00e7\u00f5es e serve de base para habilidades sociais mais complexas.');
+    }
+    if (a.pct >= 70) {
+      return S + ' ' + D.forte + ', ainda que parte dessas respostas ocorra de forma inconsistente, variando conforme o contexto e o parceiro de intera\u00e7\u00e3o' +
+        (n.n1 + n.n0 ? ', e algumas habilidades apare\u00e7am apenas em poucas situa\u00e7\u00f5es' : '') +
+        '. O treino segue voltado para ' + D.foco + ', buscando maior regularidade e generaliza\u00e7\u00e3o.';
+    }
+    if (a.pct >= 40) {
+      return S + ' j\u00e1 apresenta ' + D.parcial + ', por\u00e9m com pouca regularidade: das ' + n.tot + ' habilidades observadas, ' +
+        n.n3 + ' ocorre' + (n.n3 === 1 ? '' : 'm') + ' de forma consistente, ' + n.n2 + ' aparece' + (n.n2 === 1 ? '' : 'm') + ' sem regularidade e ' +
+        (n.n1 + n.n0) + ' raramente ou ainda n\u00e3o fo' + (n.n1 + n.n0 === 1 ? 'i observada' : 'ram observadas') +
+        '. A interven\u00e7\u00e3o deve priorizar ' + D.foco + '.';
+    }
+    return S + ' apresenta repert\u00f3rio inicial nesta \u00e1rea: ' + D.parcial + (n.n3 + n.n2 ? ' ocorrem apenas em poucas situa\u00e7\u00f5es, geralmente com apoio do adulto,' : ' ainda n\u00e3o foram observadas de forma funcional') +
+      ' e a maior parte das habilidades avaliadas ainda n\u00e3o se estabeleceu. ' + cap(D.foco) + ' passam a compor as metas priorit\u00e1rias do PEI.';
   },
   rascunhoConclusao(d) {
     const primeiro = d.pac.nome.split(' ')[0];
@@ -399,7 +460,7 @@ window.MODULOS.laudo_avaliacao = {
       return (d.completo ? '<h2 style="margin-top:10px"><span class="ponto deq-teal"></span>' + escaparHtml(this.NOME_PROT[pr.av.protocolo] || pr.av.protocolo) + ' <small>&middot; ' + fmt(pr.av.concluido_em) + '</small></h2>' : '') +
         '<div class="deq-caixa" style="margin-top:6px">' + grafico + '</div>' +
         pr.atual.areas.map(a =>
-          '<div class="deq-caixa deq-texto" style="margin-top:6px"><b>' + escaparHtml(a.area) + (a.pct === null ? '' : ' &ndash; ' + a.pct + '%') + '</b><br>' +
+          '<div class="deq-caixa deq-texto" style="margin-top:6px"><b>' + escaparHtml(this.nomeAreaDoc(a.area)) + (a.pct === null ? '' : ' &ndash; ' + a.pct + '%') + '</b><br>' +
           '<span style="color:var(--eq-cinza)">' + escaparHtml(this.AREA_TEXTO[a.area] || '') + '</span><br>' + txt((rel.areas || {})[this.chaveArea(pr, a.area)]) + '</div>').join('');
     };
     const anexos = rel.incluir_anexos && this._anexos ? d.protocolos.map(pr => this._anexos[pr.av.protocolo] || '').filter(Boolean) : [];

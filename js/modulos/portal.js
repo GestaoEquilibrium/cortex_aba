@@ -270,7 +270,7 @@ window.MODULOS.portal = {
   async docsPortal(pacId, nome) {
     const ov = this.novaJanela('Documentos de ' + nome);
     const { data } = await sb.from('portal_documentos')
-      .select('id, tipo, titulo, enviado_em')
+      .select('id, tipo, titulo, enviado_em, arquivo_path')
       .eq('paciente_id', pacId).order('enviado_em', { ascending: false });
     const lista = data || [];
     document.getElementById('portal-jan-corpo').innerHTML =
@@ -278,11 +278,18 @@ window.MODULOS.portal = {
         ? lista.map(d =>
             '<div class="linha-doc"><div><b>' + escaparHtml(d.titulo) + '</b>' +
             '<small>Enviado em ' + new Date(d.enviado_em).toLocaleDateString('pt-BR') + '</small></div>' +
-            '<button class="btn btn-primario" onclick="MODULOS.portal.verDoc(\'' + d.id + '\')">Ver documento</button>' +
+            (d.arquivo_path
+              ? '<button class="btn btn-primario" onclick="MODULOS.portal.abrirArquivo(\'' + d.arquivo_path + '\')">Abrir arquivo</button>'
+              : '<button class="btn btn-primario" onclick="MODULOS.portal.verDoc(\'' + d.id + '\')">Ver documento</button>') +
             '</div>').join('')
         : '<p class="sub">A coordenacao ainda nao enviou documentos. Eles aparecem aqui assim que forem liberados.</p>');
   },
 
+  async abrirArquivo(caminho) {
+    const { data, error } = await sb.storage.from('documentos').createSignedUrl(caminho, 600);
+    if (error || !data) { popAviso('Nao foi possivel abrir o arquivo agora. Tente de novo em instantes.'); return; }
+    window.open(data.signedUrl, '_blank');
+  },
   async verDoc(id) {
     const { data: d } = await sb.from('portal_documentos')
       .select('titulo, html').eq('id', id).single();

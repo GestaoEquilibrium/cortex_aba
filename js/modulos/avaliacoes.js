@@ -717,16 +717,28 @@ window.MODULOS.avaliacoes = {
     const fmt = d => d ? new Date(d).toLocaleDateString('pt-BR') : '-';
     const rels = this._relAv || [];
     const ord = concluidas.slice().sort((a, b) => String(b.concluido_em || '').localeCompare(String(a.concluido_em || '')));
-    return '<div class="cartao faixa-vermelho"><h3>Apagar avaliacoes <small class="sub">&middot; coordenacao</small></h3>' +
-      '<p class="sub" style="margin-bottom:8px">Marque a(s) avaliacao(oes) que precisam ser feitas de novo. Apagar tira a aplicacao, todas as respostas e os relatorios de avaliacao ligados a ela. Nao tem volta.</p>' +
+    const dataIso = d => d ? new Date(d).toISOString().slice(0, 10) : '';
+    return '<div class="cartao faixa-vermelho"><h3>Gerenciar avaliacoes <small class="sub">&middot; coordenacao</small></h3>' +
+      '<p class="sub" style="margin-bottom:8px">Ajuste a data de conclusao (muda o vencimento e as pendencias de reavaliacao) ou marque a(s) avaliacao(oes) que precisam ser feitas de novo. Apagar tira a aplicacao, todas as respostas e os relatorios ligados a ela. Nao tem volta.</p>' +
       ord.map(x => {
         const nRel = rels.filter(r => (r.avaliacoes_ids && r.avaliacoes_ids.length ? r.avaliacoes_ids : [r.avaliacao_id]).includes(x.id)).length;
-        return '<label class="linha-doc" style="cursor:pointer"><input type="checkbox" class="av-apagar-chk" value="' + x.id + '" style="margin-right:10px">' +
-          '<div style="flex:1"><b>' + (NOME[x.protocolo] || x.protocolo) + '</b><small>Concluida em ' + fmt(x.concluido_em) +
-          (x.origem === 'importado' ? ' &middot; externa' : '') + (nRel ? ' &middot; ' + nRel + ' relatorio(s) de avaliacao' : '') + '</small></div></label>';
+        return '<div class="linha-doc"><label style="display:flex; align-items:center; cursor:pointer; flex:1; gap:10px"><input type="checkbox" class="av-apagar-chk" value="' + x.id + '">' +
+          '<div><b>' + (NOME[x.protocolo] || x.protocolo) + '</b><small>Concluida em ' + fmt(x.concluido_em) +
+          (x.origem === 'importado' ? ' &middot; externa' : '') + (nRel ? ' &middot; ' + nRel + ' relatorio(s) de avaliacao' : '') + '</small></div></label>' +
+          '<label class="sub" style="display:flex; align-items:center; gap:6px; white-space:nowrap">data <input type="date" value="' + dataIso(x.concluido_em) + '" max="' + hojeLocal() + '" style="padding:5px 8px; font:inherit; font-size:12.5px" ' +
+          'onchange="MODULOS.avaliacoes.mudarDataAvaliacao(\'' + x.id + '\', this.value, this)"></label></div>';
       }).join('') +
       '<div class="barra-acoes" style="margin-top:8px"><button class="btn btn-fantasma" onclick="MODULOS.avaliacoes.apagarAvaliacoesSelecionadas()">&#10005; Apagar selecionadas</button></div>' +
       '</div>';
+  },
+  async mudarDataAvaliacao(id, valor, input) {
+    if (!valor) return;
+    if (!await popConfirmar('Alterar a data de conclusao desta avaliacao para ' + valor.split('-').reverse().join('/') + '?\n\nO vencimento (validade) e os avisos de reavaliacao passam a contar desta data.', { titulo: 'Alterar data', ok: 'Alterar' })) { if (this._pacRelAv) MODULOS.pacientes.telaDetalhe(this._pacRelAv, 'avaliacao'); return; }
+    const { error, count } = await sb.from('avaliacoes').update({ concluido_em: valor + 'T12:00:00-03:00' }, { count: 'exact' }).eq('id', id);
+    if (error || !count) { popAviso('Nao consegui alterar a data: ' + (error ? error.message : 'sem permissao no banco (policy avaliacoes_editar_gestao)')); return; }
+    if (input) input.style.borderColor = '#16A34A';
+    popAviso('Data alterada.');
+    if (this._pacRelAv) MODULOS.pacientes.telaDetalhe(this._pacRelAv, 'avaliacao');
   },
   async apagarAvaliacoesSelecionadas() {
     const ids = [...document.querySelectorAll('.av-apagar-chk:checked')].map(c => c.value);

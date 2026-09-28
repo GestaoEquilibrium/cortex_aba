@@ -2019,7 +2019,7 @@ window.MODULOS.programas = {
     const hoje = hojeLocal();
     const { data: ss } = await sb.from('sessoes')
       .select('id, data, hora_inicio, status, paciente_id, pacientes(nome)')
-      .eq('aplicador_id', eu).lte('data', hoje)
+      .eq('aplicador_id', eu).lte('data', hoje).gte('data', window.CORTEX_EVO_DESDE || '2000-01-01')
       .not('status', 'in', '("falta","cancelada")')
       .order('data', { ascending: false }).limit(60);
     const passadas = (ss || []).filter(s =>

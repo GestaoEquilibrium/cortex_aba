@@ -127,7 +127,7 @@ window.MODULOS.inicio = {
     // Minhas sessoes sem evolucao
     try {
       const { data: ss } = await sb.from('sessoes').select('id, data, status')
-        .eq('aplicador_id', eu).lte('data', hoje)
+        .eq('aplicador_id', eu).lte('data', hoje).gte('data', window.CORTEX_EVO_DESDE || '2000-01-01')
         .not('status', 'in', '("falta","cancelada")').limit(60);
       const passadas = (ss || []).filter(s => s.status === 'concluida' || s.data < hoje);
       if (passadas.length) {

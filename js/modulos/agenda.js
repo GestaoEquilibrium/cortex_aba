@@ -370,7 +370,7 @@ window.MODULOS.agenda = {
         '  <span class="ck-prof">&#128100; ' + escaparHtml(prof) +
         (s.salas ? ' <small>&middot; ' + escaparHtml(s.salas.nome) + '</small>' : '') + '</span>' +
         '  <div class="pac-selos">' + this.selosSessao(s) +
-        (s.status === 'concluida' && !this._comEvoDia.has(s.id)
+        (s.status === 'concluida' && !this._comEvoDia.has(s.id) && s.data >= (window.CORTEX_EVO_DESDE || '2000-01-01')
           ? '<span class="selo selo-sem-evo" title="A sessao foi concluida mas a evolucao ainda nao foi escrita.">&#9998; sem evolucao</span>' : '') +
         '</div>' +
         '</div></div>';
@@ -580,7 +580,7 @@ window.MODULOS.agenda = {
       corpo =
         '<div class="sess-grid">' +
         '  <div class="sess-col">' +
-        '    <p class="st-titulo">Data e horario</p>' +
+        '    <p class="st-titulo">Data e horario' + (podeOperar ? ' <button class="btn-chip" style="margin-left:6px" title="Alterar data, horario, duracao ou aplicador (vale tambem para sessao concluida)" onclick="MODULOS.agenda.editarSessao(\'' + id + '\')">&#9998; Editar</button>' : '') + '</p>' +
         '    <div class="sess-quando"><div class="dia-badge"><b>' + s.data.slice(8) + '</b><span>' + mesCurto + '</span></div>' +
         '      <div><b>' + dExt.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) + '</b>' +
         '      <p class="sub">' + s.hora_inicio.slice(0, 5) + ' &ndash; ' + fim + ' (' + (s.duracao_min || 40) + ' min)</p></div></div>' +
@@ -652,6 +652,42 @@ window.MODULOS.agenda = {
       '<div class="abas sess-abas">' + tab('resumo', 'Resumo') + tab('paciente', 'Dados do paciente') + tab('guias', 'Guias' + (guias.length ? ' <small>' + guias.length + '</small>' : '')) + tab('historico', 'Historico') + '</div>' +
       corpo, true, 'agenda');
     if (aba0 === 'historico') this.historicoSessao(s.id);
+  },
+
+  // ── Editar a sessao (data, horario, duracao, aplicador): gestao, inclusive depois de concluida
+  editarSessao(id) {
+    const m = this._sessaoModal; if (!m || m.s.id !== id) return;
+    const s = m.s;
+    const profs = (this.equipe || []).filter(p => p.ativo !== false);
+    abrirModal('Editar sessao',
+      '<div class="grade-form">' +
+      '  <div class="campo"><label>Data</label><input type="date" id="es-data" value="' + s.data + '"></div>' +
+      '  <div class="campo"><label>Horario</label><input type="time" id="es-hora" value="' + String(s.hora_inicio).slice(0, 5) + '"></div>' +
+      '  <div class="campo"><label>Duracao (min)</label><input type="number" id="es-dur" min="10" max="240" value="' + (s.duracao_min || 40) + '"></div>' +
+      '  <div class="campo"><label>Aplicador</label><select id="es-prof">' +
+      profs.map(p => '<option value="' + p.id + '"' + (p.id === s.aplicador_id ? ' selected' : '') + '>' + escaparHtml(p.nome) + '</option>').join('') +
+      '</select></div>' +
+      '</div>' +
+      (['concluida', 'falta'].includes(s.status) ? '<p class="sub" style="margin-top:8px">Esta sessao ja esta <b>' + s.status + '</b>: a alteracao muda a data/horario do registro, mas mantem a evolucao e as tentativas lancadas.</p>' : '') +
+      '<div class="mensagem-erro" id="es-erro"></div>' +
+      '<div class="barra-acoes"><button class="btn btn-fantasma" onclick="fecharModal()">Cancelar</button>' +
+      '<button class="btn btn-primario" id="es-salvar" onclick="MODULOS.agenda.salvarEdicaoSessao(\'' + id + '\')">Salvar</button></div>', false, 'agenda');
+  },
+  async salvarEdicaoSessao(id) {
+    const erro = document.getElementById('es-erro'); erro.classList.remove('visivel');
+    const dados = {
+      data: document.getElementById('es-data').value,
+      hora_inicio: document.getElementById('es-hora').value,
+      duracao_min: parseInt(document.getElementById('es-dur').value, 10) || 40,
+      aplicador_id: document.getElementById('es-prof').value
+    };
+    if (!dados.data || !dados.hora_inicio) { erro.textContent = 'Informe data e horario.'; erro.classList.add('visivel'); return; }
+    const b = document.getElementById('es-salvar'); b.disabled = true; b.textContent = 'Salvando...';
+    const { error, count } = await sb.from('sessoes').update(dados, { count: 'exact' }).eq('id', id);
+    if (error || !count) { erro.textContent = error ? this.traduzErro(error.message) : 'Nada foi alterado (sem permissao no banco).'; erro.classList.add('visivel'); b.disabled = false; b.textContent = 'Salvar'; return; }
+    fecharModal();
+    this.desenhar();
+    this.abrirSessao(id, 'resumo');
   },
 
   async editarObs(id) {

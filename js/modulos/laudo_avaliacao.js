@@ -114,6 +114,21 @@ window.MODULOS.laudo_avaliacao = {
         .gte('criado_em', new Date(new Date(av.concluido_em).getTime() - 60 * 86400000).toISOString()).lte('criado_em', av.concluido_em)
         .order('criado_em').limit(40)
     ]);
+    // Anamnese respondida pela familia: respostas em texto das secoes "Sobre a crianca" e "Comportamento" viram as queixas da demanda
+    let queixas = [];
+    try {
+      const { data: an } = await sb.from('anamneses').select('id').eq('paciente_id', pac.id).order('criado_em', { ascending: false }).limit(1);
+      if (an && an[0]) {
+        const [rQ, rR] = await Promise.all([
+          sb.from('anamnese_questoes').select('id, pergunta, tipo, secao, ordem').in('tipo', ['texto', 'texto_longo']).order('ordem'),
+          sb.from('anamnese_respostas').select('questao_id, resposta').eq('anamnese_id', an[0].id)
+        ]);
+        const resp = {}; (rR.data || []).forEach(r => { resp[r.questao_id] = r.resposta; });
+        const chave = /queixa|preocup|dificul|motivo|comport|desafio|problema|incomod|birra|agress|frustra|comunica|fala|intera|social|rotina|sono|alimenta/i;
+        queixas = (rQ.data || []).filter(q => ['GERAL', 'ABA'].includes(q.secao) && chave.test(q.pergunta || '') && (resp[q.id] || '').trim().length >= 8)
+          .map(q => ({ pergunta: q.pergunta, resposta: String(resp[q.id]).trim() }));
+      }
+    } catch (e) { queixas = []; }
     const protocolos = [];
     for (const a of avs) {
       const { data: rAnt } = await sb.from('avaliacoes').select('id, protocolo, concluido_em, areas_excluidas').eq('paciente_id', pac.id).eq('protocolo', a.protocolo)
@@ -130,7 +145,8 @@ window.MODULOS.laudo_avaliacao = {
       atual: p0.atual, anterior: p0.anterior, anteriorAv: p0.anteriorAv, nSessoes: p0.nSessoes,
       medico: rEnc.data && rEnc.data[0] ? rEnc.data[0].medico : null,
       freq: (rPlano.data && rPlano.data[0] && rPlano.data[0].frequencia_semanal) || (rEnc.data && rEnc.data[0] && rEnc.data[0].sessoes_semanais) || null,
-      evolucoes: rEvo.data || []
+      evolucoes: rEvo.data || [],
+      queixas
     };
   },
 
@@ -160,21 +176,101 @@ window.MODULOS.laudo_avaliacao = {
   primeiraFrase(t) { const m = String(t || '').replace(/Programas aplicados:[^\n]*\n?/i, '').replace(/Motivo dos nao aplicados:[^\n]*/i, '').trim().match(/^[^.!?\n]{15,220}[.!?]?/); return m ? m[0].trim() : ''; },
 
   // ─────────────── RASCUNHOS ───────────────
+  // CID-11 / CID-10 mais comuns na clinica -> nome por extenso
+  CID_NOME: {
+    '6A02': 'Transtorno do Espectro Autista (TEA)', 'F84': 'Transtorno do Espectro Autista (TEA)', 'F84.0': 'Transtorno do Espectro Autista (TEA)', 'F84.5': 'S\u00edndrome de Asperger (TEA)',
+    '6A05': 'Transtorno do D\u00e9ficit de Aten\u00e7\u00e3o e Hiperatividade (TDAH)', 'F90': 'Transtorno do D\u00e9ficit de Aten\u00e7\u00e3o e Hiperatividade (TDAH)', 'F90.0': 'Transtorno do D\u00e9ficit de Aten\u00e7\u00e3o e Hiperatividade (TDAH)',
+    '6A00': 'Transtorno do Desenvolvimento Intelectual', 'F70': 'Defici\u00eancia Intelectual', 'F71': 'Defici\u00eancia Intelectual',
+    '6A01': 'Transtorno do Desenvolvimento da Fala ou da Linguagem', 'F80': 'Transtorno do Desenvolvimento da Fala ou da Linguagem',
+    '6A03': 'Transtorno do Desenvolvimento da Aprendizagem', 'F81': 'Transtorno do Desenvolvimento da Aprendizagem',
+    '6A04': 'Transtorno do Desenvolvimento da Coordena\u00e7\u00e3o Motora', 'F82': 'Transtorno do Desenvolvimento da Coordena\u00e7\u00e3o Motora',
+    '6A06': 'Transtorno de Movimentos Estereotipados', 'R62': 'Atraso do Desenvolvimento', 'R62.0': 'Atraso do Desenvolvimento', 'F88': 'Atraso Global do Desenvolvimento',
+    'Q90': 'S\u00edndrome de Down', 'LD40': 'S\u00edndrome de Down', '6C51': 'Transtorno de Oposi\u00e7\u00e3o Desafiante', 'F91.3': 'Transtorno de Oposi\u00e7\u00e3o Desafiante'
+  },
+  diagnosticoTxt(cid) {
+    if (!cid) return '';
+    const cods = String(cid).split(/[,;\/]+| e /).map(c => c.trim()).filter(Boolean);
+    const nomes = cods.map(c => { const k = c.toUpperCase().replace(/\s/g, ''); const n = this.CID_NOME[k] || this.CID_NOME[k.split('.')[0]] || this.CID_NOME[k.slice(0, 4)]; return n ? n + ' (CID ' + c + ')' : 'CID ' + c; });
+    return nomes.join(' e ');
+  },
   rascunhoDemanda(d) {
     const p = d.pac, primeiro = p.nome.split(' ')[0];
-    const sexo = p.sexo === 'F' ? 'Paciente do sexo feminino, com ' : 'Paciente do sexo masculino, com ';
-    const enc = p.sexo === 'F' ? 'encaminhada' : 'encaminhado';
-    return sexo + this.idadeTxt(p.data_nascimento, d.av.concluido_em) + ', ' + enc + (d.medico ? ' por ' + d.medico : ' pelo m\u00e9dico(a)') +
+    const ela = p.sexo === 'F';
+    const sexo = ela ? 'Paciente do sexo feminino, com ' : 'Paciente do sexo masculino, com ';
+    const enc = ela ? 'encaminhada' : 'encaminhado';
+    const diag = this.diagnosticoTxt(p.cid);
+    let t = sexo + this.idadeTxt(p.data_nascimento, d.av.concluido_em) + ', ' + enc + (d.medico ? ' por ' + d.medico : ' pelo m\u00e9dico(a)') +
       ' para avalia\u00e7\u00e3o do desenvolvimento e comportamento infantil e planejamento da interven\u00e7\u00e3o terap\u00eautica fundamentada na An\u00e1lise do Comportamento Aplicada (ABA)' +
-      (p.cid ? ', em virtude do diagn\u00f3stico ' + p.cid : '') + (p.motivo_encaminhamento ? ', com foco atual em ' + p.motivo_encaminhamento : '') + '.';
+      (diag ? ', em virtude do diagn\u00f3stico de ' + diag : '') + (p.motivo_encaminhamento ? ', com foco em ' + p.motivo_encaminhamento : '') + '.';
+    // queixas dos pais (anamnese)
+    const q = (d.queixas || []).slice(0, 4).map(x => this.limparFrase(x.resposta, primeiro)).filter(Boolean);
+    if (q.length) {
+      t += '\n\nNa anamnese, os respons\u00e1veis relataram como principais queixas: ' +
+        q.map((x, i) => (i === q.length - 1 && q.length > 1 ? 'e ' : '') + x.replace(/\.$/, '')).join(q.length > 2 ? '; ' : ' ') + '.';
+    } else if (!p.motivo_encaminhamento) {
+      t += '\n\nAs principais queixas relatadas pela fam\u00edlia envolvem [descrever, conforme a anamnese].';
+    }
+    return t;
+  },
+  // normaliza uma frase de registro para entrar em texto corrido: sem "hoje", sem data, minuscula no inicio (menos nome proprio), sem ponto final duplicado
+  limparFrase(f, nome) {
+    let t = String(f || '').replace(/\s+/g, ' ').trim();
+    t = t.replace(/^(hoje|na sess\u00e3o de hoje|na sessao de hoje|nesta sess\u00e3o|nesta sessao|no atendimento de hoje|neste atendimento|na sess\u00e3o|na sessao|no dia \d{1,2}\/\d{1,2}(\/\d{2,4})?|\d{1,2}\/\d{1,2}(\/\d{2,4})?)[,:\s-]+/i, '');
+    t = t.replace(/^(o|a) paciente /i, nome ? nome + ' ' : '').replace(/^(o|a) (crian\u00e7a|crianca) /i, nome ? nome + ' ' : '');
+    if (nome) t = t.replace(new RegExp('^(o|a) ' + nome + '\\b', 'i'), nome);
+    if (!t) return '';
+    if (!(nome && t.startsWith(nome))) t = t.charAt(0).toLowerCase() + t.slice(1);
+    return t.replace(/[.;,\s]+$/, '');
+  },
+  // Analise: texto corrido, analitico e observacional, montado a partir das evolucoes do periodo (sem citar que e um compilado)
+  TEMAS_ANALISE: [
+    ['regulacao', /chor|birra|frustr|recus|negou|gritou|agress|bateu|jogou|fugiu|resist|dificuldade|n\u00e3o aceitou|nao aceitou|irritad|nervos|ansios|estereotip|auto-?les|desregul|se jogou|mordeu|cuspiu/i],
+    ['social', /pares|colega|outra crian|outro paciente|outras crian|dividiu|revez|esperou a vez|grupo|dupla|amig|cumpriment|compartilh/i],
+    ['transicoes', /transi|combinado|regra|esperar|aguard|cron[o\u00f4]metro|aceitou o n[a\u00e3]o|encerrar|finaliz|trocar de atividade|rotina|timer/i],
+    ['comunicacao', /pediu|falou|verbaliz|nomeou|palavra|frase|comunic|pecs|apontou|respondeu|conversou|mand|ecoic|tato\b|intraverbal/i],
+    ['adaptacao', /adapt|tranquil|chegou bem|entrou bem|engaj|particip|colabor|v[i\u00ed]nculo|feliz|animad|sorri|acolh|receptiv|disposi/i],
+    ['interesses', /gost|brincou de|escolheu|interess|prefer|jogo|desenh|massinha|slime|carrinho|bola|quebra|livro|m\u00fasica|musica|pintur|bloco|constru/i]
+  ],
+  frasesEvolucoes(d) {
+    const nome = d.pac.nome.split(' ')[0];
+    const out = [];
+    (d.evolucoes || []).slice(-25).forEach(e => {
+      const txt = String(e.texto || '').replace(/Programas aplicados:[^\n]*\n?/ig, '').replace(/Motivo dos nao aplicados:[^\n]*/ig, '').replace(/Destina[^\n]*:[^\n]*/ig, '');
+      txt.split(/(?<=[.!?])\s+|\n+/).map(f => f.trim()).filter(f => f.length >= 25 && f.length <= 230 && !/^(programas?|tentativas?|estimul|n[i\u00ed]vel|obs\.?:)/i.test(f))
+        .forEach(f => { const l = this.limparFrase(f, nome); if (l && !out.some(o => o.frase === l)) out.push({ frase: l, tema: /sem resist|tranquil|sem dificuldade|sem chor|sem birra|calm[oa]\b/i.test(f) ? 'adaptacao' : (this.TEMAS_ANALISE.find(([t, re]) => re.test(f)) || ['outro'])[0] }); });
+    });
+    return out;
   },
   rascunhoAnalise(d) {
     const primeiro = d.pac.nome.split(' ')[0];
-    const frases = d.evolucoes.map(e => this.primeiraFrase(e.texto)).filter(Boolean);
-    if (!frases.length) return 'Durante o processo de avalia\u00e7\u00e3o, ' + primeiro + ' ' + (d.pac.sexo === 'F' ? 'foi observada' : 'foi observado') + ' em sess\u00f5es individuais, com registro do v\u00ednculo terap\u00eautico, do engajamento nas atividades, da intera\u00e7\u00e3o com pares e dos comportamentos interferentes.';
-    const uniq = [...new Set(frases)].slice(-8);
-    return 'Durante o processo de avalia\u00e7\u00e3o, foi poss\u00edvel observar o desenvolvimento de ' + primeiro + ' ao longo das sess\u00f5es realizadas. Registros da equipe no per\u00edodo: ' +
-      uniq.map(f => '\u201c' + f + '\u201d').join('; ') + '.\n\nCom base no conjunto de observa\u00e7\u00f5es, ' + primeiro + ' vem apresentando adapta\u00e7\u00e3o \u00e0 rotina terap\u00eautica e fortalecimento do v\u00ednculo com a equipe.';
+    const ela = d.pac.sexo === 'F';
+    const S = ela ? 'ela' : 'ele';
+    const frases = this.frasesEvolucoes(d);
+    const por = t => frases.filter(f => f.tema === t).slice(-3).map(f => f.frase.replace(new RegExp('^' + primeiro + '\\b'), S));
+    const junta = arr => arr.length === 1 ? arr[0] : arr.length === 2 ? arr[0] + ' e ' + arr[1] : arr.slice(0, -1).join(', ') + ' e ' + arr[arr.length - 1];
+    const ad = por('adaptacao'), inte = por('interesses'), soc = por('social'), com = por('comunicacao'), reg = por('regulacao'), tra = por('transicoes');
+    const P = [];
+    // 1) adaptacao e vinculo
+    P.push('Durante o processo de avalia\u00e7\u00e3o, ' + primeiro + (ad.length
+      ? ' demonstrou boa adapta\u00e7\u00e3o ao ambiente terap\u00eautico: ' + junta(ad.slice(0, 2)) + '.'
+      : ' foi ' + (ela ? 'observada' : 'observado') + ' em sess\u00f5es individuais, com aten\u00e7\u00e3o ao v\u00ednculo terap\u00eautico, ao engajamento nas atividades propostas e \u00e0 forma como responde \u00e0s demandas do ambiente.') +
+      (inte.length ? ' \u00c9 uma crian\u00e7a que responde bem quando \u00e9 inclu\u00edda nas escolhas e no planejamento das atividades; nesse per\u00edodo, ' + junta(inte.slice(0, 2)) + '.' : ''));
+    // 2) social e comunicacao
+    if (soc.length || com.length) {
+      P.push((soc.length
+        ? 'Um ponto de destaque foi a sua participa\u00e7\u00e3o em situa\u00e7\u00f5es sociais: ' + junta(soc.slice(0, 2)) + ', o que indica habilidades sociais em desenvolvimento e sugere que o contexto de intera\u00e7\u00e3o \u00e9 um fator motivador para ' + S + '.'
+        : '') +
+        (com.length ? (soc.length ? ' No campo da comunica\u00e7\u00e3o, ' : 'No campo da comunica\u00e7\u00e3o, ') + junta(com.slice(0, 2)) + ', com respostas mais funcionais quando o adulto oferece modelo e espera a iniciativa da crian\u00e7a.' : ''));
+    }
+    // 3) transicoes e regras
+    if (tra.length) P.push('Tamb\u00e9m foram observados avan\u00e7os na capacidade de respeitar o tempo de cada atividade e de lidar com transi\u00e7\u00f5es, especialmente quando as regras s\u00e3o combinadas com anteced\u00eancia: ' + junta(tra.slice(0, 2)) + '. Nesses arranjos, ' + S + ' precisou de menos apoio para encerrar atividades, o que mostra progresso no controle inibit\u00f3rio e na flexibilidade.');
+    // 4) dificuldades
+    P.push(reg.length
+      ? 'Por outro lado, ainda s\u00e3o observadas dificuldades em situa\u00e7\u00f5es de maior exig\u00eancia ou frustra\u00e7\u00e3o: ' + junta(reg.slice(0, 3)) + '. Esses momentos t\u00eam sido manejados pela equipe com acolhimento, antecipa\u00e7\u00e3o e refor\u00e7o positivo, e seguem sendo trabalhados nos programas terap\u00eauticos.'
+      : 'As dificuldades observadas concentram-se nas situa\u00e7\u00f5es de maior exig\u00eancia, em que ' + S + ' ainda depende do apoio do adulto para se organizar e sustentar a resposta esperada; esses momentos t\u00eam sido manejados pela equipe com acolhimento, antecipa\u00e7\u00e3o e refor\u00e7o positivo.');
+    // 5) fechamento
+    P.push('De forma geral, ' + primeiro + ' \u00e9 uma crian\u00e7a com bom potencial de desenvolvimento, que evolui de maneira consistente quando o ambiente \u00e9 estruturado, as expectativas s\u00e3o claras e o v\u00ednculo com a equipe est\u00e1 estabelecido.');
+    return P.filter(Boolean).join('\n\n');
   },
   rascunhoComparativo(d, pr) {
     pr = pr || d.protocolos[0];

@@ -43,7 +43,8 @@ window.MODULOS.pacientes = {
       '    <button type="button" data-modo="detalhada" onclick="MODULOS.pacientes.mudarModo(\'detalhada\')">Detalhada</button>' +
       '  </div>' +
       '  <select id="pac-status" onchange="MODULOS.pacientes.filtrar()">' +
-      '    <option value="">Todos os status</option>' +
+      '    <option value="">Em acompanhamento</option>' +
+      '    <option value="todos">Todos (com encerrados)</option>' +
       '    <option value="triagem">Triagem</option>' +
       '    <option value="avaliacao">Avaliacao</option>' +
       '    <option value="ativo">Ativo</option>' +
@@ -152,7 +153,7 @@ window.MODULOS.pacientes = {
     const filtrados = this.dados.filter(p =>
       (!termo || p.nome.toLowerCase().includes(termo) ||
         p._todosResp.toLowerCase().includes(termo)) &&
-      (!status || p.status === status));
+      (status === 'todos' ? true : status ? p.status === status : p.status !== 'encerrado'));
 
     document.getElementById('pac-contagem').textContent =
       (['aplicador', 'terapeuta'].includes(this.sessao.profile.perfil)
@@ -378,6 +379,11 @@ window.MODULOS.pacientes = {
           (p.nivel ? 'Alterar nivel de intervencao' : 'Selecionar nivel de intervencao') + '</button>'
         : '') +
       '        <button class="btn-chip" onclick="MODULOS.pacientes.abrirAba(\'documentos\')">&#128196; Documentos</button>' +
+      (perm('pacientes.editar') === 'E' && ['coordenador', 'direcao', 'suporte'].includes(this.sessao.profile.perfil)
+        ? (p.status === 'encerrado'
+          ? '<button class="btn-chip" onclick="MODULOS.pacientes.reativar()">&#8634; Reativar acompanhamento</button>'
+          : '<button class="btn-chip" onclick="MODULOS.pacientes.modalEncerrar()">&#9211; Encerrar acompanhamento</button>')
+        : '') +
       '      </div>' +
       '    </div>' +
       '  </div>' +
@@ -453,8 +459,9 @@ window.MODULOS.pacientes = {
 
     if (id === 'visao') { alvo.innerHTML = this.htmlVisaoGeral(p); return; }
     if (id === 'documentos') {
-      alvo.innerHTML = this.htmlDocumentos(p) + '<div id="pac-assinados"></div><div id="pac-portal"><div class="cartao"><p class="sub">Carregando portal...</p></div></div>';
+      alvo.innerHTML = this.htmlDocumentos(p) + '<div id="pac-anexos"></div><div id="pac-assinados"></div><div id="pac-portal"><div class="cartao"><p class="sub">Carregando portal...</p></div></div>';
       this.listarAssinados(p.id);
+      this.listarAnexos(p.id);
       this.blocoPortal(p.id);
       return;
     }
@@ -571,6 +578,88 @@ window.MODULOS.pacientes = {
   },
 
   // PDFs assinados com certificado digital (gerados nos documentos)
+  // ─────────────── Documentos anexados (arquivos prontos: laudos, exames, relatorios externos) ───────────────
+  CATEGORIAS_ANEXO: ['Laudo medico', 'Relatorio externo', 'Exame', 'Documento escolar', 'Relatorio da clinica (arquivo)', 'Outro'],
+  podeAnexar() { return perm('pacientes.editar') === 'E' || perm('relatorios.portal') === 'E'; },
+  async listarAnexos(pacienteId) {
+    const alvo = document.getElementById('pac-anexos'); if (!alvo) return;
+    const { data, error } = await sb.from('documentos_externos').select('id, titulo, categoria, arquivo_path, mime, criado_em, portal_doc_id, enviado:profiles!documentos_externos_enviado_por_fkey(nome)')
+      .eq('paciente_id', pacienteId).order('criado_em', { ascending: false });
+    if (error) { alvo.innerHTML = '<div class="cartao"><p class="sub">Documentos anexados: ' + escaparHtml(error.message) + ' (rode o SQL da tabela documentos_externos).</p></div>'; return; }
+    const lista = data || [];
+    const pode = this.podeAnexar();
+    alvo.innerHTML = '<div class="cartao faixa-azul"><h3>Documentos anexados' +
+      (pode ? ' <button class="btn-chip" style="margin-left:8px" onclick="MODULOS.pacientes.modalAnexo()">+ Anexar arquivo</button>' : '') + '</h3>' +
+      '<p class="sub" style="margin-bottom:8px">Arquivos prontos (PDF, imagem, Word): laudos, exames, relatorios feitos fora do sistema. Podem ser liberados no portal da familia.</p>' +
+      (lista.length ? lista.map(d =>
+        '<div class="linha-doc"><div><b>' + escaparHtml(d.titulo) + '</b><small>' + escaparHtml(d.categoria || '') + ' &middot; ' + new Date(d.criado_em).toLocaleDateString('pt-BR') +
+        (d.enviado ? ' &middot; ' + escaparHtml(d.enviado.nome.split(' ').slice(0, 2).join(' ')) : '') + '</small></div>' +
+        '<div class="pac-selos">' + (d.portal_doc_id ? '<span class="selo selo-ok">no portal</span>' : '') +
+        '<button class="btn-chip" onclick="MODULOS.pacientes.abrirAnexo(\'' + d.arquivo_path + '\', \'' + escaparHtml(d.titulo).replace(/'/g, '') + '\', \'' + (d.mime || '') + '\')">Abrir</button>' +
+        (pode && !d.portal_doc_id && podeEnviarPortal() ? '<button class="btn-chip" onclick="MODULOS.pacientes.anexoPortal(\'' + d.id + '\')">&#128228; Portal</button>' : '') +
+        (pode ? '<button class="btn-chip" title="Apagar" onclick="MODULOS.pacientes.apagarAnexo(\'' + d.id + '\', \'' + d.arquivo_path + '\')">&#10005;</button>' : '') +
+        '</div></div>').join('') : '<p class="sub">Nenhum arquivo anexado.</p>') +
+      '</div>';
+  },
+  modalAnexo() {
+    abrirModal('Anexar arquivo &middot; ' + escaparHtml(this.paciente.nome),
+      '<div class="grade-form">' +
+      '  <div class="campo c2"><label>Titulo *</label><input id="ax-titulo" placeholder="Ex.: Laudo neuropediatra - Dr. Fulano (ago/26)"></div>' +
+      '  <div class="campo"><label>Categoria</label><select id="ax-cat">' + this.CATEGORIAS_ANEXO.map(c => '<option>' + c + '</option>').join('') + '</select></div>' +
+      '  <div class="campo"><label>Arquivo * <small>(PDF, JPG, PNG, DOCX; ate 15 MB)</small></label><input type="file" id="ax-arquivo" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,application/pdf,image/*"></div>' +
+      '  <div class="campo c2"><label class="check"><input type="checkbox" id="ax-portal"> Liberar tambem no portal da familia</label></div>' +
+      '</div>' +
+      '<div class="mensagem-erro" id="ax-erro"></div>' +
+      '<div class="barra-acoes"><button class="btn btn-fantasma" onclick="fecharModal()">Cancelar</button>' +
+      '<button class="btn btn-primario" id="ax-salvar" onclick="MODULOS.pacientes.salvarAnexo()">Anexar</button></div>', false, 'evolucao');
+  },
+  async salvarAnexo() {
+    const erro = document.getElementById('ax-erro'); erro.classList.remove('visivel');
+    const titulo = document.getElementById('ax-titulo').value.trim();
+    const arquivo = document.getElementById('ax-arquivo').files[0];
+    if (!titulo || !arquivo) { erro.textContent = 'Informe o titulo e escolha o arquivo.'; erro.classList.add('visivel'); return; }
+    if (arquivo.size > 15 * 1024 * 1024) { erro.textContent = 'Arquivo acima de 15 MB.'; erro.classList.add('visivel'); return; }
+    const b = document.getElementById('ax-salvar'); b.disabled = true; b.textContent = 'Enviando...';
+    try {
+      const ext = (arquivo.name.split('.').pop() || 'bin').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const caminho = 'pacientes/' + this.paciente.id + '/anexos/' + Date.now() + '.' + ext;
+      const { error: eU } = await sb.storage.from('documentos').upload(caminho, arquivo, { contentType: arquivo.type || 'application/octet-stream' });
+      if (eU) throw new Error('Arquivo: ' + eU.message);
+      const { data: novo, error } = await sb.from('documentos_externos').insert({
+        paciente_id: this.paciente.id, titulo, categoria: document.getElementById('ax-cat').value,
+        arquivo_path: caminho, mime: arquivo.type || null, tamanho: arquivo.size, enviado_por: this.sessao.user.id }).select('id').single();
+      if (error) throw new Error(error.message);
+      fecharModal();
+      if (document.getElementById('ax-portal') && document.getElementById('ax-portal').checked) await this.anexoPortal(novo.id, true);
+      this.telaDetalhe(this.paciente.id, 'documentos');
+    } catch (e) { erro.textContent = e.message; erro.classList.add('visivel'); b.disabled = false; b.textContent = 'Anexar'; }
+  },
+  async abrirAnexo(caminho, titulo, mime) {
+    const { data, error } = await sb.storage.from('documentos').createSignedUrl(caminho, 600);
+    if (error || !data) { popAviso('Nao foi possivel abrir o arquivo.'); return; }
+    if ((mime || '').includes('pdf') || /\.pdf$/i.test(caminho)) abrirModalPdf(titulo || 'Documento', data.signedUrl);
+    else window.open(data.signedUrl, '_blank');
+  },
+  async anexoPortal(id, silencioso) {
+    const { data: d } = await sb.from('documentos_externos').select('id, titulo, categoria, arquivo_path, paciente_id').eq('id', id).single();
+    if (!d) return;
+    const { data: pd, error } = await sb.from('portal_documentos').insert({
+      paciente_id: d.paciente_id, tipo: 'arquivo', titulo: d.titulo, arquivo_path: d.arquivo_path,
+      html: '<p>' + escaparHtml(d.titulo) + '</p>', enviado_por: this.sessao.user.id }).select('id').single();
+    if (error) { popAviso('Portal: ' + error.message); return; }
+    await sb.from('documentos_externos').update({ portal_doc_id: pd.id }).eq('id', id);
+    if (!silencioso) { popAviso('Liberado no portal da familia.'); this.listarAnexos(d.paciente_id); }
+  },
+  async apagarAnexo(id, caminho) {
+    if (!await popConfirmar('Apagar este arquivo? Se estiver no portal, some de la tambem.')) return;
+    const { data: d } = await sb.from('documentos_externos').select('portal_doc_id, paciente_id').eq('id', id).single();
+    if (d && d.portal_doc_id) await sb.from('portal_documentos').delete().eq('id', d.portal_doc_id);
+    const { error, count } = await sb.from('documentos_externos').delete({ count: 'exact' }).eq('id', id);
+    if (error || !count) { popAviso('Nao consegui apagar: ' + (error ? error.message : 'sem permissao')); return; }
+    await sb.storage.from('documentos').remove([caminho]);
+    this.listarAnexos(d ? d.paciente_id : this.paciente.id);
+  },
+
   async listarAssinados(pacienteId) {
     const alvo = document.getElementById('pac-assinados'); if (!alvo) return;
     const { data } = await sb.from('documentos_assinados').select('id, tipo, titulo, arquivo_path, assinante, criado_em')
@@ -853,6 +942,52 @@ window.MODULOS.pacientes = {
       '      onclick="MODULOS.pacientes.salvarNivel()">Definir nivel</button>' +
       '  </div>' +
       '</div>');
+  },
+
+  // ─────────────── Encerrar / reativar acompanhamento (paciente que saiu) ───────────────
+  modalEncerrar() {
+    const p = this.paciente;
+    abrirModal('Encerrar acompanhamento &middot; ' + escaparHtml(p.nome),
+      '<p class="sub" style="margin-bottom:10px">O paciente sai das listas, da agenda e das pendencias. O prontuario, as sessoes e os documentos ficam guardados e ele pode ser reativado depois.</p>' +
+      '<div class="grade-form">' +
+      '  <div class="campo"><label>Motivo</label><select id="enc-motivo">' +
+      ['Alta terapeutica', 'Desistencia da familia', 'Mudanca de cidade', 'Troca de clinica', 'Convenio / financeiro', 'Outro'].map(m => '<option>' + m + '</option>').join('') + '</select></div>' +
+      '  <div class="campo"><label>Data da saida</label><input type="date" id="enc-data" value="' + hojeLocal() + '"></div>' +
+      '  <div class="campo c2"><label>Observacao</label><input id="enc-obs" placeholder="opcional"></div>' +
+      '  <div class="campo c2"><label class="check"><input type="checkbox" id="enc-cancelar" checked> Cancelar as sessoes futuras e desligar os horarios fixos da grade</label></div>' +
+      '</div>' +
+      '<div class="mensagem-erro" id="enc-erro"></div>' +
+      '<div class="barra-acoes"><button class="btn btn-fantasma" onclick="fecharModal()">Voltar</button>' +
+      '<button class="btn btn-primario" id="enc-salvar" onclick="MODULOS.pacientes.encerrar()">Encerrar</button></div>', false, 'aviso');
+  },
+  async encerrar() {
+    const p = this.paciente, erro = document.getElementById('enc-erro'); erro.classList.remove('visivel');
+    const motivo = document.getElementById('enc-motivo').value, data = document.getElementById('enc-data').value || hojeLocal();
+    const obs = document.getElementById('enc-obs').value.trim();
+    const limpar = document.getElementById('enc-cancelar').checked;
+    const b = document.getElementById('enc-salvar'); b.disabled = true; b.textContent = 'Encerrando...';
+    try {
+      const { error, count } = await sb.from('pacientes').update({ status: 'encerrado', encerrado_em: data, motivo_encerramento: motivo + (obs ? ' - ' + obs : '') }, { count: 'exact' }).eq('id', p.id);
+      if (error) throw new Error(error.message);
+      if (!count) throw new Error('Nada foi alterado (sem permissao no banco).');
+      if (limpar) {
+        const { error: e1 } = await sb.from('grade_horarios').update({ ativo: false }).eq('paciente_id', p.id).eq('ativo', true);
+        if (e1) popAviso('Horarios da grade: ' + e1.message);
+        const { error: e2 } = await sb.from('sessoes').update({ status: 'cancelada', motivo_cancelamento: 'encerramento' })
+          .eq('paciente_id', p.id).gt('data', data).in('status', ['agendada', 'checkin']);
+        if (e2) popAviso('Sessoes futuras: ' + e2.message);
+      }
+      fecharModal();
+      popAviso('Acompanhamento encerrado.');
+      this.telaDetalhe(p.id);
+    } catch (e) { erro.textContent = e.message; erro.classList.add('visivel'); b.disabled = false; b.textContent = 'Encerrar'; }
+  },
+  async reativar() {
+    const p = this.paciente;
+    if (!await popConfirmar('Reativar o acompanhamento de ' + p.nome + '? Ele volta para as listas como Ativo (horarios da grade precisam ser recriados).')) return;
+    const { error } = await sb.from('pacientes').update({ status: 'ativo', encerrado_em: null, motivo_encerramento: null }).eq('id', p.id);
+    if (error) { popAviso('Erro: ' + error.message); return; }
+    this.telaDetalhe(p.id);
   },
 
   async salvarNivel() {

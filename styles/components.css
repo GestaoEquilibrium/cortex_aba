@@ -1793,7 +1793,10 @@
     .folha-pagina { box-shadow: none !important; border-radius: 0 !important; max-width: none !important; width: 100% !important;
                     padding: 0 !important; margin: 0 !important; background: #fff !important; }
     .rel-trilho { border: 1px solid #ddd; }
-    body > *:not(#rel-sessao-overlay):not(#folha-overlay):not(#doc-eq-overlay) { display: none !important; }
+    /* so esconde o app quando ha um documento aberto por cima; sem overlay (ex.: lista de presenca) a pagina imprime normal */
+    body:has(#rel-sessao-overlay, #folha-overlay, #doc-eq-overlay) > *:not(#rel-sessao-overlay):not(#folha-overlay):not(#doc-eq-overlay) { display: none !important; }
+    .cab-celular, .barra-celular, .folha-mais, .modal-fundo, #pop-fila { display: none !important; }
+    .app-main { max-width: none !important; }
 }
 
 /* ── Sprint 17: ficha de tentativas v2, niveis e estimulos ────────────── */

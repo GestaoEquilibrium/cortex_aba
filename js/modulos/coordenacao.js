@@ -172,7 +172,7 @@ window.MODULOS.coordenacao = {
     const porDia = {};
     (sess || []).forEach(s => { (porDia[s.data] = porDia[s.data] || []).push(s); });
     const totalProg = regs.filter(r => !r.nao_aplicado).length, totalEvo = Object.keys(evPor).length;
-    const semEvo = (sess || []).filter(s => s.status === 'concluida' && !evPor[s.id]).length;
+    const semEvo = (sess || []).filter(s => s.status === 'concluida' && !evPor[s.id] && s.data >= (window.CORTEX_EVO_DESDE || '2000-01-01')).length;
 
     alvo.innerHTML =
       '<div class="grade-visao" style="margin-bottom:10px">' +

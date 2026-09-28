@@ -490,6 +490,8 @@ function podeReabrirRelatorio() {
   if (!['coordenador', 'direcao'].includes(p.perfil)) return false;
   return CORTEX_PERMS['relatorios.reabrir'] !== undefined ? CORTEX_PERMS['relatorios.reabrir'] === 'E' : true;
 }
+// Evolucoes pendentes: so contam sessoes a partir desta data (decisao da coordenacao em 28/09/2026)
+window.CORTEX_EVO_DESDE = '2026-09-21';
 // perm('pacientes') -> 'E' | 'V' | ''
 // Subchaves ('programas.atribuir') herdam do modulo ('programas') enquanto nao forem definidas.
 function perm(chave) {

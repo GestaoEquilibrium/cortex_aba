@@ -787,8 +787,28 @@ window.MODULOS.agenda = {
       }
     }
     if (status !== 'cancelada') dados.motivo_cancelamento = null;
-    const { error } = await sb.from('sessoes').update(dados).eq('id', id);
+    // Concluida -> Faltou: a sessao pode ter tentativas e evolucao lancadas por engano; oferece limpar antes de marcar FA
+    if (status === 'falta' && m.s && m.s.status === 'concluida') {
+      const [rT, rE] = await Promise.all([
+        sb.from('registros_tentativas').select('id', { count: 'exact', head: true }).eq('sessao_id', id),
+        sb.from('evolucoes').select('id', { count: 'exact', head: true }).eq('sessao_id', id)
+      ]);
+      const nT = rT.count || 0, nE = rE.count || 0;
+      if (nT || nE) {
+        const limpar = await popConfirmar('Esta sessao estava concluida e tem ' + (nT ? nT + ' tentativa(s) lancada(s)' : '') + (nT && nE ? ' e ' : '') + (nE ? 'evolucao escrita' : '') +
+          '.\n\nApagar esses lancamentos e registrar a falta (todos os programas ficam com FA)? Se responder "Manter", a sessao vira falta mas os lancamentos continuam.',
+          { titulo: 'Sessao concluida por engano?', ok: 'Apagar e marcar falta', cancelar: 'Manter lancamentos', tipo: 'aviso' });
+        if (limpar) {
+          for (const [t, col] of [['registros_tentativas', 'sessao_id'], ['programa_sessao_registros', 'sessao_id'], ['evolucoes', 'sessao_id']]) {
+            const { error: eD } = await sb.from(t).delete().eq(col, id);
+            if (eD) { popAviso('Nao consegui apagar (' + t + '): ' + eD.message); return; }
+          }
+        }
+      }
+    }
+    const { error, count } = await sb.from('sessoes').update(dados, { count: 'exact' }).eq('id', id);
     if (error) { popAviso('Erro: ' + error.message); return; }
+    if (!count) { popAviso('A sessao nao foi alterada: seu perfil nao tem permissao no banco para mudar uma sessao ' + (m.s ? m.s.status : '') + '. Peca a coordenacao.'); return; }
     // falta: programas entram na sessao com todas as tentativas FA (ja vale para o mensal e os graficos)
     if (status === 'falta' && MODULOS.programas) {
       const n = await MODULOS.programas.registrarFalta(id);

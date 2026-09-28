@@ -2020,10 +2020,10 @@ window.MODULOS.programas = {
     const { data: ss } = await sb.from('sessoes')
       .select('id, data, hora_inicio, status, paciente_id, pacientes(nome)')
       .eq('aplicador_id', eu).lte('data', hoje).gte('data', window.CORTEX_EVO_DESDE || '2000-01-01')
-      .not('status', 'in', '("falta","cancelada")')
+      .neq('status', 'cancelada')
       .order('data', { ascending: false }).limit(60);
     const passadas = (ss || []).filter(s =>
-      s.status === 'concluida' || s.data < hoje);
+      s.status === 'concluida' || s.status === 'falta' || s.data < hoje);
     if (!passadas.length) return;
 
     const { data: evs } = await sb.from('evolucoes')
@@ -2037,7 +2037,7 @@ window.MODULOS.programas = {
       '</b> sessao(oes) aguardando evolucao. Toque para escrever agora:</p>' +
       pend.map(s =>
         '<div class="linha-doc"><span><b>' + escaparHtml(s.pacientes ? s.pacientes.nome : '?') +
-        '</b><small>' + s.data.split('-').reverse().join('/') + ' as ' + s.hora_inicio.slice(0, 5) + '</small></span>' +
+        '</b><small>' + s.data.split('-').reverse().join('/') + ' as ' + s.hora_inicio.slice(0, 5) + (s.status === 'falta' ? ' &middot; <b style="color:var(--st-bad)">falta</b> (registre o motivo)' : '') + '</small></span>' +
         '<button class="btn-chip cheio" onclick="MODULOS.programas.evolucaoRapida(\'' + s.id + '\', \'' +
         s.paciente_id + '\', \'' + escaparHtml((s.pacientes ? s.pacientes.nome : '').split(' ')[0]) + '\', \'' +
         s.data + '\')">Lancar evolucao</button></div>').join(''),

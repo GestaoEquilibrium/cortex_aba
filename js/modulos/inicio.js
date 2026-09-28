@@ -128,8 +128,8 @@ window.MODULOS.inicio = {
     try {
       const { data: ss } = await sb.from('sessoes').select('id, data, status')
         .eq('aplicador_id', eu).lte('data', hoje).gte('data', window.CORTEX_EVO_DESDE || '2000-01-01')
-        .not('status', 'in', '("falta","cancelada")').limit(60);
-      const passadas = (ss || []).filter(s => s.status === 'concluida' || s.data < hoje);
+        .neq('status', 'cancelada').limit(60);
+      const passadas = (ss || []).filter(s => s.status === 'concluida' || s.status === 'falta' || s.data < hoje);
       if (passadas.length) {
         const { data: evs } = await sb.from('evolucoes').select('sessao_id')
           .in('sessao_id', passadas.map(s => s.id));

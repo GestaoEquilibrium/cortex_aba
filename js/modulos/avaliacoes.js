@@ -35,6 +35,29 @@ window.MODULOS.avaliacoes = {
 
   _overlay: false,
 
+  // ─────────────── Correcao de pontuacao depois de concluida (coordenacao/direcao) ───────────────
+  emCorrecao() { return !!(this.avaliacao && this.avaliacao.status === 'concluida'); },
+  faixaCorrecao() {
+    return this.emCorrecao()
+      ? '<div class="mensagem-erro visivel" style="background:var(--st-warn-bg, #FEF3C7); color:#92400E; border-color:#FDE68A; margin-bottom:10px">&#9998; <b>Correcao de pontuacao</b> &middot; a avaliacao ja esta concluida; cada toque salva na hora. Ao terminar, toque em <b>Fechar correcao</b>. Relatorios de avaliacao ja gerados nao mudam sozinhos: reabra o relatorio (coordenacao) para refazer os textos com a nova pontuacao.</div>'
+      : '';
+  },
+  rotuloConcluir(padrao) { return this.emCorrecao() ? 'Fechar correcao' : padrao; },
+  podeCorrigirAv() {
+    const p = window.CORTEX_SESSAO && window.CORTEX_SESSAO.profile;
+    if (!p) return false;
+    if (typeof CORTEX_PERM_TUDO !== 'undefined' && CORTEX_PERM_TUDO) return true;
+    return ['coordenador', 'direcao'].includes(p.perfil) && perm('avaliacoes') === 'E';
+  },
+  corrigir(avaliacaoId) {
+    if (!this.podeCorrigirAv()) return;
+    this.abrirJanela(avaliacaoId);
+  },
+  async fecharCorrecao() {
+    popAviso('Correcao salva. A pontuacao e os graficos ja refletem as respostas atuais.');
+    this.telaResultado(this.avaliacao.id);
+  },
+
   abrirJanela(avaliacaoId, resultado) {
     document.getElementById('aval-overlay')?.remove();
     const ov = document.createElement('div');
@@ -310,6 +333,7 @@ window.MODULOS.avaliacoes = {
     const feitosBloco = d.itens.filter(x => x.resp !== undefined).length;
     const concluir = av.protocolo === 'ss' ? 'concluirSS' : av.protocolo === 'portage' ? 'concluirPortage' : 'concluir';
     this.el.innerHTML =
+      this.faixaCorrecao() +
       '<div class="cel-ficha">' +
       '<div class="cel-ficha-topo"><button class="btn-voltar" onclick="MODULOS.avaliacoes.fecharJanela()">&larr;</button>' +
       '<div class="cel-ficha-tit"><b>' + nome + ' &middot; ' + escaparHtml(av.pacientes ? av.pacientes.nome.split(' ').slice(0, 2).join(' ') : '') + '</b>' +
@@ -332,7 +356,7 @@ window.MODULOS.avaliacoes = {
         : '<button class="btn btn-primario" onclick="MODULOS.avaliacoes.proximoBloco()">Proximo bloco &rsaquo;</button>') +
       '</div>' +
       '<div class="cel-rodape"><span class="sub" style="font-size:11.5px">' + escaparHtml(d.bloco) + ' &middot; ' + feitosBloco + '/' + d.itens.length + '</span>' +
-      '<button class="btn-chip cheio" onclick="MODULOS.avaliacoes.' + concluir + '()">Concluir aplicacao</button></div>' +
+      '<button class="btn-chip cheio" onclick="MODULOS.avaliacoes.' + concluir + '()">' + this.rotuloConcluir('Concluir aplicacao') + '</button></div>' +
       '</div>';
   },
   irItem(i) { const d = this.itensCelular(); this._mIdx = Math.max(0, Math.min(d.itens.length - 1, i)); this.telaCelular(); },
@@ -405,6 +429,7 @@ window.MODULOS.avaliacoes = {
     });
 
     this.el.innerHTML =
+      this.faixaCorrecao() +
       '<div class="pagina-cabecalho">' +
       '  <div>' +
       this.voltarHtml() +
@@ -419,7 +444,7 @@ window.MODULOS.avaliacoes = {
       '      <button type="button" class="seg' + (av.oral === false ? ' ativo' : '') + '" ' +
       '        onclick="MODULOS.avaliacoes.marcarOral(this, false)">N&atilde;o Oral</button>' +
       '    </div>' +
-      '    <button class="btn btn-primario" onclick="MODULOS.avaliacoes.concluir()">Concluir</button>' +
+      '    <button class="btn btn-primario" onclick="MODULOS.avaliacoes.concluir()">' + this.rotuloConcluir('Concluir') + '</button>' +
       '  </div>' +
       '</div>' +
       '<div class="abas">' + abasFaixas + '</div>' +
@@ -468,8 +493,9 @@ window.MODULOS.avaliacoes = {
   },
 
   async concluir() {
+    if (this.emCorrecao()) { this.fecharCorrecao(); return; }
     const respondidas = Object.keys(this.respostas).length;
-    if (respondidas === 0) { alert('Nenhuma resposta registrada ainda.'); return; }
+    if (respondidas === 0) { popAviso('Nenhuma resposta registrada ainda.'); return; }
     if (!await popConfirmar('Concluir a avaliacao com ' + respondidas + ' resposta(s)? ' +
       'Depois de concluida ela fica somente leitura.')) return;
 
@@ -726,7 +752,8 @@ window.MODULOS.avaliacoes = {
           '<div><b>' + (NOME[x.protocolo] || x.protocolo) + '</b><small>Concluida em ' + fmt(x.concluido_em) +
           (x.origem === 'importado' ? ' &middot; externa' : '') + (nRel ? ' &middot; ' + nRel + ' relatorio(s) de avaliacao' : '') + '</small></div></label>' +
           '<label class="sub" style="display:flex; align-items:center; gap:6px; white-space:nowrap">data <input type="date" value="' + dataIso(x.concluido_em) + '" max="' + hojeLocal() + '" style="padding:5px 8px; font:inherit; font-size:12.5px" ' +
-          'onchange="MODULOS.avaliacoes.mudarDataAvaliacao(\'' + x.id + '\', this.value, this)"></label></div>';
+          'onchange="MODULOS.avaliacoes.mudarDataAvaliacao(\'' + x.id + '\', this.value, this)"></label>' +
+          (x.origem !== 'importado' && ['qadi', 'ss', 'portage'].includes(x.protocolo) ? '<button class="btn-chip" title="Abrir a aplicacao para corrigir respostas" onclick="MODULOS.avaliacoes.corrigir(\'' + x.id + '\')">&#9998; Corrigir pontuacao</button>' : '') + '</div>';
       }).join('') +
       '<div class="barra-acoes" style="margin-top:8px"><button class="btn btn-fantasma" onclick="MODULOS.avaliacoes.apagarAvaliacoesSelecionadas()">&#10005; Apagar selecionadas</button></div>' +
       '</div>';
@@ -1271,6 +1298,7 @@ window.MODULOS.avaliacoes = {
     });
 
     this.el.innerHTML =
+      this.faixaCorrecao() +
       '<div class="pagina-cabecalho">' +
       '  <div>' +
       this.voltarHtml() +
@@ -1279,7 +1307,7 @@ window.MODULOS.avaliacoes = {
       '    <p class="sub">' + calcularIdade(this.pacienteAtual.data_nascimento) +
       ' &middot; Respostas salvas a cada toque &middot; <span id="ss-progresso">' + feitas + '</span> de ' + total + ' itens</p>' +
       '  </div>' +
-      '  <button class="btn btn-primario" onclick="MODULOS.avaliacoes.concluirSS()">Concluir</button>' +
+      '  <button class="btn btn-primario" onclick="MODULOS.avaliacoes.concluirSS()">' + this.rotuloConcluir('Concluir') + '</button>' +
       '</div>' +
 
       '<div class="cartao"><div class="grade-form">' +
@@ -1382,6 +1410,7 @@ window.MODULOS.avaliacoes = {
   },
 
   async concluirSS() {
+    if (this.emCorrecao()) { this.fecharCorrecao(); return; }
     const ex = (this.avaliacao && this.avaliacao.areas_excluidas) || [];
     const itensAplic = this.itensSS.filter(i => !ex.includes(i.area));
     const total = itensAplic.length;
@@ -1546,10 +1575,11 @@ window.MODULOS.avaliacoes = {
     const itens = this.itensPortage.filter(i => i.area === this._pArea && i.faixa === this._pFaixa);
 
     alvo.innerHTML =
+      this.faixaCorrecao() +
       '<div class="cartao"><div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; align-items:center">' +
       '<h3 style="margin:0">Portage &middot; ' + escaparHtml(av.pacientes ? av.pacientes.nome : '') + '</h3>' +
       '<div class="pac-selos"><span class="selo selo-neutro">' + respondidos + '/' + this.itensPortage.length + ' respondidos</span>' +
-      '<button class="btn btn-primario" onclick="MODULOS.avaliacoes.concluirPortage()">Concluir aplicacao</button></div></div>' +
+      '<button class="btn btn-primario" onclick="MODULOS.avaliacoes.concluirPortage()">' + this.rotuloConcluir('Concluir aplicacao') + '</button></div></div>' +
       '<p class="sub" style="margin:6px 0 10px">Sim = 1 &middot; As vezes = 0,5 &middot; Nao = 0 &middot; NA fora da conta. Aplique as faixas proximas da idade da crianca; salva sozinho.</p>' +
       '<div class="filtro-chips" style="margin-bottom:6px">' + this.P_AREAS.map(a =>
         '<button class="fchip' + (a === this._pArea ? ' ativo' : '') + '" ' +
@@ -1585,6 +1615,7 @@ window.MODULOS.avaliacoes = {
   },
 
   async concluirPortage() {
+    if (this.emCorrecao()) { this.fecharCorrecao(); return; }
     const n = Object.keys(this._pResp).length;
     if (!await popConfirmar('Concluir a aplicacao com ' + n + ' item(ns) respondido(s)? Itens em branco contam como nao alcancados nas faixas aplicadas.')) return;
     { const { error: _e } = await sb.from('avaliacoes').update({ status: 'concluida', concluido_em: new Date().toISOString() })

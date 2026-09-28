@@ -370,7 +370,7 @@ window.MODULOS.agenda = {
         '  <span class="ck-prof">&#128100; ' + escaparHtml(prof) +
         (s.salas ? ' <small>&middot; ' + escaparHtml(s.salas.nome) + '</small>' : '') + '</span>' +
         '  <div class="pac-selos">' + this.selosSessao(s) +
-        (s.status === 'concluida' && !this._comEvoDia.has(s.id) && s.data >= (window.CORTEX_EVO_DESDE || '2000-01-01')
+        (['concluida', 'falta'].includes(s.status) && !this._comEvoDia.has(s.id) && s.data >= (window.CORTEX_EVO_DESDE || '2000-01-01')
           ? '<span class="selo selo-sem-evo" title="A sessao foi concluida mas a evolucao ainda nao foi escrita.">&#9998; sem evolucao</span>' : '') +
         '</div>' +
         '</div></div>';

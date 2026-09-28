@@ -62,6 +62,7 @@ window.MODULOS.laudo_avaliacao = {
         const n = v => itens.filter(i => mapa[i.id] === v).length;
         return { area, pct: p.pct, niveis: { n3: n(3), n2: n(2), n1: n(1), n0: n(0), tot: n(0) + n(1) + n(2) + n(3) },
           presentes: itens.filter(i => (mapa[i.id] || 0) >= 2).map(tx),
+          fortes: itens.filter(i => mapa[i.id] === 3).map(tx), medios: itens.filter(i => mapa[i.id] === 2).map(tx),
           ausentes: itens.filter(i => mapa[i.id] !== undefined && mapa[i.id] >= 0 && mapa[i.id] <= 1).map(tx) };
       });
       const tot = areas.filter(a => a.pct !== null);
@@ -75,6 +76,7 @@ window.MODULOS.laudo_avaliacao = {
       const tx = i => (i.texto || '').toLowerCase().replace(/\.$/, '');
       const areas = calc.map(a => ({ area: a.area, pct: a.total === null ? null : a.total, idade: a.idade,
         presentes: A.itensPortage.filter(i => i.area === a.area && mapa[i.id] === 'S').map(tx),
+        medios: A.itensPortage.filter(i => i.area === a.area && mapa[i.id] === 'AV').map(tx),
         ausentes: A.itensPortage.filter(i => i.area === a.area && mapa[i.id] === 'N').map(tx) }));
       const tot = areas.filter(a => a.pct !== null);
       return { areas, total: tot.length ? Math.round(tot.reduce((s, a) => s + a.pct, 0) / tot.length) : null, faixas: [] };
@@ -307,12 +309,14 @@ window.MODULOS.laudo_avaliacao = {
         : 'Em ' + areaL + ', ' + primeiro + ' alcan\u00e7ou ' + a.pct + '% dos marcos esperados, o que aponta esta \u00e1rea como priorit\u00e1ria para a interven\u00e7\u00e3o no pr\u00f3ximo per\u00edodo.';
     }
     if (a.idade !== undefined) t += ' A idade de desenvolvimento estimada nesta \u00e1rea \u00e9 de ' + MODULOS.avaliacoes.fmtIdade(a.idade) + '.';
-    // 2o paragrafo: resultado por habilidade, de forma resumida (poucos exemplos, sem lista longa)
+    // 2o paragrafo: no estilo dos relatorios da clinica (habilidades no infinitivo, sem lista numerada)
     const ex = arr => arr.slice(0, 2).join(' e ');
     let p2 = '';
-    if (pr.av.protocolo === 'ss' && this.SS_DESC[a.area] && a.niveis && a.niveis.tot) {
-      p2 = this.paragrafoSS(a, ela);
+    if (pr.av.protocolo === 'ss' && a.niveis && a.niveis.tot) {
+      p2 = this.paragrafoSS(a, ela, primeiro);
     } else if (tot) {
+      p2 = this.paragrafoMarcos(a, ela, primeiro);
+    } else if (false) {
       p2 = (ela ? 'Ela' : 'Ele') + ' j\u00e1 demonstra ' + nPres + ' das ' + tot + ' habilidades avaliadas' +
         (nPres ? ', como ' + ex(a.presentes) : '') + '.';
       if (nAus) p2 += ' As que ainda n\u00e3o foram observadas' + (nAus <= 2 ? ' (' + ex(a.ausentes) + ')' : ', a exemplo de ' + ex(a.ausentes) + ',') +
@@ -357,7 +361,96 @@ window.MODULOS.laudo_avaliacao = {
   AREA_DOC: { 'Participacao Conjunta': 'Aten\u00e7\u00e3o Compartilhada', 'Autorregulacao': 'Autorregula\u00e7\u00e3o', 'Linguagem Nao-Verbal': 'Linguagem Social N\u00e3o-Verbal',
     'Socializacao': 'Socializa\u00e7\u00e3o', 'Cognicao': 'Cogni\u00e7\u00e3o', 'Cognição': 'Cogni\u00e7\u00e3o' },
   nomeAreaDoc(area) { return this.AREA_DOC[area] || area; },
-  paragrafoSS(a, ela) {
+  // ── habilidade no infinitivo: "Responde ao nome?" -> "responder ao nome"
+  VERBOS_INF: { faz: 'fazer', diz: 'dizer', traz: 'trazer', produz: 'produzir', conduz: 'conduzir', reduz: 'reduzir', sobe: 'subir', pede: 'pedir', mede: 'medir',
+    segue: 'seguir', consegue: 'conseguir', persegue: 'perseguir', ouve: 'ouvir', dorme: 'dormir', veste: 'vestir', despe: 'despir', abre: 'abrir', cobre: 'cobrir', descobre: 'descobrir',
+    sente: 'sentir', prefere: 'preferir', repete: 'repetir', compete: 'competir', permite: 'permitir', cumpre: 'cumprir', diverte: 'divertir', serve: 'servir', sorri: 'sorrir',
+    reflete: 'refletir', sugere: 'sugerir', refere: 'referir', transfere: 'transferir', confere: 'conferir', adere: 'aderir', interfere: 'interferir', mente: 'mentir', consente: 'consentir',
+    dirige: 'dirigir', corrige: 'corrigir', exige: 'exigir', reage: 'reagir', age: 'agir', interage: 'interagir', finge: 'fingir', atinge: 'atingir', restringe: 'restringir', dorme: 'dormir', cobre: 'cobrir', surge: 'surgir', emerge: 'emergir', diverge: 'divergir', insiste: 'insistir', desiste: 'desistir', assiste: 'assistir', resiste: 'resistir', persiste: 'persistir', existe: 'existir',
+    divide: 'dividir', decide: 'decidir', coincide: 'coincidir', discute: 'discutir', reparte: 'repartir', parte: 'partir', invade: 'invadir', agride: 'agredir', impede: 'impedir', despede: 'despedir',
+    tem: 'ter', mant\u00e9m: 'manter', cont\u00e9m: 'conter', obt\u00e9m: 'obter', det\u00e9m: 'deter', ret\u00e9m: 'reter', entret\u00e9m: 'entreter', vem: 'vir', vai: 'ir', \u00e9: 'ser', est\u00e1: 'estar', d\u00e1: 'dar', p\u00f5e: 'p\u00f4r', comp\u00f5e: 'compor', prop\u00f5e: 'propor', disp\u00f5e: 'dispor', l\u00ea: 'ler', v\u00ea: 'ver', sabe: 'saber', pode: 'poder', quer: 'querer', constr\u00f3i: 'construir', destr\u00f3i: 'destruir',
+    cai: 'cair', sai: 'sair', atrai: 'atrair', distrai: 'distrair', possui: 'possuir', atribui: 'atribuir', contribui: 'contribuir', substitui: 'substituir', inclui: 'incluir', exclui: 'excluir', conclui: 'concluir', distingue: 'distinguir', extingue: 'extinguir',
+    nomeia: 'nomear', passeia: 'passear', chateia: 'chatear', bloqueia: 'bloquear', manuseia: 'manusear', odeia: 'odiar', anseia: 'ansiar', incendeia: 'incendiar', remedeia: 'remediar', penteia: 'pentear', folheia: 'folhear', delineia: 'delinear',
+    joga: 'jogar', chega: 'chegar', pega: 'pegar', entrega: 'entregar', carrega: 'carregar', brinca: 'brincar', busca: 'buscar', fica: 'ficar', indica: 'indicar', explica: 'explicar', comunica: 'comunicar', come\u00e7a: 'come\u00e7ar', abra\u00e7a: 'abra\u00e7ar', alcan\u00e7a: 'alcan\u00e7ar', avan\u00e7a: 'avan\u00e7ar', dan\u00e7a: 'dan\u00e7ar', tra\u00e7a: 'tra\u00e7ar', la\u00e7a: 'la\u00e7ar', cal\u00e7a: 'cal\u00e7ar' },
+  infinitivo(frase) {
+    let t = String(frase || '').trim().replace(/[?.!]+$/, '').replace(/\s+/g, ' ');
+    t = t.replace(/^(a crian\u00e7a|a crianca|o paciente|a paciente|ele|ela)\s+/i, '');
+    t = t.replace(/^(\u00e9 capaz de|consegue|costuma|sabe|tende a|j\u00e1 consegue|j\u00e1)\s+/i, '');
+    if (!t) return '';
+    const m = t.match(/^([^\s]+?)(-se|-lhe|-o|-a)?(\s|$)/i);
+    if (!m) return t.toLowerCase();
+    const v = m[1].toLowerCase(), cl = (m[2] || '').toLowerCase(), resto = t.slice(m[0].length);
+    let inf = this.VERBOS_INF[v];
+    if (!inf) {
+      if (/[a-z\u00e7]a$/.test(v)) inf = v + 'r';
+      else if (/\u00e9m$/.test(v)) inf = v.replace(/\u00e9m$/, 'er');
+      else if (/\u00f5e$/.test(v)) inf = v.replace(/\u00f5e$/, 'or');
+      else if (/ai$/.test(v)) inf = v + 'r';
+      else if (/ui$/.test(v)) inf = v + 'r';
+      else if (/uz$/.test(v)) inf = v + 'ir';
+      else if (/z$/.test(v)) inf = v + 'er';
+      else if (/e$/.test(v)) inf = v + 'r';
+      else if (/i$/.test(v)) inf = v + 'r';
+      else return t.charAt(0).toLowerCase() + t.slice(1);
+    }
+    let r = resto.trim();
+    // "sobe e desce escadas" -> "subir e descer escadas"
+    const m2 = r.match(/^(e|ou)\s+([^\s]+?)(-se)?(\s|$)/i);
+    if (m2 && !/^(e|ou)\s+(o|a|os|as|um|uma|de|do|da|em|no|na|com|sem|para|por|que|se)\b/i.test(r)) {
+      const inf2 = this.infinitivo(m2[2] + (m2[3] || '') + ' x').replace(/ x$/, '');
+      if (inf2 && /r(-se)?$/.test(inf2)) r = m2[1] + ' ' + inf2 + r.slice(m2[0].length - (m2[4] ? 1 : 0)).replace(/^\s*/, ' ').replace(/\s+$/, '');
+    }
+    return (inf + cl + (r ? ' ' + r : '')).replace(/\s+/g, ' ').trim();
+  },
+  // lista curta e legivel: tira exemplos longos entre parenteses e junta com virgula + "e"
+  listaHab(arr, max) {
+    const itens = (arr || []).map(x => this.infinitivo(x)).filter(Boolean)
+      .map(x => x.length > 70 ? x.replace(/\s*\((ex\.?:?|por exemplo)[^)]*\)/i, '').trim() : x)
+      .filter((x, i, l) => l.indexOf(x) === i).slice(0, max || 5);
+    if (!itens.length) return '';
+    return itens.length === 1 ? itens[0] : itens.slice(0, -1).join(', ') + ' e ' + itens[itens.length - 1];
+  },
+  // QADI / Portage (estilo Alice): "demonstra boa capacidade para X, Y e Z. Por outro lado, apresenta dificuldades em A, B e C."
+  paragrafoMarcos(a, ela, primeiro) {
+    const pres = this.listaHab(a.presentes, 6), aus = this.listaHab(a.ausentes, 5), med = this.listaHab(a.medios, 3);
+    const nPres = (a.presentes || []).length, nAus = (a.ausentes || []).length;
+    let t = '';
+    if (nPres && nAus) {
+      t = primeiro + ' demonstra boa capacidade para ' + pres + (med ? ', al\u00e9m de j\u00e1 apresentar, de forma ainda inconsistente, ' + med : '') +
+        '. Por outro lado, apresenta dificuldades em ' + aus + (nAus > 5 ? ', entre outras habilidades da faixa' : '') + ', que passam a compor as pr\u00f3ximas metas de ensino.';
+    } else if (nPres) {
+      t = primeiro + ' demonstra boa capacidade para ' + pres + (nPres > 6 ? ', entre outras habilidades' : '') + (med ? ', apresentando ainda de forma inconsistente ' + med : '') +
+        '. N\u00e3o foram observadas dificuldades nos marcos avaliados para a faixa et\u00e1ria, restando ampliar a generaliza\u00e7\u00e3o dessas habilidades para diferentes contextos e parceiros.';
+    } else if (nAus) {
+      t = (ela ? 'A crian\u00e7a ainda n\u00e3o apresenta' : primeiro + ' ainda n\u00e3o apresenta') + ' os marcos avaliados nesta \u00e1rea' + (med ? ', embora j\u00e1 demonstre, de forma inconsistente, ' + med : '') +
+        '. As dificuldades concentram-se em ' + aus + (nAus > 5 ? ', entre outras' : '') + ', habilidades que passam a compor as metas priorit\u00e1rias do PEI.';
+    }
+    return t;
+  },
+  // Socially Savvy (estilo Joao Vitor): desempenho + capacidades demonstradas + habilidades ainda inconsistentes
+  paragrafoSS(a, ela, primeiro) {
+    const n = a.niveis, areaL = this.nomeAreaDoc(a.area).toLowerCase();
+    const fortes = this.listaHab((a.fortes && a.fortes.length ? a.fortes : a.medios), 4);
+    const fracos = this.listaHab(((a.ausentes || []).length ? a.ausentes : a.medios), 3);
+    const D = this.SS_DESC[a.area] || {};
+    if (a.pct >= 85) {
+      return primeiro + ' apresentou desempenho consistente em ' + areaL + (fortes ? ', demonstrando boa capacidade de ' + fortes : '') +
+        '. De modo geral, apresenta bom repert\u00f3rio nessa \u00e1rea' +
+        (fracos ? ', embora habilidades como ' + fracos + ' ainda possam ocorrer de forma menos consistente.' : ', com respostas consistentes em todas as habilidades avaliadas.');
+    }
+    if (a.pct >= 60) {
+      return primeiro + ' apresentou bom desempenho em ' + areaL + (fortes ? ', demonstrando, de maneira consistente, capacidade de ' + fortes : '') +
+        '. Observa-se que, em situa\u00e7\u00f5es que envolvem ' + (fracos || D.foco || 'maior exig\u00eancia social') +
+        ', a habilidade ainda apresenta varia\u00e7\u00e3o conforme o contexto e o parceiro de intera\u00e7\u00e3o, embora o repert\u00f3rio geral esteja em consolida\u00e7\u00e3o.';
+    }
+    if (a.pct >= 35) {
+      return primeiro + ' apresentou desempenho parcial em ' + areaL + (fortes ? ': j\u00e1 demonstra capacidade de ' + fortes + ', ainda que com pouca regularidade' : ', com respostas ainda pouco regulares') +
+        '. Habilidades como ' + (fracos || D.foco || 'as de maior complexidade social') + ' ainda n\u00e3o foram observadas de forma consistente, o que indica esta \u00e1rea como foco priorit\u00e1rio da interven\u00e7\u00e3o.';
+    }
+    return primeiro + ' apresentou repert\u00f3rio inicial em ' + areaL + (fortes ? ', com respostas emergentes em ' + fortes + ', geralmente com apoio do adulto' : ', sem respostas consistentes nas habilidades avaliadas') +
+      '. Habilidades como ' + (fracos || D.foco || 'as de intera\u00e7\u00e3o com pares') + ' ainda n\u00e3o foram observadas e passam a compor as metas priorit\u00e1rias do PEI.';
+  },
+  paragrafoSS_antigo(a, ela) {
     const D = this.SS_DESC[a.area], n = a.niveis, S = ela ? 'Ela' : 'Ele';
     const deficit = n.n2 + n.n1 + n.n0;
     const cap = s => s.charAt(0).toUpperCase() + s.slice(1);

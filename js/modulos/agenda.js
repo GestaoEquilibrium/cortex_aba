@@ -504,7 +504,7 @@ window.MODULOS.agenda = {
     if (!s) return;
     const pac = s.pacientes;
     // tudo em paralelo (a trilha de auditoria so e lida na aba Historico - e a consulta mais pesada)
-    const [rResp, rGuias, rMeus, rFoto, rEvo] = await Promise.all([
+    const [rResp, rEvo, rGuias, rMeus, rFoto] = await Promise.all([
       sb.from('responsaveis').select('nome, telefone, email, parentesco, principal').eq('paciente_id', pac.id).order('principal', { ascending: false }),
       sb.from('evolucoes').select('texto, destinacao, criado_em, espelho_de, aplicador:profiles!evolucoes_aplicador_id_fkey(nome)').eq('sessao_id', id).maybeSingle(),
       sb.from('guias').select('id, numero, qtd_autorizada, vigencia_inicio, vigencia_fim, convenio, obs').eq('paciente_id', pac.id).order('vigencia_fim', { ascending: false }),

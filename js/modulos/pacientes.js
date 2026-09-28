@@ -312,6 +312,14 @@ window.MODULOS.pacientes = {
   paciente: null,
 
   async telaDetalhe(id, abaInicial) {
+    // chamado de outros modulos (Avaliacoes, Relatorios, Agenda...) sem passar pelo render: garante sessao, area e menu marcado
+    if (!this.sessao) this.sessao = window.CORTEX_SESSAO;
+    if (!this.el || !document.body.contains(this.el)) {
+      this.el = document.getElementById('pagina');
+      window._moduloAtual = 'pacientes';
+      document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('ativa', n.dataset.modulo === 'pacientes'));
+      if (typeof marcarBarraCelular === 'function') marcarBarraCelular('pacientes');
+    }
     if (['aplicador', 'terapeuta'].includes(this.sessao.profile.perfil)) {
       const meus = await meusPacientesIds(true);
       if (!meus.has(id)) {

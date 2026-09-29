@@ -33,13 +33,20 @@ window.MODULOS.eventos = {
 
   async carregar() {
     const corte = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
-    const [rE, rP] = await Promise.all([
-      sb.from('eventos').select('*, profissional:profiles!eventos_profissional_id_fkey(nome)')
+    const [rE, rP, rPac, rPre] = await Promise.all([
+      sb.from('eventos').select('*, profissional:profiles!eventos_profissional_id_fkey(nome), paciente:pacientes!eventos_paciente_id_fkey(id, nome)')
         .gte('data', corte).order('data').order('hora'),
-      sb.from('profiles').select('id, nome').eq('ativo', true).neq('perfil', 'familia').order('nome')
+      sb.from('profiles').select('id, nome').eq('ativo', true).neq('perfil', 'familia').order('nome'),
+      sb.from('pacientes').select('id, nome, data_nascimento, aplicador_id').neq('status', 'encerrado').order('nome'),
+      sb.from('pre_supervisoes').select('id, evento_id, paciente_id, aplicador_id, data, status, enviada_em, aplicador:profiles!pre_supervisoes_aplicador_id_fkey(nome), paciente:pacientes!pre_supervisoes_paciente_id_fkey(nome)')
+        .gte('data', corte).order('data', { ascending: false })
     ]);
     this.lista = await ESCOPO.apls(rE.data || [], 'profissional_id', true);
     this.equipe = rP.data || [];
+    this.pacientes = rPac.data || [];
+    this.pres = rPre.error ? [] : (rPre.data || []);
+    if (rPre.error) console.warn('pre_supervisoes:', rPre.error.message);
+    if (ehEquipe()) { const meus = await meusPacientesIds(true); this.pacientes = this.pacientes.filter(p => meus.has(p.id)); this.pres = this.pres.filter(x => x.aplicador_id === window.CORTEX_SESSAO.user.id); }
   },
 
   desenhar() {
@@ -54,8 +61,10 @@ window.MODULOS.eventos = {
       ' &middot; ' + escaparHtml(e.titulo) + '</b>' +
       '<small>' + e.data.split('-').reverse().join('/') + (e.hora ? ' as ' + e.hora.slice(0, 5) : '') +
       ' &middot; ' + (e.profissional ? escaparHtml(e.profissional.nome) : 'Equipe toda') +
+      (e.paciente ? ' &middot; ' + escaparHtml(e.paciente.nome.split(' ').slice(0, 2).join(' ')) : '') +
       (e.ata ? ' &middot; ATA registrada' : '') + '</small></div>' +
       '<div class="pac-selos">' +
+      this.chipPre(e) +
       (e.ata ? '<button class="btn-chip cheio" onclick="MODULOS.eventos.docAta(\'' + e.id + '\')">Ver ATA</button>' : '') +
       (this.podeE()
         ? '<button class="btn-chip" onclick="MODULOS.eventos.modalAta(\'' + e.id + '\')">' + (e.ata ? 'Editar ATA' : 'Lavrar ATA') + '</button>' +
@@ -64,10 +73,150 @@ window.MODULOS.eventos = {
       '</div></div>';
 
     alvo.innerHTML =
+      this.htmlPres() +
       '<div class="cartao"><h3>Proximos <span class="selo selo-neutro">' + fut.length + '</span></h3>' +
       (fut.length ? fut.map(linha).join('') : '<p class="sub">Nada agendado. Use + Agendar.</p>') + '</div>' +
       (pas.length
         ? '<div class="cartao"><h3>Ultimos 30 dias</h3>' + pas.map(linha).join('') + '</div>' : '');
+  },
+
+  // ─────────────── Pre-supervisao: a aplicadora preenche antes; a coordenacao le na supervisao ───────────────
+  PRE_CAMPOS: [
+    ['programas', '4) Programas atuais (se houver)', 3],
+    ['evolucao', '5) Evolucao observada entre as supervisoes', 4],
+    ['comportamentos', '6) Comportamentos interferentes e estrategias de manejo (se houver)', 4],
+    ['dificuldades', '7) Dificuldades enfrentadas pelo aplicador (se houver)', 5]
+  ],
+  preDe(evento) { return (this.pres || []).find(p => p.evento_id === evento.id); },
+  chipPre(e) {
+    if (e.tipo !== 'supervisao') return '';
+    const p = this.preDe(e);
+    const eu = window.CORTEX_SESSAO.user.id;
+    const minha = e.profissional_id === eu || (!e.profissional_id && ehEquipe());
+    if (p && p.status === 'enviada') return '<button class="btn-chip cheio" title="Estrutura de pre-supervisao enviada por ' + escaparHtml(p.aplicador ? p.aplicador.nome : '') + '" onclick="MODULOS.eventos.docPre(\'' + p.id + '\')">&#128203; Pre-supervisao</button>';
+    if (minha) return '<button class="btn-chip" style="border-color:var(--st-warn); color:#92400E" onclick="MODULOS.eventos.modalPre(\'' + (p ? p.id : '') + '\', \'' + e.id + '\')">' + (p ? '&#9998; Continuar pre-supervisao' : '&#9998; Preencher pre-supervisao') + '</button>';
+    return '<span class="selo selo-warn" title="A aplicadora ainda nao enviou a estrutura de pre-supervisao">pre-supervisao pendente</span>';
+  },
+  htmlPres() {
+    const eu = window.CORTEX_SESSAO.user.id;
+    const lista = (this.pres || []);
+    const fmt = d => d ? d.split('-').reverse().join('/') : '';
+    if (ehEquipe()) {
+      return '<div class="cartao faixa-ambar"><h3>Minhas pre-supervisoes ' +
+        '<button class="btn-chip" style="margin-left:8px" onclick="MODULOS.eventos.modalPre(\'\', \'\')">+ Nova estrutura</button></h3>' +
+        '<p class="sub" style="margin-bottom:6px">Preencha a Estrutura de supervisao antes do encontro com a coordenacao. Ela fica salva como rascunho ate voce enviar.</p>' +
+        (lista.length ? lista.map(p => '<div class="linha-doc"><div><b>' + escaparHtml(p.paciente ? p.paciente.nome : '?') + '</b><small>' + fmt(p.data) +
+          (p.status === 'enviada' ? ' &middot; enviada' : ' &middot; rascunho') + '</small></div><div class="pac-selos">' +
+          (p.status === 'enviada' ? '<span class="selo selo-ok">enviada</span><button class="btn-chip" onclick="MODULOS.eventos.docPre(\'' + p.id + '\')">Ver</button>' : '<span class="selo selo-warn">rascunho</span>') +
+          '<button class="btn-chip" onclick="MODULOS.eventos.modalPre(\'' + p.id + '\', \'' + (p.evento_id || '') + '\')">&#9998; ' + (p.status === 'enviada' ? 'Editar' : 'Continuar') + '</button></div></div>').join('')
+          : '<p class="sub">Nenhuma estrutura preenchida ainda.</p>') + '</div>';
+    }
+    const enviadas = lista.filter(p => p.status === 'enviada');
+    if (!enviadas.length && !lista.length) return '';
+    return '<div class="cartao faixa-ambar"><h3>Pre-supervisoes recebidas <span class="selo selo-neutro">' + enviadas.length + '</span></h3>' +
+      '<p class="sub" style="margin-bottom:6px">Estruturas preenchidas pelas aplicadoras antes da supervisao (ultimos 30 dias).</p>' +
+      (lista.length ? lista.map(p => '<div class="linha-doc"><div><b>' + escaparHtml(p.paciente ? p.paciente.nome : '?') + '</b><small>' + fmt(p.data) + ' &middot; ' + escaparHtml(p.aplicador ? p.aplicador.nome : '') + '</small></div>' +
+        '<div class="pac-selos">' + (p.status === 'enviada' ? '<span class="selo selo-ok">enviada</span><button class="btn-chip cheio" onclick="MODULOS.eventos.docPre(\'' + p.id + '\')">Ver</button>' : '<span class="selo selo-warn">rascunho da aplicadora</span>') + '</div></div>').join('') : '') + '</div>';
+  },
+  idadeCurta(dn, ref) {
+    if (!dn) return '';
+    const a = new Date(dn + 'T12:00:00'), b = ref ? new Date(ref + 'T12:00:00') : new Date();
+    let m = (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth()); if (b.getDate() < a.getDate()) m--;
+    return Math.floor(m / 12) + ' anos e ' + (m % 12) + ' meses';
+  },
+  async programasAtuais(pacienteId) {
+    const { data } = await sb.from('paciente_programas').select('programas(nome, area)').eq('paciente_id', pacienteId).eq('status', 'em_intervencao');
+    return (data || []).map(x => x.programas ? x.programas.nome + (x.programas.area ? ' (' + x.programas.area + ')' : '') : '').filter(Boolean).join('\n');
+  },
+  async modalPre(id, eventoId) {
+    let p = null;
+    if (id) { const r = await sb.from('pre_supervisoes').select('*').eq('id', id).single(); p = r.data; }
+    const ev = eventoId ? this.lista.find(x => x.id === eventoId) : null;
+    const pacId = (p && p.paciente_id) || (ev && ev.paciente_id) || '';
+    const data = (p && p.data) || (ev && ev.data) || hojeLocal();
+    const pacs = this.pacientes || [];
+    const pac = pacs.find(x => x.id === pacId);
+    const v = k => escaparHtml((p && p[k]) || '');
+    abrirModal('Estrutura de supervis&atilde;o' + (ev ? ' &middot; ' + escaparHtml(ev.titulo) : ''),
+      '<div class="grade-form">' +
+      '  <div class="campo"><label>1) Data da supervisao</label><input type="date" id="ps-data" value="' + data + '"></div>' +
+      '  <div class="campo c2"><label>2) Nome do aprendiz *</label><select id="ps-pac" onchange="MODULOS.eventos.preTrocouPaciente()">' +
+      '    <option value="">Selecione</option>' + pacs.map(x => '<option value="' + x.id + '"' + (x.id === pacId ? ' selected' : '') + '>' + escaparHtml(x.nome) + '</option>').join('') + '</select></div>' +
+      '  <div class="campo"><label>3) Idade</label><input id="ps-idade" readonly value="' + (pac ? this.idadeCurta(pac.data_nascimento, data) : '') + '"></div>' +
+      this.PRE_CAMPOS.map(([k, rot, linhas]) => '  <div class="campo c2"><label>' + rot + (k === 'programas' ? ' <button type="button" class="btn-chip" style="margin-left:6px" onclick="MODULOS.eventos.prePuxarProgramas()">&#8635; puxar do sistema</button>' : '') + '</label>' +
+        '<textarea id="ps-' + k + '" rows="' + linhas + '" style="resize:vertical">' + v(k) + '</textarea></div>').join('') +
+      '</div>' +
+      '<input type="hidden" id="ps-id" value="' + (p ? p.id : '') + '"><input type="hidden" id="ps-ev" value="' + (eventoId || (p && p.evento_id) || '') + '">' +
+      '<div class="mensagem-erro" id="ps-erro"></div>' +
+      '<div class="barra-acoes">' +
+      '  <button class="btn btn-fantasma" onclick="fecharModal()">Fechar</button>' +
+      '  <button class="btn btn-fantasma" onclick="MODULOS.eventos.salvarPre(false)">Salvar rascunho</button>' +
+      '  <button class="btn btn-primario" onclick="MODULOS.eventos.salvarPre(true)">Enviar para a coordenacao</button>' +
+      '</div>', true, 'evolucao');
+    if (!p && pacId) this.prePuxarProgramas();
+  },
+  preTrocouPaciente() {
+    const pac = (this.pacientes || []).find(x => x.id === document.getElementById('ps-pac').value);
+    document.getElementById('ps-idade').value = pac ? this.idadeCurta(pac.data_nascimento, document.getElementById('ps-data').value) : '';
+    if (pac && !document.getElementById('ps-programas').value.trim()) this.prePuxarProgramas();
+  },
+  async prePuxarProgramas() {
+    const pacId = document.getElementById('ps-pac').value; if (!pacId) return;
+    const t = await this.programasAtuais(pacId);
+    const el = document.getElementById('ps-programas');
+    if (el) el.value = t || 'Nenhum programa em intervencao no sistema.';
+  },
+  async salvarPre(enviar) {
+    const erro = document.getElementById('ps-erro'); erro.classList.remove('visivel');
+    const id = document.getElementById('ps-id').value;
+    const dados = { paciente_id: document.getElementById('ps-pac').value || null, data: document.getElementById('ps-data').value,
+      evento_id: document.getElementById('ps-ev').value || null, idade: document.getElementById('ps-idade').value || null };
+    this.PRE_CAMPOS.forEach(([k]) => { dados[k] = document.getElementById('ps-' + k).value.trim() || null; });
+    if (!dados.paciente_id || !dados.data) { erro.textContent = 'Escolha o aprendiz e a data.'; erro.classList.add('visivel'); return; }
+    if (enviar && !dados.evolucao) { erro.textContent = 'Preencha ao menos a evolucao observada antes de enviar.'; erro.classList.add('visivel'); return; }
+    dados.status = enviar ? 'enviada' : 'rascunho';
+    if (enviar) dados.enviada_em = new Date().toISOString();
+    let r;
+    if (id) r = await sb.from('pre_supervisoes').update(dados).eq('id', id);
+    else r = await sb.from('pre_supervisoes').insert(Object.assign({ aplicador_id: window.CORTEX_SESSAO.user.id }, dados));
+    if (r.error) { erro.textContent = r.error.message; erro.classList.add('visivel'); return; }
+    fecharModal();
+    if (enviar) {
+      popAviso('Estrutura enviada. A coordenacao ja consegue ver na supervisao.');
+      try {
+        const { data: coords } = await sb.from('profiles').select('id').in('perfil', ['coordenador', 'direcao']).eq('ativo', true);
+        const pac = (this.pacientes || []).find(x => x.id === dados.paciente_id);
+        if (coords && coords.length) await sb.from('notificacoes').insert(coords.map(c => ({ destinatario_id: c.id, titulo: 'Pre-supervisao recebida',
+          corpo: window.CORTEX_SESSAO.profile.nome.split(' ')[0] + ' enviou a estrutura de supervisao de ' + (pac ? pac.nome.split(' ')[0] : 'uma crianca') + ' (' + dados.data.split('-').reverse().join('/') + ').' })));
+      } catch (e) { /* aviso e opcional */ }
+    }
+    await this.carregar(); this.desenhar();
+  },
+  async docPre(id) {
+    const { data: p } = await sb.from('pre_supervisoes').select('*, aplicador:profiles!pre_supervisoes_aplicador_id_fkey(nome), paciente:pacientes!pre_supervisoes_paciente_id_fkey(nome, data_nascimento)').eq('id', id).single();
+    if (!p) return;
+    const txt = t => t ? escaparHtml(t).replace(/\n/g, '<br>') : '<span style="color:#94A3B8">&mdash;</span>';
+    const bloco = (rot, t) => '<h2 style="margin-top:12px"><span class="ponto deq-azul"></span>' + rot + '</h2><div class="deq-caixa deq-texto">' + txt(t) + '</div>';
+    document.getElementById('doc-eq-overlay')?.remove();
+    const ov = document.createElement('div');
+    ov.id = 'doc-eq-overlay'; ov.className = 'folha-overlay';
+    ov.innerHTML = '<div class="folha-pagina" style="max-width:860px">' +
+      '<div class="pagina-cabecalho nao-imprime">' +
+      '  <div><button class="btn-voltar" onclick="document.getElementById(\'doc-eq-overlay\').remove()">&larr; Fechar</button><h2>Estrutura de supervis&atilde;o</h2></div>' +
+      '  <div style="display:flex; gap:8px">' + (ehEquipe() && p.aplicador_id === window.CORTEX_SESSAO.user.id ? '<button class="btn btn-fantasma" onclick="document.getElementById(\'doc-eq-overlay\').remove(); MODULOS.eventos.modalPre(\'' + p.id + '\', \'' + (p.evento_id || '') + '\')">&#9998; Editar</button>' : '') +
+      '  <button class="btn btn-primario" onclick="window.print()">&#128424; Imprimir / PDF</button></div></div>' +
+      '<div class="doc-eq">' +
+      '<div class="deq-cab"><img src="icones/equilibrium.png" alt="Equilibrium"><div class="deq-cab-t"><h1>ESTRUTURA DE SUPERVIS&Atilde;O</h1><p>Equilibrium Terapia Infantil &middot; preenchida pelo aplicador antes da supervis&atilde;o</p></div></div>' +
+      '<div class="deq-caixa deq-dados" style="grid-template-columns:1.2fr 2fr 1fr 1.4fr; margin-top:8px">' +
+      '  <div><small>1) Data da supervis&atilde;o</small><b>' + p.data.split('-').reverse().join('/') + '</b></div>' +
+      '  <div><small>2) Nome do aprendiz</small><b>' + escaparHtml(p.paciente ? p.paciente.nome : '') + '</b></div>' +
+      '  <div><small>3) Idade</small><b>' + escaparHtml(p.idade || this.idadeCurta(p.paciente && p.paciente.data_nascimento, p.data)) + '</b></div>' +
+      '  <div style="border-bottom:none"><small>Aplicador(a)</small><b>' + escaparHtml(p.aplicador ? p.aplicador.nome : '') + '</b></div></div>' +
+      this.PRE_CAMPOS.map(([k, rot]) => bloco(rot, p[k])).join('') +
+      '<div class="deq-rodape"><span>Equilibrium Terapia Infantil &middot; Uberl&acirc;ndia/MG' + (p.enviada_em ? ' &middot; enviada em ' + new Date(p.enviada_em).toLocaleString('pt-BR') : '') + '</span>' +
+      '<span class="pontos"><i style="background:var(--eq-teal)"></i><i style="background:var(--eq-amarelo)"></i><i style="background:var(--eq-rosa)"></i><i style="background:var(--eq-azul)"></i></span><span>CORTEX aba</span></div>' +
+      '</div></div>';
+    document.body.appendChild(ov);
   },
 
   // ─────────────── Agendar / editar ───────────────
@@ -93,6 +242,10 @@ window.MODULOS.eventos = {
       this.equipe.map(m => '<option value="' + m.id + '"' +
         (e && e.profissional_id === m.id ? ' selected' : '') + '>' + escaparHtml(m.nome) + '</option>').join('') +
       '  </select></div>' +
+      '  <div class="campo c2"><label>Crianca <small class="sub">(opcional; na supervisao, a aplicadora preenche a estrutura de pre-supervisao desta crianca)</small></label><select id="ev-pac">' +
+      '    <option value="">Sem crianca especifica</option>' +
+      (this.pacientes || []).map(p => '<option value="' + p.id + '"' + (e && e.paciente_id === p.id ? ' selected' : '') + '>' + escaparHtml(p.nome) + '</option>').join('') +
+      '  </select></div>' +
       '</div>' +
       '<div class="mensagem-erro" id="ev-erro"></div>' +
       '<div class="barra-acoes">' +
@@ -110,7 +263,8 @@ window.MODULOS.eventos = {
       titulo: document.getElementById('ev-titulo').value.trim(),
       data: document.getElementById('ev-data').value,
       hora: document.getElementById('ev-hora').value || null,
-      profissional_id: document.getElementById('ev-prof').value || null
+      profissional_id: document.getElementById('ev-prof').value || null,
+      paciente_id: document.getElementById('ev-pac').value || null
     };
     if (!dados.titulo || !dados.data) {
       erro.textContent = 'Preencha assunto e data.'; erro.classList.add('visivel'); return;
@@ -233,9 +387,17 @@ window.MODULOS.eventos = {
     const amanha = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
 
     const { data: evs } = await sb.from('eventos')
-      .select('tipo, titulo, data, hora, profissional_id')
+      .select('id, tipo, titulo, data, hora, profissional_id, paciente_id')
       .in('data', [hoje, amanha]).order('data').order('hora');
     const meus = (evs || []).filter(e => !e.profissional_id || e.profissional_id === eu);
+    // aplicadora: supervisao de hoje/amanha ainda sem a estrutura de pre-supervisao enviada
+    let preFalta = [];
+    if (ehEquipe() && meus.some(e => e.tipo === 'supervisao')) {
+      const ids = meus.filter(e => e.tipo === 'supervisao').map(e => e.id);
+      const { data: pr } = await sb.from('pre_supervisoes').select('evento_id, status').in('evento_id', ids).eq('aplicador_id', eu);
+      const ok = new Set((pr || []).filter(x => x.status === 'enviada').map(x => x.evento_id));
+      preFalta = meus.filter(e => e.tipo === 'supervisao' && !ok.has(e.id));
+    }
 
     let venc = [];
     if (['direcao', 'coordenador'].includes(perfil)) {
@@ -280,7 +442,10 @@ window.MODULOS.eventos = {
           '<div class="linha-doc"><span><b>' + (e.tipo === 'supervisao' ? '&#128204;' : e.tipo === 'reuniao_pais' ? '&#128106;' : '&#128101;') + ' ' +
           escaparHtml(e.titulo) + '</b><small>' +
           (e.data === hoje ? 'HOJE' : 'Amanha') + (e.hora ? ' as ' + e.hora.slice(0, 5) : '') +
-          '</small></span></div>').join('');
+          (preFalta.includes(e) ? ' &middot; <b style="color:#92400E">estrutura de pre-supervisao pendente</b>' : '') +
+          '</small></span>' +
+          (preFalta.includes(e) ? '<button class="btn-chip cheio" onclick="fecharModal(); abrirModulo(\'eventos\'); setTimeout(function(){ MODULOS.eventos.modalPre(\'\', \'' + e.id + '\'); }, 600)">Preencher agora</button>' : '') +
+          '</div>').join('');
     }
     if (venc.length) {
       html += '<p class="sub" style="margin:10px 0 6px"><b>Avaliacoes vencendo ou vencidas (' + venc.length + '):</b></p>' +

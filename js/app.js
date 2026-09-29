@@ -539,14 +539,16 @@ function pdfAssinadoBtn() {
 // 1) monta o PDF do documento aqui no navegador (html2pdf, mesmo visual da impressao)
 // 2) manda para a Edge Function assinar-pdf, que assina com o certificado guardado nos secrets
 // 3) devolve o PDF assinado (download) e guarda uma copia em documentos/assinados
-async function carregarHtml2pdf() {
-  if (window.html2pdf) return;
-  await new Promise((res, rej) => {
-    const s = document.createElement('script');
-    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
-    s.onload = res; s.onerror = () => rej(new Error('Nao foi possivel carregar o gerador de PDF.'));
+function carregarScript(src) {
+  return new Promise((res, rej) => {
+    const s = document.createElement('script'); s.src = src;
+    s.onload = res; s.onerror = () => rej(new Error('Nao foi possivel carregar ' + src.split('/').pop()));
     document.head.appendChild(s);
   });
+}
+async function carregarHtml2pdf() {
+  if (!window.html2canvas) await carregarScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
+  if (!(window.jspdf && window.jspdf.jsPDF)) await carregarScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
 }
 // Divide o documento (.doc-eq) em paginas A4 de 794x1123px: cabecalho e rodape repetidos, conteudo distribuido
 // por unidades (h2, caixas, graficos, assinatura); caixas de texto sao quebradas por paragrafo quando nao cabem.
@@ -577,7 +579,7 @@ function paginarDocumentoPdf(doc, wrap) {
   const novaPagina = () => {
     const pg = document.createElement('div');
     pg.className = classes + ' pdf-pagina';
-    pg.style.cssText = 'width:794px; height:' + ALT + 'px; padding:' + PAD_T + 'px ' + PAD_X + 'px ' + PAD_B + 'px; margin:0; border-radius:0; background:#fff; position:relative; overflow:hidden;';
+    pg.style.cssText = 'box-sizing:border-box; width:794px; height:' + ALT + 'px; padding:' + PAD_T + 'px ' + PAD_X + 'px ' + PAD_B + 'px; margin:0; border-radius:0; background:#fff; position:relative; overflow:hidden;';
     if (cab) pg.appendChild(cab.cloneNode(true));
     const cont = document.createElement('div'); cont.className = 'pdf-cont';
     pg.appendChild(cont);
@@ -670,24 +672,29 @@ async function gerarPdfAssinado(botao) {
     } else (clone.querySelector('.deq-rodape') || clone).insertAdjacentElement(clone.querySelector('.deq-rodape') ? 'beforebegin' : 'beforeend', carimbo);
     // Paginacao propria: cada pagina A4 e um bloco fechado (cabecalho + conteudo + rodape) e vira UMA imagem em alta
     // resolucao. Nada e cortado no meio; blocos de texto longos sao divididos por paragrafo entre as paginas.
+    // paginas montadas fora da tela; cada uma e capturada sozinha num palco 794x1123 (sem deslocamento de scroll)
     const wrap = document.createElement('div');
-    wrap.style.cssText = 'position:fixed; left:-10000px; top:0; width:794px; background:#fff;';
+    wrap.style.cssText = 'position:absolute; left:0; top:0; width:794px; background:#fff; z-index:-1; pointer-events:none; visibility:hidden;';
     document.body.appendChild(wrap);
     const paginas = paginarDocumentoPdf(clone, wrap);
-    const escala = 2.6;
-    const opts = { margin: 0, image: { type: 'jpeg', quality: 0.93 },
-      html2canvas: { scale: escala, useCORS: true, backgroundColor: '#ffffff', width: 794, height: 1123, windowWidth: 794 },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait', compress: true }, pagebreak: { mode: ['avoid-all'] } };
-    let pdf = null;
-    for (let i = 0; i < paginas.length; i++) {
-      botao.textContent = 'Montando o PDF... pagina ' + (i + 1) + ' de ' + paginas.length;
-      if (i === 0) { pdf = await html2pdf().set(opts).from(paginas[0]).toPdf().get('pdf'); continue; }
-      const canvas = await html2pdf().set(opts).from(paginas[i]).toCanvas().get('canvas');
-      pdf.addPage('a4', 'portrait');
-      pdf.addImage(canvas.toDataURL('image/jpeg', 0.93), 'JPEG', 0, 0, 210, 297, undefined, 'FAST');
-    }
-    // se a primeira pagina saiu com mais de uma folha (nao deveria), mantem so a primeira
-    while (pdf.getNumberOfPages() > paginas.length) pdf.deletePage(2);
+    const palco = document.createElement('div');
+    palco.style.cssText = 'position:absolute; left:0; top:0; width:794px; height:1123px; overflow:hidden; background:#fff; z-index:-1; pointer-events:none;';
+    document.body.appendChild(palco);
+    const escala = 2.6, sy = window.scrollY;
+    window.scrollTo(0, 0);
+    const pdf = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait', compress: true });
+    try {
+      for (let i = 0; i < paginas.length; i++) {
+        botao.textContent = 'Montando o PDF... pagina ' + (i + 1) + ' de ' + paginas.length;
+        palco.innerHTML = ''; palco.appendChild(paginas[i]);
+        const canvas = await window.html2canvas(palco, {
+          scale: escala, useCORS: true, backgroundColor: '#ffffff', logging: false,
+          width: 794, height: 1123, x: 0, y: 0, scrollX: 0, scrollY: 0, windowWidth: 794, windowHeight: 1123
+        });
+        if (i > 0) pdf.addPage('a4', 'portrait');
+        pdf.addImage(canvas.toDataURL('image/jpeg', 0.93), 'JPEG', 0, 0, 210, 297, undefined, 'FAST');
+      }
+    } finally { palco.remove(); window.scrollTo(0, sy); }
     const blob = pdf.output('blob');
     wrap.remove();
     const b64 = await new Promise(res => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1]); r.readAsDataURL(blob); });

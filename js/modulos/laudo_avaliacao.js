@@ -522,6 +522,7 @@ window.MODULOS.laudo_avaliacao = {
       Object.assign(rel, auto);
     }
     if (rel.incluir_anexos === null || rel.incluir_anexos === undefined) rel.incluir_anexos = d.completo;
+    if (rel.mostrar_frequencia === null || rel.mostrar_frequencia === undefined) rel.mostrar_frequencia = !!d.freq;
     this._rel = rel; this._d = d;
     // anexos consolidados (tabelas/graficos de cada protocolo), capturados uma vez
     this._anexos = {};
@@ -560,6 +561,7 @@ window.MODULOS.laudo_avaliacao = {
       '    <div class="caixa-info"><small>' + escaparHtml(this.NOME_PROT[pr.av.protocolo] || pr.av.protocolo) + '</small><b>' + (pr.atual.total === null ? '-' : pr.atual.total + '%') +
       ' <small class="sub">' + new Date(pr.av.concluido_em).toLocaleDateString('pt-BR') + ' &middot; ' + pr.nSessoes + ' sess.' + (pr.anterior ? ' &middot; ant. ' + pr.anterior.total + '%' : '') + '</small></b></div>').join('') + '</div>' +
       '  <label class="check" style="display:flex; gap:6px; align-items:center; font-size:12.5px; margin-top:8px"><input type="checkbox" id="la-anexos"' + (rel.incluir_anexos ? ' checked' : '') + (editavel ? '' : ' disabled') + ' onchange="MODULOS.laudo_avaliacao.salvarAuto()"> Incluir anexos consolidados (tabelas e graficos de cada protocolo)</label>' +
+      '  <label class="check" style="display:flex; gap:6px; align-items:center; font-size:12.5px; margin-top:6px"><input type="checkbox" id="la-freq"' + (rel.mostrar_frequencia ? ' checked' : '') + (editavel ? '' : ' disabled') + ' onchange="MODULOS.laudo_avaliacao.salvarAuto()"> Mostrar a frequ&ecirc;ncia semanal na identifica&ccedil;&atilde;o' + (d.freq ? ' (' + escaparHtml(String(d.freq)) + ' sess&otilde;es/semana)' : ' <small class="sub">(sem frequ&ecirc;ncia cadastrada no Plano)</small>') + '</label>' +
       (faltas.length ? '<div class="mensagem-erro visivel" style="margin-top:8px">Faltam no cadastro: ' + faltas.join(', ') + '. O relatorio sai sem esses dados ate preencher em Editar dados / Plano.</div>' : '') +
       '  <div class="campo" style="margin-top:8px"><label>Assinatura</label><select id="la-ass"' + (editavel ? '' : ' disabled') + ' onchange="MODULOS.laudo_avaliacao.salvarAuto()">' +
       this._assinaturas.map(a => '<option value="' + escaparHtml(a.nome) + '"' + (a.nome === rel.assinatura_nome ? ' selected' : '') + '>' + escaparHtml(a.nome) + ' \u2014 ' + escaparHtml(a.titulo) + '</option>').join('') + '</select></div></div>' +
@@ -600,6 +602,7 @@ window.MODULOS.laudo_avaliacao = {
     const procedimento = procEl ? (procEl.value.trim() === this.procedimentoPadrao(d).trim() ? null : procEl.value.trim() || null) : rel.procedimento;
     return { demanda: v('demanda') ?? rel.demanda, procedimento, analise: v('analise') ?? rel.analise, comparativo: v('comparativo') ?? rel.comparativo,
       areas, conclusao: v('conclusao') ?? rel.conclusao, incluir_anexos: anx ? anx.checked : rel.incluir_anexos,
+      mostrar_frequencia: document.getElementById('la-freq') ? document.getElementById('la-freq').checked : rel.mostrar_frequencia,
       assinatura_nome: a ? a.nome : rel.assinatura_nome, assinatura_titulo: a ? a.titulo : rel.assinatura_titulo };
   },
   salvarAuto() {
@@ -659,12 +662,12 @@ window.MODULOS.laudo_avaliacao = {
       '  <div class="deq-cab-t"><h1>RELAT&Oacute;RIO &middot; AVALIA&Ccedil;&Atilde;O DO DESENVOLVIMENTO E COMPORTAMENTO INFANTIL</h1><p>Equilibrium Terapia Infantil &middot; Psicoterapia ABA</p></div>' +
       '  <span class="deq-pilula">' + (d.protocolos.some(pr => pr.anterior) ? 'REAVALIA&Ccedil;&Atilde;O' : 'AVALIA&Ccedil;&Atilde;O') + (d.completo ? ' COMPLETA' : '') + '</span></div>' +
       sec('I.', 'Identifica&ccedil;&atilde;o') +
-      '<div class="deq-caixa deq-dados" style="grid-template-columns:2fr 1.2fr 1.6fr 1fr 1fr">' +
+      '<div class="deq-caixa deq-dados" style="grid-template-columns:2fr 1.2fr 1.6fr 1fr' + (rel.mostrar_frequencia ? ' 1fr' : '') + '">' +
       '  <div style="border-bottom:none"><small>Nome</small><b>' + escaparHtml(d.pac.nome) + '</b></div>' +
       '  <div style="border-bottom:none"><small>Data de nascimento</small><b>' + fmt(d.pac.data_nascimento + 'T12:00:00') + ' (' + this.idadeTxt(d.pac.data_nascimento, d.av.concluido_em) + ')</b></div>' +
       '  <div style="border-bottom:none"><small>Psic&oacute;logo respons&aacute;vel</small><b>' + escaparHtml(rel.assinatura_nome || this.ASSINATURA_PADRAO.nome) + '</b></div>' +
       '  <div style="border-bottom:none"><small>Especialidade</small><b>Psicoterapia ABA</b></div>' +
-      '  <div style="border-bottom:none"><small>Frequ&ecirc;ncia</small><b>' + (d.freq ? escaparHtml(String(d.freq)) + ' sess&otilde;es semanais' : '&mdash;') + '</b></div></div>' +
+      (rel.mostrar_frequencia ? '  <div style="border-bottom:none"><small>Frequ&ecirc;ncia</small><b>' + (d.freq ? escaparHtml(String(d.freq)) + ' sess&otilde;es semanais' : '&mdash;') + '</b></div>' : '') + '</div>' +
       sec('II.', 'Descri&ccedil;&atilde;o da demanda') + '<div class="deq-caixa deq-texto">' + txt(rel.demanda) + '</div>' +
       sec('III.', 'Procedimento') + '<div class="deq-caixa deq-texto">' + txt(proc) + '</div>' +
       sec('IV.', 'An&aacute;lise') + '<div class="deq-caixa deq-texto">' + txt(rel.analise) + '</div>' +

@@ -12,7 +12,8 @@ window.MODULOS.eventos = {
   el: null,
   lista: [],
 
-  podeE() { return perm('eventos.criar') === 'E'; },
+  // criar/editar eventos e lavrar ATA: coordenacao/direcao (aplicador e terapeuta nunca, mesmo com E na matriz)
+  podeE() { return perm('eventos.criar') === 'E' && !ehEquipe(); },
   podeDemanda() { return perm('eventos.demandas') === 'E'; },
 
   async render(el) {
@@ -289,6 +290,7 @@ window.MODULOS.eventos = {
   // ─────────────── ATA ───────────────
 
   modalAta(id) {
+    if (!this.podeE()) { popAviso('A ATA e lavrada pela coordenacao. Voce preenche a estrutura de pre-supervisao.'); return; }
     const e = this.lista.find(x => x.id === id);
     if (!e) return;
     const a = e.ata || {};

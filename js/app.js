@@ -548,6 +548,100 @@ async function carregarHtml2pdf() {
     document.head.appendChild(s);
   });
 }
+// Divide o documento (.doc-eq) em paginas A4 de 794x1123px: cabecalho e rodape repetidos, conteudo distribuido
+// por unidades (h2, caixas, graficos, assinatura); caixas de texto sao quebradas por paragrafo quando nao cabem.
+function paginarDocumentoPdf(doc, wrap) {
+  const ALT = 1123, PAD_T = 30, PAD_B = 26, PAD_X = 38;
+  const cab = doc.querySelector('.deq-cab'), rod = doc.querySelector('.deq-rodape');
+  const classes = doc.className;
+  // unidades de fluxo
+  const ehUnidade = el => el.matches('h2, h3, p, table, svg, img, .deq-caixa, .deq-assinatura, .deq-carimbo-icp, .deq-graf-item, .deq-dados, .deq-freq, .deq-quebra, .deq-anexo');
+  const unidades = [];
+  const coletar = el => {
+    [...el.children].forEach(ch => {
+      if (ch === cab || ch === rod) return;
+      if (ehUnidade(ch)) unidades.push(ch);
+      else if (ch.children.length && !ch.querySelector('svg, table, img')) coletar(ch);
+      else unidades.push(ch);
+    });
+  };
+  coletar(doc);
+  // caixa de texto -> paragrafos (divisivel); mantem classes/estilo
+  const divisivel = el => el.classList && el.classList.contains('deq-caixa') && !el.querySelector('svg, table, img, .deq-dados') &&
+    (el.innerHTML.includes('<br') || el.querySelector(':scope > .deq-par'));
+  const paragrafos = el => {
+    if (el.querySelector(':scope > .deq-par')) return [...el.children];
+    const partes = el.innerHTML.split(/<br\s*\/?>/i);
+    return partes.map(h => { const d = document.createElement('div'); d.className = 'deq-par'; d.innerHTML = h.trim() || '&nbsp;'; if (!h.trim()) d.style.height = '8px'; return d; });
+  };
+  const novaPagina = () => {
+    const pg = document.createElement('div');
+    pg.className = classes + ' pdf-pagina';
+    pg.style.cssText = 'width:794px; height:' + ALT + 'px; padding:' + PAD_T + 'px ' + PAD_X + 'px ' + PAD_B + 'px; margin:0; border-radius:0; background:#fff; position:relative; overflow:hidden;';
+    if (cab) pg.appendChild(cab.cloneNode(true));
+    const cont = document.createElement('div'); cont.className = 'pdf-cont';
+    pg.appendChild(cont);
+    let rodH = 0;
+    if (rod) { const r = rod.cloneNode(true); r.style.cssText = 'position:absolute; left:' + PAD_X + 'px; right:' + PAD_X + 'px; bottom:' + PAD_B + 'px; margin:0;'; pg.appendChild(r); rodH = r.offsetHeight; }
+    wrap.appendChild(pg);
+    if (rod) rodH = pg.lastChild.offsetHeight;
+    pg._cont = cont;
+    pg._max = ALT - PAD_T - PAD_B - (cab ? pg.firstChild.offsetHeight + 10 : 0) - (rod ? rodH + 14 : 0);
+    return pg;
+  };
+  const paginas = [];
+  let pg = novaPagina(); paginas.push(pg);
+  const cabe = () => pg._cont.offsetHeight <= pg._max;
+  const vazia = () => pg._cont.children.length === 0;
+  const fila = unidades.slice();
+  let guarda = 0;
+  while (fila.length && guarda++ < 5000) {
+    const u = fila.shift();
+    pg._cont.appendChild(u);
+    if (cabe()) continue;
+    // nao coube: tenta dividir caixa de texto por paragrafo
+    if (divisivel(u)) {
+      const pars = paragrafos(u);
+      const primeira = u.cloneNode(false); primeira.innerHTML = '';
+      pg._cont.replaceChild(primeira, u);
+      let n = 0;
+      while (pars.length) {
+        primeira.appendChild(pars[0]);
+        if (cabe()) { pars.shift(); n++; continue; }
+        primeira.removeChild(pars[0]);
+        // paragrafo de texto puro: divide por frases para nao deixar buraco no fim da pagina
+        const par = pars[0];
+        if (!par.children.length && par.textContent.trim().length > 120) {
+          const frases = par.textContent.split(/(?<=[.!?;:])\s+/);
+          const a = par.cloneNode(false); a.textContent = ''; primeira.appendChild(a);
+          let k = 0;
+          while (k < frases.length) { a.textContent = frases.slice(0, k + 1).join(' '); if (!cabe()) { a.textContent = frases.slice(0, k).join(' '); break; } k++; }
+          if (k >= 1 && k < frases.length) { par.textContent = frases.slice(k).join(' '); n++; }
+          else primeira.removeChild(a);
+        }
+        break;
+      }
+      // pedaco pequeno demais no fim da pagina (so o titulo da area, por exemplo): vai inteiro para a proxima
+      if (n < 2 || primeira.offsetHeight < 110) { while (primeira.lastChild) pars.unshift(primeira.removeChild(primeira.lastChild)); primeira.remove(); n = 0; }
+      if (pars.length) { const resto = u.cloneNode(false); resto.innerHTML = ''; resto.classList.add('deq-cont'); pars.forEach(p => resto.appendChild(p)); fila.unshift(resto); }
+      if (n === 0 && vazia()) { /* paragrafo maior que a pagina: deixa e segue */ continue; }
+      if (n === 0) { pg = novaPagina(); paginas.push(pg); }
+      else { pg = novaPagina(); paginas.push(pg); }
+      continue;
+    }
+    if (vazia()) continue;                    // unidade maior que a pagina: fica e transborda (raro)
+    pg._cont.removeChild(u);
+    // titulo orfao no fim da pagina vai junto para a proxima
+    const ult = pg._cont.lastElementChild;
+    if (ult && /^H[23]$/.test(ult.tagName)) { pg._cont.removeChild(ult); fila.unshift(ult); }
+    fila.unshift(u);
+    pg = novaPagina(); paginas.push(pg);
+  }
+  // numeracao no rodape
+  paginas.forEach((p, i) => { const r = p.querySelector('.deq-rodape'); if (r) { const n = document.createElement('span'); n.textContent = 'p\u00e1g. ' + (i + 1) + '/' + paginas.length; r.appendChild(n); } });
+  return paginas;
+}
+
 async function gerarPdfAssinado(botao) {
   const ctx = window._docPortal;
   const doc = document.querySelector('#doc-eq-overlay .doc-eq, .folha-overlay .doc-eq, .folha-pagina .doc-eq, #rm-previa .doc-eq, #la-previa .doc-eq');
@@ -574,15 +668,27 @@ async function gerarPdfAssinado(botao) {
       ass.classList.add('assinado-icp');
       ass.insertAdjacentElement('afterbegin', carimbo);
     } else (clone.querySelector('.deq-rodape') || clone).insertAdjacentElement(clone.querySelector('.deq-rodape') ? 'beforebegin' : 'beforeend', carimbo);
+    // Paginacao propria: cada pagina A4 e um bloco fechado (cabecalho + conteudo + rodape) e vira UMA imagem em alta
+    // resolucao. Nada e cortado no meio; blocos de texto longos sao divididos por paragrafo entre as paginas.
     const wrap = document.createElement('div');
-    wrap.style.cssText = 'position:fixed; left:-10000px; top:0; width:794px; background:#fff; padding:28px 32px;';
-    wrap.appendChild(clone); document.body.appendChild(wrap);
-    const blob = await html2pdf().set({
-      margin: [10, 10, 12, 10], filename: 'documento.pdf', image: { type: 'jpeg', quality: .95 },
-      html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-      pagebreak: { mode: ['css', 'legacy'], avoid: ['.deq-caixa', 'table', '.deq-graf-item', 'svg', '.deq-assinatura', '.deq-carimbo-icp'] }
-    }).from(clone).outputPdf('blob');
+    wrap.style.cssText = 'position:fixed; left:-10000px; top:0; width:794px; background:#fff;';
+    document.body.appendChild(wrap);
+    const paginas = paginarDocumentoPdf(clone, wrap);
+    const escala = 2.6;
+    const opts = { margin: 0, image: { type: 'jpeg', quality: 0.93 },
+      html2canvas: { scale: escala, useCORS: true, backgroundColor: '#ffffff', width: 794, height: 1123, windowWidth: 794 },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait', compress: true }, pagebreak: { mode: ['avoid-all'] } };
+    let pdf = null;
+    for (let i = 0; i < paginas.length; i++) {
+      botao.textContent = 'Montando o PDF... pagina ' + (i + 1) + ' de ' + paginas.length;
+      if (i === 0) { pdf = await html2pdf().set(opts).from(paginas[0]).toPdf().get('pdf'); continue; }
+      const canvas = await html2pdf().set(opts).from(paginas[i]).toCanvas().get('canvas');
+      pdf.addPage('a4', 'portrait');
+      pdf.addImage(canvas.toDataURL('image/jpeg', 0.93), 'JPEG', 0, 0, 210, 297, undefined, 'FAST');
+    }
+    // se a primeira pagina saiu com mais de uma folha (nao deveria), mantem so a primeira
+    while (pdf.getNumberOfPages() > paginas.length) pdf.deletePage(2);
+    const blob = pdf.output('blob');
     wrap.remove();
     const b64 = await new Promise(res => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1]); r.readAsDataURL(blob); });
 

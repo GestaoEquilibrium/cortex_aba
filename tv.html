@@ -35,7 +35,7 @@
     <button class="btn btn-primario" onclick="iniciarPainel()">Iniciar painel</button>
   </div>
 
-  <!-- Painel -->
+  <!-- Painel (patch 31: quadro de chamadas) -->
   <div class="tv-painel" id="tv-painel" style="display:none">
     <header class="tv-topo">
       <div class="marca">
@@ -56,22 +56,28 @@
       <div class="tv-relogio" id="tv-relogio">--:--</div>
     </header>
 
-    <main class="tv-colunas">
-      <section class="tv-col">
-        <div class="tv-col-titulo aguardando">Aguardando chegada</div>
-        <div class="tv-lista" id="col-agendada"></div>
+    <main class="tv-quadro">
+      <section class="tv-chamadas-wrap">
+        <div class="tv-col-titulo chegou">Chegou &middot; pode buscar <span class="tv-conta" id="n-checkin">0</span></div>
+        <div class="tv-chamadas" id="col-checkin"></div>
       </section>
-      <section class="tv-col">
-        <div class="tv-col-titulo chegou">Chegou &middot; pode buscar</div>
-        <div class="tv-lista" id="col-checkin"></div>
-      </section>
-      <section class="tv-col">
-        <div class="tv-col-titulo atendimento">Em atendimento</div>
-        <div class="tv-lista" id="col-atendimento"></div>
-      </section>
+      <aside class="tv-lado">
+        <section class="tv-col">
+          <div class="tv-col-titulo aguardando">Aguardando chegada <span class="tv-conta" id="n-agendada">0</span></div>
+          <div class="tv-lista" id="col-agendada"></div>
+        </section>
+        <section class="tv-col">
+          <div class="tv-col-titulo atendimento">Em atendimento <span class="tv-conta" id="n-atendimento">0</span></div>
+          <div class="tv-lista" id="col-atendimento"></div>
+        </section>
+      </aside>
     </main>
 
-    <footer class="tv-rodape" id="tv-rodape">Atualizado automaticamente</footer>
+    <footer class="tv-rodape">
+      <span id="tv-rodape">Atualizado automaticamente</span>
+      <div class="tv-prog"><i id="tv-prog-barra" style="width:0%"></i></div>
+      <span id="tv-prog-txt"></span>
+    </footer>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>

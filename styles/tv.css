@@ -1,15 +1,19 @@
 /* ============================================================================
    CORTEX aba - styles/tv.css
-   Painel do Dia: sempre no escuro ameixa, escala grande para leitura a distancia.
+   Painel do Dia (patch 31: quadro de chamadas): navy Aurora com brilho ambar,
+   "Chegou - pode buscar" grande a esquerda, listas compactas a direita.
+   Escala grande para leitura a distancia.
    ============================================================================ */
 
 .tv-corpo {
-    background: linear-gradient(180deg, #241832 0%, #150D20 100%) !important;
-    color: #E9E2F4;
+    background: radial-gradient(1200px 600px at 20% -10%, rgba(245, 158, 11, .22), transparent 60%),
+                linear-gradient(160deg, #0A1428 0%, #101E42 100%) !important;
+    color: #E9EEF8;
     min-height: 100vh;
     overflow: hidden;
+    font-family: 'Inter', 'Segoe UI', sans-serif;
 }
-.tv-corpo::before { background-image: radial-gradient(circle, rgba(255,255,255,.06) 1px, transparent 1px); }
+.tv-corpo::before { background-image: radial-gradient(circle, rgba(255,255,255,.05) 1px, transparent 1px); }
 
 /* ── Sobreposicao de inicio ── */
 .tv-inicio {
@@ -20,107 +24,138 @@
     padding: 24px;
 }
 .tv-inicio .marca .nome { color: #fff; font-size: 22px; }
-.tv-inicio .marca .simbolo { width: 46px; height: 46px; border-radius: 13px; }
-.tv-inicio h1 { font-size: 30px; font-weight: 700; color: #fff; }
-.tv-inicio p { color: #B4A8C8; font-size: 15px; line-height: 1.6; max-width: 420px; }
-.tv-inicio p a { color: #FBBF24; }
+.tv-inicio .marca .simbolo { width: 46px; height: 46px; border-radius: 13px; background: linear-gradient(135deg, #B45309, #F59E0B); color: #1A1208; }
+.tv-inicio h1 { font-size: 30px; font-weight: 800; color: #fff; }
+.tv-inicio p { color: #AAB6D3; font-size: 15px; line-height: 1.6; max-width: 420px; }
+.tv-inicio p a { color: #FCD34D; }
 .tv-inicio .btn { font-size: 15px; padding: 13px 30px; }
 
 /* ── Painel ── */
 .tv-painel {
     display: flex; flex-direction: column;
     height: 100vh;
-    padding: 22px 26px;
-    gap: 18px;
+    padding: 18px 28px 14px;
+    gap: 14px;
 }
-.tv-topo {
-    display: flex; align-items: center; justify-content: space-between;
-    gap: 20px;
-}
-.tv-topo .marca .nome { color: #fff; }
-.tv-data { font-size: 16px; color: #B4A8C8; font-weight: 600; }
+.tv-topo { display: flex; align-items: center; gap: 18px; }
+.tv-topo .marca .nome { color: #fff; font-size: 20px; }
+.tv-topo .marca .simbolo { width: 40px; height: 40px; border-radius: 12px; background: linear-gradient(135deg, #B45309, #F59E0B); color: #1A1208; box-shadow: 0 8px 22px rgba(245, 158, 11, .35); }
+.tv-data { font-size: 16px; color: #AAB6D3; font-weight: 600; margin-left: 6px; }
 .tv-relogio {
-    font-size: 34px; font-weight: 800;
-    color: #fff;
+    margin-left: auto;
+    font-size: 46px; font-weight: 800;
+    color: #FCD34D;
     letter-spacing: .02em;
     font-variant-numeric: tabular-nums;
 }
 
-.tv-colunas {
-    flex: 1;
-    display: grid;
-    grid-template-columns: 1fr 1.15fr 1fr;
-    gap: 18px;
-    min-height: 0;
+/* ── Quadro: chamadas a esquerda, listas a direita ── */
+.tv-quadro {
+    flex: 1; min-height: 0;
+    display: grid; grid-template-columns: 1.6fr 1fr; gap: 16px;
 }
+.tv-chamadas-wrap { display: flex; flex-direction: column; min-height: 0; }
+.tv-lado { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
+.tv-lado .tv-col { flex: 1; }
 .tv-col {
-    background: rgba(255, 255, 255, .05);
-    border: 1px solid rgba(255, 255, 255, .10);
+    background: rgba(255, 255, 255, .06);
+    border: 1px solid rgba(255, 255, 255, .08);
     border-radius: 20px;
-    padding: 16px;
+    padding: 14px;
     display: flex; flex-direction: column;
     min-height: 0;
 }
 .tv-col-titulo {
     font-size: 15px; font-weight: 800;
-    letter-spacing: .04em; text-transform: uppercase;
-    padding: 4px 6px 14px;
+    letter-spacing: .08em; text-transform: uppercase;
+    padding: 2px 4px 12px;
+    display: flex; align-items: center; gap: 8px;
 }
-.tv-col-titulo.aguardando  { color: #B4A8C8; }
-.tv-col-titulo.chegou      { color: #FBBF24; }
+.tv-col-titulo.aguardando  { color: #AAB6D3; }
+.tv-col-titulo.chegou      { color: #FCD34D; font-size: 17px; }
 .tv-col-titulo.atendimento { color: #6EE7B7; }
+.tv-conta { margin-left: auto; background: rgba(255, 255, 255, .12); border-radius: 999px; padding: 2px 11px; font-size: 13px; color: #fff; }
+.tv-col-titulo.chegou .tv-conta { background: rgba(245, 158, 11, .25); color: #FCD34D; }
 
 .tv-lista {
     flex: 1; overflow-y: auto;
-    display: flex; flex-direction: column; gap: 10px;
+    display: flex; flex-direction: column; gap: 7px;
     scrollbar-width: none;
     mask-image: linear-gradient(to bottom, #000 calc(100% - 20px), transparent 100%);
 }
 .tv-lista::-webkit-scrollbar { display: none; }
 
 .tv-cartao {
-    display: flex; align-items: center; gap: 14px;
+    display: flex; align-items: center; gap: 12px;
     background: rgba(255, 255, 255, .07);
-    border: 1px solid rgba(255, 255, 255, .10);
+    border: 1px solid rgba(255, 255, 255, .08);
     border-radius: 14px;
-    padding: 12px 14px;
+    padding: 9px 12px;
 }
-.tv-hora {
-    font-size: 21px; font-weight: 800;
-    color: #fff;
-    font-variant-numeric: tabular-nums;
-    flex: 0 0 auto;
-}
+.tv-hora { font-size: 18px; font-weight: 800; color: #FCD34D; font-variant-numeric: tabular-nums; flex: 0 0 auto; width: 58px; }
 .tv-quem { min-width: 0; }
-.tv-quem b { display: block; font-size: 17px; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tv-quem small { color: #B4A8C8; font-size: 12.5px; }
+.tv-quem b { display: block; font-size: 16px; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tv-quem small { color: #AAB6D3; font-size: 12.5px; }
 
-/* Chegou: destaque ambar pulsante */
-.tv-cartao.destaque {
-    background: rgba(251, 191, 36, .13);
-    border-color: rgba(251, 191, 36, .45);
-    animation: tv-pulso 2.2s ease-in-out infinite;
+/* ── Chamadas: cartoes grandes em ambar ── */
+.tv-chamadas {
+    flex: 1; overflow-y: auto; scrollbar-width: none;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-content: start;
 }
-.tv-cartao.destaque .tv-hora { color: #FBBF24; }
+.tv-chamadas::-webkit-scrollbar { display: none; }
+.tv-chamada {
+    background: linear-gradient(135deg, #F59E0B, #D97706);
+    color: #1A1208;
+    border-radius: 18px;
+    padding: 16px 18px;
+    display: flex; align-items: center; gap: 14px;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, .35);
+    animation: tv-entrada .5s cubic-bezier(.2, .8, .2, 1), tv-pulso 2.4s ease-in-out infinite;
+}
+.tv-chamada-av {
+    width: 56px; height: 56px; border-radius: 50%; flex: none;
+    background: #1A1208; color: #FCD34D;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 19px;
+}
+.tv-chamada-n { min-width: 0; }
+.tv-chamada-n b { display: block; font-size: 25px; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tv-chamada-n small { font-size: 14px; color: rgba(26, 18, 8, .78); }
+.tv-chamada-sala { margin-left: auto; background: rgba(26, 18, 8, .16); border-radius: 10px; padding: 7px 11px; font-weight: 800; font-size: 15px; white-space: nowrap; }
+.tv-chamada.grande { padding: 22px 24px; }
+.tv-chamada.grande .tv-chamada-av { width: 72px; height: 72px; font-size: 24px; }
+.tv-chamada.grande .tv-chamada-n b { font-size: 32px; }
+.tv-chamada.grande .tv-chamada-n small { font-size: 16px; }
+.tv-chamada.compacto { padding: 10px 14px; }
+.tv-chamada.compacto .tv-chamada-av { width: 44px; height: 44px; font-size: 15px; }
+.tv-chamada.compacto .tv-chamada-n b { font-size: 20px; }
+.tv-chamadas-vazio {
+    grid-column: 1 / -1;
+    color: rgba(255, 255, 255, .3);
+    text-align: center; font-size: 22px; padding: 60px 0;
+    border: 2px dashed rgba(255, 255, 255, .1); border-radius: 18px;
+}
+@keyframes tv-entrada { from { transform: translateY(14px); opacity: 0; } to { transform: none; opacity: 1; } }
 @keyframes tv-pulso {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0); }
-    50%      { box-shadow: 0 0 22px 2px rgba(251, 191, 36, .25); }
+    0%, 100% { box-shadow: 0 16px 40px rgba(0, 0, 0, .35), 0 0 0 0 rgba(245, 158, 11, 0); }
+    50%      { box-shadow: 0 16px 40px rgba(0, 0, 0, .35), 0 0 0 8px rgba(245, 158, 11, .18); }
 }
 
-.tv-vazio {
-    color: rgba(255, 255, 255, .25);
-    text-align: center;
-    font-size: 22px;
-    padding: 24px 0;
-}
+.tv-vazio { color: rgba(255, 255, 255, .25); text-align: center; font-size: 20px; padding: 18px 0; }
 
+/* ── Rodape: barra do dia ── */
 .tv-rodape {
-    text-align: center;
-    color: #6E5D88;
-    font-size: 12px;
-    font-weight: 600;
+    display: flex; align-items: center; gap: 16px;
+    color: #7F8DB0; font-size: 12.5px; font-weight: 600;
 }
+.tv-prog { flex: 1; height: 8px; border-radius: 6px; background: rgba(255, 255, 255, .12); overflow: hidden; }
+.tv-prog i { display: block; height: 100%; background: linear-gradient(90deg, #B45309, #F59E0B); border-radius: 6px; transition: width .6s ease; }
 
+@media (max-width: 900px) {
+    .tv-quadro { grid-template-columns: 1fr; }
+    .tv-chamadas { grid-template-columns: 1fr; }
+    .tv-relogio { font-size: 32px; }
+}
 @media (prefers-reduced-motion: reduce) {
-    .tv-cartao.destaque { animation: none; }
+    .tv-chamada { animation: none; }
 }

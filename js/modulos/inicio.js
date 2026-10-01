@@ -5,38 +5,109 @@
 window.MODULOS = window.MODULOS || {};
 
 window.MODULOS.inicio = {
+  // Patch 31 — Inicio "Agora na clinica": faixa navy com os numeros do dia, trilho das sessoes em
+  // volta de agora, Minhas pendencias (mesma lista da Central de avisos) e Equipe hoje.
   async render(el, sessao) {
     const nome = sessao.profile.nome.split(' ')[0];
     const hora = new Date().getHours();
     const saudacao = hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite';
     const hoje = new Date().toLocaleDateString('pt-BR',
       { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+    const gestao = ['direcao', 'coordenador', 'suporte'].includes(sessao.profile.perfil);
 
     el.innerHTML =
-      '<section class="heroi">' +
-      '  <div>' +
-      '    <h1>' + saudacao + ', ' + escaparHtml(nome) + '!</h1>' +
-      '    <div class="sub">' + hoje.charAt(0).toUpperCase() + hoje.slice(1) + '</div>' +
-      '  </div>' +
+      '<section class="ini-heroi"><div>' +
+      '  <h1>' + saudacao + ', ' + escaparHtml(nome) + '</h1>' +
+      '  <div class="sub" id="ini-heroi-sub">' + hoje.charAt(0).toUpperCase() + hoje.slice(1) + '</div></div>' +
+      '  <div class="ini-nums" id="ini-nums"></div>' +
       '</section>' +
-      (perm('painel') === '' ? '<div class="kpis" id="kpis-inicio"></div>' : '<div id="inicio-painel"></div>') +
-      '<div class="cartao faixa-ambar" id="inicio-notifs"><h3>Notificacoes</h3><p class="sub">Carregando...</p></div>' +
-      '<div id="inicio-vencimentos"></div>' +
-      '';
+      '<div id="ini-agora"></div>' +
+      '<div class="ini-grid">' +
+      '  <div class="cartao" id="ini-pendencias"><h3>Minhas pendencias</h3><p class="sub">Carregando...</p></div>' +
+      '  <div class="cartao" id="ini-equipe"><h3>' + (gestao ? 'Equipe hoje' : 'Minhas sessoes hoje') + '</h3><p class="sub">Carregando...</p></div>' +
+      '</div>' +
+      (perm('painel') === '' ? '' : '<div id="inicio-painel" style="margin-top:14px"></div>') +
+      '<div id="inicio-vencimentos"></div>';
 
-    // Acoes rapidas coloridas + pendencias vivas entram entre o heroi e o painel
-    const painelDiv = document.getElementById('inicio-painel') || document.getElementById('kpis-inicio');
-    if (painelDiv) {
-      const barra = document.createElement('div');
-      barra.innerHTML = this.htmlAcoes() + '<div class="ini-pend" id="ini-pend"></div>';
-      painelDiv.parentNode.insertBefore(barra, painelDiv);
-      this.carregarPendencias();
+    this.carregarDia(sessao, gestao);
+    this.carregarPendenciasCentral();
+    if (perm('painel') !== '') MODULOS.painel.carregar('inicio-painel');
+    this.carregarVencimentos();
+  },
+
+  // Sessoes de hoje (mesmo recorte da agenda: aplicador ve as dele; coordenadora, a equipe)
+  async carregarDia(sessao, gestao) {
+    const hoje = hojeLocal();
+    let { data: sessoes } = await sb.from('sessoes')
+      .select('id, hora_inicio, duracao_min, status, aplicador_id, paciente_id, pacientes(nome), profissional:profiles!sessoes_aplicador_id_fkey(nome), salas(nome)')
+      .eq('data', hoje).order('hora_inicio');
+    if (MODULOS.agenda && MODULOS.agenda.soMinhas) sessoes = await MODULOS.agenda.soMinhas(sessoes || []);
+    const lista = (sessoes || []).filter(s => s.status !== 'cancelada');
+    const n = st => lista.filter(s => s.status === st).length;
+
+    const nums = document.getElementById('ini-nums');
+    if (nums) nums.innerHTML = [[lista.length, 'Sessoes hoje'], [n('em_atendimento'), 'Em atendimento'], [n('checkin'), 'Chegaram'], [n('concluida'), 'Concluidas'], [n('falta'), 'Faltas']]
+      .map(x => '<div><b>' + x[0] + '</b><small>' + x[1] + '</small></div>').join('');
+    const sub = document.getElementById('ini-heroi-sub');
+    if (sub && lista.length) {
+      const apls = new Set(lista.map(s => s.aplicador_id).filter(Boolean));
+      sub.innerHTML += ' &middot; ' + lista.length + ' sessao(oes)' + (gestao ? ' &middot; ' + apls.size + ' aplicador(es)' : '');
     }
 
-    if (perm('painel') === '') this.carregarKpis();
-    else MODULOS.painel.carregar('inicio-painel');
-    this.carregarNotificacoes(sessao);
-    this.carregarVencimentos();
+    // trilho "Agora na clinica": a sessao em curso (ou a proxima) no centro, 2 antes e 3 depois
+    const agoraEl = document.getElementById('ini-agora');
+    if (agoraEl) {
+      const d = new Date(); const hhmm = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+      let idx = lista.findIndex(s => s.status === 'em_atendimento');
+      if (idx < 0) idx = lista.findIndex(s => String(s.hora_inicio).slice(0, 5) >= hhmm);
+      if (idx < 0) idx = lista.length - 1;
+      const ini = Math.max(0, Math.min(idx - 2, lista.length - 6));
+      const trilho = lista.slice(ini, ini + 6);
+      const COR = { agendada: 'var(--st-neutro)', checkin: '#2563EB', em_atendimento: '#D97706', concluida: 'var(--st-ok)', falta: 'var(--st-bad)' };
+      agoraEl.innerHTML = lista.length
+        ? '<h3 class="ini-sec">Agora na clinica <span class="sub">&middot; ' + hhmm + '</span>' +
+          '<button class="btn-chip" style="margin-left:auto" onclick="abrirModulo(\'agenda\')">Abrir agenda</button></h3>' +
+          '<div class="ini-trilho">' + trilho.map((s, i) => '<div class="ini-ag-card' + (ini + i === idx ? ' atual' : '') + '" onclick="abrirModulo(\'agenda\'); setTimeout(function(){ MODULOS.agenda.abrirSessao(\'' + s.id + '\'); }, 500)">' +
+            '<span class="st" style="background:' + (COR[s.status] || COR.agendada) + '"></span><b>' + escaparHtml((s.pacientes ? s.pacientes.nome : '?').split(' ').slice(0, 2).join(' ')) + '</b>' +
+            '<small>' + String(s.hora_inicio).slice(0, 5) + ' &middot; ' + escaparHtml(s.profissional ? s.profissional.nome.split(' ')[0] : '-') + (s.salas ? ' &middot; ' + escaparHtml(s.salas.nome) : '') + '</small></div>').join('') + '</div>'
+        : '';
+    }
+
+    // Equipe hoje (gestao): concluidas / agendadas por aplicadora. Aplicador: lista das proprias sessoes
+    const eq = document.getElementById('ini-equipe');
+    if (!eq) return;
+    if (gestao) {
+      const por = {};
+      lista.forEach(s => { const k = s.aplicador_id || 'sem'; const o = por[k] = por[k] || { nome: s.profissional ? s.profissional.nome : 'Sem aplicador', total: 0, feitas: 0, atend: 0 }; o.total++; if (['concluida', 'falta'].includes(s.status)) o.feitas++; if (s.status === 'em_atendimento') o.atend++; });
+      const linhas = Object.values(por).sort((a, b) => a.nome.localeCompare(b.nome));
+      eq.innerHTML = '<h3>Equipe hoje <span class="sub" style="font-weight:500">&middot; encerradas / agendadas</span></h3>' +
+        (linhas.length ? linhas.map(a => '<div class="ini-lin"><span class="evo-av ' + (typeof corAvatar === 'function' ? corAvatar(a.nome) : 'av-1') + '">' + escaparHtml(a.nome.split(' ').slice(0, 2).map(x => x[0]).join('').toUpperCase()) + '</span>' +
+          '<span class="ini-lin-n">' + escaparHtml(a.nome.split(' ').slice(0, 2).join(' ')) + (a.atend ? ' <span class="selo selo-warn">em atendimento</span>' : '') + '</span>' +
+          '<span class="ini-barra"><i style="width:' + Math.round(a.feitas / a.total * 100) + '%"></i></span><small>' + a.feitas + '/' + a.total + '</small></div>').join('')
+          : '<p class="sub">Nenhuma sessao hoje.</p>');
+    } else {
+      eq.innerHTML = '<h3>Minhas sessoes hoje</h3>' + (lista.length ? lista.map(s =>
+        '<div class="ini-lin clicavel" onclick="abrirModulo(\'agenda\'); setTimeout(function(){ MODULOS.agenda.abrirSessao(\'' + s.id + '\'); }, 500)"><b class="ini-lin-h">' + String(s.hora_inicio).slice(0, 5) + '</b>' +
+        '<span class="ini-lin-n">' + escaparHtml(s.pacientes ? s.pacientes.nome : '?') + (s.salas ? '<small class="sub"> &middot; ' + escaparHtml(s.salas.nome) + '</small>' : '') + '</span>' +
+        (MODULOS.agenda ? MODULOS.agenda.selosSessao(s) : '') + '</div>').join('') : '<p class="sub">Nenhuma sessao hoje.</p>');
+    }
+  },
+
+  // Minhas pendencias: as 5 primeiras linhas da Central de avisos, com o mesmo botao de acao
+  async carregarPendenciasCentral() {
+    const alvo = document.getElementById('ini-pendencias');
+    if (!alvo || !MODULOS.avisos) return;
+    if (!MODULOS.avisos.itens.length && !MODULOS.avisos._carregando) await MODULOS.avisos.carregar();
+    else if (MODULOS.avisos._carregando) { await new Promise(r => setTimeout(r, 1500)); }
+    const itens = MODULOS.avisos.itens.filter(i => i.grupo !== 'Notificacoes do sistema');
+    const notifs = MODULOS.avisos.itens.length - itens.length;
+    alvo.innerHTML = '<h3>Minhas pendencias ' + (itens.length ? '<span class="selo selo-neutro">' + itens.length + '</span>' : '') +
+      '<button class="btn-chip" style="margin-left:auto" onclick="MODULOS.avisos.abrir()">Ver tudo' + (notifs ? ' &middot; ' + notifs + ' notificacao(oes)' : '') + '</button></h3>' +
+      (itens.length ? itens.slice(0, 5).map(i => '<div class="av-item ini-av"><span class="ic ic-' + i.cor + '">' + (ICONES[i.icone] || ICONES.inicio) + '</span>' +
+        '<span class="tx"><b>' + escaparHtml(i.titulo) + '</b><small>' + escaparHtml(i.sub || '') + '</small></span>' +
+        '<button type="button" class="btn-chip" onclick="MODULOS.avisos.acao(this)" data-acao="' + escaparHtml(i.acao).replace(/"/g, '&quot;') + '">' + escaparHtml(i.botao || 'Abrir') + '</button></div>').join('') +
+        (itens.length > 5 ? '<p class="sub" style="margin-top:6px">+ ' + (itens.length - 5) + ' na central de avisos.</p>' : '')
+        : '<div class="avisos-vazio" style="padding:18px 10px"><div style="font-size:26px">&#10004;</div><b>Tudo em dia</b></div>');
   },
 
   async carregarVencimentos() {

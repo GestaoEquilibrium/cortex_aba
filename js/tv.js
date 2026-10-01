@@ -1,7 +1,7 @@
 // ============================================================================
 // CORTEX aba - js/tv.js
-// Painel do Dia: atualiza sozinho, toca som quando ha novo check-in e
-// remove da tela as sessoes concluidas/faltas/canceladas.
+// Painel do Dia (patch 31: quadro de chamadas): atualiza sozinho, toca som quando ha
+// novo check-in e remove da tela as sessoes concluidas/faltas/canceladas.
 // Requer sessao de qualquer perfil interno (logar uma vez na TV).
 // ============================================================================
 
@@ -91,16 +91,24 @@ async function cicloTV() {
   TV_CHECKINS_VISTOS = idsCheckin;
   TV_PRIMEIRA_CARGA = false;
 
-  desenharColuna('col-agendada', grupos.agendada, false);
-  desenharColuna('col-checkin', grupos.checkin, true);
-  desenharColuna('col-atendimento', grupos.em_atendimento, false);
+  desenharChamadas(grupos.checkin);
+  desenharColuna('col-agendada', grupos.agendada);
+  desenharColuna('col-atendimento', grupos.em_atendimento);
+  document.getElementById('n-checkin').textContent = grupos.checkin.length;
+  document.getElementById('n-agendada').textContent = grupos.agendada.length;
+  document.getElementById('n-atendimento').textContent = grupos.em_atendimento.length;
+
+  // barra do dia: concluidas sobre o total (faltas e canceladas contam como encerradas)
+  const total = (sessoes || []).filter(s => s.status !== 'cancelada').length;
+  const feitas = (sessoes || []).filter(s => ['concluida', 'falta'].includes(s.status)).length;
+  document.getElementById('tv-prog-barra').style.width = (total ? Math.round(feitas * 100 / total) : 0) + '%';
+  document.getElementById('tv-prog-txt').textContent = feitas + ' de ' + total + ' sessoes encerradas';
 
   const agora = new Date();
   document.getElementById('tv-rodape').textContent =
     'Atualizado as ' + String(agora.getHours()).padStart(2, '0') + ':' +
     String(agora.getMinutes()).padStart(2, '0') + ':' +
-    String(agora.getSeconds()).padStart(2, '0') +
-    ' \u00B7 ' + (sessoes || []).length + ' sessao(oes) hoje';
+    String(agora.getSeconds()).padStart(2, '0');
 }
 
 function nomeCurto(nome) {
@@ -109,14 +117,41 @@ function nomeCurto(nome) {
   return partes[0] + (partes[1] ? ' ' + partes[1][0] + '.' : '');
 }
 
-function desenharColuna(id, lista, destaque) {
+// dois primeiros nomes + inicial do terceiro (quadro de chamadas)
+function nomeMedio(nome) {
+  const p = String(nome || '?').trim().split(/\s+/);
+  return p.slice(0, 2).join(' ') + (p[2] ? ' ' + p[2][0] + '.' : '');
+}
+
+function iniciais(nome) {
+  return String(nome || '?').trim().split(/\s+/).slice(0, 2).map(p => p[0]).join('').toUpperCase();
+}
+
+// Quadro de chamadas: cartoes grandes (iniciais, crianca, aplicadora, sala)
+function desenharChamadas(lista) {
+  const alvo = document.getElementById('col-checkin');
+  if (lista.length === 0) {
+    alvo.innerHTML = '<div class="tv-chamadas-vazio">Nenhuma crianca aguardando na recepcao</div>';
+    return;
+  }
+  const cls = lista.length <= 2 ? ' grande' : lista.length <= 6 ? '' : ' compacto';
+  alvo.innerHTML = lista.map(s =>
+    '<div class="tv-chamada' + cls + '">' +
+    '  <div class="tv-chamada-av">' + iniciais(s.pacientes ? s.pacientes.nome : '') + '</div>' +
+    '  <div class="tv-chamada-n"><b>' + nomeMedio(s.pacientes ? s.pacientes.nome : '') + '</b>' +
+    '    <small>' + (s.profissional ? nomeCurto(s.profissional.nome) : '-') + ' \u00B7 sessao ' + s.hora_inicio.slice(0, 5) + '</small></div>' +
+    (s.salas ? '<div class="tv-chamada-sala">' + s.salas.nome + '</div>' : '') +
+    '</div>').join('');
+}
+
+function desenharColuna(id, lista) {
   const alvo = document.getElementById(id);
   if (lista.length === 0) {
     alvo.innerHTML = '<div class="tv-vazio">&mdash;</div>';
     return;
   }
   alvo.innerHTML = lista.map(s =>
-    '<div class="tv-cartao' + (destaque ? ' destaque' : '') + '">' +
+    '<div class="tv-cartao">' +
     '  <div class="tv-hora">' + s.hora_inicio.slice(0, 5) + '</div>' +
     '  <div class="tv-quem">' +
     '    <b>' + nomeCurto(s.pacientes ? s.pacientes.nome : '') + '</b>' +

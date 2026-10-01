@@ -327,6 +327,12 @@ window.MODULOS.agenda = {
 
   // ───────────────────────── VISAO DIA ─────────────────────────
 
+  // Patch 31: a visao Dia tem dois modos, guardados no navegador — "Linha" (sessoes por horario numa
+  // linha do tempo com o marcador de agora e acoes rapidas) e "Grade" (aplicadores x horarios, com
+  // mini-calendario). Semana e Mes continuam como estavam.
+  modoDia() { try { return localStorage.getItem('cortex_agenda_dia') || 'linha'; } catch (e) { return 'linha'; } },
+  mudarModoDia(m) { try { localStorage.setItem('cortex_agenda_dia', m); } catch (e) {} this.desenharDia(); },
+
   async desenharDia() {
     const d = new Date(this.dataRef + 'T12:00:00');
     document.getElementById('ag-sub').textContent =
@@ -351,30 +357,99 @@ window.MODULOS.agenda = {
     if (!alvo) return;
     if (error) { alvo.innerHTML = '<div class="cartao"><div class="mensagem-erro visivel">' + escaparHtml(error.message) + '</div></div>'; return; }
 
+    const modo = this.modoDia();
+    const lista = (sessoes || []).filter(s => s.status !== 'cancelada');
+    const n = st => lista.filter(s => s.status === st).length;
+    const topo = '<div class="agd-topo">' +
+      '<div class="agd-tiles">' +
+      [['agendada', 'Aguardando', 'var(--st-neutro)'], ['checkin', 'Chegaram', '#2563EB'], ['em_atendimento', 'Em atendimento', '#D97706'], ['concluida', 'Concluidas', 'var(--st-ok)'], ['falta', 'Faltas', 'var(--st-bad)']]
+        .map(t => '<div class="agd-tile" style="border-left-color:' + t[2] + '"><small>' + t[1] + '</small><b>' + n(t[0]) + '</b></div>').join('') + '</div>' +
+      '<div class="toggle-visao agd-modo"><button type="button" class="' + (modo === 'linha' ? 'ativo' : '') + '" onclick="MODULOS.agenda.mudarModoDia(\'linha\')">Linha</button>' +
+      '<button type="button" class="' + (modo === 'grade' ? 'ativo' : '') + '" onclick="MODULOS.agenda.mudarModoDia(\'grade\')">Grade</button></div></div>';
+
     if (!sessoes || sessoes.length === 0) {
-      alvo.innerHTML = '<div class="cartao"><div class="vazio">' +
+      alvo.innerHTML = topo + '<div class="cartao"><div class="vazio">' +
         '<div class="simbolo-vazio">&#128197;</div><strong>Sem sessoes neste dia</strong>' +
         'A grade fixa nao tem horarios para esta data.</div></div>';
       return;
     }
+    alvo.innerHTML = topo + (modo === 'grade' ? this.htmlDiaGrade(sessoes) : this.htmlDiaLinha(sessoes));
+  },
 
-    alvo.innerHTML = '<div class="grade-checkin">' + sessoes.map(s => {
-      const prof = s.profissional
-        ? s.profissional.nome.split(' ').slice(0, 2).join(' ')
-        : 'Sem profissional';
-      return '<div class="cartao cartao-checkin clicavel-sessao ck-st-' + s.status + '" ' +
-        'onclick="MODULOS.agenda.abrirSessao(\'' + s.id + '\')">' +
-        '<div class="ck-hora">' + s.hora_inicio.slice(0, 5) + '</div>' +
-        '<div class="ck-info">' +
-        '  <b>' + escaparHtml(s.pacientes ? s.pacientes.nome : '?') + '</b>' +
-        '  <span class="ck-prof">&#128100; ' + escaparHtml(prof) +
-        (s.salas ? ' <small>&middot; ' + escaparHtml(s.salas.nome) + '</small>' : '') + '</span>' +
-        '  <div class="pac-selos">' + this.selosSessao(s) +
-        (['concluida', 'falta'].includes(s.status) && !this._comEvoDia.has(s.id) && s.data >= (window.CORTEX_EVO_DESDE || '2000-01-01')
-          ? '<span class="selo selo-sem-evo" title="A sessao foi concluida mas a evolucao ainda nao foi escrita.">&#9998; sem evolucao</span>' : '') +
-        '</div>' +
-        '</div></div>';
-    }).join('') + '</div>';
+  // acao rapida no cartao: abre a sessao (regras de guia e permissao valem) e aplica o status
+  async acaoRapida(id, status) {
+    await this.abrirSessao(id);
+    await this.mudarStatusSeguro(id, status);
+  },
+
+  iniciaisDe(nome) { return String(nome || '?').trim().split(/\s+/).slice(0, 2).map(p => p[0]).join('').toUpperCase(); },
+
+  cartaoDia(s, podeOperar) {
+    const prof = s.profissional ? s.profissional.nome.split(' ').slice(0, 2).join(' ') : 'Sem profissional';
+    const semEvo = ['concluida', 'falta'].includes(s.status) && !this._comEvoDia.has(s.id) && s.data >= (window.CORTEX_EVO_DESDE || '2000-01-01');
+    const passada = ['concluida', 'falta'].includes(s.status);
+    const chip = !podeOperar ? '' :
+      s.status === 'agendada' ? '<button type="button" class="btn-chip" onclick="event.stopPropagation(); MODULOS.agenda.acaoRapida(\'' + s.id + '\', \'checkin\')">Check-in</button>' :
+      s.status === 'checkin' ? '<button type="button" class="btn-chip cheio" onclick="event.stopPropagation(); MODULOS.agenda.acaoRapida(\'' + s.id + '\', \'em_atendimento\')">Iniciar</button>' :
+      s.status === 'em_atendimento' ? '<button type="button" class="btn-chip cheio" onclick="event.stopPropagation(); MODULOS.agenda.abrirSessao(\'' + s.id + '\')">Concluir</button>' : '';
+    return '<div class="agd-card' + (passada ? ' passada' : '') + ' ck-st-' + s.status + '" onclick="MODULOS.agenda.abrirSessao(\'' + s.id + '\')">' +
+      '<span class="evo-av ' + (typeof corAvatar === 'function' ? corAvatar(prof) : 'av-1') + '">' + escaparHtml(this.iniciaisDe(prof)) + '</span>' +
+      '<span class="agd-n"><b>' + escaparHtml(s.pacientes ? s.pacientes.nome : '?') + '</b><small>' + escaparHtml(prof) + (s.salas ? ' &middot; ' + escaparHtml(s.salas.nome) : '') + '</small></span>' +
+      '<span class="agd-selos">' + this.selosSessao(s) + (semEvo ? '<span class="selo selo-sem-evo" title="Sessao encerrada sem evolucao">&#9998; sem evolucao</span>' : '') + '</span>' +
+      chip + '</div>';
+  },
+
+  htmlDiaLinha(sessoes) {
+    const podeOperar = perm('agenda.status') === 'E' || ehEquipe();
+    const porHora = {};
+    sessoes.forEach(s => { const h = String(s.hora_inicio).slice(0, 5); (porHora[h] = porHora[h] || []).push(s); });
+    const horas = Object.keys(porHora).sort();
+    const agora = new Date(); const hhmm = String(agora.getHours()).padStart(2, '0') + ':' + String(agora.getMinutes()).padStart(2, '0');
+    const hojeMesmo = this.dataRef === hojeLocal();
+    // bloco "agora": o ultimo horario que ja comecou (ou o primeiro, se o dia nao comecou)
+    let blocoAgora = null;
+    if (hojeMesmo) { horas.forEach(h => { if (h <= hhmm) blocoAgora = h; }); if (!blocoAgora) blocoAgora = horas[0]; }
+    return '<div class="agd-tl">' + horas.map(h =>
+      '<div class="agd-bloco' + (h === blocoAgora ? ' agora' : '') + '">' +
+      '<div class="agd-hora">' + h + (h === blocoAgora ? '<small>agora ' + hhmm + '</small>' : '') + '</div>' +
+      '<div class="agd-cards">' + porHora[h].map(s => this.cartaoDia(s, podeOperar)).join('') + '</div></div>').join('') + '</div>';
+  },
+
+  htmlDiaGrade(sessoes) {
+    const ST = { agendada: 'ag-eq-agendada', checkin: 'ag-eq-checkin', em_atendimento: 'ag-eq-atend', concluida: 'ag-eq-concluida', falta: 'ag-eq-falta', cancelada: 'ag-eq-falta' };
+    const cols = []; const vistos = new Set();
+    sessoes.forEach(s => { const id = s.aplicador_id || 'sem'; if (!vistos.has(id)) { vistos.add(id); cols.push({ id, nome: s.profissional ? s.profissional.nome : 'Sem profissional' }); } });
+    cols.sort((a, b) => a.nome.localeCompare(b.nome));
+    const horas = [...new Set(sessoes.map(s => String(s.hora_inicio).slice(0, 5)))].sort();
+    const cel = (c, h) => {
+      const l = sessoes.filter(s => (s.aplicador_id || 'sem') === c.id && String(s.hora_inicio).slice(0, 5) === h);
+      if (!l.length) return '<td class="ag-eq-fora"></td>';
+      return '<td class="ag-eq-cel ' + (ST[l[0].status] || '') + '" onclick="MODULOS.agenda.abrirSessao(\'' + l[0].id + '\')" title="Abrir sessao">' +
+        l.map(s => '<b>' + escaparHtml((s.pacientes ? s.pacientes.nome : '?').split(' ').slice(0, 2).join(' ')) + '</b><small>' + (s.salas ? escaparHtml(s.salas.nome) + ' &middot; ' : '') + this.selosSessao(s).replace(/<[^>]+>/g, ' ').trim() + '</small>').join('<hr style="border:none; border-top:1px dashed var(--line); margin:3px 0">') + '</td>';
+    };
+    const grade = '<div class="cartao ag-eq-wrap"><table class="ag-eq"><thead><tr><th class="ag-eq-h"></th>' +
+      cols.map(c => '<th><span class="evo-av ' + (typeof corAvatar === 'function' ? corAvatar(c.nome) : 'av-1') + '" style="margin-right:6px; vertical-align:middle">' + escaparHtml(this.iniciaisDe(c.nome)) + '</span><b>' + escaparHtml(c.nome.split(' ').slice(0, 2).join(' ')) + '</b></th>').join('') + '</tr></thead><tbody>' +
+      horas.map(h => '<tr><td class="ag-eq-h">' + h + '</td>' + cols.map(c => cel(c, h)).join('') + '</tr>').join('') + '</tbody></table></div>' +
+      '<div class="agd-legenda">' + [['ag-eq-agendada', 'Aguardando'], ['ag-eq-checkin', 'Chegou'], ['ag-eq-atend', 'Em atendimento'], ['ag-eq-concluida', 'Concluida'], ['ag-eq-falta', 'Falta']].map(x => '<span><i class="' + x[0] + '"></i>' + x[1] + '</span>').join('') + '<span style="margin-left:auto">Toque na sessao para abrir</span></div>';
+    return '<div class="agd-grade-wrap">' + this.htmlMiniCalendario() + '<div>' + grade + '</div></div>';
+  },
+
+  htmlMiniCalendario() {
+    const [ano, mes] = this.dataRef.split('-').map(Number);
+    const primeiro = new Date(ano, mes - 1, 1), nDias = new Date(ano, mes, 0).getDate();
+    const NM = ['Janeiro', 'Fevereiro', 'Marco', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+    const hoje = hojeLocal();
+    let cels = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map(d => '<span class="h">' + d + '</span>').join('');
+    for (let i = 0; i < primeiro.getDay(); i++) cels += '<span></span>';
+    for (let d = 1; d <= nDias; d++) {
+      const k = this.dataRef.slice(0, 8) + String(d).padStart(2, '0');
+      const dow = new Date(ano, mes - 1, d).getDay();
+      cels += '<span class="' + (k === this.dataRef ? 'sel' : dow === 0 || dow === 6 ? 'fds' : 'd') + (k === hoje ? ' hoje' : '') + '" onclick="MODULOS.agenda.dataRef = \'' + k + '\'; MODULOS.agenda.desenhar()">' + d + '</span>';
+    }
+    const mesAnt = () => { const x = new Date(ano, mes - 2, 1); return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-01'; };
+    const mesProx = () => { const x = new Date(ano, mes, 1); return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-01'; };
+    return '<div class="agd-minical"><div class="agd-minical-top"><button type="button" class="btn-chip" onclick="MODULOS.agenda.dataRef = \'' + mesAnt() + '\'; MODULOS.agenda.desenhar()">&lsaquo;</button><b>' + NM[mes - 1] + ' ' + ano + '</b>' +
+      '<button type="button" class="btn-chip" onclick="MODULOS.agenda.dataRef = \'' + mesProx() + '\'; MODULOS.agenda.desenhar()">&rsaquo;</button></div><div class="agd-minical-g">' + cels + '</div></div>';
   },
 
   // ───────────────────────── VISAO SEMANA ─────────────────────────

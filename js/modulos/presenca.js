@@ -83,7 +83,8 @@ window.MODULOS.presenca = {
       const dia = new Date(segunda);
       dia.setDate(segunda.getDate() + (d - 1));
       const dataFmt = dia.toLocaleDateString('pt-BR');
-      const doDia = this.grade.filter(h => h.dia_semana === d);
+      // so horarios com crianca: reservas da grade (rotulo sem paciente) ficam fora da lista
+      const doDia = this.grade.filter(h => h.dia_semana === d && h.paciente_id);
       if (doDia.length === 0) continue;
       const turnos = [['Manha', 'Manh&atilde;', 'deq-teal', doDia.filter(h => h.hora_inicio < '13:00')],
                       ['Tarde', 'Tarde', 'deq-amarelo', doDia.filter(h => h.hora_inicio >= '13:00')]];

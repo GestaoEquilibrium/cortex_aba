@@ -212,7 +212,7 @@ window.MODULOS.agenda = {
       return null;
     }
     const d = r.data || {};
-    if (avisar) popAviso((d.criadas || 0) + ' sessao(oes) criada(s), ' + ((d.removidas || 0) + (d.canceladas || 0)) + ' retirada(s) e ' + (d.vinculadas || 0) + ' vinculada(s) a grade, em ' + (d.dias || 0) + ' dia(s) conferido(s) (hoje em diante).', 'Agenda sincronizada');
+    if (avisar) popAviso((d.criadas || 0) + ' sessao(oes) criada(s), ' + ((d.removidas || 0) + (d.canceladas || 0)) + ' retirada(s), ' + (d.reapontadas || 0) + ' passada(s) para o aplicador da grade (' + (d.reativadas || 0) + ' reativada(s)) e ' + (d.vinculadas || 0) + ' vinculada(s), em ' + (d.dias || 0) + ' dia(s) conferido(s) (hoje em diante).', 'Agenda sincronizada');
     return d;
   },
 

@@ -89,6 +89,21 @@ async function iniciarApp() {
     }
   }
 
+  // Patch 31: "Entrar como pessoa" — suporte e direcao veem o sistema exatamente como um usuario
+  // especifico (equipe, agenda, pendencias, permissoes do perfil dele), em modo somente visualizacao.
+  let verUsuario = null;
+  try { verUsuario = sessionStorage.getItem('cortex_ver_usuario'); } catch (e) {}
+  if (verUsuario && ['suporte', 'direcao'].includes(profile.perfil_real) && verUsuario !== sessao.user.id) {
+    const { data: alvo } = await sb.from('profiles').select('id, nome, perfil, foto_path').eq('id', verUsuario).maybeSingle();
+    if (alvo) {
+      window.CORTEX_VER_USUARIO = { id: alvo.id, nome: alvo.nome, perfil: alvo.perfil, meuId: sessao.user.id, meuNome: profile.nome };
+      sessao.user = Object.assign({}, sessao.user, { id: alvo.id });
+      profile.id = alvo.id; profile.nome = alvo.nome; profile.perfil = alvo.perfil; profile.foto_path = alvo.foto_path; profile.primeiro_acesso = false;
+      if (typeof TEMA_POR_PERFIL !== 'undefined') document.documentElement.setAttribute('data-tema', TEMA_POR_PERFIL[alvo.perfil] || 'gestao');
+      bloquearEscrita();
+    } else { try { sessionStorage.removeItem('cortex_ver_usuario'); } catch (e) {} }
+  }
+
   await carregarPermissoes(profile.perfil);
   await carregarDataPendencias();
 
@@ -114,8 +129,17 @@ async function iniciarApp() {
   if (profile.perfil_real === 'suporte') {
     const cartao = document.getElementById('usuario-cartao');
     cartao.classList.add('clicavel-perfil');
-    cartao.title = 'Trocar o perfil de visualizacao';
+    cartao.title = 'Trocar o perfil de visualizacao ou entrar como uma pessoa';
     cartao.onclick = abrirSeletorPerfil;
+  } else if (profile.perfil_real === 'direcao') {
+    // direcao: a linha do perfil abre "Entrar como pessoa" (o avatar continua abrindo Meu Perfil)
+    const lp = document.getElementById('usuario-perfil');
+    lp.style.cursor = 'pointer'; lp.title = 'Ver o sistema como uma pessoa da equipe';
+    lp.onclick = ev => { ev.stopPropagation(); abrirSeletorPerfil(); };
+  }
+  if (window.CORTEX_VER_USUARIO) {
+    document.getElementById('usuario-perfil').innerHTML += ' <span class="ver-como-selo">ver como</span>';
+    montarBarraVerUsuario();
   }
 
   montarSidebar(profile.perfil);
@@ -435,22 +459,83 @@ function formatarCPF(cpf) {
 
 
 // ── "Ver como" (exclusivo do suporte) ───────────────────────────────
-function abrirSeletorPerfil() {
+async function abrirSeletorPerfil() {
   const atual = window.CORTEX_SESSAO.profile.perfil;
+  const real = window.CORTEX_SESSAO.profile.perfil_real;
   const opcoes = ['suporte', 'direcao', 'coordenador', 'terapeuta', 'aplicador', 'callcenter', 'recepcao', 'familia'];
+  const vu = window.CORTEX_VER_USUARIO;
 
-  abrirModal('Ver o sistema como...',
-    '<p class="sub" style="margin-bottom:14px">Voce continua logado como Suporte; apenas a ' +
-    'visualizacao (menu, botoes, tema e permissoes) muda. Valido nesta aba do navegador.</p>' +
-    opcoes.map(p =>
-      '<button type="button" class="opcao-perfil' + (p === atual ? ' atual' : '') + '" ' +
-      'onclick="definirVerComo(\'' + p + '\')">' +
-      '<b>' + (ROTULOS_PERFIL[p] || p) + '</b>' +
-      (p === 'suporte' ? '<small>Acesso total (seu perfil real)</small>' :
-       p === 'familia' ? '<small>Portal da familia (sem vinculos, aparece vazio)</small>' :
-       '<small>Conforme a matriz de permissoes</small>') +
-      (p === atual ? '<span class="selo selo-ok">Atual</span>' : '') +
-      '</button>').join(''));
+  // pessoas da equipe (sem familia), para "entrar como"
+  const { data: pessoas } = await sb.from('profiles').select('id, nome, perfil').eq('ativo', true).neq('perfil', 'familia').order('nome');
+  const meuId = vu ? vu.meuId : window.CORTEX_SESSAO.user.id;
+  const htmlPessoa =
+    '<h3 style="margin:0 0 6px">Entrar como uma pessoa</h3>' +
+    '<p class="sub" style="margin-bottom:8px">Voce ve o sistema exatamente como essa pessoa ve (equipe, agenda, pendencias, permissoes do perfil dela), em <b>modo somente visualizacao</b>: nada e gravado enquanto estiver assim.</p>' +
+    (vu ? '<div class="caixa-info" style="margin-bottom:8px; border-left:4px solid var(--st-warn)"><small>Agora vendo como</small><b>' + escaparHtml(vu.nome) + ' <span class="sub">(' + (ROTULOS_PERFIL[vu.perfil] || vu.perfil) + ')</span></b>' +
+          '<div style="margin-top:6px"><button type="button" class="btn btn-primario" onclick="sairVerUsuario()">Voltar a ser ' + escaparHtml(vu.meuNome.split(' ')[0]) + '</button></div></div>' : '') +
+    '<div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:14px">' +
+    '<select id="vu-pessoa" style="flex:1; min-width:220px"><option value="">Escolha a pessoa...</option>' +
+    (pessoas || []).filter(x => x.id !== meuId).map(x => '<option value="' + x.id + '"' + (vu && vu.id === x.id ? ' selected' : '') + '>' + escaparHtml(x.nome) + ' - ' + (ROTULOS_PERFIL[x.perfil] || x.perfil) + '</option>').join('') + '</select>' +
+    '<button type="button" class="btn btn-primario" onclick="definirVerUsuario(document.getElementById(\'vu-pessoa\').value)">Ver como esta pessoa</button></div>';
+
+  const htmlPerfil = real === 'suporte'
+    ? '<h3 style="margin:0 0 6px">Ou so trocar o perfil</h3>' +
+      '<p class="sub" style="margin-bottom:10px">Voce continua logado como Suporte; apenas a visualizacao (menu, botoes, tema e permissoes) muda. Valido nesta aba do navegador.</p>' +
+      opcoes.map(p =>
+        '<button type="button" class="opcao-perfil' + (p === atual && !vu ? ' atual' : '') + '" ' +
+        'onclick="definirVerComo(\'' + p + '\')">' +
+        '<b>' + (ROTULOS_PERFIL[p] || p) + '</b>' +
+        (p === 'suporte' ? '<small>Acesso total (seu perfil real)</small>' :
+         p === 'familia' ? '<small>Portal da familia (sem vinculos, aparece vazio)</small>' :
+         '<small>Conforme a matriz de permissoes</small>') +
+        (p === atual && !vu ? '<span class="selo selo-ok">Atual</span>' : '') +
+        '</button>').join('')
+    : '';
+
+  abrirModal('Ver o sistema como...', htmlPessoa + htmlPerfil, true);
+}
+
+function definirVerUsuario(id) {
+  if (!id) { popAviso('Escolha a pessoa.'); return; }
+  try { sessionStorage.setItem('cortex_ver_usuario', id); sessionStorage.removeItem('cortex_ver_como'); } catch (e) {}
+  window.location.reload();
+}
+function sairVerUsuario() {
+  try { sessionStorage.removeItem('cortex_ver_usuario'); } catch (e) {}
+  window.location.reload();
+}
+
+// Barra fixa no topo enquanto estiver vendo como outra pessoa
+function montarBarraVerUsuario() {
+  const vu = window.CORTEX_VER_USUARIO; if (!vu) return;
+  document.getElementById('ver-usuario-barra')?.remove();
+  const b = document.createElement('div');
+  b.id = 'ver-usuario-barra'; b.className = 'ver-usuario-barra';
+  b.innerHTML = '<span>&#128065; Vendo como <b>' + escaparHtml(vu.nome) + '</b> <small>(' + (ROTULOS_PERFIL[vu.perfil] || vu.perfil) + ')</small> &middot; somente visualizacao</span>' +
+    '<button type="button" onclick="sairVerUsuario()">Voltar a ser ' + escaparHtml(vu.meuNome.split(' ')[0]) + '</button>';
+  document.body.appendChild(b);
+  document.body.classList.add('ver-usuario');
+}
+
+// Em "ver como pessoa" nada pode ser gravado: insert/update/delete/upsert, RPCs de escrita e uploads
+// voltam um erro amigavel em vez de ir ao banco (que gravaria em nome do usuario real).
+function bloquearEscrita() {
+  const quem = () => (window.CORTEX_VER_USUARIO ? window.CORTEX_VER_USUARIO.nome.split(' ')[0] : 'outra pessoa');
+  const bloqueado = () => {
+    const b = { then(res, rej) { return Promise.resolve({ data: null, error: { message: 'Modo "ver como ' + quem() + '": somente visualizacao, nada foi gravado.' }, count: 0 }).then(res, rej); } };
+    ['select', 'eq', 'neq', 'in', 'is', 'gte', 'lte', 'gt', 'lt', 'not', 'or', 'order', 'limit', 'single', 'maybeSingle', 'match', 'filter', 'range', 'contains', 'returns'].forEach(m => { b[m] = () => b; });
+    return b;
+  };
+  const _from = sb.from.bind(sb);
+  sb.from = t => { const q = _from(t); ['insert', 'update', 'delete', 'upsert'].forEach(m => { q[m] = bloqueado; }); return q; };
+  const _rpc = sb.rpc.bind(sb);
+  sb.rpc = (fn, args, opts) => ['gerar_sessoes_do_dia', 'migrations_pendentes'].includes(fn) ? _rpc(fn, args, opts) : bloqueado();
+  try {
+    const _sfrom = sb.storage.from.bind(sb.storage);
+    sb.storage.from = bucket => { const o = _sfrom(bucket); o.upload = bloqueado; o.remove = bloqueado; o.update = bloqueado; return o; };
+  } catch (e) { /* storage pode nao existir */ }
+  try { if (sb.functions) sb.functions.invoke = bloqueado; } catch (e) {}
+  try { if (sb.auth) sb.auth.updateUser = bloqueado; } catch (e) {}
 }
 
 function definirVerComo(p) {

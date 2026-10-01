@@ -264,3 +264,43 @@ label.check { display: inline-flex; align-items: center; gap: 7px; font-size: 12
     .app-main > *, .modal { animation: none; }
     .nav-item, .btn, .cartao, .kpi { transition: none; }
 }
+
+/* ══════════════ Patch 31 — cor de acao ambar em todos os perfis + sidebar com ambar (opcao C) ══════════════
+   Decisao de Wess (01/10/2026): o ambar Equilibrium (#D97706) vira a cor de acao de todo o sistema
+   (gestao, equipe, call center e familia), o simbolo da marca e o item ativo do menu ficam em ambar,
+   e o favicon segue o mesmo esquema (ambar sobre o navy Aurora). So estetica: nenhuma funcao muda. */
+:root, [data-tema="gestao"], [data-tema="equipe"], [data-tema="recepcao"], [data-tema="familia"] {
+    --acao: #D97706; --acao-forte: #B45309; --acao-soft: rgba(217, 119, 6, .14);
+    --chip: linear-gradient(135deg, #FBBF24 0%, #D97706 100%);
+    --mao: #FCD34D; --pilula: #FDF9F0; --pilula-ink: #3B2506;
+    --grad-primary: linear-gradient(135deg, #B45309 0%, #F59E0B 100%);
+    --grad-hover:   linear-gradient(135deg, #92400E 0%, #D97706 100%);
+    --glow-blue:    0 8px 24px rgba(245, 158, 11, .38);
+    --glow-ambar:   0 8px 24px rgba(245, 158, 11, .38);
+}
+[data-modo="escuro"], [data-modo="escuro"][data-tema="gestao"], [data-modo="escuro"][data-tema="equipe"],
+[data-modo="escuro"][data-tema="recepcao"], [data-modo="escuro"][data-tema="familia"] { --acao-soft: rgba(245, 158, 11, .24); }
+
+/* sidebar: aurora dourada suave sobre o navy, simbolo ambar, titulos de grupo dourados */
+.sidebar::before {
+    background: radial-gradient(closest-side, rgba(245, 158, 11, .42), transparent 70%),
+                radial-gradient(closest-side, rgba(47, 111, 237, .35), transparent 70%);
+}
+.marca .simbolo { background: var(--grad-primary); color: #1A1208; box-shadow: var(--glow-ambar); }
+.login-pagina .marca .simbolo { background: var(--grad-primary); color: #1A1208; }
+.nav-grupo-titulo { color: #F3B63D; opacity: .85; }
+.nav-item { --nav-accent: #F3B63D; }
+/* item ativo em ambar com texto branco (opcao C) */
+.nav-item.ativa, .nav-item.ativa:hover, [data-modo="escuro"] .nav-item.ativa {
+    background: linear-gradient(135deg, #B45309 0%, #F59E0B 100%); color: #fff;
+    box-shadow: 0 6px 18px rgba(245, 158, 11, .35);
+}
+.nav-item.ativa .icone { color: #fff; }
+.nav-item.ativa .nav-conta { background: #fff; color: #B45309; }
+/* avatar da sidebar continua colorido por nome (corAvatar); o avatar padrao segue o ambar */
+.avatar { box-shadow: var(--glow-ambar); }
+@media (max-width: 720px) {
+    .barra-celular button.ativo { color: #B45309; }
+    .barra-celular button.ativo .icone { background: rgba(217, 119, 6, .14); }
+    .cab-cel-marca .simbolo { background: linear-gradient(135deg, #B45309 0%, #F59E0B 100%); color: #1A1208; }
+}

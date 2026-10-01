@@ -859,7 +859,8 @@ window.MODULOS.pacientes = {
         (m.id === principal ? ' checked' : '') + ' onchange="const c=this.closest(\'.ap-item\').querySelector(\'.ap-chk\'); c.checked=true; this.closest(\'.ap-item\').classList.add(\'marcado\')"> principal</span>' +
         '</label>').join('') +
       '</div>' +
-      '<p class="sub" style="margin-top:6px">Quem entrar na lista recebe uma notificacao no Inicio.</p>' +
+      '<p class="sub" style="margin-top:6px">Quem entrar na lista recebe uma notificacao no Inicio. Quem sair leva a grade fixa e as sessoes futuras para o principal (o sistema pergunta antes).' +
+      (perm('agenda_grade') === 'E' ? ' <a href="#" onclick="MODULOS.pacientes.moverAgendaManual(); return false;">Ainda ha horarios no nome de quem ja saiu? Mover agora.</a>' : '') + '</p>' +
       '<div class="mensagem-erro" id="ap-erro"></div>' +
       '<div class="barra-acoes">' +
       '  <button type="button" class="btn btn-fantasma" onclick="fecharModal()">Cancelar</button>' +
@@ -907,6 +908,9 @@ window.MODULOS.pacientes = {
       window._meusPac = null;
 
       fecharModal();
+      // Patch 31: quem saiu da equipe da crianca leva os horarios fixos e as sessoes futuras para o novo principal
+      const sairam = [...antes].filter(id => !marcados.includes(id));
+      if (sairam.length && principal) await this.moverAgenda(sairam, principal);
       this.telaDetalhe(this.paciente.id);
     } catch (e) {
       erro.textContent = e.message;
@@ -914,6 +918,63 @@ window.MODULOS.pacientes = {
       botao.disabled = false;
       botao.textContent = 'Salvar';
     }
+  },
+
+  // Caso ja aconteceu: aplicador foi trocado antes e os horarios ficaram no nome dele. Lista quem ainda
+  // tem grade/sessoes futuras da crianca sem estar na equipe e oferece mover para o principal.
+  async moverAgendaManual() {
+    const pacId = this.paciente.id, hoje = hojeLocal();
+    const principal = (document.querySelector('.ap-princ:checked') || {}).value || this.paciente.aplicador_id;
+    if (!principal) { popAviso('Escolha e salve o aplicador principal primeiro.'); return; }
+    const equipe = new Set(Array.from(document.querySelectorAll('.ap-chk:checked')).map(c => c.value));
+    const [rG, rS] = await Promise.all([
+      sb.from('grade_horarios').select('aplicador_id').eq('paciente_id', pacId).eq('ativo', true),
+      sb.from('sessoes').select('aplicador_id').eq('paciente_id', pacId).gte('data', hoje).in('status', ['agendada', 'checkin'])
+    ]);
+    const fora = [...new Set((rG.data || []).concat(rS.data || []).map(x => x.aplicador_id).filter(id => id && !equipe.has(id) && id !== principal))];
+    if (!fora.length) { popAviso('Nenhum horario ou sessao futura no nome de quem esta fora da equipe. Tudo em ordem.'); return; }
+    await this.moverAgenda(fora, principal);
+  },
+
+  // Move a agenda da crianca (grade fixa + sessoes futuras ainda nao iniciadas) dos aplicadores que
+  // sairam para o novo principal. Pergunta antes, com as contagens; cada tabela e auditada pelos triggers.
+  async moverAgenda(deIds, paraId) {
+    const hoje = hojeLocal();
+    const pacId = this.paciente.id;
+    const [rG, rS, rP] = await Promise.all([
+      sb.from('grade_horarios').select('id, dia_semana, hora_inicio').eq('paciente_id', pacId).eq('ativo', true).in('aplicador_id', deIds),
+      sb.from('sessoes').select('id, data').eq('paciente_id', pacId).in('aplicador_id', deIds).gte('data', hoje).in('status', ['agendada', 'checkin']),
+      sb.from('profiles').select('id, nome').in('id', deIds.concat([paraId]))
+    ]);
+    const grade = rG.data || [], sess = rS.data || [];
+    if (!grade.length && !sess.length) return;
+    const nome = id => { const x = (rP.data || []).find(p => p.id === id); return x ? x.nome.split(' ').slice(0, 2).join(' ') : '?'; };
+    const de = deIds.map(nome).join(', ');
+    const ok = await popConfirmar(
+      de + ' saiu da equipe de ' + this.paciente.nome.split(' ')[0] + '.\n\n' +
+      'Mover para ' + nome(paraId) + ':\n' +
+      '- ' + grade.length + ' horario(s) da grade fixa\n' +
+      '- ' + sess.length + ' sessao(oes) futura(s) ainda nao iniciada(s) (de ' + hoje.split('-').reverse().join('/') + ' em diante)\n\n' +
+      'Sessoes ja realizadas ficam como estao. Se nao mover, os horarios continuam no nome de quem saiu.',
+      { titulo: 'Mover agenda', ok: 'Mover tudo', cancelar: 'Nao mover', tipo: 'agenda' });
+    if (!ok) return;
+    let movG = 0, movS = 0;
+    if (grade.length) {
+      const { error, count } = await sb.from('grade_horarios').update({ aplicador_id: paraId }, { count: 'exact' }).in('id', grade.map(g => g.id));
+      if (error) { popAviso('Nao foi possivel mover a grade fixa: ' + error.message); return; }
+      movG = count || 0;
+    }
+    if (sess.length) {
+      const { error, count } = await sb.from('sessoes').update({ aplicador_id: paraId }, { count: 'exact' }).in('id', sess.map(x => x.id));
+      if (error) { popAviso('Nao foi possivel mover as sessoes: ' + error.message); return; }
+      movS = count || 0;
+    }
+    if ((grade.length && !movG) || (sess.length && !movS)) { popAviso('A agenda nao foi movida: seu perfil nao tem permissao no banco para alterar grade/sessoes. Peca a coordenacao.'); return; }
+    try {
+      await sb.from('notificacoes').insert({ destinatario_id: paraId, titulo: 'Agenda de ' + this.paciente.nome.split(' ')[0] + ' passou para voce',
+        corpo: movG + ' horario(s) fixo(s) e ' + movS + ' sessao(oes) futura(s) foram movidos de ' + de + ' para voce.' });
+    } catch (e) { /* aviso e opcional */ }
+    popAviso('Agenda movida: ' + movG + ' horario(s) fixo(s) e ' + movS + ' sessao(oes) futura(s) agora estao com ' + nome(paraId) + '.');
   },
 
   modalNivel() {

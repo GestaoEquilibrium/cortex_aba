@@ -2645,3 +2645,68 @@
 .av-barra i { display: block; height: 100%; border-radius: 4px; }
 @media (max-width: 900px) { .av-kpis { grid-template-columns: repeat(2, 1fr); } }
 @media print { .av-kpis { grid-template-columns: repeat(4, 1fr); } .av-sec { break-after: avoid; } .av-quadro tr { break-inside: avoid; } .av-quadro tr td:first-child { box-shadow: none; } }
+
+/* ══════════════ Sessoes realizadas: acoes alinhadas numa coluna (patch 31) ══════════════ */
+.atd-topo { flex-wrap: nowrap; }
+.atd-meta { flex: 1; min-width: 0; }
+.atd-acoes { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex: none; }
+.atd-x, .atd-x-vazio { width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; padding: 0; }
+.atd-x { color: #E9586A; border-color: #F5C2C9; }
+@media (max-width: 640px) {
+    .atd-topo { flex-wrap: wrap; }
+    .atd-acoes { width: 100%; flex-wrap: wrap; }
+    .atd-x-vazio { display: none; }
+}
+
+/* ══════════════ Aba Evolucoes: linha do tempo + calendario (patch 31) ══════════════ */
+.evo-barra { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+.evo-barra input { flex: 1; min-width: 200px; }
+.evo-barra .toggle-visao button { font-size: 12px; }
+.evo-resumo { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 12px; }
+.evo-resumo .caixa-info b { font-size: 20px; }
+.evo-av { width: 26px; height: 26px; border-radius: 50%; color: #fff; font-size: 10.5px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.evo-acoes { margin-left: auto; display: inline-flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.evo-progs { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
+.evo-dest { margin-top: 8px; font-size: 12px; display: inline-flex; gap: 6px; align-items: center; background: #EEF5FB; color: #0E4E86; border-radius: 999px; padding: 3px 10px; }
+.evo-dest-vazia { background: var(--st-warn-bg); color: #92400E; }
+/* linha do tempo */
+.evo-tl { position: relative; padding-left: 34px; }
+.evo-tl::before { content: ''; position: absolute; left: 13px; top: 6px; bottom: 6px; width: 2px; background: var(--line); }
+.evo-item { position: relative; margin-bottom: 10px; }
+.evo-item::before { content: ''; position: absolute; left: -27px; top: 16px; width: 12px; height: 12px; border-radius: 50%; background: var(--acao); border: 3px solid var(--surface); box-shadow: 0 0 0 2px var(--acao); }
+.evo-item.falta::before { background: var(--st-bad); box-shadow: 0 0 0 2px var(--st-bad); }
+.evo-item.sem::before { background: var(--surface); box-shadow: 0 0 0 2px var(--st-warn); }
+.evo-card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
+.evo-card-vazia { border-style: dashed; }
+.evo-cab { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.evo-cab b { font-size: 13.5px; }
+.evo-txt { font-size: 13px; line-height: 1.6; margin-top: 8px; white-space: pre-wrap; }
+.evo-txt.curto { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.evo-mais { font-size: 12px; font-weight: 700; color: var(--acao); margin-top: 4px; cursor: pointer; }
+/* calendario + leitura */
+.evo-cal-wrap { display: grid; grid-template-columns: 340px 1fr; gap: 14px; align-items: start; }
+.evo-cal { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 12px; }
+.evo-cal-top { display: flex; justify-content: center; align-items: center; margin-bottom: 8px; font-weight: 800; }
+.evo-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.evo-cal-grid small { text-align: center; font-size: 10px; font-weight: 800; color: var(--ink-muted); }
+.evo-cal-d { aspect-ratio: 1; border-radius: 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; color: var(--ink-soft); }
+.evo-cal-d.off { visibility: hidden; }
+.evo-cal-d.ev, .evo-cal-d.falta, .evo-cal-d.sem, .evo-cal-d.ses { cursor: pointer; }
+.evo-cal-d.ses { background: var(--surface-alt, #F1F4F9); }
+.evo-cal-d.ev { background: #EEF5FB; color: #0E4E86; font-weight: 800; }
+.evo-cal-d.ev::after, .evo-cal-d.falta::after { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--acao); margin-top: 2px; }
+.evo-cal-d.falta { background: var(--st-bad-bg); color: var(--st-bad); }
+.evo-cal-d.falta::after { background: var(--st-bad); }
+.evo-cal-d.sem { box-shadow: inset 0 0 0 2px var(--st-warn); color: #92400E; }
+.evo-cal-d.sel { outline: 3px solid var(--acao); outline-offset: -1px; }
+.evo-cal-leg { display: flex; gap: 10px; flex-wrap: wrap; font-size: 11px; color: var(--ink-muted); margin-top: 10px; }
+.evo-cal-leg i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 4px; }
+.evo-dia-nav { display: flex; justify-content: space-between; margin-bottom: 8px; }
+.evo-leitura { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 16px 18px; margin-bottom: 10px; }
+.evo-leitura h3 { display: flex; align-items: center; gap: 10px; font-size: 14px; margin: 0; }
+.evo-meta { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; font-size: 12px; color: var(--ink-muted); margin-top: 6px; }
+.evo-txt-cheio { font-size: 14px; line-height: 1.75; margin-top: 12px; white-space: pre-wrap; }
+.evo-rod { margin-top: 14px; }
+.evo-rod .evo-acoes { margin-left: 0; justify-content: flex-start; }
+@media (max-width: 820px) { .evo-cal-wrap { grid-template-columns: 1fr; } .evo-resumo { grid-template-columns: 1fr 1fr 1fr; } }
+@media print { .evo-barra, .evo-acoes, .evo-dia-nav { display: none !important; } .evo-txt.curto { display: block; -webkit-line-clamp: unset; } .evo-mais { display: none; } }

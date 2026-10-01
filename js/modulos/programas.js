@@ -1325,7 +1325,7 @@ window.MODULOS.programas = {
     const naoAplicados = f.programas.filter(pp => !linhas.some(l => l.pp.id === pp.id));
     // Evolucao ja vem preenchida com o que foi feito (o aplicador so complementa)
     const resumo = (linhas.length
-      ? 'Programas aplicados: ' + linhas.map(l => l.pp.programas.nome + ' (' + l.corretos + '/' + l.total + ', ' + l.pct + '% de independencia)').join('; ') + '.'
+      ? 'Programas aplicados: ' + linhas.map(l => l.pp.programas.nome).join('; ') + '.'
       : 'Nenhum programa aplicado nesta sessao.') +
       (naoAplicados.length ? '\nNao aplicados: ' + naoAplicados.map(pp => pp.programas.nome).join('; ') + ' (motivo abaixo).' : '') +
       '\n\nComportamento e observacoes: ';
@@ -1552,6 +1552,8 @@ window.MODULOS.programas = {
         (media !== null ? ' &middot; <span class="atd-pct">' + media + '% de corretos</span>' : '') +
         (s.status !== 'concluida' ? ' <span class="selo selo-warn">Nao concluida</span>' : '') +
         '</div>' +
+        // acoes sempre na mesma coluna, alinhadas a direita (patch 31)
+        '<div class="atd-acoes">' +
         (s.status !== 'concluida' && perm('evolucao') === 'E'
           ? '<button type="button" class="btn btn-fantasma atd-btn" ' +
             'onclick="event.stopPropagation(); MODULOS.programas.concluirSessaoLista(\'' + s.id + '\')">Concluir sessao</button>'
@@ -1560,11 +1562,11 @@ window.MODULOS.programas = {
         'onclick="event.stopPropagation(); MODULOS.programas.docEvolucaoDiaria(\'' + s.id + '\', true)">' +
         '&#128202; Ver relatorio</button>' +
         (perm('programas.apagar') === 'E' && ['direcao', 'coordenador', 'suporte'].includes(window.CORTEX_SESSAO.profile.perfil)
-          ? '<button class="btn-chip" style="color:#E9586A; border-color:#F5C2C9" title="Apagar esta sessao e todos os registros dela (gestao)" ' +
+          ? '<button class="btn-chip atd-x" title="Apagar esta sessao e todos os registros dela (gestao)" ' +
             'onclick="event.stopPropagation(); MODULOS.programas.apagarSessao(\'' + s.id + '\', \'' +
             (s.data || '') + '\')">&#10005;</button>'
-          : '') +
-        '</div>' +
+          : '<span class="atd-x-vazio"></span>') +
+        '</div></div>' +
         (evo ? '<p class="sub">' + escaparHtml(evo.length > 140 ? evo.slice(0, 140) + '...' : evo) + '</p>' : '') +
         '</div>';
     }).join('');
@@ -1695,70 +1697,225 @@ window.MODULOS.programas = {
 
   // ═══════════════════ EVOLUCOES (aba do prontuario) ═══════════════════
 
-  async htmlEvolucoes(pacienteId) {
-    const { data: evs } = await sb.from('evolucoes')
-      .select('id, texto, destinacao, criado_em, sessao_id, aplicador:profiles!evolucoes_aplicador_id_fkey(nome), sessoes:sessoes!evolucoes_sessao_id_fkey(data, hora_inicio)')
-      .eq('paciente_id', pacienteId)
-      .order('criado_em', { ascending: false })
-      .limit(30);
+  // ─────────────── ABA EVOLUCOES (patch 31): linha do tempo + calendario ───────────────
+  // So o texto da evolucao e a destinacao (sem percentuais). Duas visoes, escolha guardada no navegador:
+  // "Linha do tempo" (cartoes por sessao, texto expande) e "Calendario" (mes a esquerda, leitura do dia a direita).
+  _evo: null,
+  EVO_MESES: ['Janeiro', 'Fevereiro', 'Marco', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'],
 
-    const lista = evs || [];
-    if (lista.length === 0) {
-      return (perm('evolucao') === 'E'
-        ? '<div class="aba-acoes"><button class="btn btn-primario" ' +
-          'onclick="MODULOS.programas.modalLancarEvolucao(\'' + pacienteId + '\')">+ Lancar evolucao</button></div>' : '') +
-        '<div class="cartao"><div class="vazio"><div class="simbolo-vazio">&#128221;</div>' +
-        '<strong>Nenhuma evolucao registrada</strong>' +
-        'As evolucoes sao escritas ao encerrar a sessao, ou lancadas depois pelo botao acima.</div></div>';
+  async htmlEvolucoes(pacienteId, mes) {
+    let visao = 'linha';
+    try { visao = localStorage.getItem('cortex_evo_visao') || 'linha'; } catch (e) {}
+    mes = mes || (this._evo && this._evo.pacienteId === pacienteId && this._evo.mes) || hojeLocal().slice(0, 7);
+    const ini = mes + '-01';
+    const fimD = new Date(mes + '-01T12:00:00'); fimD.setMonth(fimD.getMonth() + 1); fimD.setDate(0);
+    const fim = fimD.getFullYear() + '-' + String(fimD.getMonth() + 1).padStart(2, '0') + '-' + String(fimD.getDate()).padStart(2, '0');
+
+    const [rS, rMeses] = await Promise.all([
+      sb.from('sessoes').select('id, data, hora_inicio, duracao_min, status, aplicador_id, profissional:profiles!sessoes_aplicador_id_fkey(nome), salas(nome)')
+        .eq('paciente_id', pacienteId).gte('data', ini).lte('data', fim).neq('status', 'cancelada')
+        .order('data', { ascending: false }).order('hora_inicio', { ascending: false }),
+      sb.from('sessoes').select('data').eq('paciente_id', pacienteId).neq('status', 'cancelada').order('data', { ascending: false }).limit(2000)
+    ]);
+    const sessoes = rS.data || [];
+    const ids = sessoes.map(x => x.id);
+    let evs = [], regs = [];
+    if (ids.length) {
+      const [rE, rR] = await Promise.all([
+        sb.from('evolucoes').select('id, sessao_id, texto, destinacao, criado_em, espelho_de, aplicador_id, aplicador:profiles!evolucoes_aplicador_id_fkey(nome)').in('sessao_id', ids),
+        sb.from('programa_sessao_registros').select('sessao_id, nao_aplicado, paciente_programas(programas(nome))').in('sessao_id', ids)
+      ]);
+      evs = rE.data || []; regs = rR.data || [];
     }
+    const evPor = {}; evs.forEach(e => { evPor[e.sessao_id] = e; });
+    const progPor = {}; regs.forEach(r => { (progPor[r.sessao_id] = progPor[r.sessao_id] || []).push({ nome: (r.paciente_programas && r.paciente_programas.programas && r.paciente_programas.programas.nome) || 'programa', na: !!r.nao_aplicado }); });
+    const meses = [...new Set((rMeses.data || []).map(x => x.data.slice(0, 7)).concat([hojeLocal().slice(0, 7), mes]))].sort().reverse();
+    const apls = {};
+    sessoes.forEach(x => { if (x.aplicador_id) apls[x.aplicador_id] = x.profissional ? x.profissional.nome : '-'; });
+    evs.forEach(e => { if (e.aplicador_id && !apls[e.aplicador_id]) apls[e.aplicador_id] = e.aplicador ? e.aplicador.nome : '-'; });
 
-    const ids = lista.map(e => e.sessao_id);
-    const { data: regs } = await sb.from('registros_tentativas')
-      .select('sessao_id, resposta, acertou').in('sessao_id', ids);
-    const porSessao = {};
-    (regs || []).forEach(r => {
-      porSessao[r.sessao_id] = porSessao[r.sessao_id] || { t: 0, c: 0 };
-      porSessao[r.sessao_id].t++;
-      if (r.resposta === 'C' || r.resposta === 'I') porSessao[r.sessao_id].c++;
+    this._evo = { pacienteId, mes, visao, sessoes, evPor, progPor, meses, apls, busca: '', apl: '', dia: null };
+    const rotMes = m => this.EVO_MESES[parseInt(m.slice(5, 7), 10) - 1] + ' ' + m.slice(0, 4);
+    return '<div class="evo-barra nao-imprime">' +
+      (perm('evolucao') === 'E' ? '<button class="btn btn-primario" title="Lancamento retroativo: escolha a data, a sessao daquele dia, e escreva a evolucao dela." onclick="MODULOS.programas.modalLancarEvolucao(\'' + pacienteId + '\')">+ Lancar evolucao</button>' : '') +
+      '<input id="evo-busca" placeholder="Buscar no texto das evolucoes..." oninput="MODULOS.programas.evoFiltrar()">' +
+      '<select id="evo-mes" onchange="MODULOS.programas.evoTrocarMes(this.value)">' + meses.map(m => '<option value="' + m + '"' + (m === mes ? ' selected' : '') + '>' + rotMes(m) + '</option>').join('') + '</select>' +
+      '<select id="evo-apl" onchange="MODULOS.programas.evoFiltrar()"><option value="">Todos os aplicadores</option>' + Object.entries(apls).map(([id, n]) => '<option value="' + id + '">' + escaparHtml(n) + '</option>').join('') + '</select>' +
+      '<div class="toggle-visao" id="evo-visao"><button type="button" data-v="linha" class="' + (visao === 'linha' ? 'ativo' : '') + '" onclick="MODULOS.programas.evoVisao(\'linha\')">Linha do tempo</button>' +
+      '<button type="button" data-v="cal" class="' + (visao === 'cal' ? 'ativo' : '') + '" onclick="MODULOS.programas.evoVisao(\'cal\')">Calendario</button></div>' +
+      '<button class="btn btn-fantasma" onclick="window.print()">&#128424; Imprimir mes</button>' +
+      '</div>' +
+      '<div id="evo-resumo"></div><div id="evo-corpo"></div>' +
+      // o corpo e desenhado assim que o HTML entrar na tela (a aba so recebe uma string)
+      '<img src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" alt="" style="display:none" onload="MODULOS.programas.evoDesenhar()">';
+  },
+
+  evoVisao(v) {
+    try { localStorage.setItem('cortex_evo_visao', v); } catch (e) {}
+    if (!this._evo) return;
+    this._evo.visao = v;
+    document.querySelectorAll('#evo-visao button').forEach(b => b.classList.toggle('ativo', b.dataset.v === v));
+    this.evoDesenhar();
+  },
+  evoFiltrar() {
+    if (!this._evo) return;
+    this._evo.busca = (document.getElementById('evo-busca')?.value || '').toLowerCase();
+    this._evo.apl = document.getElementById('evo-apl')?.value || '';
+    this.evoDesenhar();
+  },
+  async evoRecarregar(mes) {
+    if (!this._evo) return;
+    const corpo = document.getElementById('evo-corpo'); if (corpo) corpo.innerHTML = '<div class="cartao"><p class="sub">Carregando...</p></div>';
+    const pai = corpo && corpo.parentElement;
+    const html = await this.htmlEvolucoes(this._evo.pacienteId, mes || this._evo.mes);
+    if (pai) pai.innerHTML = html;
+  },
+  evoTrocarMes(m) { this.evoRecarregar(m); },
+
+  evoSessoesFiltradas() {
+    const E = this._evo;
+    return E.sessoes.filter(s => {
+      if (E.apl && s.aplicador_id !== E.apl) return false;
+      if (E.busca) { const ev = E.evPor[s.id]; const t = ((ev && ev.texto) || '') + ' ' + ((ev && ev.destinacao) || ''); if (!t.toLowerCase().includes(E.busca)) return false; }
+      return true;
     });
+  },
+  evoPendente(s) {
+    const E = this._evo;
+    return !E.evPor[s.id] && (['concluida', 'falta'].includes(s.status) || s.data < hojeLocal()) && s.data >= (window.CORTEX_EVO_DESDE || '2000-01-01');
+  },
+  evoPodeEditar(ev) {
+    const p = window.CORTEX_SESSAO.profile.perfil;
+    return perm('evolucao') === 'E' && (ev.aplicador_id === window.CORTEX_SESSAO.user.id || ['direcao', 'coordenador', 'suporte'].includes(p));
+  },
+  evoAvatar(nome) {
+    const ini = String(nome || '?').split(' ').filter(Boolean).slice(0, 2).map(x => x[0]).join('').toUpperCase();
+    return '<span class="evo-av ' + (typeof corAvatar === 'function' ? corAvatar(nome) : 'av-1') + '">' + escaparHtml(ini) + '</span>';
+  },
+  evoNomePac() { return escaparHtml(((MODULOS.pacientes && MODULOS.pacientes.paciente && MODULOS.pacientes.paciente.nome) || '').split(' ')[0]); },
+  evoChips(s) {
+    const E = this._evo; const ev = E.evPor[s.id]; const progs = E.progPor[s.id] || [];
+    return (progs.length ? '<div class="evo-progs">' + progs.map(p => '<span class="selo ' + (p.na ? 'selo-warn' : 'selo-neutro') + '">' + escaparHtml(p.nome) + (p.na ? ' &middot; nao aplicado' : '') + '</span>').join('') + '</div>' : '') +
+      (ev ? (ev.destinacao ? '<div class="evo-dest">&#127968; Destinacao: ' + escaparHtml(ev.destinacao) + '</div>'
+                           : (s.status === 'falta' ? '' : '<div class="evo-dest evo-dest-vazia">Destinacao nao informada</div>')) : '');
+  },
+  evoAcoes(s, ev, cheio) {
+    return '<span class="evo-acoes">' +
+      '<button type="button" class="btn-chip' + (cheio ? ' cheio' : '') + '" onclick="MODULOS.programas.docEvolucaoDiaria(\'' + s.id + '\')">&#128196; Documento</button>' +
+      (ev && this.evoPodeEditar(ev) ? '<button type="button" class="btn-chip" onclick="MODULOS.programas.evoEditar(\'' + ev.id + '\')">&#9998; Editar</button>' : '') +
+      (cheio ? '<button type="button" class="btn-chip" onclick="MODULOS.programas.docEvolucaoDiaria(\'' + s.id + '\', true)">Relatorio da sessao</button>' : '') +
+      '</span>';
+  },
+  evoBtnEscrever(s, classe) {
+    return '<button type="button" class="' + classe + '" onclick="MODULOS.programas.evolucaoRapida(\'' + s.id + '\', \'' + this._evo.pacienteId + '\', \'' + this.evoNomePac() + '\', \'' + s.data + '\')">Escrever agora</button>';
+  },
 
-    const cron = lista.slice().reverse();
-    const barras = cron.map(e => {
-      const d = porSessao[e.sessao_id];
-      const pct = d && d.t ? Math.round(d.c * 100 / d.t) : 0;
-      const dia = e.sessoes ? new Date(e.sessoes.data + 'T12:00:00').toLocaleDateString('pt-BR').slice(0, 5) : '';
-      return '<div class="prog-col" title="' + dia + ': ' + pct + '% de corretos (' + (d ? d.t : 0) + ' tentativas)">' +
-        '<div class="prog-barra" style="height:' + Math.max(pct, 4) + '%"></div>' +
-        '<small>' + dia + '</small></div>';
+  evoDesenhar() {
+    const E = this._evo; if (!E) return;
+    const corpo = document.getElementById('evo-corpo'); if (!corpo) return;
+    const lista = this.evoSessoesFiltradas();
+    const nEvo = E.sessoes.filter(s => E.evPor[s.id]).length;
+    const nSem = E.sessoes.filter(s => this.evoPendente(s)).length;
+    const nFalta = E.sessoes.filter(s => s.status === 'falta').length;
+    const resumo = document.getElementById('evo-resumo');
+    if (resumo) resumo.innerHTML = '<div class="evo-resumo"><div class="caixa-info"><small>Evolucoes no mes</small><b>' + nEvo + '</b></div>' +
+      '<div class="caixa-info"><small>Sessoes sem evolucao</small><b style="color:' + (nSem ? 'var(--st-bad)' : 'inherit') + '">' + nSem + '</b></div>' +
+      '<div class="caixa-info"><small>Faltas no mes</small><b>' + nFalta + '</b></div></div>';
+    if (!E.sessoes.length) { corpo.innerHTML = '<div class="cartao"><div class="vazio"><div class="simbolo-vazio">&#128221;</div><strong>Nenhuma sessao neste mes</strong>Escolha outro mes acima ou lance uma evolucao retroativa.</div></div>'; return; }
+    if (!lista.length) { corpo.innerHTML = '<div class="cartao"><p class="sub">Nenhuma evolucao com esse filtro.</p></div>'; return; }
+    corpo.innerHTML = E.visao === 'cal' ? this.evoHtmlCalendario(lista) : this.evoHtmlLinha(lista);
+  },
+
+  evoHtmlLinha(lista) {
+    const E = this._evo; const fmt = d => d.split('-').reverse().join('/');
+    const podeE = perm('evolucao') === 'E';
+    return '<div class="evo-tl">' + lista.map(s => {
+      const ev = E.evPor[s.id];
+      const nomeApl = (ev && ev.aplicador ? ev.aplicador.nome : (s.profissional ? s.profissional.nome : '-'));
+      const cls = s.status === 'falta' ? ' falta' : (!ev ? ' sem' : '');
+      if (!ev) {
+        const pend = this.evoPendente(s);
+        return '<div class="evo-item' + cls + '"><div class="evo-card evo-card-vazia"><div class="evo-cab"><b>' + fmt(s.data) + ' as ' + String(s.hora_inicio).slice(0, 5) + '</b>' +
+          '<small class="sub">' + escaparHtml(nomeApl.split(' ').slice(0, 2).join(' ')) + '</small>' +
+          (s.status === 'falta' ? '<span class="selo selo-bad">falta</span>' : '') +
+          (pend ? '<span class="selo selo-warn">sem evolucao</span>' : '<span class="selo selo-neutro">' + escaparHtml(String(s.status).replace('_', ' ')) + '</span>') +
+          (pend && podeE ? '<span class="evo-acoes">' + this.evoBtnEscrever(s, 'btn-chip cheio') + '</span>' : '') +
+          '</div></div></div>';
+      }
+      const longo = (ev.texto || '').length > 220;
+      return '<div class="evo-item' + cls + '"><div class="evo-card">' +
+        '<div class="evo-cab"><b>' + fmt(s.data) + ' as ' + String(s.hora_inicio).slice(0, 5) + '</b>' + this.evoAvatar(nomeApl) +
+        '<small class="sub">' + escaparHtml(nomeApl.split(' ').slice(0, 2).join(' ')) + '</small>' +
+        (s.status === 'falta' ? '<span class="selo selo-bad">falta</span>' : '') +
+        (ev.espelho_de ? '<span class="selo selo-neutro" title="Mesma evolucao do outro horario do dia">mesma do outro horario</span>' : '') +
+        this.evoAcoes(s, ev, false) + '</div>' +
+        '<div class="evo-txt' + (longo ? ' curto' : '') + '">' + escaparHtml(ev.texto || '') + '</div>' +
+        (longo ? '<div class="evo-mais" onclick="MODULOS.programas.evoExpandir(this)">ver tudo</div>' : '') +
+        this.evoChips(s) + '</div></div>';
+    }).join('') + '</div>';
+  },
+  evoExpandir(el) { const t = el.previousElementSibling; t.classList.toggle('curto'); el.textContent = t.classList.contains('curto') ? 'ver tudo' : 'ver menos'; },
+
+  evoHtmlCalendario(lista) {
+    const E = this._evo; const fmt = d => d.split('-').reverse().join('/');
+    const diasCom = {};
+    E.sessoes.forEach(s => { const d = diasCom[s.data] = diasCom[s.data] || { ev: false, falta: false, sem: false }; if (E.evPor[s.id]) d.ev = true; if (s.status === 'falta') d.falta = true; if (this.evoPendente(s)) d.sem = true; });
+    const diasLista = [...new Set(lista.map(s => s.data))].sort();
+    if (!E.dia || !diasLista.includes(E.dia)) E.dia = diasLista[diasLista.length - 1];
+    const idx = diasLista.indexOf(E.dia);
+    const [ano, mes] = E.mes.split('-').map(Number);
+    const primeiro = new Date(ano, mes - 1, 1), nDias = new Date(ano, mes, 0).getDate();
+    let cels = '';
+    for (let i = 0; i < primeiro.getDay(); i++) cels += '<div class="evo-cal-d off"></div>';
+    for (let d = 1; d <= nDias; d++) {
+      const k = E.mes + '-' + String(d).padStart(2, '0'); const m = diasCom[k];
+      const cls = m ? (m.falta ? 'falta' : m.ev ? 'ev' : m.sem ? 'sem' : 'ses') : '';
+      cels += '<div class="evo-cal-d ' + cls + (k === E.dia ? ' sel' : '') + '"' + (m ? ' onclick="MODULOS.programas.evoDia(\'' + k + '\')"' : '') + '>' + d + '</div>';
+    }
+    const doDia = lista.filter(s => s.data === E.dia).sort((a, b) => String(a.hora_inicio).localeCompare(String(b.hora_inicio)));
+    const DIAS = ['Domingo', 'Segunda-feira', 'Terca-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sabado'];
+    const leitura = doDia.map(s => {
+      const ev = E.evPor[s.id];
+      const nomeApl = (ev && ev.aplicador ? ev.aplicador.nome : (s.profissional ? s.profissional.nome : '-'));
+      const pend = this.evoPendente(s);
+      return '<div class="evo-leitura"><h3>' + this.evoAvatar(nomeApl) + DIAS[new Date(s.data + 'T12:00:00').getDay()] + ', ' + fmt(s.data) + ' as ' + String(s.hora_inicio).slice(0, 5) + '</h3>' +
+        '<div class="evo-meta"><span>' + escaparHtml(nomeApl) + '</span>' + (s.duracao_min ? '<span>&middot; ' + s.duracao_min + ' min</span>' : '') + (s.salas ? '<span>&middot; ' + escaparHtml(s.salas.nome) + '</span>' : '') +
+        '<span class="selo ' + (s.status === 'concluida' ? 'selo-ok' : s.status === 'falta' ? 'selo-bad' : 'selo-neutro') + '">' + escaparHtml(String(s.status).replace('_', ' ')) + '</span></div>' +
+        (ev ? '<p class="evo-txt-cheio">' + escaparHtml(ev.texto || '') + '</p>' + this.evoChips(s) + '<div class="evo-rod">' + this.evoAcoes(s, ev, true) + '</div>'
+            : '<p class="sub" style="margin-top:10px">' + (pend ? 'Sessao sem evolucao.' : 'Ainda sem evolucao.') + '</p>' + this.evoChips(s) +
+              (pend && perm('evolucao') === 'E' ? '<div class="evo-rod">' + this.evoBtnEscrever(s, 'btn btn-primario') + '</div>' : '')) +
+        '</div>';
     }).join('');
+    return '<div class="evo-cal-wrap"><div class="evo-cal"><div class="evo-cal-top"><b>' + this.EVO_MESES[mes - 1] + ' ' + ano + '</b></div>' +
+      '<div class="evo-cal-grid"><small>D</small><small>S</small><small>T</small><small>Q</small><small>Q</small><small>S</small><small>S</small>' + cels + '</div>' +
+      '<div class="evo-cal-leg"><span><i style="background:var(--acao)"></i>com evolucao</span><span><i style="background:var(--st-bad)"></i>falta</span><span><i style="box-shadow:inset 0 0 0 2px var(--st-warn)"></i>sem evolucao</span></div></div>' +
+      '<div class="evo-dia">' +
+      '<div class="evo-dia-nav">' + (idx > 0 ? '<button type="button" class="btn-chip" onclick="MODULOS.programas.evoDia(\'' + diasLista[idx - 1] + '\')">&lsaquo; ' + fmt(diasLista[idx - 1]).slice(0, 5) + '</button>' : '<span></span>') +
+      (idx >= 0 && idx < diasLista.length - 1 ? '<button type="button" class="btn-chip" onclick="MODULOS.programas.evoDia(\'' + diasLista[idx + 1] + '\')">' + fmt(diasLista[idx + 1]).slice(0, 5) + ' &rsaquo;</button>' : '') + '</div>' +
+      (leitura || '<div class="cartao"><p class="sub">Toque num dia marcado no calendario.</p></div>') + '</div></div>';
+  },
+  evoDia(d) { if (this._evo) { this._evo.dia = d; this.evoDesenhar(); } },
 
-    const barraAcoes = perm('evolucao') === 'E'
-      ? '<div class="aba-acoes"><button class="btn btn-primario" ' +
-        'title="Lancamento retroativo: escolha a data, a sessao daquele dia, e escreva a evolucao dela." ' +
-        'onclick="MODULOS.programas.modalLancarEvolucao(\'' + pacienteId + '\')">+ Lancar evolucao</button></div>'
-      : '';
-
-    return barraAcoes + '<div class="cartao"><h3>Corretos por sessao</h3>' +
-      '<p class="sub" style="margin-bottom:10px">% de respostas corretas (C) sobre as tentativas registradas. ' +
-      '<b>Legenda de dados antigos:</b> registros anteriores usavam I/G/Ve/Vi - convertidos para C/GE/VE/VI.</p>' +
-      '<div class="prog-grafico">' + barras + '</div></div>' +
-      '<div class="cartao"><h3>Evolucoes diarias</h3>' +
-      '<p class="sub" style="margin-bottom:8px">So o texto da evolucao e a destinacao da crianca. Os percentuais e tentativas dos programas ficam no relatorio da sessao (aba Relatorios).</p>' +
-      lista.map(e => {
-        return '<div class="linha-doc" style="align-items:flex-start">' +
-          '<div style="flex:1"><b>' +
-          (e.sessoes ? new Date(e.sessoes.data + 'T12:00:00').toLocaleDateString('pt-BR') +
-            ' as ' + e.sessoes.hora_inicio.slice(0, 5) : '') + '</b>' +
-          '<small>' + escaparHtml(e.aplicador ? e.aplicador.nome : '-') + '</small>' +
-          '<p style="margin-top:6px; font-size:12.5px; line-height:1.6; white-space:pre-wrap">' +
-          escaparHtml(e.texto) + '</p>' +
-          '<p style="margin-top:6px; font-size:12px"><b>Destinacao da crianca:</b> ' +
-          (e.destinacao ? escaparHtml(e.destinacao) : '<span class="sub">nao informada</span>') + '</p></div>' +
-          '<div class="pac-selos"><button class="btn-chip" title="Documento Evolucao Diaria desta sessao" ' +
-          'onclick="MODULOS.programas.docEvolucaoDiaria(\'' + e.sessao_id + '\')">&#128196; Documento</button></div>' +
-          '</div>';
-      }).join('') +
-      '</div>';
+  // Editar uma evolucao ja escrita (a propria aplicadora ou a gestao)
+  async evoEditar(evoId) {
+    const { data: ev } = await sb.from('evolucoes').select('id, texto, destinacao, sessao_id').eq('id', evoId).single();
+    if (!ev) return;
+    abrirModal('Editar evolucao',
+      '<div class="campo"><label>Evolucao da sessao *</label><textarea id="ee-texto" rows="6" style="resize:vertical">' + escaparHtml(ev.texto || '') + '</textarea></div>' +
+      '<div class="campo"><label>Destinacao da crianca</label><input id="ee-dest" placeholder="Ex.: entregue a mae as 09:50" value="' + escaparHtml(ev.destinacao || '') + '"></div>' +
+      '<div class="mensagem-erro" id="ee-erro"></div>' +
+      '<div class="barra-acoes"><button class="btn btn-fantasma" onclick="fecharModal()">Cancelar</button>' +
+      '<button class="btn btn-primario" onclick="MODULOS.programas.evoSalvarEdicao(\'' + ev.id + '\')">Salvar</button></div>', false, 'evolucao');
+  },
+  async evoSalvarEdicao(evoId) {
+    const erro = document.getElementById('ee-erro'); erro.classList.remove('visivel');
+    const texto = document.getElementById('ee-texto').value.trim();
+    if (!texto) { erro.textContent = 'Escreva a evolucao.'; erro.classList.add('visivel'); return; }
+    const { error, count } = await sb.from('evolucoes').update({ texto, destinacao: document.getElementById('ee-dest').value.trim() || null }, { count: 'exact' }).eq('id', evoId);
+    if (error) { erro.textContent = error.message; erro.classList.add('visivel'); return; }
+    if (count === 0) { erro.textContent = 'Sem permissao para alterar esta evolucao.'; erro.classList.add('visivel'); return; }
+    fecharModal();
+    this.evoRecarregar();
   },
 
   // Contador da faixa de comportamentos (chamado pelo modulo comportamentos)
@@ -2190,7 +2347,7 @@ window.MODULOS.programas = {
         { const { error: _e } = await sb.from('sessoes').update({ status: 'concluida' }).eq('id', sessaoId); if (_e) popAviso('Nao foi possivel gravar (sessoes): ' + _e.message); }
       }
       fecharModal();
-      this.popupEvolucoesPendentes();
+      if (this._evo && document.getElementById('evo-corpo')) this.evoRecarregar(); else this.popupEvolucoesPendentes();
     } catch (e) {
       erro.textContent = e.message; erro.classList.add('visivel');
       botao.disabled = false; botao.textContent = 'Lancar';

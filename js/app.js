@@ -110,7 +110,7 @@ async function iniciarApp() {
   document.getElementById('usuario-nome').textContent = profile.nome;
   document.getElementById('usuario-perfil').innerHTML =
     (ROTULOS_PERFIL[profile.perfil] || profile.perfil) +
-    (profile.perfil_real === 'suporte' && profile.perfil !== 'suporte'
+    (profile.perfil_real === 'suporte' && profile.perfil !== 'suporte' && !window.CORTEX_VER_USUARIO
       ? ' <span class="ver-como-selo">ver como</span>' : '');
   document.getElementById('avatar').textContent = iniciais(profile.nome);
   if (profile.perfil !== 'familia') {

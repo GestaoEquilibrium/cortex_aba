@@ -451,6 +451,8 @@ window.MODULOS.agenda = {
       .select('*, pacientes(nome), profissional:profiles!sessoes_aplicador_id_fkey(nome), salas(nome)')
       .eq('data', this.dataRef).order('hora_inicio');
     sessoes = await this.soMinhas(sessoes);
+    // colunas extras da grade (aplicadores com jornada no dia) respeitam o escopo Minha equipe | Geral
+    this._equipeDia = this.gere() ? await ESCOPO.apls(this.equipe || [], 'id') : [];
 
     const comEvo = new Set();
     if (sessoes && sessoes.length) {
@@ -533,7 +535,7 @@ window.MODULOS.agenda = {
     // para poder arrastar uma sessao ate eles
     if (podeMover) {
       const dow = (d => d.getDay() === 0 ? 7 : d.getDay())(new Date(this.dataRef + 'T12:00:00'));
-      (this.equipe || []).forEach(p => {
+      (this._equipeDia || []).forEach(p => {
         if (!vistos.has(p.id) && (this.jornadas || []).some(j => j.profissional_id === p.id && j.dia_semana === dow)) { vistos.add(p.id); cols.push({ id: p.id, nome: p.nome, vazio: true }); }
       });
     }

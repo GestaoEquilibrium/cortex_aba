@@ -339,6 +339,7 @@ function abrirModulo(id) {
   window.scrollTo(0, 0);
 
   const modulo = window.MODULOS[id];
+  ESCOPO.parar();
   if (modulo && typeof modulo.render === 'function') {
     modulo.render(pagina, window.CORTEX_SESSAO);
     if (['pacientes', 'agenda', 'auditoria', 'eventos', 'presenca', 'faltas'].includes(id)) ESCOPO.montar(pagina);
@@ -915,17 +916,23 @@ const ESCOPO = {
       '<button type="button" class="' + (eq ? 'ativo' : '') + '" onclick="ESCOPO.alternar(\'equipe\')">Minha equipe</button>' +
       '<button type="button" class="' + (!eq ? 'ativo' : '') + '" onclick="ESCOPO.alternar(\'geral\')">Geral</button></div>';
   },
-  // encaixa o botao no cabecalho da pagina assim que ele existir
+  // Encaixa o botao no cabecalho da pagina e fica de olho: quando o modulo redesenha a tela principal
+  // (ex.: "Voltar a lista de pacientes", "Voltar" da grade fixa), o cabecalho nasce de novo sem o botao
+  // e ele e recolocado. Nao entra em telas internas (cabecalho com botao Voltar) nem em documentos.
   montar(pagina) {
+    this.parar();
     if (!this.ehCoord()) return;
-    let n = 0;
-    const tenta = () => {
-      const cab = pagina.querySelector('.pagina-cabecalho');
-      if (cab) { if (!cab.querySelector('.escopo-toggle')) cab.insertAdjacentHTML('beforeend', this.html()); return; }
-      if (++n < 30) setTimeout(tenta, 120);
+    const encaixar = () => {
+      pagina.querySelectorAll(':scope > .pagina-cabecalho').forEach(cab => {
+        if (cab.querySelector('.escopo-toggle') || cab.querySelector('.btn-voltar')) return;
+        cab.insertAdjacentHTML('beforeend', this.html());
+      });
     };
-    tenta();
-  }
+    encaixar();
+    this._obs = new MutationObserver(() => encaixar());
+    this._obs.observe(pagina, { childList: true, subtree: true });
+  },
+  parar() { if (this._obs) { this._obs.disconnect(); this._obs = null; } }
 };
 
 // ─────────────── Cadeia clinica: avaliacao -> plano -> PEI -> programas ───────────────

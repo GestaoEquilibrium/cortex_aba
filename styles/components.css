@@ -2819,3 +2819,13 @@ body.ver-usuario .app-main { padding-top: 64px; } /* a barra nao cobre o titulo 
 .mv-escolha small { color: var(--ink-soft); display: block; }
 .ag-pac-resumo { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 14px; margin-bottom: 10px; font-size: 12.5px; }
 .ag-pac-resumo > b { font-size: 14px; }
+
+/* ══════════════ Evolucoes: selecao para o relatorio rapido (patch 31) ══════════════ */
+.evo-selbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 12px; margin: 0 0 10px; border-radius: 12px; border: 1px dashed var(--line-strong); font-size: 12.5px; background: var(--surface); }
+.evo-selbar.ativa { border-style: solid; border-color: var(--acao); background: var(--acao-soft); position: sticky; top: 8px; z-index: 5; box-shadow: var(--shadow-sm); }
+.evo-selbar b { font-size: 13px; }
+.evo-sel { display: inline-flex; align-items: center; margin-right: 2px; cursor: pointer; }
+.evo-sel input { width: 16px; height: 16px; accent-color: var(--acao); cursor: pointer; margin: 0; }
+.evo-item.selecionada .evo-card { border-color: var(--acao); box-shadow: 0 0 0 2px var(--acao-soft); }
+.evo-item.selecionada::before { background: var(--acao); box-shadow: 0 0 0 2px var(--acao); }
+@media print { .evo-sel, .evo-selbar { display: none !important; } }

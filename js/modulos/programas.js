@@ -1734,6 +1734,7 @@ window.MODULOS.programas = {
     sessoes.forEach(x => { if (x.aplicador_id) apls[x.aplicador_id] = x.profissional ? x.profissional.nome : '-'; });
     evs.forEach(e => { if (e.aplicador_id && !apls[e.aplicador_id]) apls[e.aplicador_id] = e.aplicador ? e.aplicador.nome : '-'; });
 
+    if (!this._evoSel || this._evoSel.pacienteId !== pacienteId) this._evoSel = { pacienteId, ids: new Set(), info: {} };
     this._evo = { pacienteId, mes, visao, sessoes, evPor, progPor, meses, apls, busca: '', apl: '', dia: null };
     const rotMes = m => this.EVO_MESES[parseInt(m.slice(5, 7), 10) - 1] + ' ' + m.slice(0, 4);
     return '<div class="evo-barra nao-imprime">' +
@@ -1820,7 +1821,7 @@ window.MODULOS.programas = {
     const resumo = document.getElementById('evo-resumo');
     if (resumo) resumo.innerHTML = '<div class="evo-resumo"><div class="caixa-info"><small>Evolucoes no mes</small><b>' + nEvo + '</b></div>' +
       '<div class="caixa-info"><small>Sessoes sem evolucao</small><b style="color:' + (nSem ? 'var(--st-bad)' : 'inherit') + '">' + nSem + '</b></div>' +
-      '<div class="caixa-info"><small>Faltas no mes</small><b>' + nFalta + '</b></div></div>';
+      '<div class="caixa-info"><small>Faltas no mes</small><b>' + nFalta + '</b></div></div>' + this.evoHtmlSelBar();
     if (!E.sessoes.length) { corpo.innerHTML = '<div class="cartao"><div class="vazio"><div class="simbolo-vazio">&#128221;</div><strong>Nenhuma sessao neste mes</strong>Escolha outro mes acima ou lance uma evolucao retroativa.</div></div>'; return; }
     if (!lista.length) { corpo.innerHTML = '<div class="cartao"><p class="sub">Nenhuma evolucao com esse filtro.</p></div>'; return; }
     corpo.innerHTML = E.visao === 'cal' ? this.evoHtmlCalendario(lista) : this.evoHtmlLinha(lista);
@@ -1843,8 +1844,10 @@ window.MODULOS.programas = {
           '</div></div></div>';
       }
       const longo = (ev.texto || '').length > 220;
-      return '<div class="evo-item' + cls + '"><div class="evo-card">' +
-        '<div class="evo-cab"><b>' + fmt(s.data) + ' as ' + String(s.hora_inicio).slice(0, 5) + '</b>' + this.evoAvatar(nomeApl) +
+      const sel = this._evoSel && this._evoSel.ids.has(s.id);
+      return '<div class="evo-item' + cls + (sel ? ' selecionada' : '') + '"><div class="evo-card">' +
+        '<div class="evo-cab"><label class="evo-sel" title="Marcar para o relatorio rapido"><input type="checkbox"' + (sel ? ' checked' : '') + ' onchange="MODULOS.programas.evoMarcar(\'' + s.id + '\', this.checked)"></label>' +
+        '<b>' + fmt(s.data) + ' as ' + String(s.hora_inicio).slice(0, 5) + '</b>' + this.evoAvatar(nomeApl) +
         '<small class="sub">' + escaparHtml(nomeApl.split(' ').slice(0, 2).join(' ')) + '</small>' +
         (s.status === 'falta' ? '<span class="selo selo-bad">falta</span>' : '') +
         (ev.espelho_de ? '<span class="selo selo-neutro" title="Mesma evolucao do outro horario do dia">mesma do outro horario</span>' : '') +
@@ -1855,6 +1858,111 @@ window.MODULOS.programas = {
     }).join('') + '</div>';
   },
   evoExpandir(el) { const t = el.previousElementSibling; t.classList.toggle('curto'); el.textContent = t.classList.contains('curto') ? 'ver tudo' : 'ver menos'; },
+
+  // ── Relatorio rapido de sessoes (patch 31): marca evolucoes na linha do tempo e gera um documento
+  //    no padrao Equilibrium com as evolucoes escolhidas, para enviar a familia (impressao, PDF ou portal)
+  evoMarcar(sid, on) {
+    const S = this._evoSel; if (!S) return;
+    if (on) { S.ids.add(sid); const s = (this._evo.sessoes || []).find(x => x.id === sid); if (s) S.info[sid] = s.data; }
+    else { S.ids.delete(sid); delete S.info[sid]; }
+    document.querySelectorAll('.evo-item').forEach(it => { const c = it.querySelector('.evo-sel input'); if (c) it.classList.toggle('selecionada', c.checked); });
+    const bar = document.getElementById('evo-selbar'); if (bar) bar.outerHTML = this.evoHtmlSelBar();
+  },
+  evoMarcarTodas(on) {
+    const E = this._evo; if (!E) return;
+    this.evoSessoesFiltradas().forEach(s => { if (E.evPor[s.id]) { if (on) { this._evoSel.ids.add(s.id); this._evoSel.info[s.id] = s.data; } else { this._evoSel.ids.delete(s.id); delete this._evoSel.info[s.id]; } } });
+    this.evoDesenhar();
+  },
+  evoLimparSel() { if (this._evoSel) { this._evoSel.ids.clear(); this._evoSel.info = {}; } this.evoDesenhar(); },
+  evoHtmlSelBar() {
+    const S = this._evoSel; const n = S ? S.ids.size : 0;
+    const E = this._evo; const noMes = E ? this.evoSessoesFiltradas().filter(s => E.evPor[s.id]).length : 0;
+    const datas = S ? Object.values(S.info).sort() : [];
+    const fmt = d => d.split('-').reverse().join('/').slice(0, 5);
+    return '<div id="evo-selbar" class="evo-selbar' + (n ? ' ativa' : '') + ' nao-imprime">' +
+      (n ? '<b>' + n + ' sessao(oes) marcada(s)</b><small class="sub">' + (datas.length ? fmt(datas[0]) + (datas.length > 1 ? ' a ' + fmt(datas[datas.length - 1]) : '') : '') + '</small>' +
+           '<button type="button" class="btn btn-primario" onclick="MODULOS.programas.docRelatorioRapido()">&#128196; Relatorio rapido</button>' +
+           '<button type="button" class="btn-chip" onclick="MODULOS.programas.evoLimparSel()">Limpar</button>'
+         : '<span class="sub">Marque as evolucoes (caixinha de cada sessao) para montar um <b>relatorio rapido</b> para a familia.</span>') +
+      (noMes ? '<button type="button" class="btn-chip" style="margin-left:auto" onclick="MODULOS.programas.evoMarcarTodas(true)">Marcar as ' + noMes + ' do mes</button>' : '') +
+      '</div>';
+  },
+
+  async docRelatorioRapido(idsForcados) {
+    const S = this._evoSel;
+    const ids = idsForcados || (S ? Array.from(S.ids) : []);
+    if (!ids.length) { popAviso('Marque ao menos uma evolucao.'); return; }
+    document.getElementById('rel-sessao-overlay')?.remove();
+    document.getElementById('doc-eq-overlay')?.remove();
+    const ov = document.createElement('div');
+    ov.id = 'doc-eq-overlay'; ov.className = 'folha-overlay';
+    ov.innerHTML = '<div class="folha-pagina" id="doc-eq-corpo" style="max-width:900px"><p class="sub">Montando o relatorio...</p></div>';
+    document.body.appendChild(ov);
+
+    const [rS, rE] = await Promise.all([
+      sb.from('sessoes').select('id, data, hora_inicio, duracao_min, status, paciente_id, pacientes(nome, data_nascimento), profissional:profiles!sessoes_aplicador_id_fkey(nome)')
+        .in('id', ids).order('data').order('hora_inicio'),
+      sb.from('evolucoes').select('sessao_id, texto, destinacao, aplicador:profiles!evolucoes_aplicador_id_fkey(nome)').in('sessao_id', ids)
+    ]);
+    const sessoes = rS.data || [];
+    if (!sessoes.length) { ov.remove(); popAviso('Sessoes nao encontradas.'); return; }
+    const evPor = {}; (rE.data || []).forEach(e => { evPor[e.sessao_id] = e; });
+    const pac = sessoes[0].pacientes || {};
+    const fmt = d => d.split('-').reverse().join('/');
+    const apls = [...new Set(sessoes.map(x => (evPor[x.id] && evPor[x.id].aplicador ? evPor[x.id].aplicador.nome : (x.profissional ? x.profissional.nome : ''))).filter(Boolean))];
+    const curto = n => n.split(' ').slice(0, 2).join(' ');
+    const DS = ['Domingo', 'Segunda-feira', 'Ter&ccedil;a-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'S&aacute;bado'];
+    const eu = (window.CORTEX_SESSAO && window.CORTEX_SESSAO.profile) || {};
+    const papel = { direcao: 'Dire&ccedil;&atilde;o', coordenador: 'Coordena&ccedil;&atilde;o', terapeuta: 'Terapeuta', aplicador: 'Aplicador(a)' }[eu.perfil] || 'Equipe ABA';
+    const nFaltas = sessoes.filter(x => x.status === 'falta').length;
+
+    const blocos = sessoes.map(x => {
+      const ev = evPor[x.id] || {};
+      const quem = ev.aplicador ? ev.aplicador.nome : (x.profissional ? x.profissional.nome : '');
+      const dow = DS[new Date(x.data + 'T12:00:00').getDay()];
+      if (x.status === 'falta' && !ev.texto) {
+        return '<h2><span class="ponto deq-rosa"></span>' + fmt(x.data) + ' <small>&middot; ' + dow + ' &middot; ' + String(x.hora_inicio).slice(0, 5) + '</small></h2>' +
+          '<div class="deq-caixa deq-texto" style="min-height:0; color:var(--eq-rosa); font-weight:700">Falta</div>';
+      }
+      return '<h2><span class="ponto deq-amarelo"></span>' + fmt(x.data) + ' <small>&middot; ' + dow + ' &middot; ' + String(x.hora_inicio).slice(0, 5) +
+        (quem ? ' &middot; ' + escaparHtml(curto(quem)) : '') + (x.status === 'falta' ? ' &middot; <span style="color:var(--eq-rosa)">falta</span>' : '') + '</small></h2>' +
+        '<div class="deq-caixa deq-texto" style="min-height:0">' + escaparHtml(ev.texto || '') + '</div>';
+    }).join('');
+
+    window._docPortal = { paciente_id: sessoes[0].paciente_id, tipo: 'relatorio_sessoes', titulo: 'Relatorio de sessoes ' + fmt(sessoes[0].data) + ' a ' + fmt(sessoes[sessoes.length - 1].data) };
+    document.getElementById('doc-eq-corpo').innerHTML =
+      '<div class="pagina-cabecalho nao-imprime">' +
+      '  <div><button class="btn-voltar" onclick="document.getElementById(\'doc-eq-overlay\').remove()">&larr; Fechar</button>' +
+      '  <h2>Relatorio rapido de sessoes</h2>' +
+      '  <p class="sub">' + sessoes.length + ' sessao(oes) escolhida(s). Mensagem para a familia (opcional):</p>' +
+      '  <textarea id="rr-msg" rows="2" style="width:100%; max-width:640px; margin-top:4px" placeholder="Ex.: Seguem as evolucoes das sessoes desta semana. Qualquer duvida, estamos a disposicao." oninput="document.getElementById(\'rr-intro\').style.display = this.value.trim() ? \'\' : \'none\'; document.getElementById(\'rr-intro-txt\').textContent = this.value;"></textarea></div>' +
+      '  <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:flex-start"><button class="btn btn-primario" onclick="window.print()">&#128424; Imprimir / PDF</button>' + portalBtn() + '</div>' +
+      '</div>' +
+
+      '<div class="doc-eq">' +
+      '<div class="deq-cab">' +
+      '  <img src="icones/equilibrium.png" alt="Equilibrium">' +
+      '  <div class="deq-cab-t"><h1>Relat&oacute;rio de Sess&otilde;es</h1>' +
+      '  <p>Equilibrium Terapia Infantil &middot; Psicoterapia ABA &middot; evolu&ccedil;&otilde;es das sess&otilde;es</p></div>' +
+      '  <span class="deq-pilula">' + (sessoes.length === 1 ? 'SESS&Atilde;O ' + fmt(sessoes[0].data) : fmt(sessoes[0].data) + ' A ' + fmt(sessoes[sessoes.length - 1].data)) + '</span>' +
+      '</div>' +
+      '<div class="deq-caixa deq-dados" style="grid-template-columns:2fr 1fr 1fr 1.6fr; margin-top:4px">' +
+      '  <div style="border-bottom:none"><small>Paciente</small><b>' + escaparHtml(pac.nome || '') + '</b></div>' +
+      '  <div style="border-bottom:none"><small>Idade</small><b>' + (pac.data_nascimento ? calcularIdade(pac.data_nascimento) : '&mdash;') + '</b></div>' +
+      '  <div style="border-bottom:none"><small>Sess&otilde;es</small><b>' + sessoes.length + (nFaltas ? ' <span style="color:var(--eq-rosa); font-size:11px">(' + nFaltas + ' falta' + (nFaltas > 1 ? 's' : '') + ')</span>' : '') + '</b></div>' +
+      '  <div style="border-bottom:none"><small>Aplicador(a)' + (apls.length > 1 ? 's' : '') + '</small><b>' + escaparHtml(apls.map(curto).join(', ') || '&mdash;') + '</b></div>' +
+      '</div>' +
+      '<div id="rr-intro" style="display:none"><h2><span class="ponto deq-teal"></span>&Agrave; fam&iacute;lia</h2><div class="deq-caixa deq-texto" style="min-height:0" id="rr-intro-txt"></div></div>' +
+      blocos +
+      '<div class="deq-assinatura">' + escaparHtml(eu.nome || '') + '<br>' + papel + ' &middot; Equilibrium Terapia Infantil</div>' +
+      '<div class="deq-rodape">' +
+      '  <span>Equilibrium Terapia Infantil &middot; Uberl&acirc;ndia/MG</span>' +
+      '  <span class="pontos"><i style="background:var(--eq-teal)"></i><i style="background:var(--eq-amarelo)"></i>' +
+      '<i style="background:var(--eq-rosa)"></i><i style="background:var(--eq-azul)"></i></span>' +
+      '  <span>Documento gerado pelo CORTEX aba &middot; ' + new Date().toLocaleDateString('pt-BR') + '</span>' +
+      '</div>' +
+      '</div>';
+  },
 
   evoHtmlCalendario(lista) {
     const E = this._evo; const fmt = d => d.split('-').reverse().join('/');

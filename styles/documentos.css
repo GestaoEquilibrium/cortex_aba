@@ -343,3 +343,12 @@ table.deq-pagina .deq-rodape { margin-top: 0; }
     .deq-lista th, .deq-lista tr:nth-child(even) td, .deq-lista td.sess b { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .deq-conf { break-inside: avoid; page-break-inside: avoid; }
 }
+
+/* ── Patch 31 (01/10/2026, decisao de Wess): todo texto corrido dos documentos sai justificado.
+   So os blocos de prosa (.deq-texto e os paragrafos paginados do PDF); cabecalho, quadros de dados,
+   tabelas, graficos, assinatura e rodape continuam como estao. ── */
+.doc-eq .deq-texto, .doc-eq .deq-par, .pdf-pagina .deq-texto, .pdf-pagina .deq-par {
+    text-align: justify;
+    text-justify: inter-word;
+}
+.doc-eq .deq-texto table, .doc-eq .deq-texto .deq-grade2, .doc-eq .deq-texto .deq-graf-item { text-align: initial; }

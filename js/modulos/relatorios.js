@@ -531,7 +531,7 @@ window.MODULOS.relatorios = {
     abrirModal('Relatorio da sessao',
       '<p class="sub" style="margin-bottom:8px">Escolha a sessao (20 mais recentes):</p>' +
       lista.map(s =>
-        '<div class="linha-doc clicavel" onclick="fecharModal(); MODULOS.programas.docEvolucaoDiaria(\'' + s.id + '\')">' +
+        '<div class="linha-doc clicavel" onclick="fecharModal(); MODULOS.programas.docEvolucaoDiaria(\'' + s.id + '\', true)">' +
         '<div><b>' + s.data.split('-').reverse().join('/') + '</b>' +
         '<small>' + (s.hora_inicio ? 'as ' + s.hora_inicio.slice(0, 5) : '') +
         (s.status === 'concluida' ? ' &middot; concluida' : ' &middot; ' + s.status.replace('_', ' ')) + '</small></div>' +

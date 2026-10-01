@@ -118,17 +118,13 @@ window.MODULOS.coordenacao = {
       (dems.length ? '<p class="sub" style="margin-top:8px"><b>Demandas abertas na equipe:</b> ' + dems.length + '</p>' : '') +
       (!evs.length && !vencEq.length && !dems.length ? '<p class="sub">Nada pendente para hoje.</p>' : '') +
       '<div class="barra-acoes" style="justify-content:flex-start; margin-top:10px">' +
-      '<button class="btn btn-chip" onclick="MODULOS.coordenacao.reabrirAvisos()">&#128276; Reabrir avisos da entrada</button>' +
+      '<button class="btn btn-chip" onclick="MODULOS.avisos.abrir()">&#128276; Central de avisos</button>' +
       '<button class="btn btn-chip" onclick="abrirModulo(\'avaliacoes\')">Vencimentos</button>' +
       '<button class="btn btn-chip" onclick="abrirModulo(\'eventos\')">Supervisao</button></div>';
   },
 
-  reabrirAvisos() {
-    agendarPop(() => MODULOS.programas?.popupEvolucoesPendentes?.(), 50);
-    agendarPop(() => MODULOS.agenda?.popupIndicativos?.(), 100);
-    agendarPop(() => MODULOS.eventos?.popupAvisos?.(), 150);
-    agendarPop(() => MODULOS.programas?.popupEquipe?.(), 200);
-  },
+  // Patch 31: os avisos da entrada viraram a Central de avisos (sino); mantido por compatibilidade
+  reabrirAvisos() { if (MODULOS.avisos) MODULOS.avisos.abrir(); },
 
   async desenharPendencias() {
     const alvo = document.getElementById('co-pend');
@@ -159,7 +155,7 @@ window.MODULOS.coordenacao = {
     for (let i = 0; i < sids.length; i += 300) {
       const lote = sids.slice(i, i + 300);
       const [rE, rR] = await Promise.all([
-        sb.from('evolucoes').select('sessao_id, texto, aplicador:profiles!evolucoes_aplicador_id_fkey(nome)').in('sessao_id', lote),
+        sb.from('evolucoes').select('sessao_id, texto, destinacao, aplicador:profiles!evolucoes_aplicador_id_fkey(nome)').in('sessao_id', lote),
         sb.from('programa_sessao_registros').select('sessao_id, corretos, tentativas, tentativas_sessao, pct_corretos, nao_aplicado, motivo_nao_aplicado, paciente_programas(programas(nome))').in('sessao_id', lote)
       ]);
       evs.push(...(rE.data || [])); regs.push(...(rR.data || []));
@@ -205,7 +201,7 @@ window.MODULOS.coordenacao = {
             (evl.length
               ? evl.map(e => '<p style="margin-top:6px; font-size:12.5px; line-height:1.5"><b>Evolucao</b>' +
                   (e.aplicador ? ' <small class="sub">(' + escaparHtml(e.aplicador.nome.split(' ')[0]) + ')</small>' : '') + ': ' +
-                  this.resumo(e.texto) + '</p>').join('')
+                  this.resumo(e.texto) + (e.destinacao ? ' <small class="sub">&middot; Destinacao: ' + escaparHtml(e.destinacao) + '</small>' : '') + '</p>').join('')
               : (s.status === 'concluida' ? '<p class="sub" style="margin-top:4px; color:var(--st-bad)">Sem evolucao.</p>' : '')) +
             '</div>';
         }).join('')

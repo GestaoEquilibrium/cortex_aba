@@ -159,12 +159,10 @@ async function iniciarApp() {
   festejarAniversario(profile);
 
   if (profile.perfil !== 'familia') {
-    // Fila de pop-ups da entrada: cada um so aparece depois que o anterior for fechado
-    agendarPop(() => MODULOS.programas?.popupEvolucoesPendentes?.(), 900);
-    agendarPop(() => MODULOS.agenda?.popupIndicativos?.(), 1200);
-    agendarPop(() => MODULOS.eventos?.popupAvisos?.(), 1500);
-    agendarPop(() => MODULOS.programas?.popupEquipe?.(), 1800);
-    // instalacao no celular / notificacoes (entra na fila, depois dos avisos do dia)
+    // Patch 31: nenhum pop-up de pendencia abre sozinho na entrada. Tudo fica na Central de avisos
+    // (sino flutuante com contador; no celular, sino no cabecalho) e abre quando a pessoa quiser.
+    try { MODULOS.avisos?.iniciar?.(); } catch (e) { console.warn('avisos:', e); }
+    // instalacao no celular / notificacoes push: continua pedindo uma vez, sozinho
     agendarPop(() => window.PWA && PWA.instalado() ? PWA.pedirNotificacoes() : null, 2200);
   }
 }

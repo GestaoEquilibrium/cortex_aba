@@ -596,7 +596,7 @@ window.MODULOS.agenda = {
         (evo
           ? '<div style="font-size:12.5px; line-height:1.55; white-space:pre-wrap; max-height:180px; overflow:auto">' + escaparHtml(evo.texto || '') + '</div>' +
             (evo.destinacao ? '<small class="sub">Destina&ccedil;&atilde;o: ' + escaparHtml(evo.destinacao) + '</small>' : '') +
-            '<div style="margin-top:6px"><button class="btn-chip" onclick="fecharModal(); MODULOS.programas.docEvolucaoDiaria(\'' + id + '\')">&#128196; Relat&oacute;rio da sess&atilde;o</button></div>'
+            '<div style="margin-top:6px"><button class="btn-chip" onclick="fecharModal(); MODULOS.programas.docEvolucaoDiaria(\'' + id + '\')">&#128196; Evolu&ccedil;&atilde;o di&aacute;ria</button></div>'
           : '<span class="sub">' + (s.status === 'concluida' ? '<b style="color:var(--st-warn)">Sess&atilde;o conclu&iacute;da sem evolu&ccedil;&atilde;o</b>' : 'ainda n&atilde;o escrita') + '</span>') +
         '</div>' +
         '    <div class="caixa-info" style="margin-top:8px"><small>Observacoes ' + (podeOperar ? '<button class="btn-chip" style="margin-left:6px" onclick="MODULOS.agenda.editarObs(\'' + id + '\')">&#9998;</button>' : '') + '</small>' +

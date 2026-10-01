@@ -705,7 +705,7 @@ window.MODULOS.programas = {
         '<div><b>' + fmt(x.data) + ' as ' + String(x.hora_inicio).slice(0, 5) + '</b><small>' +
         escaparHtml(x.profissional ? x.profissional.nome.split(' ').slice(0, 2).join(' ') : 'sem aplicador') + (minha ? ' (voce)' : '') + '</small></div>' +
         '<div class="pac-selos"><span class="selo ' + st[0] + '">' + st[1] + '</span>' +
-        (x.status === 'concluida' ? '<button class="btn-chip" onclick="fecharModal(); MODULOS.programas.docEvolucaoDiaria(\'' + x.id + '\')">Relatorio</button>' : '') +
+        (x.status === 'concluida' ? '<button class="btn-chip" onclick="fecharModal(); MODULOS.programas.docEvolucaoDiaria(\'' + x.id + '\', true)">Relatorio</button>' : '') +
         (x.status === 'falta' ? '' :
           '<label class="check" title="Marque para lancar os mesmos programas e a evolucao em mais de uma sessao"><input type="checkbox" class="sess-multi" value="' + x.id + '"' + (x.data === hoje ? ' checked' : '') + '> junto</label>' +
           '<button class="btn-chip cheio" onclick="fecharModal(); MODULOS.programas.abrirFolha(\'' + x.id + '\', true)">Lancar nesta</button>') +
@@ -1544,7 +1544,7 @@ window.MODULOS.programas = {
       const pcts = porSessao[s.id] || [];
       const media = pcts.length ? Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length) : null;
       const evo = (s.evolucoes && s.evolucoes[0] && s.evolucoes[0].texto) || '';
-      return '<div class="atd-item clicavel" onclick="MODULOS.programas.docEvolucaoDiaria(\'' + s.id + '\')">' +
+      return '<div class="atd-item clicavel" onclick="MODULOS.programas.docEvolucaoDiaria(\'' + s.id + '\', true)">' +
         '<div class="atd-topo">' +
         '<div class="atd-meta"><b>' + s.data.split('-').reverse().join('/') + '</b> as ' +
         s.hora_inicio.slice(0, 5) +
@@ -1557,7 +1557,7 @@ window.MODULOS.programas = {
             'onclick="event.stopPropagation(); MODULOS.programas.concluirSessaoLista(\'' + s.id + '\')">Concluir sessao</button>'
           : '') +
         '<button type="button" class="btn btn-primario atd-btn" ' +
-        'onclick="event.stopPropagation(); MODULOS.programas.docEvolucaoDiaria(\'' + s.id + '\')">' +
+        'onclick="event.stopPropagation(); MODULOS.programas.docEvolucaoDiaria(\'' + s.id + '\', true)">' +
         '&#128202; Ver relatorio</button>' +
         (perm('programas.apagar') === 'E' && ['direcao', 'coordenador', 'suporte'].includes(window.CORTEX_SESSAO.profile.perfil)
           ? '<button class="btn-chip" style="color:#E9586A; border-color:#F5C2C9" title="Apagar esta sessao e todos os registros dela (gestao)" ' +
@@ -1697,7 +1697,7 @@ window.MODULOS.programas = {
 
   async htmlEvolucoes(pacienteId) {
     const { data: evs } = await sb.from('evolucoes')
-      .select('id, texto, criado_em, sessao_id, aplicador:profiles!evolucoes_aplicador_id_fkey(nome), sessoes:sessoes!evolucoes_sessao_id_fkey(data, hora_inicio)')
+      .select('id, texto, destinacao, criado_em, sessao_id, aplicador:profiles!evolucoes_aplicador_id_fkey(nome), sessoes:sessoes!evolucoes_sessao_id_fkey(data, hora_inicio)')
       .eq('paciente_id', pacienteId)
       .order('criado_em', { ascending: false })
       .limit(30);
@@ -1743,17 +1743,19 @@ window.MODULOS.programas = {
       '<b>Legenda de dados antigos:</b> registros anteriores usavam I/G/Ve/Vi - convertidos para C/GE/VE/VI.</p>' +
       '<div class="prog-grafico">' + barras + '</div></div>' +
       '<div class="cartao"><h3>Evolucoes diarias</h3>' +
+      '<p class="sub" style="margin-bottom:8px">So o texto da evolucao e a destinacao da crianca. Os percentuais e tentativas dos programas ficam no relatorio da sessao (aba Relatorios).</p>' +
       lista.map(e => {
-        const d = porSessao[e.sessao_id];
-        const pct = d && d.t ? Math.round(d.c * 100 / d.t) : null;
         return '<div class="linha-doc" style="align-items:flex-start">' +
           '<div style="flex:1"><b>' +
           (e.sessoes ? new Date(e.sessoes.data + 'T12:00:00').toLocaleDateString('pt-BR') +
             ' as ' + e.sessoes.hora_inicio.slice(0, 5) : '') + '</b>' +
-          '<small>' + escaparHtml(e.aplicador ? e.aplicador.nome : '-') +
-          (pct !== null ? ' &middot; ' + pct + '% de corretos em ' + d.t + ' tentativas' : '') + '</small>' +
+          '<small>' + escaparHtml(e.aplicador ? e.aplicador.nome : '-') + '</small>' +
           '<p style="margin-top:6px; font-size:12.5px; line-height:1.6; white-space:pre-wrap">' +
-          escaparHtml(e.texto) + '</p></div>' +
+          escaparHtml(e.texto) + '</p>' +
+          '<p style="margin-top:6px; font-size:12px"><b>Destinacao da crianca:</b> ' +
+          (e.destinacao ? escaparHtml(e.destinacao) : '<span class="sub">nao informada</span>') + '</p></div>' +
+          '<div class="pac-selos"><button class="btn-chip" title="Documento Evolucao Diaria desta sessao" ' +
+          'onclick="MODULOS.programas.docEvolucaoDiaria(\'' + e.sessao_id + '\')">&#128196; Documento</button></div>' +
           '</div>';
       }).join('') +
       '</div>';
@@ -1823,8 +1825,13 @@ window.MODULOS.programas = {
 
   // ─────────── DOCUMENTO OFICIAL: Evolucao Diaria (identidade Equilibrium) ───────────
 
-  async docEvolucaoDiaria(sessaoId) {
+  // Evolucao Diaria (patch 31): por padrao so a evolucao escrita + destinacao da crianca + comportamentos.
+  // Os programas (percentuais, tentativas e observacoes) so entram com a opcao "Incluir programas e tentativas".
+  async docEvolucaoDiaria(sessaoId, comProgramas) {
+    comProgramas = !!comProgramas;
+    this._docEvoProg = comProgramas;
     document.getElementById('rel-sessao-overlay')?.remove();
+    document.getElementById('doc-eq-overlay')?.remove();
     const ov = document.createElement('div');
     ov.id = 'doc-eq-overlay';
     ov.className = 'folha-overlay';
@@ -1955,7 +1962,9 @@ window.MODULOS.programas = {
     document.getElementById('doc-eq-corpo').innerHTML =
       '<div class="pagina-cabecalho nao-imprime">' +
       '  <div><button class="btn-voltar" onclick="document.getElementById(\'doc-eq-overlay\').remove()">&larr; Fechar</button>' +
-      '  <h2>Evolucao diaria &middot; documento oficial</h2></div>' +
+      '  <h2>Evolucao diaria &middot; documento oficial</h2>' +
+      '  <label class="check" style="margin-top:6px; font-size:12.5px"><input type="checkbox" id="doc-evo-prog"' + (comProgramas ? ' checked' : '') +
+      ' onchange="MODULOS.programas.docEvolucaoDiaria(\'' + sessaoId + '\', this.checked)"> Incluir programas e tentativas (percentuais e observacoes)</label></div>' +
       '  <button class="btn btn-primario" onclick="window.print()">&#128424; Imprimir / PDF</button>' +
       portalBtn() +
       '</div>' +
@@ -1964,7 +1973,7 @@ window.MODULOS.programas = {
       '<div class="deq-cab">' +
       '  <img src="icones/equilibrium.png" alt="Equilibrium">' +
       '  <div class="deq-cab-t"><h1>Evolu&ccedil;&atilde;o Di&aacute;ria</h1>' +
-      '  <p>Equilibrium Terapia Infantil &middot; Psicoterapia ABA</p></div>' +
+      '  <p>Equilibrium Terapia Infantil &middot; Psicoterapia ABA' + (comProgramas ? ' &middot; com programas da sess&atilde;o' : '') + '</p></div>' +
       '  <span class="deq-pilula">SESS&Atilde;O ' + s.data.split('-').reverse().join('/') + '</span>' +
       '</div>' +
 
@@ -1977,12 +1986,13 @@ window.MODULOS.programas = {
            escaparHtml(s.profissional ? s.profissional.nome : '&mdash;') + '</b></div>' +
       '</div>' +
 
-      '<h2><span class="ponto deq-teal"></span>Programas trabalhados</h2>' +
-      '<div class="deq-caixa deq-texto" style="min-height:0">' + progHtml + '</div>' +
-
-      (avalHtml
-        ? '<h2><span class="ponto deq-teal"></span>Avalia&ccedil;&otilde;es do dia</h2>' +
-          '<div class="deq-caixa deq-texto" style="min-height:0">' + avalHtml + '</div>'
+      (comProgramas
+        ? '<h2><span class="ponto deq-teal"></span>Programas trabalhados</h2>' +
+          '<div class="deq-caixa deq-texto" style="min-height:0">' + progHtml + '</div>' +
+          (avalHtml
+            ? '<h2><span class="ponto deq-teal"></span>Avalia&ccedil;&otilde;es do dia</h2>' +
+              '<div class="deq-caixa deq-texto" style="min-height:0">' + avalHtml + '</div>'
+            : '')
         : '') +
       '<h2><span class="ponto deq-amarelo"></span>Sess&atilde;o, evolu&ccedil;&atilde;o e atividades realizadas</h2>' +
       '<div class="deq-caixa deq-texto">' + escaparHtml(evo.texto || '') + '</div>' +
@@ -1990,8 +2000,8 @@ window.MODULOS.programas = {
       '<h2><span class="ponto deq-rosa"></span>Comportamentos interferentes</h2>' +
       '<div class="deq-caixa deq-texto" style="min-height:0">' + compHtml + '</div>' +
 
-      '<h2><span class="ponto"></span>Destina&ccedil;&atilde;o da crian&ccedil;a</h2>' +
-      '<div class="deq-caixa deq-texto" style="min-height:34px">' + escaparHtml(evo.destinacao || '') + '</div>' +
+      '<h2><span class="ponto deq-azul"></span>Destina&ccedil;&atilde;o da crian&ccedil;a</h2>' +
+      '<div class="deq-caixa deq-texto" style="min-height:34px">' + (evo.destinacao ? escaparHtml(evo.destinacao) : '<span style="color:var(--eq-cinza)">N&atilde;o informada na evolu&ccedil;&atilde;o.</span>') + '</div>' +
 
       '<div class="deq-assinatura">' +
       escaparHtml((evo.aplicador && evo.aplicador.nome) || (s.profissional && s.profissional.nome) || '') +

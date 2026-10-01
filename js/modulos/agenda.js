@@ -81,6 +81,7 @@ window.MODULOS.agenda = {
       '  <div><h2>Agenda</h2><p class="sub" id="ag-sub"></p></div>' +
       '  <div style="display:flex; gap:8px; flex-wrap:wrap">' +
       '    <button class="btn-chip" onclick="window.open(\'tv.html\', \'_blank\')">&#128250; TV</button>' +
+      (this.gere() ? '<button class="btn-chip" id="ag-inativos" style="display:none; border-color:var(--st-warn); color:#92400E" title="Profissionais inativados que ainda tem horarios fixos ou sessoes futuras" onclick="MODULOS.agenda.modalInativos()"></button>' : '') +
       (this.gere()
         ? '<button class="btn-chip" onclick="MODULOS.agenda.telaGrade()">Grade fixa</button>' +
           '<button class="btn-chip" title="Jornada e horarios de cada aplicador, com os espacos livres." ' +
@@ -108,6 +109,92 @@ window.MODULOS.agenda = {
       '<div id="ag-corpo"></div>';
 
     this.desenhar();
+    this.verificarInativos();
+  },
+
+  // ───────────── Profissionais inativos que ainda estao na agenda (patch 31) ─────────────
+  // Inativar o acesso nao mexe na grade fixa nem nas sessoes futuras; aqui a gestao transfere tudo
+  // para outro aplicador (inclusive a designacao das criancas) ou encerra os horarios.
+  async inativosComAgenda() {
+    const hoje = hojeLocal();
+    const { data: inat } = await sb.from('profiles').select('id, nome').eq('ativo', false);
+    if (!inat || !inat.length) return [];
+    const ids = inat.map(p => p.id);
+    const [rG, rS, rP] = await Promise.all([
+      sb.from('grade_horarios').select('id, aplicador_id, paciente_id').eq('ativo', true).in('aplicador_id', ids),
+      sb.from('sessoes').select('id, aplicador_id, paciente_id').gte('data', hoje).in('status', ['agendada', 'checkin']).in('aplicador_id', ids),
+      sb.from('pacientes').select('id, aplicador_id').in('aplicador_id', ids).neq('status', 'encerrado')
+    ]);
+    return inat.map(p => ({ p,
+      grade: (rG.data || []).filter(g => g.aplicador_id === p.id),
+      sess: (rS.data || []).filter(x => x.aplicador_id === p.id),
+      pacs: (rP.data || []).filter(x => x.aplicador_id === p.id) }))
+      .filter(x => x.grade.length || x.sess.length || x.pacs.length);
+  },
+  async verificarInativos() {
+    const el = document.getElementById('ag-inativos');
+    if (!el || !this.gere()) return;
+    try {
+      const lista = await this.inativosComAgenda();
+      if (!lista.length) { el.style.display = 'none'; return; }
+      el.style.display = ''; el.innerHTML = '&#9888; ' + lista.length + ' inativo(s) na agenda';
+    } catch (e) { /* so aviso */ }
+  },
+  async modalInativos() {
+    const lista = await this.inativosComAgenda();
+    if (!lista.length) { popAviso('Nenhum profissional inativo com horarios ou criancas no nome. Tudo em ordem.'); return; }
+    const alvos = (this.equipe || []).filter(p => !lista.some(x => x.p.id === p.id));
+    abrirModal('Profissionais inativos ainda na agenda',
+      '<p class="sub" style="margin-bottom:10px">Inativar o acesso nao mexe na agenda. Para cada um, <b>transfira</b> a grade fixa, as sessoes futuras e as criancas designadas para outro aplicador, ou <b>encerre</b> os horarios (grade desativada, sessoes futuras canceladas, criancas ficam sem designacao).</p>' +
+      lista.map(x => '<div class="linha-doc" style="align-items:flex-start; flex-wrap:wrap; gap:8px"><div style="flex:1; min-width:200px"><b>' + escaparHtml(x.p.nome) + '</b>' +
+        '<small>' + x.grade.length + ' horario(s) fixo(s) &middot; ' + x.sess.length + ' sessao(oes) futura(s) &middot; ' + x.pacs.length + ' crianca(s) designada(s)</small></div>' +
+        '<div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap"><select id="in-alvo-' + x.p.id + '"><option value="">Transferir para...</option>' +
+        alvos.map(a => '<option value="' + a.id + '">' + escaparHtml(a.nome) + '</option>').join('') + '</select>' +
+        '<button class="btn-chip cheio" onclick="MODULOS.agenda.transferirInativo(\'' + x.p.id + '\')">Transferir</button>' +
+        '<button class="btn-chip" style="color:#E9586A; border-color:#F5C2C9" onclick="MODULOS.agenda.encerrarInativo(\'' + x.p.id + '\')">Encerrar horarios</button></div></div>').join('') +
+      '<div class="mensagem-erro" id="in-erro"></div>' +
+      '<div class="barra-acoes"><button class="btn btn-fantasma" onclick="fecharModal()">Fechar</button></div>', true, 'agenda');
+  },
+  async transferirInativo(deId) {
+    const alvo = (document.getElementById('in-alvo-' + deId) || {}).value;
+    const erro = document.getElementById('in-erro'); if (erro) erro.classList.remove('visivel');
+    if (!alvo) { if (erro) { erro.textContent = 'Escolha para quem transferir.'; erro.classList.add('visivel'); } return; }
+    const hoje = hojeLocal();
+    const nome = id => { const p = (this.equipe || []).find(x => x.id === id); return p ? p.nome.split(' ').slice(0, 2).join(' ') : 'o novo aplicador'; };
+    if (!await popConfirmar('Transferir a grade fixa, as sessoes futuras e as criancas designadas deste profissional para ' + nome(alvo) + '?', { titulo: 'Transferir agenda', ok: 'Transferir', tipo: 'agenda' })) return;
+    const r1 = await sb.from('grade_horarios').update({ aplicador_id: alvo }, { count: 'exact' }).eq('aplicador_id', deId).eq('ativo', true);
+    if (r1.error) { popAviso('Grade fixa: ' + r1.error.message); return; }
+    const r2 = await sb.from('sessoes').update({ aplicador_id: alvo }, { count: 'exact' }).eq('aplicador_id', deId).gte('data', hoje).in('status', ['agendada', 'checkin']);
+    if (r2.error) { popAviso('Sessoes: ' + r2.error.message); return; }
+    // designacao das criancas: principal e vinculos extras
+    const { data: vinc } = await sb.from('paciente_aplicadores').select('paciente_id, principal').eq('aplicador_id', deId);
+    const r3 = await sb.from('pacientes').update({ aplicador_id: alvo }, { count: 'exact' }).eq('aplicador_id', deId);
+    if (r3.error) { popAviso('Criancas: ' + r3.error.message); return; }
+    if (vinc && vinc.length) {
+      const { data: jaTem } = await sb.from('paciente_aplicadores').select('paciente_id').eq('aplicador_id', alvo).in('paciente_id', vinc.map(v => v.paciente_id));
+      const tem = new Set((jaTem || []).map(x => x.paciente_id));
+      await sb.from('paciente_aplicadores').delete().eq('aplicador_id', deId);
+      const novos = vinc.filter(v => !tem.has(v.paciente_id)).map(v => ({ paciente_id: v.paciente_id, aplicador_id: alvo, principal: !!v.principal }));
+      if (novos.length) { const r4 = await sb.from('paciente_aplicadores').insert(novos); if (r4.error) popAviso('Vinculos: ' + r4.error.message); }
+    }
+    window._meusPac = null; window._equipe = null;
+    try { await sb.from('notificacoes').insert({ destinatario_id: alvo, titulo: 'Agenda transferida para voce', corpo: (r1.count || 0) + ' horario(s) fixo(s), ' + (r2.count || 0) + ' sessao(oes) futura(s) e ' + (r3.count || 0) + ' crianca(s) de um profissional desligado passaram para voce.' }); } catch (e) {}
+    popAviso('Transferido para ' + nome(alvo) + ': ' + (r1.count || 0) + ' horario(s) fixo(s), ' + (r2.count || 0) + ' sessao(oes) futura(s) e ' + (r3.count || 0) + ' crianca(s).');
+    fecharModal(); await this.carregarBase(); this.desenhar(); this.verificarInativos();
+  },
+  async encerrarInativo(deId) {
+    if (!await popConfirmar('Encerrar os horarios deste profissional? A grade fixa dele e desativada, as sessoes futuras sao canceladas e as criancas ficam sem designacao (para voce designar depois).', { titulo: 'Encerrar horarios', ok: 'Encerrar', tipo: 'agenda' })) return;
+    const hoje = hojeLocal();
+    const r1 = await sb.from('grade_horarios').update({ ativo: false }, { count: 'exact' }).eq('aplicador_id', deId).eq('ativo', true);
+    if (r1.error) { popAviso('Grade fixa: ' + r1.error.message); return; }
+    const r2 = await sb.from('sessoes').update({ status: 'cancelada', motivo_cancelamento: 'Profissional desligado' }, { count: 'exact' }).eq('aplicador_id', deId).gte('data', hoje).in('status', ['agendada', 'checkin']);
+    if (r2.error) { popAviso('Sessoes: ' + r2.error.message); return; }
+    const r3 = await sb.from('pacientes').update({ aplicador_id: null }, { count: 'exact' }).eq('aplicador_id', deId);
+    if (r3.error) { popAviso('Criancas: ' + r3.error.message); return; }
+    await sb.from('paciente_aplicadores').delete().eq('aplicador_id', deId);
+    window._meusPac = null; window._equipe = null;
+    popAviso('Encerrado: ' + (r1.count || 0) + ' horario(s) fixo(s) desativado(s), ' + (r2.count || 0) + ' sessao(oes) cancelada(s), ' + (r3.count || 0) + ' crianca(s) sem designacao.');
+    fecharModal(); await this.carregarBase(); this.desenhar(); this.verificarInativos();
   },
 
   mudarVisao(v) {

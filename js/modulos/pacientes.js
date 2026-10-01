@@ -908,9 +908,9 @@ window.MODULOS.pacientes = {
       window._meusPac = null;
 
       fecharModal();
-      // Patch 31: quem saiu da equipe da crianca leva os horarios fixos e as sessoes futuras para o novo principal
-      const sairam = [...antes].filter(id => !marcados.includes(id));
-      if (sairam.length && principal) await this.moverAgenda(sairam, principal);
+      // Patch 31: tudo que estiver na grade fixa / sessoes futuras da crianca no nome de quem NAO esta na
+      // equipe nova vai para o principal (cobre quem saiu agora, quem saiu antes e profissional inativado)
+      if (principal) await this.moverAgendaFora(new Set(marcados), principal);
       this.telaDetalhe(this.paciente.id);
     } catch (e) {
       erro.textContent = e.message;
@@ -923,17 +923,25 @@ window.MODULOS.pacientes = {
   // Caso ja aconteceu: aplicador foi trocado antes e os horarios ficaram no nome dele. Lista quem ainda
   // tem grade/sessoes futuras da crianca sem estar na equipe e oferece mover para o principal.
   async moverAgendaManual() {
-    const pacId = this.paciente.id, hoje = hojeLocal();
     const principal = (document.querySelector('.ap-princ:checked') || {}).value || this.paciente.aplicador_id;
     if (!principal) { popAviso('Escolha e salve o aplicador principal primeiro.'); return; }
     const equipe = new Set(Array.from(document.querySelectorAll('.ap-chk:checked')).map(c => c.value));
+    const achou = await this.moverAgendaFora(equipe, principal);
+    if (!achou) popAviso('Nenhum horario ou sessao futura no nome de quem esta fora da equipe. Tudo em ordem.');
+  },
+
+  // Procura grade fixa / sessoes futuras da crianca no nome de quem nao esta na equipe e oferece mover
+  async moverAgendaFora(equipe, principal) {
+    const pacId = this.paciente.id, hoje = hojeLocal();
     const [rG, rS] = await Promise.all([
       sb.from('grade_horarios').select('aplicador_id').eq('paciente_id', pacId).eq('ativo', true),
       sb.from('sessoes').select('aplicador_id').eq('paciente_id', pacId).gte('data', hoje).in('status', ['agendada', 'checkin'])
     ]);
+    if (rG.error || rS.error) { popAviso('Nao consegui ler a agenda da crianca: ' + ((rG.error || rS.error).message)); return false; }
     const fora = [...new Set((rG.data || []).concat(rS.data || []).map(x => x.aplicador_id).filter(id => id && !equipe.has(id) && id !== principal))];
-    if (!fora.length) { popAviso('Nenhum horario ou sessao futura no nome de quem esta fora da equipe. Tudo em ordem.'); return; }
+    if (!fora.length) return false;
     await this.moverAgenda(fora, principal);
+    return true;
   },
 
   // Move a agenda da crianca (grade fixa + sessoes futuras ainda nao iniciadas) dos aplicadores que

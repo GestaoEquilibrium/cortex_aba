@@ -2080,7 +2080,9 @@ window.MODULOS.programas = {
     const veTudo = !coordId && ['direcao', 'suporte'].includes(perfil);
 
     const hoje = hojeLocal();
-    const desde = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+    // ultimos 30 dias, mas nunca antes da data de corte das pendencias (CORTEX_EVO_DESDE)
+    let desde = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+    if (window.CORTEX_EVO_DESDE && window.CORTEX_EVO_DESDE > desde) desde = window.CORTEX_EVO_DESDE;
 
     const [rPac, rProf, rEm] = await Promise.all([
       sb.from('pacientes').select('id, nome, coordenador_id, aplicador_id').eq('status', 'ativo'),
@@ -2135,7 +2137,7 @@ window.MODULOS.programas = {
     const fmt = d => d.split('-').reverse().join('/');
     const selo = f => '<span class="selo ' + (f === 'nao encerrada' ? 'selo-warn' : f === 'sem evolucao' ? 'selo-bad' : 'selo-neutro') + '">' + f + '</span>';
 
-    let html = '<p class="sub" style="margin-bottom:10px"><b>' + pend.length + '</b> sessao(oes) dos ultimos 30 dias com pendencia' +
+    let html = '<p class="sub" style="margin-bottom:10px"><b>' + pend.length + '</b> sessao(oes) com pendencia desde ' + fmt(desde) +
       (veTudo ? ', por equipe' : ' na sua equipe') + '. Toque no nome para abrir o prontuario.</p>';
     Object.entries(grupos).forEach(([coord, porApl]) => {
       if (veTudo) html += '<h4 style="margin:10px 0 4px; font-size:12.5px">Equipe ' + escaparHtml(nome(coord)) + '</h4>';

@@ -90,7 +90,7 @@ window.MODULOS.avisos = {
       try {
         const r = await MODULOS.programas.pendenciasEquipe();
         if (r && r.total) add('Pendencias', 'ambar', 'coordenacao', r.total + ' pendencia(s) de sessao na equipe',
-          'Sessoes nao encerradas ou sem evolucao nos ultimos 30 dias', 'MODULOS.programas.popupEquipe()', 'Ver', 1);
+          'Sessoes nao encerradas, sem ficha ou sem evolucao desde ' + (window.CORTEX_EVO_DESDE || '').split('-').reverse().join('/'), 'MODULOS.programas.popupEquipe()', 'Ver', 1);
       } catch (e) {}
     }
 

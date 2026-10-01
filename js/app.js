@@ -90,6 +90,7 @@ async function iniciarApp() {
   }
 
   await carregarPermissoes(profile.perfil);
+  await carregarDataPendencias();
 
   document.getElementById('usuario-nome').textContent = profile.nome;
   document.getElementById('usuario-perfil').innerHTML =
@@ -489,8 +490,17 @@ function podeReabrirRelatorio() {
   if (!['coordenador', 'direcao'].includes(p.perfil)) return false;
   return CORTEX_PERMS['relatorios.reabrir'] !== undefined ? CORTEX_PERMS['relatorios.reabrir'] === 'E' : true;
 }
-// Evolucoes pendentes: so contam sessoes a partir desta data (decisao da coordenacao em 28/09/2026)
-window.CORTEX_EVO_DESDE = '2026-09-21';
+// Pendencias de sessao (sem evolucao, sem ficha de programas, nao encerrada) so contam a partir desta data.
+// Wess zerou em 01/10/2026 ("limpar as pendencias e comecar a contar de hoje"). Pode ser mudada sem patch:
+// linha chave = 'pendencias_desde' na tabela configuracoes (lida no login, formato AAAA-MM-DD).
+window.CORTEX_EVO_DESDE = '2026-10-01';
+// Data de corte das pendencias vinda do banco (configuracoes.pendencias_desde); sem a linha, vale a constante acima
+async function carregarDataPendencias() {
+  try {
+    const { data } = await sb.from('configuracoes').select('valor').eq('chave', 'pendencias_desde').maybeSingle();
+    if (data && /^\d{4}-\d{2}-\d{2}$/.test(String(data.valor || '').trim())) window.CORTEX_EVO_DESDE = String(data.valor).trim();
+  } catch (e) { /* mantem a constante */ }
+}
 // perm('pacientes') -> 'E' | 'V' | ''
 // Subchaves ('programas.atribuir') herdam do modulo ('programas') enquanto nao forem definidas.
 function perm(chave) {

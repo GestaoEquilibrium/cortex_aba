@@ -130,7 +130,7 @@ window.MODULOS.coordenacao = {
     const alvo = document.getElementById('co-pend');
     const r = await MODULOS.programas.pendenciasEquipe(this._coordId || null);
     alvo.innerHTML = '<h3>Pendencias de sessao ' + (r ? '<span class="selo selo-warn">' + r.total + '</span>' : '<span class="selo selo-ok">em dia</span>') + '</h3>' +
-      (r ? r.html : '<p class="sub">Nenhuma sessao dos ultimos 30 dias com evolucao, ficha ou encerramento em falta.</p>');
+      (r ? r.html : '<p class="sub">Nenhuma sessao com evolucao, ficha ou encerramento em falta desde ' + (window.CORTEX_EVO_DESDE || '').split('-').reverse().join('/') + '.</p>');
   },
 
   async desenharFeito(eq) {

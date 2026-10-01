@@ -982,6 +982,7 @@ window.MODULOS.pacientes = {
       await sb.from('notificacoes').insert({ destinatario_id: paraId, titulo: 'Agenda de ' + this.paciente.nome.split(' ')[0] + ' passou para voce',
         corpo: movG + ' horario(s) fixo(s) e ' + movS + ' sessao(oes) futura(s) foram movidos de ' + de + ' para voce.' });
     } catch (e) { /* aviso e opcional */ }
+    try { await sb.rpc('sincronizar_agenda_grade'); } catch (e) { /* a agenda se acerta ao abrir o dia */ }
     popAviso('Agenda movida: ' + movG + ' horario(s) fixo(s) e ' + movS + ' sessao(oes) futura(s) agora estao com ' + nome(paraId) + '.');
   },
 

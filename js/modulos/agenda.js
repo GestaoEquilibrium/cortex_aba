@@ -180,6 +180,7 @@ window.MODULOS.agenda = {
     window._meusPac = null; window._equipe = null;
     try { await sb.from('notificacoes').insert({ destinatario_id: alvo, titulo: 'Agenda transferida para voce', corpo: (r1.count || 0) + ' horario(s) fixo(s), ' + (r2.count || 0) + ' sessao(oes) futura(s) e ' + (r3.count || 0) + ' crianca(s) de um profissional desligado passaram para voce.' }); } catch (e) {}
     popAviso('Transferido para ' + nome(alvo) + ': ' + (r1.count || 0) + ' horario(s) fixo(s), ' + (r2.count || 0) + ' sessao(oes) futura(s) e ' + (r3.count || 0) + ' crianca(s).');
+    await this.sincronizarGrade();
     fecharModal(); await this.carregarBase(); this.desenhar(); this.verificarInativos();
   },
   async encerrarInativo(deId) {
@@ -194,7 +195,25 @@ window.MODULOS.agenda = {
     await sb.from('paciente_aplicadores').delete().eq('aplicador_id', deId);
     window._meusPac = null; window._equipe = null;
     popAviso('Encerrado: ' + (r1.count || 0) + ' horario(s) fixo(s) desativado(s), ' + (r2.count || 0) + ' sessao(oes) cancelada(s), ' + (r3.count || 0) + ' crianca(s) sem designacao.');
+    await this.sincronizarGrade();
     fecharModal(); await this.carregarBase(); this.desenhar(); this.verificarInativos();
+  },
+
+  // Patch 31: a agenda e espelho da grade fixa. Depois de qualquer mudanca na grade, os dias ja abertos
+  // (hoje e os proximos) sao sincronizados no banco (RPC sincronizar_agenda_grade): sessoes ainda
+  // "agendada" de horarios alterados/encerrados saem, horarios novos entram. Sessoes ja iniciadas,
+  // concluidas, faltas e ajustes manuais feitos em "Editar sessao" nao sao tocados.
+  async sincronizarGrade(avisar) {
+    let r;
+    try { r = await sb.rpc('sincronizar_agenda_grade'); } catch (e) { r = { error: e }; }
+    if (r.error) {
+      console.warn('sincronizar_agenda_grade:', r.error.message);
+      if (avisar) popAviso('Nao foi possivel sincronizar a agenda: ' + r.error.message);
+      return null;
+    }
+    const d = r.data || {};
+    if (avisar) popAviso((d.criadas || 0) + ' sessao(oes) criada(s), ' + ((d.removidas || 0) + (d.canceladas || 0)) + ' retirada(s) e ' + (d.vinculadas || 0) + ' vinculada(s) a grade, em ' + (d.dias || 0) + ' dia(s) conferido(s) (hoje em diante).', 'Agenda sincronizada');
+    return d;
   },
 
   mudarVisao(v) {
@@ -846,7 +865,9 @@ window.MODULOS.agenda = {
     };
     if (!dados.data || !dados.hora_inicio) { erro.textContent = 'Informe data e horario.'; erro.classList.add('visivel'); return; }
     const b = document.getElementById('es-salvar'); b.disabled = true; b.textContent = 'Salvando...';
-    const { error, count } = await sb.from('sessoes').update(dados, { count: 'exact' }).eq('id', id);
+    // ajuste_manual: a sessao sai do espelho automatico da grade (a sincronizacao nao a desfaz nem recria o horario original)
+    let { error, count } = await sb.from('sessoes').update({ ...dados, ajuste_manual: true }, { count: 'exact' }).eq('id', id);
+    if (error && /ajuste_manual/.test(error.message)) ({ error, count } = await sb.from('sessoes').update(dados, { count: 'exact' }).eq('id', id));
     if (error || !count) { erro.textContent = error ? this.traduzErro(error.message) : 'Nada foi alterado (sem permissao no banco).'; erro.classList.add('visivel'); b.disabled = false; b.textContent = 'Salvar'; return; }
     fecharModal();
     this.desenhar();
@@ -1012,10 +1033,12 @@ window.MODULOS.agenda = {
       '  <div>' +
       '    <button class="btn-voltar" onclick="MODULOS.agenda.telaPrincipal(); MODULOS.agenda.ligarTempoReal()">&larr; Agenda</button>' +
       '    <h2>Grade fixa semanal</h2>' +
-      '    <p class="sub">Horarios recorrentes que geram as sessoes de cada dia.</p>' +
+      '    <p class="sub">Horarios recorrentes que geram as sessoes de cada dia. O que muda aqui atualiza a agenda de hoje em diante.</p>' +
       '  </div>' +
       (this.gere()
-        ? '<button class="btn btn-primario" onclick="MODULOS.agenda.modalHorario()">+ Novo horario</button>'
+        ? '<div style="display:flex; gap:8px; flex-wrap:wrap">' +
+          '<button class="btn-chip" title="Confere hoje e os proximos dias ja abertos: tira sessoes agendadas de horarios alterados ou encerrados e cria as que faltam." onclick="MODULOS.agenda.sincronizarGrade(true)">Sincronizar agenda</button>' +
+          '<button class="btn btn-primario" onclick="MODULOS.agenda.modalHorario()">+ Novo horario</button></div>'
         : '') +
       '</div>' +
       '<div class="toolbar">' +
@@ -1183,6 +1206,7 @@ window.MODULOS.agenda = {
       }
 
       await this.notificarMudanca(id ? 'mudanca' : 'novo', salvo, anterior);
+      await this.sincronizarGrade();
       fecharModal();
       await this.carregarBase();
       if (document.getElementById('ag-grade')) this.desenharGrade();
@@ -1201,6 +1225,7 @@ window.MODULOS.agenda = {
     const { error } = await sb.from('grade_horarios').update({ ativo: false }).eq('id', id);
     if (error) { alert('Erro: ' + error.message); return; }
     await this.notificarMudanca('encerramento', anterior, null);
+    await this.sincronizarGrade();
     fecharModal();
     await this.carregarBase();
     if (document.getElementById('ag-grade')) this.desenharGrade();
@@ -1740,6 +1765,7 @@ window.MODULOS.agenda = {
         await sb.from('notificacoes').insert(notifs);
       } catch (e) { /* notificacao nunca trava */ }
 
+      await this.sincronizarGrade();
       await this.carregarBase();
       this.popupIndicativos();
       if (!(this._pendentes || []).some(x => x.id !== id)) fecharModal();

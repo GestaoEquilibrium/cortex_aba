@@ -465,6 +465,7 @@ window.MODULOS.agenda = {
     if (error) { alvo.innerHTML = '<div class="cartao"><div class="mensagem-erro visivel">' + escaparHtml(error.message) + '</div></div>'; return; }
 
     const modo = this.modoDia();
+    this._sessoesDia = sessoes || [];
     const lista = (sessoes || []).filter(s => s.status !== 'cancelada');
     const n = st => lista.filter(s => s.status === st).length;
     const topo = '<div class="agd-topo">' +
@@ -481,6 +482,7 @@ window.MODULOS.agenda = {
       return;
     }
     alvo.innerHTML = topo + (modo === 'grade' ? this.htmlDiaGrade(sessoes) : this.htmlDiaLinha(sessoes));
+    if (modo === 'grade') this.ligarArrastarDia();
   },
 
   // acao rapida no cartao: abre a sessao (regras de guia e permissao valem) e aplica o status
@@ -524,21 +526,132 @@ window.MODULOS.agenda = {
 
   htmlDiaGrade(sessoes) {
     const ST = { agendada: 'ag-eq-agendada', checkin: 'ag-eq-checkin', em_atendimento: 'ag-eq-atend', concluida: 'ag-eq-concluida', falta: 'ag-eq-falta', cancelada: 'ag-eq-falta' };
+    const podeMover = this.gere();
     const cols = []; const vistos = new Set();
     sessoes.forEach(s => { const id = s.aplicador_id || 'sem'; if (!vistos.has(id)) { vistos.add(id); cols.push({ id, nome: s.profissional ? s.profissional.nome : 'Sem profissional' }); } });
+    // Patch 31: quem pode remanejar ve tambem os aplicadores com jornada neste dia da semana (sem sessao ainda),
+    // para poder arrastar uma sessao ate eles
+    if (podeMover) {
+      const dow = (d => d.getDay() === 0 ? 7 : d.getDay())(new Date(this.dataRef + 'T12:00:00'));
+      (this.equipe || []).forEach(p => {
+        if (!vistos.has(p.id) && (this.jornadas || []).some(j => j.profissional_id === p.id && j.dia_semana === dow)) { vistos.add(p.id); cols.push({ id: p.id, nome: p.nome, vazio: true }); }
+      });
+    }
     cols.sort((a, b) => a.nome.localeCompare(b.nome));
     const horas = [...new Set(sessoes.map(s => String(s.hora_inicio).slice(0, 5)))].sort();
     const cel = (c, h) => {
       const l = sessoes.filter(s => (s.aplicador_id || 'sem') === c.id && String(s.hora_inicio).slice(0, 5) === h);
-      if (!l.length) return '<td class="ag-eq-fora"></td>';
-      return '<td class="ag-eq-cel ' + (ST[l[0].status] || '') + '" onclick="MODULOS.agenda.abrirSessao(\'' + l[0].id + '\')" title="Abrir sessao">' +
+      const pos = ' data-apl="' + c.id + '" data-hora="' + h + '"';
+      if (!l.length) return '<td class="ag-eq-fora"' + pos + '></td>';
+      const arr = podeMover && l.length === 1 && ['agendada', 'checkin'].includes(l[0].status) && c.id !== 'sem'
+        ? ' draggable="true" data-sid="' + l[0].id + '"' : '';
+      return '<td class="ag-eq-cel ' + (ST[l[0].status] || '') + '"' + pos + arr + ' onclick="MODULOS.agenda.abrirSessao(\'' + l[0].id + '\')" title="' + (arr ? 'Abrir sessao - arraste para outro aplicador ou horario' : 'Abrir sessao') + '">' +
         l.map(s => '<b>' + escaparHtml((s.pacientes ? s.pacientes.nome : '?').split(' ').slice(0, 2).join(' ')) + '</b><small>' + (s.salas ? escaparHtml(s.salas.nome) + ' &middot; ' : '') + this.selosSessao(s).replace(/<[^>]+>/g, ' ').trim() + '</small>').join('<hr style="border:none; border-top:1px dashed var(--line); margin:3px 0">') + '</td>';
     };
-    const grade = '<div class="cartao ag-eq-wrap"><table class="ag-eq"><thead><tr><th class="ag-eq-h"></th>' +
-      cols.map(c => '<th><span class="evo-av ' + (typeof corAvatar === 'function' ? corAvatar(c.nome) : 'av-1') + '" style="margin-right:6px; vertical-align:middle">' + escaparHtml(this.iniciaisDe(c.nome)) + '</span><b>' + escaparHtml(c.nome.split(' ').slice(0, 2).join(' ')) + '</b></th>').join('') + '</tr></thead><tbody>' +
+    const grade = '<div class="cartao ag-eq-wrap"><table class="ag-eq" id="ag-dia-grade"><thead><tr><th class="ag-eq-h"></th>' +
+      cols.map(c => '<th' + (c.vazio ? ' class="ag-eq-sem"' : '') + '><span class="evo-av ' + (typeof corAvatar === 'function' ? corAvatar(c.nome) : 'av-1') + '" style="margin-right:6px; vertical-align:middle">' + escaparHtml(this.iniciaisDe(c.nome)) + '</span><b>' + escaparHtml(c.nome.split(' ').slice(0, 2).join(' ')) + '</b>' + (c.vazio ? '<small>sem sessoes</small>' : '') + '</th>').join('') + '</tr></thead><tbody>' +
       horas.map(h => '<tr><td class="ag-eq-h">' + h + '</td>' + cols.map(c => cel(c, h)).join('') + '</tr>').join('') + '</tbody></table></div>' +
-      '<div class="agd-legenda">' + [['ag-eq-agendada', 'Aguardando'], ['ag-eq-checkin', 'Chegou'], ['ag-eq-atend', 'Em atendimento'], ['ag-eq-concluida', 'Concluida'], ['ag-eq-falta', 'Falta']].map(x => '<span><i class="' + x[0] + '"></i>' + x[1] + '</span>').join('') + '<span style="margin-left:auto">Toque na sessao para abrir</span></div>';
+      '<div class="agd-legenda">' + [['ag-eq-agendada', 'Aguardando'], ['ag-eq-checkin', 'Chegou'], ['ag-eq-atend', 'Em atendimento'], ['ag-eq-concluida', 'Concluida'], ['ag-eq-falta', 'Falta']].map(x => '<span><i class="' + x[0] + '"></i>' + x[1] + '</span>').join('') +
+      '<span style="margin-left:auto">' + (podeMover ? '&#10021; Arraste a sessao para outro aplicador ou horario &middot; ' : '') + 'Toque na sessao para abrir</span></div>';
     return '<div class="agd-grade-wrap">' + this.htmlMiniCalendario() + '<div>' + grade + '</div></div>';
+  },
+
+  // ── Arrastar sessao na grade do dia (patch 31): de um aplicador/horario para outro ──
+  ligarArrastarDia() {
+    const tab = document.getElementById('ag-dia-grade'); if (!tab) return;
+    const self = this;
+    tab.addEventListener('dragstart', ev => {
+      const td = ev.target.closest('td[draggable="true"]'); if (!td) { ev.preventDefault(); return; }
+      self._arr = { id: td.dataset.sid, apl: td.dataset.apl, hora: td.dataset.hora };
+      td.classList.add('arrastando');
+      try { ev.dataTransfer.setData('text/plain', td.dataset.sid); ev.dataTransfer.effectAllowed = 'move'; } catch (e) {}
+    });
+    tab.addEventListener('dragend', () => { self._arr = null; tab.querySelectorAll('.arrastando, .alvo').forEach(x => x.classList.remove('arrastando', 'alvo')); });
+    tab.addEventListener('dragover', ev => {
+      if (!self._arr) return;
+      const td = ev.target.closest('td[data-apl]'); if (!td) return;
+      const livre = !td.classList.contains('ag-eq-cel') || td.dataset.sid === self._arr.id;
+      if (!livre) return;
+      ev.preventDefault(); try { ev.dataTransfer.dropEffect = 'move'; } catch (e) {}
+      tab.querySelectorAll('.alvo').forEach(x => x.classList.remove('alvo'));
+      if (td.dataset.sid !== self._arr.id) td.classList.add('alvo');
+    });
+    tab.addEventListener('dragleave', ev => { const td = ev.target.closest && ev.target.closest('td'); if (td) td.classList.remove('alvo'); });
+    tab.addEventListener('drop', ev => {
+      ev.preventDefault();
+      const a = self._arr; self._arr = null;
+      tab.querySelectorAll('.arrastando, .alvo').forEach(x => x.classList.remove('arrastando', 'alvo'));
+      const td = ev.target.closest('td[data-apl]'); if (!td || !a) return;
+      if (td.classList.contains('ag-eq-cel') && td.dataset.sid !== a.id) return;
+      self.soltarSessao(a.id, td.dataset.apl, td.dataset.hora);
+    });
+  },
+
+  soltarSessao(id, apl, hora) {
+    const s = (this._sessoesDia || []).find(x => x.id === id); if (!s) return;
+    const horaAtual = String(s.hora_inicio).slice(0, 5);
+    if (apl === s.aplicador_id && hora === horaAtual) return;
+    const ocupada = (this._sessoesDia || []).find(x => x.id !== id && x.aplicador_id === apl && String(x.hora_inicio).slice(0, 5) === hora && x.status !== 'cancelada');
+    if (ocupada) { popAviso('Esse horario ja tem sessao com ' + escaparHtml(ocupada.pacientes ? ocupada.pacientes.nome.split(' ')[0] : 'outra crianca') + '.'); return; }
+    const nome = pid => { const p = (this.equipe || []).find(x => x.id === pid); return p ? p.nome.split(' ').slice(0, 2).join(' ') : (s.profissional && pid === s.aplicador_id ? s.profissional.nome.split(' ').slice(0, 2).join(' ') : 'o aplicador'); };
+    const d = new Date(s.data + 'T12:00:00');
+    const diaSem = this.DIAS[d.getDay() === 0 ? 7 : d.getDay()];
+    const dataFmt = d.toLocaleDateString('pt-BR');
+    const mudouApl = apl !== s.aplicador_id, mudouHora = hora !== horaAtual;
+    const descr = (mudouApl ? 'De <b>' + escaparHtml(nome(s.aplicador_id)) + '</b> para <b>' + escaparHtml(nome(apl)) + '</b>' : 'Com <b>' + escaparHtml(nome(apl)) + '</b>') +
+      (mudouHora ? ', das ' + horaAtual + ' para as <b>' + hora + '</b>.' : ', mesmo horario.');
+    const temGrade = !!s.grade_id;
+    this._mover = { id, apl, hora };
+    abrirModal('Mover sessao',
+      '<p style="margin:0 0 4px"><b>' + escaparHtml(s.pacientes ? s.pacientes.nome : 'Crianca') + '</b> &middot; ' + diaSem.toLowerCase() + ' ' + dataFmt + ' &middot; ' + horaAtual + '</p>' +
+      '<p class="sub" style="margin-bottom:10px">' + descr + '</p>' +
+      '<div class="mv-escolha">' +
+      '<label class="sel"><input type="radio" name="mv-esc" value="dia" checked onchange="MODULOS.agenda.marcarEscolha(this)"><span><b>So esta sessao (' + dataFmt.slice(0, 5) + ')</b><small>Ajuste de um dia. A grade fixa continua como esta.</small></span></label>' +
+      (temGrade
+        ? '<label><input type="radio" name="mv-esc" value="grade" onchange="MODULOS.agenda.marcarEscolha(this)"><span><b>Tambem na grade fixa</b><small>Todas as ' + diaSem.toLowerCase() + 's ' + hora + ' passam para ' + escaparHtml(nome(apl)) + '. A agenda de hoje em diante acompanha.</small></span></label>'
+        : '<p class="sub" style="font-size:11.5px">Esta sessao nao esta ligada a um horario fixo; para mudar a grade, use Grade fixa.</p>') +
+      '</div>' +
+      '<div class="mensagem-erro" id="mv-erro"></div>' +
+      '<div class="barra-acoes"><button class="btn btn-fantasma" onclick="fecharModal()">Cancelar</button>' +
+      '<button class="btn btn-primario" id="mv-ok" onclick="MODULOS.agenda.confirmarMover()">Mover</button></div>', false, 'agenda');
+  },
+  marcarEscolha(inp) { inp.closest('.mv-escolha').querySelectorAll('label').forEach(l => l.classList.toggle('sel', l.contains(inp))); },
+
+  async confirmarMover() {
+    const m = this._mover; if (!m) return;
+    const s = (this._sessoesDia || []).find(x => x.id === m.id); if (!s) return;
+    const escolha = (document.querySelector('input[name="mv-esc"]:checked') || {}).value || 'dia';
+    const erro = document.getElementById('mv-erro'); erro.classList.remove('visivel');
+    const b = document.getElementById('mv-ok'); b.disabled = true; b.textContent = 'Movendo...';
+    const falha = msg => { erro.textContent = msg; erro.classList.add('visivel'); b.disabled = false; b.textContent = 'Mover'; };
+    const horaSql = m.hora + ':00';
+    const nome = pid => { const p = (this.equipe || []).find(x => x.id === pid); return p ? p.nome.split(' ')[0] : 'outro aplicador'; };
+    try {
+      if (escolha === 'grade' && s.grade_id) {
+        const anterior = (this.grade || []).find(x => x.id === s.grade_id) || null;
+        const { data: salvo, error } = await sb.from('grade_horarios').update({ aplicador_id: m.apl, hora_inicio: horaSql }).eq('id', s.grade_id).select('*').single();
+        if (error) return falha(this.traduzErro(error.message));
+        const r = await sb.from('sessoes').update({ aplicador_id: m.apl, hora_inicio: horaSql }, { count: 'exact' }).eq('id', m.id);
+        if (r.error) return falha(this.traduzErro(r.error.message));
+        if (anterior) await this.notificarMudanca('mudanca', salvo, anterior);
+        await this.sincronizarGrade();
+        await this.carregarBase();
+      } else {
+        let r = await sb.from('sessoes').update({ aplicador_id: m.apl, hora_inicio: horaSql, ajuste_manual: true }, { count: 'exact' }).eq('id', m.id);
+        if (r.error && /ajuste_manual/.test(r.error.message)) r = await sb.from('sessoes').update({ aplicador_id: m.apl, hora_inicio: horaSql }, { count: 'exact' }).eq('id', m.id);
+        if (r.error) return falha(this.traduzErro(r.error.message));
+        if (!r.count) return falha('Nada foi alterado (sem permissao no banco).');
+        if (m.apl !== s.aplicador_id) {
+          try {
+            await sb.from('notificacoes').insert({ destinatario_id: m.apl, titulo: 'Sessao remanejada para voce',
+              corpo: (s.pacientes ? s.pacientes.nome : 'Crianca') + ' em ' + new Date(s.data + 'T12:00:00').toLocaleDateString('pt-BR') + ' as ' + m.hora + (s.profissional ? ' (antes com ' + s.profissional.nome.split(' ')[0] + ')' : '') + '.' });
+          } catch (e) { /* aviso e opcional */ }
+        }
+      }
+      this._mover = null;
+      fecharModal();
+      this.desenhar();
+    } catch (e) { falha(e.message); }
   },
 
   htmlMiniCalendario() {
@@ -1046,31 +1159,54 @@ window.MODULOS.agenda = {
       '    <option value="">Todos os profissionais</option>' +
       this.equipe.map(m => '<option value="' + m.id + '">' + escaparHtml(m.nome) + '</option>').join('') +
       '  </select>' +
+      '  <select id="ag-f-pac" onchange="MODULOS.agenda.desenharGrade()" title="Grade fixa de uma crianca: todos os horarios dela na semana, com o aplicador de cada um">' +
+      '    <option value="">Todas as criancas</option>' +
+      (this.pacientes || []).map(p => '<option value="' + p.id + '">' + escaparHtml(p.nome) + '</option>').join('') +
+      '  </select>' +
       '  <select id="ag-f-sala" onchange="MODULOS.agenda.desenharGrade()">' +
       '    <option value="">Todas as salas</option>' +
       this.salas.filter(s => s.ativo).map(s => '<option value="' + s.id + '">' + escaparHtml(s.nome) + '</option>').join('') +
       '  </select>' +
       '</div>' +
+      '<div id="ag-grade-resumo"></div>' +
       '<div id="ag-grade"></div>';
     this.desenharGrade();
   },
 
   desenharGrade() {
     const fp = document.getElementById('ag-f-prof')?.value || '';
+    const fpac = document.getElementById('ag-f-pac')?.value || '';
     const fs = document.getElementById('ag-f-sala')?.value || '';
     const itens = this.grade.filter(h =>
-      (!fp || h.aplicador_id === fp) && (!fs || h.sala_id === fs));
+      (!fp || h.aplicador_id === fp) && (!fpac || h.paciente_id === fpac) && (!fs || h.sala_id === fs));
+    const gere = this.gere();
+
+    // resumo da crianca escolhida: quantos horarios e com quem
+    const resumo = document.getElementById('ag-grade-resumo');
+    if (resumo) {
+      if (fpac) {
+        const pac = (this.pacientes || []).find(p => p.id === fpac);
+        const porApl = {};
+        itens.forEach(h => { const n = h.profissional ? h.profissional.nome.split(' ')[0] : '-'; porApl[n] = (porApl[n] || 0) + 1; });
+        const principal = pac && pac.aplicador_id ? (this.equipe.find(e => e.id === pac.aplicador_id) || {}).nome : null;
+        resumo.innerHTML = '<div class="cartao ag-pac-resumo"><b>' + escaparHtml(pac ? pac.nome : 'Crianca') + '</b>' +
+          '<span class="selo selo-neutro">' + itens.length + ' horario(s) fixo(s)</span>' +
+          (Object.keys(porApl).length ? '<span class="sub">' + Object.keys(porApl).sort().map(n => escaparHtml(n) + ' (' + porApl[n] + ')').join(' &middot; ') + '</span>' : '') +
+          (principal ? '<span class="sub">aplicador principal: ' + escaparHtml(principal.split(' ').slice(0, 2).join(' ')) + '</span>' : '') +
+          (gere ? '<span class="sub" style="margin-left:auto">&#10021; arraste um horario para outro dia</span>' : '') + '</div>';
+      } else resumo.innerHTML = '';
+    }
 
     let html = '<div class="agenda-grade">';
     for (let d = 1; d <= 5; d++) {
       const doDia = itens.filter(h => h.dia_semana === d);
-      html += '<div class="agenda-dia">' +
+      html += '<div class="agenda-dia" data-dia="' + d + '">' +
         '<div class="agenda-dia-titulo">' + this.DIAS[d] +
         ' <span class="selo selo-neutro">' + doDia.length + '</span></div>';
       if (doDia.length === 0) html += '<div class="agenda-vazio">Sem horarios</div>';
       doDia.forEach(h => {
-        html += '<div class="chip-sessao' + (this.gere() ? ' clicavel' : '') + '"' +
-          (this.gere() ? ' onclick="MODULOS.agenda.modalHorario(\'' + h.id + '\')"' : '') + '>' +
+        html += '<div class="chip-sessao' + (gere ? ' clicavel' : '') + '"' + (gere ? ' draggable="true" data-hid="' + h.id + '"' : '') +
+          (gere ? ' onclick="MODULOS.agenda.modalHorario(\'' + h.id + '\')"' : '') + '>' +
           '<b>' + h.hora_inicio.slice(0, 5) + '</b> ' +
           '<span class="chip-nome">' + (h.pacientes
             ? escaparHtml(h.pacientes.nome.split(' ')[0] + ' ' + (h.pacientes.nome.split(' ')[1] || ''))
@@ -1083,6 +1219,38 @@ window.MODULOS.agenda = {
     }
     html += '</div>';
     document.getElementById('ag-grade').innerHTML = html;
+    if (gere) this.ligarArrastarGrade();
+  },
+
+  // arrastar um horario fixo para outro dia da semana: abre o editor ja no dia novo (hora e aplicador conferem-se la)
+  ligarArrastarGrade() {
+    const wrap = document.querySelector('#ag-grade .agenda-grade'); if (!wrap) return;
+    const self = this;
+    wrap.addEventListener('dragstart', ev => {
+      const c = ev.target.closest('.chip-sessao[draggable="true"]'); if (!c) { ev.preventDefault(); return; }
+      self._arrG = c.dataset.hid; c.classList.add('arrastando');
+      try { ev.dataTransfer.setData('text/plain', c.dataset.hid); ev.dataTransfer.effectAllowed = 'move'; } catch (e) {}
+    });
+    wrap.addEventListener('dragend', () => { self._arrG = null; wrap.querySelectorAll('.arrastando, .alvo').forEach(x => x.classList.remove('arrastando', 'alvo')); });
+    wrap.addEventListener('dragover', ev => {
+      if (!self._arrG) return;
+      const col = ev.target.closest('.agenda-dia'); if (!col) return;
+      ev.preventDefault();
+      wrap.querySelectorAll('.alvo').forEach(x => x.classList.remove('alvo'));
+      const h = self.grade.find(x => x.id === self._arrG);
+      if (h && String(h.dia_semana) !== col.dataset.dia) col.classList.add('alvo');
+    });
+    wrap.addEventListener('drop', ev => {
+      ev.preventDefault();
+      const hid = self._arrG; self._arrG = null;
+      wrap.querySelectorAll('.arrastando, .alvo').forEach(x => x.classList.remove('arrastando', 'alvo'));
+      const col = ev.target.closest('.agenda-dia'); if (!col || !hid) return;
+      const h = self.grade.find(x => x.id === hid); if (!h || String(h.dia_semana) === col.dataset.dia) return;
+      self.modalHorario(hid);
+      const sel = document.getElementById('h-dia'); if (sel) sel.value = col.dataset.dia;
+      const erro = document.getElementById('h-erro');
+      if (erro) erro.insertAdjacentHTML('beforebegin', '<div class="caixa-info" style="margin:6px 0 10px; border-left:4px solid var(--acao)"><small>Movendo para</small><b>' + self.DIAS[parseInt(col.dataset.dia, 10)] + '</b><span class="sub" style="display:block">Confira a hora e o aplicador e clique em Salvar. A agenda de hoje em diante acompanha.</span></div>');
+    });
   },
 
   modalHorario(id) {
@@ -1148,6 +1316,8 @@ window.MODULOS.agenda = {
         const p = this.pacientes.find(x => x.id === ev.target.value);
         if (p && p.aplicador_id) document.getElementById('h-prof').value = p.aplicador_id;
       });
+      const fpac = document.getElementById('ag-f-pac')?.value;
+      if (fpac) { const sel = document.getElementById('h-paciente'); sel.value = fpac; sel.dispatchEvent(new Event('change')); }
     }
   },
 

@@ -2801,3 +2801,21 @@ body.ver-usuario .app-main { padding-top: 64px; } /* a barra nao cobre o titulo 
     body.ver-usuario .app-main { padding-top: 64px; padding-bottom: calc(130px + env(safe-area-inset-bottom)); }
 }
 @media print { .ver-usuario-barra { display: none !important; } }
+
+/* ══════════════ Arrastar sessoes/horarios (patch 31) ══════════════ */
+.ag-eq td[draggable="true"] { cursor: grab; }
+.ag-eq td[draggable="true"]:active { cursor: grabbing; }
+.ag-eq td.arrastando, .chip-sessao.arrastando { opacity: .4; outline: 2px dashed var(--acao); outline-offset: -2px; }
+.ag-eq td.alvo { background: var(--acao-soft) !important; outline: 2px dashed var(--acao); outline-offset: -3px; border-radius: 8px; }
+.ag-eq th.ag-eq-sem b { color: var(--ink-muted); font-weight: 600; }
+.ag-eq th.ag-eq-sem small { color: var(--ink-muted); }
+.chip-sessao[draggable="true"] { cursor: grab; }
+.agenda-dia.alvo { outline: 2px dashed var(--acao); outline-offset: -2px; background: var(--acao-soft); }
+.mv-escolha { display: grid; gap: 8px; margin: 4px 0 12px; }
+.mv-escolha label { display: flex; gap: 10px; align-items: flex-start; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; cursor: pointer; transition: border-color .15s, background .15s; }
+.mv-escolha label.sel { border-color: var(--acao); background: var(--acao-soft); }
+.mv-escolha input { margin-top: 3px; accent-color: var(--acao); }
+.mv-escolha b { display: block; font-size: 13px; }
+.mv-escolha small { color: var(--ink-soft); display: block; }
+.ag-pac-resumo { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 14px; margin-bottom: 10px; font-size: 12.5px; }
+.ag-pac-resumo > b { font-size: 14px; }

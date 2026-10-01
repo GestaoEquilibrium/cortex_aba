@@ -179,6 +179,10 @@ async function iniciarApp() {
       document.documentElement.getAttribute('data-modo') === 'escuro' ? '\u2600' : '\u263E';
   }
 
+  // Patch 31: trava de acesso (a direcao configura em Meu perfil > Trava de acesso).
+  // Enquanto a palavra certa nao for digitada, nada do sistema pode ser usado.
+  if (!window.CORTEX_VER_USUARIO && profile.perfil !== 'familia') await TRAVA.verificar();
+
   abrirModulo(profile.perfil === 'familia' ? 'portal' : 'inicio');
 
   festejarAniversario(profile);
@@ -191,6 +195,61 @@ async function iniciarApp() {
     agendarPop(() => window.PWA && PWA.instalado() ? PWA.pedirNotificacoes() : null, 2200);
   }
 }
+
+// ─────────────── TRAVA DE ACESSO (patch 31) ───────────────
+// A direcao escolhe quem fica travado e a palavra (tabela travas_acesso; a palavra nunca chega ao
+// navegador - a conferencia e feita no banco pela RPC fn_trava_tentar). Enquanto travado, uma
+// tela com cadeado cobre o sistema inteiro e nao fecha.
+const TRAVA = {
+  _ok: null,
+  async verificar() {
+    let st = null;
+    try { const r = await sb.rpc('fn_trava_status'); st = r.data; } catch (e) { return; }
+    if (!st || !st.travada) return;
+    return new Promise(resolve => { this._ok = resolve; this.mostrar(st); });
+  },
+  mostrar(st) {
+    document.getElementById('trava-overlay')?.remove();
+    const ov = document.createElement('div');
+    ov.id = 'trava-overlay'; ov.className = 'trava-overlay';
+    ov.innerHTML =
+      '<div class="trava-caixa" role="dialog" aria-modal="true">' +
+      '  <div class="trava-cadeado"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10.5" width="16" height="10.5" rx="2.5"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/><circle cx="12" cy="15.5" r="1.3" fill="currentColor" stroke="none"/><path d="M12 16.8v1.7"/></svg></div>' +
+      '  <h2>Acesso bloqueado</h2>' +
+      '  <p>' + escaparHtml(st.mensagem || 'Para continuar, informe a senha do banco de dados fornecida pela direcao.') + '</p>' +
+      '  <form onsubmit="event.preventDefault(); TRAVA.tentar()">' +
+      '    <input type="password" id="trava-palavra" autocomplete="off" placeholder="Senha" autofocus>' +
+      '    <button type="submit" class="btn btn-primario" id="trava-btn">Desbloquear</button>' +
+      '  </form>' +
+      '  <div class="trava-erro" id="trava-erro"></div>' +
+      '  <small>Equilibrium Terapia Infantil &middot; CORTEX aba</small>' +
+      '</div>';
+    document.body.appendChild(ov);
+    document.body.classList.add('travado');
+    setTimeout(() => document.getElementById('trava-palavra')?.focus(), 50);
+    // nada fora da caixa recebe teclado nem clique enquanto travado
+    this._guarda = ev => { if (document.getElementById('trava-overlay') && !ev.target.closest('#trava-overlay')) { ev.stopPropagation(); ev.preventDefault(); document.getElementById('trava-palavra')?.focus(); } };
+    ['keydown', 'mousedown', 'click', 'focusin'].forEach(t => document.addEventListener(t, this._guarda, true));
+  },
+  async tentar() {
+    const inp = document.getElementById('trava-palavra'); const erro = document.getElementById('trava-erro'); const btn = document.getElementById('trava-btn');
+    const palavra = (inp.value || '').trim(); if (!palavra) { inp.focus(); return; }
+    btn.disabled = true; btn.textContent = 'Verificando...'; erro.textContent = '';
+    let r; try { r = await sb.rpc('fn_trava_tentar', { p_palavra: palavra }); } catch (e) { r = { error: e }; }
+    const d = r.data || {};
+    if (r.error || !d.ok) {
+      btn.disabled = false; btn.textContent = 'Desbloquear';
+      erro.textContent = r.error ? 'Nao foi possivel verificar agora. Tente de novo.' : 'Senha incorreta.' + (d.tentativas ? ' (' + d.tentativas + 'a tentativa)' : '');
+      inp.value = ''; inp.focus();
+      const cx = document.querySelector('.trava-caixa'); if (cx) { cx.classList.remove('treme'); void cx.offsetWidth; cx.classList.add('treme'); }
+      return;
+    }
+    ['keydown', 'mousedown', 'click', 'focusin'].forEach(t => document.removeEventListener(t, this._guarda, true));
+    document.body.classList.remove('travado');
+    const ov = document.getElementById('trava-overlay'); if (ov) { ov.classList.add('saindo'); setTimeout(() => ov.remove(), 350); }
+    if (this._ok) { this._ok(); this._ok = null; }
+  }
+};
 
 function montarSidebar(perfil) {
   const nav = document.getElementById('sidebar-nav');

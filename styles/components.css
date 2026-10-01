@@ -2829,3 +2829,23 @@ body.ver-usuario .app-main { padding-top: 64px; } /* a barra nao cobre o titulo 
 .evo-item.selecionada .evo-card { border-color: var(--acao); box-shadow: 0 0 0 2px var(--acao-soft); }
 .evo-item.selecionada::before { background: var(--acao); box-shadow: 0 0 0 2px var(--acao); }
 @media print { .evo-sel, .evo-selbar { display: none !important; } }
+
+/* ══════════════ Trava de acesso (patch 31): cadeado que cobre o sistema ══════════════ */
+.trava-overlay { position: fixed; inset: 0; z-index: 100000; display: flex; align-items: center; justify-content: center; padding: 20px;
+    background: rgba(10, 20, 40, .72); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); animation: modal-surge .2s ease; }
+.trava-overlay.saindo { opacity: 0; transition: opacity .3s ease; }
+.trava-caixa { width: 100%; max-width: 420px; background: var(--surface); border-radius: 22px; padding: 30px 28px 22px; text-align: center;
+    box-shadow: 0 30px 80px rgba(0, 0, 0, .45), 0 0 0 1px rgba(255, 255, 255, .08); }
+.trava-cadeado { width: 74px; height: 74px; margin: 0 auto 14px; border-radius: 22px; display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, #B45309, #F59E0B); color: #fff; box-shadow: 0 12px 30px rgba(245, 158, 11, .4); }
+.trava-cadeado svg { width: 40px; height: 40px; }
+.trava-caixa h2 { font-size: 20px; font-weight: 800; margin: 0 0 6px; }
+.trava-caixa p { font-size: 13.5px; color: var(--ink-soft); line-height: 1.55; margin: 0 0 16px; }
+.trava-caixa form { display: flex; gap: 8px; }
+.trava-caixa form input { flex: 1; min-width: 0; font-size: 15px; letter-spacing: .12em; text-align: center; }
+.trava-caixa .trava-erro { min-height: 18px; margin-top: 10px; font-size: 12.5px; font-weight: 700; color: var(--st-bad); }
+.trava-caixa small { display: block; margin-top: 10px; font-size: 11px; color: var(--ink-muted); }
+.trava-caixa.treme { animation: trava-treme .35s ease; }
+@keyframes trava-treme { 0%, 100% { transform: translateX(0); } 20% { transform: translateX(-9px); } 40% { transform: translateX(8px); } 60% { transform: translateX(-5px); } 80% { transform: translateX(4px); } }
+body.travado { overflow: hidden; }
+body.travado .app-shell { filter: blur(2px); pointer-events: none; user-select: none; }

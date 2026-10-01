@@ -2541,7 +2541,7 @@ window.MODULOS.programas = {
         .eq('status', 'ativo').maybeSingle()
     ]);
     const pac = rPac.data;
-    const sessoes = rSes.data || [];
+    let sessoes = rSes.data || [];
     if (!pac || !sessoes.length) {
       document.getElementById('doc-eq-corpo').innerHTML =
         '<div class="pagina-cabecalho"><div><button class="btn-voltar" onclick="document.getElementById(\'doc-eq-overlay\').remove()">&larr; Fechar</button>' +

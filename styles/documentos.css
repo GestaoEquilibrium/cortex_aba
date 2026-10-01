@@ -310,3 +310,36 @@ table.deq-pagina .deq-rodape { margin-top: 0; }
 .deq-assinatura.assinado-icp .deq-carimbo-icp { order: -2; }
 
 .deq-freq-dias .deq-fh { display: block; font-size: 8px; color: var(--eq-cinza); font-weight: 600; margin-top: 1px; }
+
+/* ── Lista de presenca (patch 31): folhas A4 no padrao Equilibrium, uma por dia e turno ── */
+.lp-folha { width: 210mm; max-width: 100%; margin: 0 auto 18px; background: #fff; border-radius: 4px; box-shadow: 0 6px 26px rgba(20, 24, 60, .18); }
+.lp-folha .doc-eq { padding: 12mm 12mm 10mm; min-height: 297mm; display: flex; flex-direction: column; border-radius: 4px; }
+.lp-folha .deq-rodape { margin-top: auto; }
+.deq-lista { width: 100%; border-collapse: collapse; }
+.deq-lista th { background: var(--eq-azul); color: #fff; font-size: 10px; letter-spacing: .07em; text-transform: uppercase; padding: 7px 10px; text-align: left; }
+.deq-lista th.c, .deq-lista td.c { text-align: center; }
+.deq-lista td { border-top: 1px solid var(--eq-linha); padding: 7px 10px; font-size: 11.5px; vertical-align: middle; }
+.deq-lista tr:nth-child(even) td { background: var(--eq-fundo); }
+.deq-lista td.n { color: var(--eq-cinza); font-weight: 700; width: 26px; }
+.deq-lista td.pac { font-weight: 700; }
+.deq-lista td.hor { color: var(--eq-cinza); font-size: 10.5px; white-space: nowrap; }
+.deq-lista td.ass { width: 34%; }
+.deq-lista td.ass span { display: block; height: 22px; border-bottom: 1px solid #94A3B8; }
+.deq-lista td.sess { width: 48px; }
+.deq-lista td.sess b { display: inline-block; min-width: 22px; padding: 1px 6px; border-radius: 999px; background: #EEF5FB; color: var(--eq-azul-escuro); text-align: center; font-size: 11px; }
+.deq-lista td.sess b.dupla { background: var(--eq-amarelo); color: #4A3200; }
+.deq-legenda { display: flex; gap: 14px; flex-wrap: wrap; font-size: 9.5px; color: var(--eq-cinza); font-weight: 600; margin-top: 8px; }
+.deq-legenda i { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; }
+.deq-conf { display: flex; gap: 24px; margin-top: 16px; }
+.deq-conf .deq-assinatura { margin: 14px 0 0; width: 100%; }
+@media print {
+    .lp-folha { width: auto; max-width: none; margin: 0; box-shadow: none; border-radius: 0; break-after: page; page-break-after: always; }
+    .lp-folha:last-child { break-after: auto; page-break-after: auto; }
+    .lp-folha .doc-eq { padding: 0; min-height: 0; display: block; }
+    /* a tabela do turno pode continuar na folha seguinte (cabecalho azul repete); a linha nunca corta */
+    .lp-doc .deq-caixa.lp-tab, .lp-doc table.deq-lista { break-inside: auto; page-break-inside: auto; }
+    .deq-lista tr { break-inside: avoid; page-break-inside: avoid; }
+    .deq-lista thead { display: table-header-group; }
+    .deq-lista th, .deq-lista tr:nth-child(even) td, .deq-lista td.sess b { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .deq-conf { break-inside: avoid; page-break-inside: avoid; }
+}

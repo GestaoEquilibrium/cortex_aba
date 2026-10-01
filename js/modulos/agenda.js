@@ -417,7 +417,8 @@ window.MODULOS.agenda = {
   // Patch 31: a visao Dia tem dois modos, guardados no navegador — "Linha" (sessoes por horario numa
   // linha do tempo com o marcador de agora e acoes rapidas) e "Grade" (aplicadores x horarios, com
   // mini-calendario). Semana e Mes continuam como estavam.
-  modoDia() { try { return localStorage.getItem('cortex_agenda_dia') || 'linha'; } catch (e) { return 'linha'; } },
+  // padrao: Grade (decisao de Wess, 01/10); quem escolher Linha fica com ela no navegador
+  modoDia() { try { return localStorage.getItem('cortex_agenda_dia') || 'grade'; } catch (e) { return 'grade'; } },
   mudarModoDia(m) { try { localStorage.setItem('cortex_agenda_dia', m); } catch (e) {} this.desenharDia(); },
 
   async desenharDia() {
@@ -451,8 +452,8 @@ window.MODULOS.agenda = {
       '<div class="agd-tiles">' +
       [['agendada', 'Aguardando', 'var(--st-neutro)'], ['checkin', 'Chegaram', '#2563EB'], ['em_atendimento', 'Em atendimento', '#D97706'], ['concluida', 'Concluidas', 'var(--st-ok)'], ['falta', 'Faltas', 'var(--st-bad)']]
         .map(t => '<div class="agd-tile" style="border-left-color:' + t[2] + '"><small>' + t[1] + '</small><b>' + n(t[0]) + '</b></div>').join('') + '</div>' +
-      '<div class="toggle-visao agd-modo"><button type="button" class="' + (modo === 'linha' ? 'ativo' : '') + '" onclick="MODULOS.agenda.mudarModoDia(\'linha\')">Linha</button>' +
-      '<button type="button" class="' + (modo === 'grade' ? 'ativo' : '') + '" onclick="MODULOS.agenda.mudarModoDia(\'grade\')">Grade</button></div></div>';
+      '<div class="toggle-visao agd-modo"><button type="button" class="' + (modo === 'grade' ? 'ativo' : '') + '" onclick="MODULOS.agenda.mudarModoDia(\'grade\')">Grade</button>' +
+      '<button type="button" class="' + (modo === 'linha' ? 'ativo' : '') + '" onclick="MODULOS.agenda.mudarModoDia(\'linha\')">Linha</button></div></div>';
 
     if (!sessoes || sessoes.length === 0) {
       alvo.innerHTML = topo + '<div class="cartao"><div class="vazio">' +

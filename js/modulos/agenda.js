@@ -452,7 +452,11 @@ window.MODULOS.agenda = {
       .eq('data', this.dataRef).order('hora_inicio');
     sessoes = await this.soMinhas(sessoes);
     // colunas extras da grade (aplicadores com jornada no dia) respeitam o escopo Minha equipe | Geral
-    this._equipeDia = this.gere() ? await ESCOPO.apls(this.equipe || [], 'id') : [];
+    this._equipeDia = [];
+    if (this.gere()) {
+      if (ESCOPO.ativo()) { const eq = await ESCOPO.carregar(); const d = eq.aplicadoresDiretos || eq.aplicadores; const eu = window.CORTEX_SESSAO.user.id; this._equipeDia = (this.equipe || []).filter(p => p.id === eu || d.has(p.id)); }
+      else this._equipeDia = this.equipe || [];
+    }
 
     const comEvo = new Set();
     if (sessoes && sessoes.length) {
@@ -1053,7 +1057,10 @@ window.MODULOS.agenda = {
     if (ESCOPO.ativo()) {
       const eq = await ESCOPO.carregar();
       const eu = window.CORTEX_SESSAO.user.id;
-      return (sessoes || []).filter(s => eq.pacientes.has(s.paciente_id) || s.aplicador_id === eu || eq.aplicadores.has(s.aplicador_id));
+      // na agenda entra: crianca da equipe, ou sessao de aplicador ligado diretamente a coordenadora.
+      // Aplicador de outra equipe que atende UMA crianca daqui mostra so a sessao dessa crianca (nao a agenda toda dele).
+      const diretos = eq.aplicadoresDiretos || eq.aplicadores;
+      return (sessoes || []).filter(s => eq.pacientes.has(s.paciente_id) || s.aplicador_id === eu || diretos.has(s.aplicador_id));
     }
     if (!ehEquipe()) return sessoes;
     const meus = await meusPacientesIds();

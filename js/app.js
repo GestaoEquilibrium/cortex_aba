@@ -975,13 +975,15 @@ const ESCOPO = {
     ]);
     const apl = new Set((rProf.data || []).filter(p => p.coordenador_id === eu).map(p => p.id));
     (rEm.data || []).forEach(x => apl.add(x.aplicador_id));
+    // "diretos" = so quem esta ligado a coordenadora (coordenador_id ou vinculo extra); e o que a agenda usa
+    const diretos = new Set(apl);
     const pacs = new Set();
     (rPac.data || []).forEach(p => { if (p.coordenador_id === eu || apl.has(p.aplicador_id)) pacs.add(p.id); });
     (rPa.data || []).forEach(x => { if (apl.has(x.aplicador_id)) pacs.add(x.paciente_id); });
     // aplicadores que atendem criancas da equipe tambem contam como equipe
     (rPac.data || []).forEach(p => { if (pacs.has(p.id) && p.aplicador_id) apl.add(p.aplicador_id); });
     (rPa.data || []).forEach(x => { if (pacs.has(x.paciente_id)) apl.add(x.aplicador_id); });
-    const eq = { pacientes: pacs, aplicadores: apl, nomes: Object.fromEntries((rProf.data || []).map(p => [p.id, p.nome])) };
+    const eq = { pacientes: pacs, aplicadores: apl, aplicadoresDiretos: diretos, nomes: Object.fromEntries((rProf.data || []).map(p => [p.id, p.nome])) };
     if (!coordId) window._equipe = eq;
     return eq;
   },

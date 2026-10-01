@@ -2623,3 +2623,25 @@
     .barra-celular button { position: relative; }
 }
 @media print { .avisos-fab, .avisos-gaveta, .avisos-fundo, .avisos-cel { display: none !important; } }
+
+/* ══════════════ AVALIACOES: quadro de vencimentos (patch 31) ══════════════ */
+.av-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 12px; }
+.av-kpi { border-radius: 14px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--line); cursor: pointer; transition: transform .15s ease, box-shadow .15s ease; }
+.av-kpi:hover { transform: translateY(-1px); box-shadow: var(--shadow-sm, 0 4px 14px rgba(20, 24, 60, .08)); }
+.av-kpi small { display: block; font-size: 10.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-muted); }
+.av-kpi b { font-size: 24px; display: block; margin-top: 2px; }
+.av-kpi.av-bad { border-left: 5px solid var(--st-bad); }
+.av-kpi.av-warn { border-left: 5px solid var(--st-warn); }
+.av-kpi.av-ok { border-left: 5px solid var(--st-ok); }
+.av-kpi.av-neutro { border-left: 5px solid var(--st-neutro); }
+.av-sec { display: flex; align-items: center; gap: 8px; margin: 16px 0 6px; font-size: 13px; font-weight: 800; scroll-margin-top: 12px; }
+.av-sec i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.av-quadro td { vertical-align: middle; }
+.av-quadro tr.av-vencida td:first-child { box-shadow: inset 4px 0 0 var(--st-bad); }
+.av-quadro tr.av-prox td:first-child { box-shadow: inset 4px 0 0 var(--st-warn); }
+.av-quadro tr.av-emdia td:first-child { box-shadow: inset 4px 0 0 var(--st-ok); }
+.av-quadro tr.av-sem td:first-child { box-shadow: inset 4px 0 0 var(--st-neutro); }
+.av-barra { height: 6px; width: 100px; border-radius: 4px; background: var(--line); overflow: hidden; display: inline-block; vertical-align: middle; margin-left: 8px; }
+.av-barra i { display: block; height: 100%; border-radius: 4px; }
+@media (max-width: 900px) { .av-kpis { grid-template-columns: repeat(2, 1fr); } }
+@media print { .av-kpis { grid-template-columns: repeat(4, 1fr); } .av-sec { break-after: avoid; } .av-quadro tr { break-inside: avoid; } .av-quadro tr td:first-child { box-shadow: none; } }

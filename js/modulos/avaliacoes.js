@@ -122,53 +122,198 @@ window.MODULOS.avaliacoes = {
 
   // ───────────────────────── LISTA GERAL ─────────────────────────
 
+  // Patch 31: quadro de vencimentos no modelo da planilha da coordenacao — uma linha por crianca e
+  // protocolo (ultima avaliacao, proxima = ultima + validade, situacao), separada em blocos por
+  // situacao, com "Lancar data" para registrar avaliacoes feitas fora do sistema.
+  NOME_PROT: { qadi: 'QADI-R', ss: 'Socially Savvy', portage: 'Portage', vbmapp: 'VB-MAPP', ipo: 'IPO + QI', interno: 'Protocolo interno' },
+
   async telaLista() {
     this.el.innerHTML =
       '<div class="pagina-cabecalho">' +
-      '  <div><h2>Avaliacoes &middot; administracao</h2>' +
-      '  <p class="sub">Uma linha por paciente: situacao de cada protocolo, atrasos e documentos. As aplicacoes acontecem no prontuario.</p></div>' +
+      '  <div><h2>Avaliacoes &middot; vencimentos</h2>' +
+      '  <p class="sub">Uma linha por crianca e protocolo: ultima avaliacao, proxima (validade) e situacao. Lance a data de avaliacoes feitas fora do sistema ou aplique o protocolo na pasta.</p></div>' +
       '</div>' +
-      '<div id="av-venc"></div>' +
-      '<div class="toolbar" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center">' +
-      '  <input id="av-busca" placeholder="Buscar paciente..." style="flex:1; min-width:220px" ' +
-      '    oninput="MODULOS.avaliacoes.filtrarQuadro()">' +
-      '  <label class="check" style="margin:0"><input type="checkbox" id="av-so-pend" onchange="MODULOS.avaliacoes.filtrarQuadro()"> So com pendencia</label>' +
+      '<div id="av-kpis"></div>' +
+      '<div class="toolbar nao-imprime" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center">' +
+      '  <input id="av-busca" placeholder="Buscar crianca..." style="flex:1; min-width:200px" oninput="MODULOS.avaliacoes.desenharQuadro()">' +
+      '  <select id="av-prot" onchange="MODULOS.avaliacoes.desenharQuadro()"><option value="">Todos os protocolos</option>' +
+      Object.entries(this.NOME_PROT).map(([k, v]) => '<option value="' + k + '">' + v + '</option>').join('') + '</select>' +
+      (perm('avaliacoes') === 'E' ? '  <button class="btn btn-primario" onclick="MODULOS.avaliacoes.modalLancar()">+ Lancar avaliacao</button>' : '') +
+      '  <button class="btn btn-fantasma" onclick="window.print()">&#128424; Imprimir quadro</button>' +
       '  <button class="btn-chip" onclick="MODULOS.avaliacoes.verCatalogo(\'qadi\')">Itens QADI-R</button>' +
       '  <button class="btn-chip" onclick="MODULOS.avaliacoes.verCatalogo(\'ss\')">Itens Socially Savvy</button>' +
       '</div>' +
       '<div id="av-lista"><div class="cartao"><p class="sub">Carregando...</p></div></div>';
-    this.quadroVencimentos();
 
-    const [rAv, rPac] = await Promise.all([
+    const [rAv, rPac, rProf, rCfg] = await Promise.all([
       sb.from('avaliacoes')
-        .select('id, paciente_id, protocolo, status, iniciado_em, concluido_em')
-        .order('iniciado_em', { ascending: false }).limit(1000),
-      sb.from('pacientes').select('id, nome').neq('status', 'encerrado').order('nome')
+        .select('id, paciente_id, protocolo, status, iniciado_em, concluido_em, origem, observacoes, avaliador:profiles!avaliacoes_avaliador_id_fkey(nome)')
+        .order('concluido_em', { ascending: false }).limit(3000),
+      sb.from('pacientes').select('id, nome, data_nascimento, aplicador_id, coordenador_id').neq('status', 'encerrado').order('nome'),
+      sb.from('profiles').select('id, nome, coordenador_id, perfil').eq('ativo', true),
+      sb.from('configuracoes').select('valor').eq('chave', 'validade_avaliacao_meses').maybeSingle()
     ]);
-    await Promise.all([this.carregarQuestoes(), this.carregarItensSS()]);
+    this.carregarQuestoes(); this.carregarItensSS();
+    this._meses = parseInt(rCfg.data ? rCfg.data.valor : '6', 10) || 6;
+    this._profs = {}; (rProf.data || []).forEach(x => { this._profs[x.id] = x; });
+    this._equipe = (rProf.data || []).filter(x => !['familia', 'callcenter'].includes(x.perfil)).sort((a, b) => a.nome.localeCompare(b.nome));
+    this._pacs = await ESCOPO.pacs(rPac.data || [], 'id');
 
     const porPac = {};
-    (rAv.data || []).forEach(a => {
-      (porPac[a.paciente_id] = porPac[a.paciente_id] || []).push(a);
-    });
-
-    this._quadro = (rPac.data || []).map(p => {
+    (rAv.data || []).forEach(a => { (porPac[a.paciente_id] = porPac[a.paciente_id] || []).push(a); });
+    const hoje = hojeLocal();
+    const nomeCoord = pac => {
+      const c = pac.coordenador_id || (pac.aplicador_id && this._profs[pac.aplicador_id] ? this._profs[pac.aplicador_id].coordenador_id : null);
+      return c && this._profs[c] ? this._profs[c].nome.split(' ')[0] : '';
+    };
+    const linhas = [];
+    this._pacs.forEach(p => {
       const avs = porPac[p.id] || [];
-      const resumo = prot => {
+      const prots = [...new Set(avs.map(a => a.protocolo))];
+      let temConcluida = false;
+      prots.forEach(prot => {
         const doProt = avs.filter(a => a.protocolo === prot);
+        const conc = doProt.filter(a => a.status === 'concluida' && a.concluido_em).sort((a, b) => b.concluido_em.localeCompare(a.concluido_em));
         const aberta = doProt.find(a => a.status !== 'concluida');
-        const conc = doProt.filter(a => a.status === 'concluida');
-        return { aberta, n: conc.length,
-          ultima: conc.length ? conc[0].concluido_em : null,
-          dias: aberta ? Math.floor((Date.now() - new Date(aberta.iniciado_em)) / 86400000) : null };
-      };
-      const ss = resumo('ss'), qadi = resumo('qadi'), por = resumo('portage');
-      return { p, ss, qadi, por, pendente: !!(ss.aberta || qadi.aberta || por.aberta),
-        semNada: !avs.length };
+        if (!conc.length) { if (aberta) linhas.push(this.linhaQuadro(p, prot, null, aberta, nomeCoord(p), hoje)); return; }
+        temConcluida = true;
+        linhas.push(this.linhaQuadro(p, prot, conc[0], aberta, nomeCoord(p), hoje, conc.length));
+      });
+      if (!temConcluida && !prots.length) linhas.push(this.linhaQuadro(p, null, null, null, nomeCoord(p), hoje));
     });
-    this.filtrarQuadro();
+    this._linhas = linhas;
+    this.desenharQuadro();
   },
 
+  linhaQuadro(p, prot, ultima, aberta, coord, hoje, n) {
+    const l = { p, prot, ultima, aberta, coord, n: n || 0, dias: null, prox: null, situ: 'sem' };
+    if (ultima) {
+      const d = new Date(ultima.concluido_em); d.setMonth(d.getMonth() + this._meses);
+      l.prox = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+      l.dias = Math.round((new Date(l.prox + 'T12:00:00') - new Date(hoje + 'T12:00:00')) / 86400000);
+      l.situ = l.dias < 0 ? 'vencida' : l.dias <= 30 ? 'prox' : 'emdia';
+    }
+    if (aberta) l.diasAberta = Math.floor((Date.now() - new Date(aberta.iniciado_em)) / 86400000);
+    return l;
+  },
+
+  idadeCurta(dn) {
+    if (!dn) return '';
+    const a = new Date(dn + 'T12:00:00'), b = new Date();
+    let m = (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth()); if (b.getDate() < a.getDate()) m--;
+    return Math.floor(m / 12) + 'a ' + (m % 12) + 'm';
+  },
+
+  desenharQuadro() {
+    const alvo = document.getElementById('av-lista');
+    if (!alvo || !this._linhas) return;
+    const termo = (document.getElementById('av-busca')?.value || '').toLowerCase();
+    const prot = document.getElementById('av-prot')?.value || '';
+    const lista = this._linhas.filter(l => (!termo || l.p.nome.toLowerCase().includes(termo)) && (!prot || l.prot === prot));
+    const fmt = d => d ? d.split('-').reverse().join('/') : '';
+    const fmtTs = t => t ? new Date(t).toLocaleDateString('pt-BR') : '';
+    const podeE = perm('avaliacoes') === 'E';
+    const n = s => lista.filter(l => l.situ === s).length;
+
+    const kpis = document.getElementById('av-kpis');
+    if (kpis) kpis.innerHTML = '<div class="av-kpis">' +
+      [['vencida', 'bad', 'Vencidas'], ['prox', 'warn', 'Vencem em 30 dias'], ['emdia', 'ok', 'Em dia'], ['sem', 'neutro', 'Sem avaliacao']].map(([s, c, t]) =>
+        '<div class="av-kpi av-' + c + '" onclick="document.getElementById(\'av-sec-' + s + '\')?.scrollIntoView({ behavior: \'smooth\', block: \'start\' })"><small>' + t + '</small><b>' + n(s) + '</b></div>').join('') + '</div>';
+
+    const cor = s => s === 'vencida' ? 'var(--st-bad)' : s === 'prox' ? 'var(--st-warn)' : s === 'emdia' ? 'var(--st-ok)' : 'var(--st-neutro)';
+    const selo = l => l.situ === 'vencida' ? '<span class="selo selo-bad">vencida ha ' + (-l.dias) + 'd</span>'
+      : l.situ === 'prox' ? '<span class="selo selo-warn">vence em ' + l.dias + 'd</span>'
+      : l.situ === 'emdia' ? '<span class="selo selo-ok">em dia</span>' : '<span class="selo selo-neutro">sem avaliacao</span>';
+    const noSistema = l => {
+      const partes = [];
+      if (l.aberta) partes.push('<button class="btn-chip cheio" onclick="MODULOS.avaliacoes.abrirJanela(\'' + l.aberta.id + '\')">em avaliacao' + (l.diasAberta >= 7 ? ' &middot; ' + l.diasAberta + 'd' : '') + ' &middot; continuar</button>');
+      if (l.ultima && ['ss', 'qadi', 'portage'].includes(l.prot) && l.ultima.origem !== 'importado') {
+        const fn = l.prot === 'ss' ? 'docSS' : l.prot === 'portage' ? 'docPortage' : 'docQADI';
+        partes.push('<button class="btn-chip" title="Documento consolidado" onclick="MODULOS.avaliacoes.' + fn + '(\'' + l.p.id + '\')">' + l.n + ' AV &#128196;</button>');
+      } else if (l.ultima) partes.push('<span class="selo selo-neutro" title="Registrada fora do sistema (quadro)">externa</span>');
+      return partes.join(' ') || '<span class="sub">&mdash;</span>';
+    };
+    const pct = l => l.dias === null ? 0 : Math.max(0, Math.min(100, Math.round(l.dias / (this._meses * 30.4) * 100)));
+    const linha = l => '<tr class="av-' + l.situ + '">' +
+      '<td><b>' + escaparHtml(l.p.nome) + '</b><br><small class="sub">' + this.idadeCurta(l.p.data_nascimento) + (l.coord ? ' &middot; equipe ' + escaparHtml(l.coord) : '') + '</small></td>' +
+      '<td>' + (l.prot ? (this.NOME_PROT[l.prot] || l.prot.toUpperCase()) : '<span class="sub">&mdash;</span>') +
+        (l.ultima ? '<br><small class="sub">' + escaparHtml(this.avaliadorDe(l.ultima)) + '</small>' : '') + '</td>' +
+      '<td>' + (l.ultima ? fmtTs(l.ultima.concluido_em) : '<span class="sub">&mdash;</span>') + '</td>' +
+      '<td>' + (l.prox ? '<b>' + fmt(l.prox) + '</b><span class="av-barra"><i style="width:' + pct(l) + '%; background:' + cor(l.situ) + '"></i></span>' : '<span class="sub">&mdash;</span>') + '</td>' +
+      '<td>' + selo(l) + '</td>' +
+      '<td>' + noSistema(l) + '</td>' +
+      '<td class="nao-imprime" style="white-space:nowrap">' +
+        (podeE ? '<button class="btn-chip cheio" onclick="MODULOS.avaliacoes.modalLancar(\'' + l.p.id + '\', \'' + (l.prot || '') + '\')">+ Lancar data</button> ' : '') +
+        '<button class="btn-chip" onclick="MODULOS.pacientes.telaDetalhe(\'' + l.p.id + '\', \'avaliacao\')">Pasta</button></td></tr>';
+    const thead = '<thead><tr><th>Crianca</th><th>Protocolo / avaliador</th><th>Ultima avaliacao</th><th>Proxima (' + this._meses + ' meses)</th><th>Situacao</th><th>No sistema</th><th class="nao-imprime"></th></tr></thead>';
+    const bloco = (s, tit, vazio) => {
+      const l = lista.filter(x => x.situ === s).sort((a, b) => s === 'sem' ? a.p.nome.localeCompare(b.p.nome) : (a.dias - b.dias) || a.p.nome.localeCompare(b.p.nome));
+      return '<div class="av-sec" id="av-sec-' + s + '"><i style="background:' + cor(s) + '"></i>' + tit + ' <span class="selo selo-neutro">' + l.length + '</span></div>' +
+        '<div class="cartao" style="padding:6px 12px; overflow:auto">' + (l.length ? '<table class="tabela-presenca av-quadro">' + thead + '<tbody>' + l.map(linha).join('') + '</tbody></table>' : '<p class="sub" style="padding:8px 0">' + vazio + '</p>') + '</div>';
+    };
+    alvo.innerHTML =
+      bloco('vencida', 'Vencidas &middot; reavaliar agora', 'Nenhuma avaliacao vencida.') +
+      bloco('prox', 'Vencem nos proximos 30 dias', 'Nada vencendo nos proximos 30 dias.') +
+      bloco('emdia', 'Em dia', 'Nenhuma.') +
+      bloco('sem', 'Sem avaliacao registrada', 'Todas as criancas tem avaliacao registrada.') +
+      (!lista.length ? '<p class="sub" style="margin-top:10px">Nenhuma crianca para mostrar com esse filtro.</p>' : '');
+  },
+
+  avaliadorDe(av) {
+    if (av.avaliador && av.avaliador.nome && av.origem !== 'importado') return av.avaliador.nome.split(' ').slice(0, 2).join(' ');
+    const m = (av.observacoes || '').match(/(?:avaliador[a]?|por)\s*[:\-]?\s*([^\-|;]+)$/i);
+    if (m) return m[1].trim();
+    if (av.avaliador && av.avaliador.nome) return av.avaliador.nome.split(' ').slice(0, 2).join(' ');
+    return av.observacoes ? av.observacoes.replace(/^Importado[^-]*-\s*/, '').slice(0, 40) : '';
+  },
+
+  // Lancar a data de uma avaliacao feita fora do sistema (ou de outro protocolo): vira registro
+  // concluido em avaliacoes (origem 'importado'), conta para o vencimento e aparece na pasta como "externa".
+  modalLancar(pacId, protocolo) {
+    if (perm('avaliacoes') !== 'E') { popAviso('Voce nao tem permissao para lancar avaliacoes.'); return; }
+    const pacs = this._pacs || [];
+    const eu = window.CORTEX_SESSAO.profile.nome;
+    abrirModal('Lancar avaliacao realizada',
+      '<p class="sub" style="margin-bottom:10px">Registra uma avaliacao ja feita (dentro ou fora do sistema) so com a data: a proxima e calculada com ' + this._meses + ' meses. Nao tem itens nem documento.</p>' +
+      '<div class="grade-form">' +
+      '  <div class="campo c2"><label>Crianca *</label><select id="la-pac"' + (pacId ? ' disabled' : '') + '><option value="">Selecione</option>' +
+      pacs.map(p => '<option value="' + p.id + '"' + (p.id === pacId ? ' selected' : '') + '>' + escaparHtml(p.nome) + '</option>').join('') + '</select></div>' +
+      '  <div class="campo"><label>Protocolo *</label><select id="la-prot">' +
+      Object.entries(this.NOME_PROT).map(([k, v]) => '<option value="' + k + '"' + (k === (protocolo || 'interno') ? ' selected' : '') + '>' + v + '</option>').join('') + '</select></div>' +
+      '  <div class="campo"><label>Data da avaliacao *</label><input type="date" id="la-data" value="' + hojeLocal() + '" max="' + hojeLocal() + '"></div>' +
+      '  <div class="campo c2"><label>Avaliador(a)</label><input id="la-aval" list="la-aval-lista" placeholder="Nome de quem avaliou" value="' + escaparHtml(eu) + '">' +
+      '    <datalist id="la-aval-lista">' + (this._equipe || []).map(x => '<option value="' + escaparHtml(x.nome) + '">').join('') + '</datalist></div>' +
+      '  <div class="campo c2"><label>Observacao</label><input id="la-obs" placeholder="Opcional. Ex.: devolutiva pendente"></div>' +
+      '</div>' +
+      '<input type="hidden" id="la-pac-fixo" value="' + (pacId || '') + '">' +
+      '<div class="mensagem-erro" id="la-erro"></div>' +
+      '<div class="barra-acoes"><button class="btn btn-fantasma" onclick="fecharModal()">Cancelar</button>' +
+      '<button class="btn btn-primario" onclick="MODULOS.avaliacoes.salvarLancamento()">Lancar</button></div>', false, 'aviso');
+  },
+
+  async salvarLancamento() {
+    const erro = document.getElementById('la-erro'); erro.classList.remove('visivel');
+    const pacId = document.getElementById('la-pac-fixo').value || document.getElementById('la-pac').value;
+    const prot = document.getElementById('la-prot').value;
+    const data = document.getElementById('la-data').value;
+    const aval = document.getElementById('la-aval').value.trim();
+    const obs = document.getElementById('la-obs').value.trim();
+    if (!pacId || !prot || !data) { erro.textContent = 'Escolha a crianca, o protocolo e a data.'; erro.classList.add('visivel'); return; }
+    if (data > hojeLocal()) { erro.textContent = 'A data da avaliacao nao pode ser futura.'; erro.classList.add('visivel'); return; }
+    const perfilAval = (this._equipe || []).find(x => x.nome === aval);
+    const quando = new Date(data + 'T12:00:00').toISOString();
+    const { error } = await sb.from('avaliacoes').insert({
+      paciente_id: pacId, protocolo: prot, status: 'concluida', iniciado_em: quando, concluido_em: quando,
+      origem: 'importado', avaliador_id: perfilAval ? perfilAval.id : window.CORTEX_SESSAO.user.id,
+      observacoes: 'Lancado no quadro por ' + window.CORTEX_SESSAO.profile.nome.split(' ')[0] + (aval ? ' - avaliador: ' + aval : '') + (obs ? ' - ' + obs : '')
+    });
+    if (error) { erro.textContent = error.message; erro.classList.add('visivel'); return; }
+    fecharModal();
+    popAviso('Avaliacao lancada. A proxima vence em ' + this._meses + ' meses a partir de ' + data.split('-').reverse().join('/') + '.');
+    this.telaLista();
+  },
+
+  // mantido: usado pela aba Avaliacao da pasta (selos por protocolo)
   seloProt(r, prot, pacId) {
     if (r.aberta) {
       return '<button class="btn-chip cheio" ' +
@@ -182,42 +327,6 @@ window.MODULOS.avaliacoes = {
         r.n + ' AV &middot; ' + new Date(r.ultima).toLocaleDateString('pt-BR').slice(0, 5) + ' &#128196;</button>';
     }
     return '<span class="selo selo-neutro">&mdash;</span>';
-  },
-
-  filtrarQuadro() {
-    const alvo = document.getElementById('av-lista');
-    if (!alvo || !this._quadro) return;
-    const termo = (document.getElementById('av-busca')?.value || '').toLowerCase();
-    const soPend = document.getElementById('av-so-pend')?.checked;
-    let lista = this._quadro.filter(x =>
-      (!termo || x.p.nome.toLowerCase().includes(termo)) &&
-      (!soPend || x.pendente));
-    const total = lista.length;
-    const pendentes = this._quadro.filter(x => x.pendente).length;
-    lista = lista.slice(0, 40);
-
-    alvo.innerHTML =
-      '<div class="grade-visao" style="margin-bottom:12px">' +
-      '  <div class="caixa-info"><small>Pacientes</small><b>' + this._quadro.length + '</b></div>' +
-      '  <div class="caixa-info"><small>Com aplicacao aberta</small><b style="color:' + (pendentes ? '#D97706' : 'inherit') + '">' + pendentes + '</b></div>' +
-      '  <div class="caixa-info"><small>QADI-R &middot; catalogo</small><b>' + this.questoes.length + '</b></div>' +
-      '  <div class="caixa-info"><small>Socially Savvy &middot; catalogo</small><b>' + this.itensSS.length + '</b></div>' +
-      '</div>' +
-      '<div class="cartao">' +
-      '<table class="tabela-presenca tabela-quadro"><thead><tr>' +
-      '<th>Paciente</th><th>Socially Savvy</th><th>QADI-R</th><th>Portage</th><th></th></tr></thead><tbody>' +
-      lista.map(x =>
-        '<tr' + (x.pendente ? ' style="background:#FFFBEB"' : '') + '>' +
-        '<td><b>' + escaparHtml(x.p.nome) + '</b>' +
-        (x.semNada ? ' <span class="selo selo-neutro">sem avaliacoes</span>' : '') + '</td>' +
-        '<td>' + this.seloProt(x.ss, 'ss', x.p.id) + '</td>' +
-        '<td>' + this.seloProt(x.qadi, 'qadi', x.p.id) + '</td>' +
-        '<td>' + this.seloProt(x.por, 'portage', x.p.id) + '</td>' +
-        '<td><button class="btn-chip" onclick="MODULOS.pacientes.telaDetalhe(\'' + x.p.id + '\', \'avaliacao\')">Abrir pasta</button></td>' +
-        '</tr>').join('') +
-      '</tbody></table>' +
-      (total > 40 ? '<p class="sub" style="margin-top:8px">Mostrando 40 de ' + total + ' &mdash; refine pela busca.</p>' : '') +
-      '</div>';
   },
 
   verCatalogo(protocolo) {

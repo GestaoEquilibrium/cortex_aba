@@ -343,7 +343,7 @@ function abrirModulo(id) {
   ESCOPO.parar();
   if (modulo && typeof modulo.render === 'function') {
     modulo.render(pagina, window.CORTEX_SESSAO);
-    if (['pacientes', 'agenda', 'auditoria', 'eventos', 'presenca', 'faltas'].includes(id)) ESCOPO.montar(pagina);
+    if (['pacientes', 'agenda', 'auditoria', 'eventos', 'presenca', 'faltas', 'avaliacoes'].includes(id)) ESCOPO.montar(pagina);
   } else {
     pagina.innerHTML =
       '<div class="cartao"><div class="vazio">' +

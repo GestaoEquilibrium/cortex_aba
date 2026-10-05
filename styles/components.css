@@ -2852,3 +2852,20 @@ body.travado .app-shell { filter: blur(2px); pointer-events: none; user-select: 
 
 /* observacao por programa no relatorio da sessao (patch 31) */
 .rel-obs { font-size: 12px; color: var(--ink-soft); margin: 2px 0 6px; padding-left: 2px; text-align: justify; }
+
+/* ══════════════ Horarios: todos os aplicadores numa tela (patch 31) ══════════════ */
+.hor-faixa { padding: 12px 14px; margin-bottom: 12px; }
+.hor-faixa-cab { display: flex; align-items: center; gap: 10px; padding-bottom: 10px; margin-bottom: 10px; border-bottom: 2px solid var(--acao-soft); }
+.hor-faixa-cab > div > b { display: block; font-size: 15px; }
+.hor-faixa-cab small { color: var(--ink-muted); font-size: 11.5px; }
+.hor-semana { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.hor-dia { background: var(--surface-alt); border-radius: 10px; padding: 6px; min-height: 44px; }
+.hor-dia-tit { font-size: 10.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-muted); margin-bottom: 4px; display: flex; justify-content: space-between; }
+.hor-dia-tit small { font-weight: 600; text-transform: none; letter-spacing: 0; }
+.hor-mini { font-size: 11px; padding: 3px 7px; border-radius: 7px; margin-bottom: 3px; background: var(--surface); border: 1px solid var(--line); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.hor-mini b { font-weight: 800; margin-right: 2px; }
+.hor-mini.ocupado { border-left: 3px solid var(--acao); }
+.hor-mini.reserva { border-left: 3px solid var(--st-warn); font-style: italic; }
+.hor-mini.livre { color: var(--ink-muted); border-style: dashed; }
+.hor-mini.livre:hover { color: var(--acao); border-color: var(--acao); }
+.hor-mini.fora { color: var(--ink-muted); border: none; background: transparent; cursor: default; font-size: 10.5px; }

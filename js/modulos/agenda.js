@@ -1527,9 +1527,15 @@ window.MODULOS.agenda = {
     return this.grade.filter(g => g.aplicador_id === profId && !g.paciente_id).length;
   },
 
+  // modo da tela Horarios: 'um' (um aplicador por vez), 'equipe' (minha equipe, lado a lado) ou 'todos'
+  horModo() { try { return localStorage.getItem('cortex_hor_modo') || 'um'; } catch (e) { return 'um'; } },
+  mudarHorModo(m) { try { localStorage.setItem('cortex_hor_modo', m); } catch (e) {} this.telaHorarios(); },
+
   telaHorarios(profId) {
     const equipeOrd = this.equipe.slice().sort((x, y) => this.cargaDe(x.id) - this.cargaDe(y.id));
     this._horProf = profId || this._horProf || (equipeOrd[0] && equipeOrd[0].id);
+    const modo = this.horModo();
+    const ehCoord = typeof ESCOPO !== 'undefined' && ESCOPO.ehCoord && ESCOPO.ehCoord();
 
     this.el.innerHTML =
       '<div class="pagina-cabecalho">' +
@@ -1548,15 +1554,57 @@ window.MODULOS.agenda = {
       '  </div>' +
       '</div>' +
       '<div class="toolbar">' +
-      '  <select id="hor-prof" onchange="MODULOS.agenda.telaHorarios(this.value)">' +
-      equipeOrd.map(m => '<option value="' + m.id + '"' + (m.id === this._horProf ? ' selected' : '') + '>' +
-        escaparHtml(m.nome) + ' - ' + this.cargaDe(m.id) + ' sessoes/sem</option>').join('') +
-      '  </select>' +
-      '  <span class="selo selo-neutro">' + this.durDe(this._horProf) + ' min por sessao</span>' +
+      '  <div class="toggle-visao" id="hor-modo">' +
+      '    <button type="button" class="' + (modo === 'um' ? 'ativo' : '') + '" onclick="MODULOS.agenda.mudarHorModo(\'um\')">Um aplicador</button>' +
+      (ehCoord ? '    <button type="button" class="' + (modo === 'equipe' ? 'ativo' : '') + '" onclick="MODULOS.agenda.mudarHorModo(\'equipe\')">Minha equipe</button>' : '') +
+      '    <button type="button" class="' + (modo === 'todos' ? 'ativo' : '') + '" onclick="MODULOS.agenda.mudarHorModo(\'todos\')">Todos</button>' +
+      '  </div>' +
+      (modo === 'um'
+        ? '  <select id="hor-prof" onchange="MODULOS.agenda.telaHorarios(this.value)">' +
+          equipeOrd.map(m => '<option value="' + m.id + '"' + (m.id === this._horProf ? ' selected' : '') + '>' +
+            escaparHtml(m.nome) + ' - ' + this.cargaDe(m.id) + ' sessoes/sem</option>').join('') +
+          '  </select>' +
+          '  <span class="selo selo-neutro">' + this.durDe(this._horProf) + ' min por sessao</span>'
+        : '  <span class="sub">Uma faixa por aplicador(a), em ordem alfabetica. Toque num horario para abrir; num espaco livre para marcar.</span>') +
       '</div>' +
       '<div id="hor-grade"></div>';
 
-    this.desenharHorarios();
+    if (modo === 'um') this.desenharHorarios();
+    else this.desenharHorariosTodos(modo);
+  },
+
+  // todas as jornadas numa tela so: uma faixa por aplicador, nome em destaque, semana ao lado
+  async desenharHorariosTodos(modo) {
+    const alvo = document.getElementById('hor-grade'); if (!alvo) return;
+    let lista = this.equipe.slice();
+    if (modo === 'equipe' && typeof ESCOPO !== 'undefined') {
+      const eq = await ESCOPO.carregar(); const d = eq.aplicadoresDiretos || eq.aplicadores; const eu = window.CORTEX_SESSAO.user.id;
+      lista = lista.filter(p => p.id === eu || d.has(p.id));
+    }
+    lista.sort((a, b) => a.nome.localeCompare(b.nome));
+    if (!lista.length) { alvo.innerHTML = '<div class="cartao"><p class="sub">Nenhum aplicador para mostrar.</p></div>'; return; }
+    alvo.innerHTML = lista.map(p => {
+      const temJornada = this.jornadas.some(j => j.profissional_id === p.id);
+      let livres = 0, ocupadas = 0, dias = '';
+      for (let d = 1; d <= 6; d++) {
+        const slots = temJornada ? this.slotsDoDia(p.id, d) : [];
+        if (!slots.length && d === 6) continue;
+        livres += slots.filter(s => !s.ocupacao).length; ocupadas += slots.filter(s => s.ocupacao).length;
+        dias += '<div class="hor-dia"><div class="hor-dia-tit">' + this.DIAS[d].slice(0, 3) + (slots.length ? ' <small>' + slots.filter(s => !s.ocupacao).length + ' livres</small>' : '') + '</div>' +
+          (slots.length ? slots.map(s => s.ocupacao
+            ? '<div class="hor-mini ' + (s.ocupacao.pacientes ? 'ocupado' : 'reserva') + '"' + (this.gere() ? ' onclick="MODULOS.agenda.modalHorario(\'' + s.ocupacao.id + '\')"' : '') + ' title="' + escaparHtml(s.ocupacao.pacientes ? s.ocupacao.pacientes.nome : (s.ocupacao.rotulo || 'Reserva')) + '"><b>' + s.hora + '</b> ' + escaparHtml(s.ocupacao.pacientes ? s.ocupacao.pacientes.nome.split(' ')[0] : (s.ocupacao.rotulo || 'Reserva')) + '</div>'
+            : '<div class="hor-mini livre"' + (this.gere() ? ' onclick="MODULOS.agenda._horProf = \'' + p.id + '\'; MODULOS.agenda.novoNoSlot(' + s.dia + ', \'' + s.hora + '\')"' : '') + '><b>' + s.hora + '</b> livre</div>').join('')
+          : '<div class="hor-mini fora">fora da jornada</div>') + '</div>';
+      }
+      return '<div class="cartao hor-faixa">' +
+        '<div class="hor-faixa-cab">' + this.evoAvatarHor(p.nome) + '<div><b>' + escaparHtml(p.nome) + '</b><small>' + this.cargaDe(p.id) + ' sessoes/sem &middot; ' + this.durDe(p.id) + ' min' + (temJornada ? ' &middot; ' + livres + ' livres' : ' &middot; <span style="color:var(--st-warn)">sem jornada</span>') + '</small></div>' +
+        (this.gere() ? '<span style="margin-left:auto; display:flex; gap:6px"><button class="btn-chip" onclick="MODULOS.agenda.modalJornada(\'' + p.id + '\')">Jornada</button><button class="btn-chip" onclick="MODULOS.agenda.mudarHorModo(\'um\'); MODULOS.agenda.telaHorarios(\'' + p.id + '\')">Abrir</button></span>' : '') + '</div>' +
+        '<div class="hor-semana">' + dias + '</div></div>';
+    }).join('');
+  },
+  evoAvatarHor(nome) {
+    const ini = String(nome || '?').split(' ').filter(Boolean).slice(0, 2).map(x => x[0]).join('').toUpperCase();
+    return '<span class="evo-av ' + (typeof corAvatar === 'function' ? corAvatar(nome) : 'av-1') + '" style="width:34px; height:34px; font-size:13px">' + escaparHtml(ini) + '</span>';
   },
 
   desenharHorarios() {

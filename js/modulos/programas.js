@@ -2532,7 +2532,7 @@ window.MODULOS.programas = {
     this._retroPac = pacienteId;
     abrirModal('Lancar evolucao',
       '<p class="sub" style="margin-bottom:10px">Primeiro a data: o sistema mostra as sessoes daquele dia ' +
-      'para voce escolher qual recebe a evolucao (as meninas lancam retroativo, entao a data manda).</p>' +
+      'para voce marcar qual(is) recebe(m) a evolucao - pode marcar mais de uma, o mesmo texto vai para todas.</p>' +
       '<div class="grade-form">' +
       '  <div class="campo"><label>Data da sessao *</label>' +
       '    <input type="date" id="re-data" value="' + hojeLocal() + '" ' +
@@ -2567,7 +2567,7 @@ window.MODULOS.programas = {
       (sessoes.length
         ? sessoes.map(s =>
             '<label class="linha-doc" style="cursor:pointer">' +
-            '<span><input type="radio" name="re-sessao" value="' + s.id + '"' +
+            '<span><input type="checkbox" class="re-sessao" value="' + s.id + '"' +
             (comEvo.has(s.id) ? ' disabled' : '') +
             ' onchange="MODULOS.programas.formEvolucaoRetro()"> ' +
             '<b>' + s.hora_inicio.slice(0, 5) + '</b> &middot; ' +
@@ -2577,22 +2577,26 @@ window.MODULOS.programas = {
             '</label>').join('')
         : '<p class="sub">Nenhuma sessao nesta data.</p>') +
       '<label class="linha-doc" style="cursor:pointer"><span>' +
-      '<input type="radio" name="re-sessao" value="nova" onchange="MODULOS.programas.formEvolucaoRetro()"> ' +
+      '<input type="checkbox" class="re-sessao" value="nova" onchange="MODULOS.programas.formEvolucaoRetro()"> ' +
       '<b>Criar sessao retroativa</b> nesta data &middot; hora: </span>' +
       '<input type="time" id="re-hora" value="08:00" step="300" style="width:110px"></label>';
   },
 
   formEvolucaoRetro() {
-    document.getElementById('re-form').innerHTML =
+    const n = document.querySelectorAll('.re-sessao:checked').length;
+    const form = document.getElementById('re-form');
+    if (!n) { form.innerHTML = ''; return; }
+    if (form.querySelector('#re-texto')) { const b = document.getElementById('re-salvar'); if (b) b.textContent = 'Lancar' + (n > 1 ? ' em ' + n + ' sessoes' : ''); return; }
+    form.innerHTML =
       '<div class="campo" style="margin-top:10px"><label>Evolucao da sessao *</label>' +
       '<textarea id="re-texto" rows="4" placeholder="Como foi a sessao, comportamento, atividades realizadas..."></textarea></div>' +
       '<div class="campo"><label>Destinacao da crianca</label>' +
       '<input id="re-dest" placeholder="Ex.: entregue a mae, orientada sobre a atividade de casa"></div>' +
       '<label class="check" style="margin:4px 0 8px"><input type="checkbox" id="re-concluir" checked> ' +
-      'Marcar a sessao como concluida</label>' +
+      'Marcar a(s) sessao(oes) como concluida(s)</label>' +
       '<div class="barra-acoes">' +
       '  <button class="btn btn-fantasma" onclick="fecharModal()">Cancelar</button>' +
-      '  <button class="btn btn-primario" id="re-salvar" onclick="MODULOS.programas.salvarEvolucaoRetro()">Lancar</button>' +
+      '  <button class="btn btn-primario" id="re-salvar" onclick="MODULOS.programas.salvarEvolucaoRetro()">Lancar' + (n > 1 ? ' em ' + n + ' sessoes' : '') + '</button>' +
       '</div>';
   },
 
@@ -2601,16 +2605,17 @@ window.MODULOS.programas = {
     const botao = document.getElementById('re-salvar');
     erro.classList.remove('visivel');
 
-    const escolha = document.querySelector('input[name="re-sessao"]:checked');
+    const escolhas = Array.from(document.querySelectorAll('.re-sessao:checked')).map(c => c.value);
     const texto = document.getElementById('re-texto').value.trim();
-    if (!escolha) { erro.textContent = 'Escolha a sessao (ou crie a retroativa).'; erro.classList.add('visivel'); return; }
+    if (!escolhas.length) { erro.textContent = 'Marque ao menos uma sessao (ou crie a retroativa).'; erro.classList.add('visivel'); return; }
     if (!texto) { erro.textContent = 'Escreva a evolucao.'; erro.classList.add('visivel'); return; }
 
     botao.disabled = true;
     botao.textContent = 'Lancando...';
     try {
-      let sessaoId = escolha.value;
-      if (sessaoId === 'nova') {
+      // sessoes escolhidas (varias de uma vez): a primeira guarda a evolucao, as outras recebem a mesma como espelho
+      const ids = escolhas.filter(v => v !== 'nova');
+      if (escolhas.includes('nova')) {
         const { data: nova, error: eN } = await sb.from('sessoes').insert({
           paciente_id: this._retroPac,
           data: document.getElementById('re-data').value,
@@ -2620,21 +2625,24 @@ window.MODULOS.programas = {
           criado_por: window.CORTEX_SESSAO.user.id
         }).select('id').single();
         if (eN) throw new Error(eN.message);
-        sessaoId = nova.id;
+        ids.push(nova.id);
       }
-
-      const { error: e1 } = await sb.from('evolucoes').insert({
-        sessao_id: sessaoId,
+      const dest = document.getElementById('re-dest').value.trim() || null;
+      const { error: e1 } = await sb.from('evolucoes').insert(ids.map((sid, i) => ({
+        sessao_id: sid,
         paciente_id: this._retroPac,
         aplicador_id: window.CORTEX_SESSAO.user.id,
         texto: texto,
-        destinacao: document.getElementById('re-dest').value.trim() || null
-      });
+        destinacao: dest,
+        espelho_de: i === 0 ? null : ids[0]
+      })));
       if (e1) throw new Error(e1.message);
 
-      if (escolha.value !== 'nova' && document.getElementById('re-concluir').checked) {
-        { const { error: _e } = await sb.from('sessoes').update({ status: 'concluida' }).eq('id', sessaoId); if (_e) popAviso('Nao foi possivel gravar (sessoes): ' + _e.message); }
+      const concluirIds = escolhas.filter(v => v !== 'nova');
+      if (concluirIds.length && document.getElementById('re-concluir').checked) {
+        { const { error: _e } = await sb.from('sessoes').update({ status: 'concluida' }).in('id', concluirIds); if (_e) popAviso('Nao foi possivel gravar (sessoes): ' + _e.message); }
       }
+      if (ids.length > 1) popAviso('Evolucao lancada em ' + ids.length + ' sessoes.');
 
       fecharModal();
       if (this._pacProgPaciente && MODULOS.pacientes.paciente) {

@@ -308,10 +308,33 @@ window.MODULOS.admin = {
           'onclick="MODULOS.admin.alternarAtivo(\'' + p.id + '\', ' + (!p.ativo) + ')">' +
           (p.ativo ? 'Inativar acesso' : 'Reativar acesso') + '</button>'
         : '') +
+      (!ehFamilia && !eu && !p.ativo && ['direcao', 'suporte'].includes(this.sessao.profile.perfil)
+        ? '<button class="btn btn-fantasma" style="color:var(--st-bad); border-color:var(--st-bad)" title="Remove o acesso e o cadastro de vez (so quando nao ha historico clinico no nome da pessoa)" onclick="MODULOS.admin.apagarDeVez(\'' + p.id + '\', \'' + escaparHtml(p.nome).replace(/'/g, '') + '\')">&#10005; Apagar de vez</button>'
+        : '') +
       (!ehFamilia && !eu
         ? '<button class="btn btn-primario" onclick="MODULOS.admin.salvarPerfil(\'' + p.id + '\')">Salvar perfil</button>'
         : '') +
       '</div>');
+  },
+
+  // Patch 31: apaga o profissional de verdade (perfil + login). O banco so deixa quando nao ha sessoes
+  // realizadas nem evolucoes no nome dele; nesse caso o caminho continua sendo "Inativar acesso".
+  async apagarDeVez(id, nome) {
+    if (!await popConfirmar('Apagar de vez o cadastro e o login de ' + nome + '?\n\nHorarios fixos, jornada, vinculos de equipe e sessoes futuras somem. So e permitido quando nao existe sessao realizada nem evolucao no nome da pessoa (senao, mantenha inativo). Nao tem volta.', { titulo: 'Apagar de vez', ok: 'Apagar', cancelar: 'Voltar' })) return;
+    if (!await popConfirmar('Tem certeza? ' + nome + ' sera removido(a) do sistema.', { titulo: 'Ultima confirmacao', ok: 'Sim, apagar' })) return;
+    const erro = document.getElementById('ger-erro'); if (erro) erro.classList.remove('visivel');
+    const { data, error } = await sb.rpc('fn_apagar_profissional', { p_id: id });
+    if (error) { const m = /fn_apagar_profissional/.test(error.message) ? 'A funcao do banco ainda nao foi criada (rode o SQL do patch).' : error.message; if (erro) { erro.textContent = m; erro.classList.add('visivel'); } else popAviso(m); return; }
+    if (!data || !data.ok) {
+      const m = data && data.motivo === 'historico'
+        ? 'Nao da para apagar: ' + nome + ' tem ' + (data.sessoes || 0) + ' sessao(oes) realizada(s) e ' + (data.evolucoes || 0) + ' evolucao(oes) no nome. Mantenha o acesso inativo - o historico das criancas precisa do nome.'
+        : 'Nao foi possivel apagar: ' + ((data && data.detalhe) || 'registro ligado a esta pessoa') + '.';
+      if (erro) { erro.textContent = m; erro.classList.add('visivel'); } else popAviso(m);
+      return;
+    }
+    fecharModal();
+    popAviso(nome + ' foi removido(a) do sistema.');
+    this.render(this.el, this.sessao);
   },
 
   async salvarPerfil(id) {

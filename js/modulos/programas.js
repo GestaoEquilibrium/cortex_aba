@@ -1744,6 +1744,7 @@ window.MODULOS.programas = {
       '<select id="evo-apl" onchange="MODULOS.programas.evoFiltrar()"><option value="">Todos os aplicadores</option>' + Object.entries(apls).map(([id, n]) => '<option value="' + id + '">' + escaparHtml(n) + '</option>').join('') + '</select>' +
       '<div class="toggle-visao" id="evo-visao"><button type="button" data-v="linha" class="' + (visao === 'linha' ? 'ativo' : '') + '" onclick="MODULOS.programas.evoVisao(\'linha\')">Linha do tempo</button>' +
       '<button type="button" data-v="cal" class="' + (visao === 'cal' ? 'ativo' : '') + '" onclick="MODULOS.programas.evoVisao(\'cal\')">Calendario</button></div>' +
+      '<button class="btn btn-fantasma" title="Compila as evolucoes de um periodo (um ou varios meses) num documento para a familia" onclick="MODULOS.programas.modalRelatorioPeriodo()">&#128196; Relatorio do periodo</button>' +
       '<button class="btn btn-fantasma" onclick="window.print()">&#128424; Imprimir mes</button>' +
       '</div>' +
       '<div id="evo-resumo"></div><div id="evo-corpo"></div>' +
@@ -1886,6 +1887,42 @@ window.MODULOS.programas = {
          : '<span class="sub">Marque as evolucoes (caixinha de cada sessao) para montar um <b>relatorio rapido</b> para a familia.</span>') +
       (noMes ? '<button type="button" class="btn-chip" style="margin-left:auto" onclick="MODULOS.programas.evoMarcarTodas(true)">Marcar as ' + noMes + ' do mes</button>' : '') +
       '</div>';
+  },
+
+  // Relatorio compilado das evolucoes de um periodo (de um mes ate outro), com filtro de aplicador
+  modalRelatorioPeriodo() {
+    const E = this._evo; if (!E) return;
+    const rotMes = m => this.EVO_MESES[parseInt(m.slice(5, 7), 10) - 1] + ' ' + m.slice(0, 4);
+    const meses = E.meses.slice().sort();   // do mais antigo ao mais novo
+    const opts = sel => meses.map(m => '<option value="' + m + '"' + (m === sel ? ' selected' : '') + '>' + rotMes(m) + '</option>').join('');
+    abrirModal('Relatorio do periodo',
+      '<p class="sub" style="margin-bottom:10px">Compila, em ordem cronologica, todas as evolucoes escritas entre os meses escolhidos, no mesmo documento do relatorio rapido.</p>' +
+      '<div class="grade-form">' +
+      '  <div class="campo"><label>De</label><select id="rp-de">' + opts(E.mes) + '</select></div>' +
+      '  <div class="campo"><label>Ate</label><select id="rp-ate">' + opts(E.mes) + '</select></div>' +
+      '  <div class="campo"><label>Aplicador(a)</label><select id="rp-apl"><option value="">Todos</option>' + Object.entries(E.apls).map(([id, n]) => '<option value="' + id + '">' + escaparHtml(n) + '</option>').join('') + '</select></div>' +
+      '  <div class="campo c3"><label class="check"><input type="checkbox" id="rp-faltas"> Incluir as faltas do periodo (aparecem como "Falta")</label></div>' +
+      '</div><div class="mensagem-erro" id="rp-erro"></div>' +
+      '<div class="barra-acoes"><button class="btn btn-fantasma" onclick="fecharModal()">Cancelar</button>' +
+      '<button class="btn btn-primario" id="rp-ok" onclick="MODULOS.programas.gerarRelatorioPeriodo()">Gerar relatorio</button></div>', false);
+  },
+  async gerarRelatorioPeriodo() {
+    const E = this._evo; if (!E) return;
+    let de = document.getElementById('rp-de').value, ate = document.getElementById('rp-ate').value;
+    if (de > ate) [de, ate] = [ate, de];
+    const apl = document.getElementById('rp-apl').value; const comFaltas = document.getElementById('rp-faltas').checked;
+    const erro = document.getElementById('rp-erro'); erro.classList.remove('visivel');
+    const b = document.getElementById('rp-ok'); b.disabled = true; b.textContent = 'Buscando...';
+    const fimD = new Date(ate + '-01T12:00:00'); fimD.setMonth(fimD.getMonth() + 1); fimD.setDate(0);
+    const fim = fimD.getFullYear() + '-' + String(fimD.getMonth() + 1).padStart(2, '0') + '-' + String(fimD.getDate()).padStart(2, '0');
+    let q = sb.from('sessoes').select('id, status, evolucoes(id)').eq('paciente_id', E.pacienteId).gte('data', de + '-01').lte('data', fim).neq('status', 'cancelada');
+    if (apl) q = q.eq('aplicador_id', apl);
+    const { data, error } = await q;
+    if (error) { erro.textContent = error.message; erro.classList.add('visivel'); b.disabled = false; b.textContent = 'Gerar relatorio'; return; }
+    const ids = (data || []).filter(x => (x.evolucoes && x.evolucoes.length) || (comFaltas && x.status === 'falta')).map(x => x.id);
+    if (!ids.length) { erro.textContent = 'Nenhuma evolucao nesse periodo' + (apl ? ' para essa aplicadora' : '') + '.'; erro.classList.add('visivel'); b.disabled = false; b.textContent = 'Gerar relatorio'; return; }
+    fecharModal();
+    this.docRelatorioRapido(ids);
   },
 
   async docRelatorioRapido(idsForcados) {

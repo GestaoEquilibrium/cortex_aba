@@ -879,21 +879,60 @@ window.MODULOS.avaliacoes = {
   async apagarAvaliacoesSelecionadas() {
     const ids = [...document.querySelectorAll('.av-apagar-chk:checked')].map(c => c.value);
     if (!ids.length) { popAviso('Marque ao menos uma avaliacao para apagar.'); return; }
-    if (!await popConfirmar('Apagar ' + ids.length + ' avaliacao(oes)?\n\nSomem a aplicacao, todas as respostas e os relatorios de avaliacao feitos a partir dela. O que ja foi enviado ao portal ou assinado em PDF continua guardado. Esta acao nao tem volta.',
-      { titulo: 'Apagar avaliacoes', ok: 'Apagar de vez', cancelar: 'Voltar' })) return;
-    if (!await popConfirmar('Tem certeza? Vai apagar ' + ids.length + ' avaliacao(oes) deste paciente.', { titulo: 'Ultima confirmacao', ok: 'Sim, apagar' })) return;
-    const rels = (this._relAv || []).filter(r => (r.avaliacoes_ids && r.avaliacoes_ids.length ? r.avaliacoes_ids : [r.avaliacao_id]).some(id => ids.includes(id))).map(r => r.id);
+    // o que esta ligado a essas avaliacoes: PEI (pode ficar, so desvinculado), relatorios e devolutivas (vao junto)
+    const [rPei, rRel, rDev] = await Promise.all([
+      sb.from('peis').select('id, status, periodo_inicio, periodo_fim, avaliacao_id').in('avaliacao_id', ids),
+      sb.from('relatorios_avaliacao').select('id, tipo, status, avaliacao_id, avaliacoes_ids'),
+      sb.from('relatorios_devolutiva').select('id, avaliacao_id').in('avaliacao_id', ids)
+    ]);
+    const peis = rPei.data || [];
+    const rels = (rRel.data || []).filter(r => (r.avaliacoes_ids && r.avaliacoes_ids.length ? r.avaliacoes_ids : [r.avaliacao_id]).some(id => ids.includes(id)));
+    const devs = rDev.data || [];
+    const fmt = d => d ? d.split('-').reverse().join('/') : '-';
+    this._apagarCtx = { ids, peis, rels, devs };
+    abrirModal('Apagar ' + ids.length + ' avaliacao(oes)',
+      '<p class="sub" style="margin-bottom:10px">Somem a aplicacao e todas as respostas. Escolha o que fazer com o que esta ligado a ela(s). O que ja foi enviado ao portal ou assinado em PDF continua guardado.</p>' +
+      (peis.length ? '<div class="caixa-info" style="margin-bottom:8px"><small>PEI ligado a esta avaliacao</small>' +
+        peis.map(x => '<div class="mv-escolha" style="margin:6px 0 0"><div style="font-size:12.5px"><b>PEI ' + fmt(x.periodo_inicio) + ' a ' + fmt(x.periodo_fim) + '</b> <span class="selo ' + (x.status === 'ativo' ? 'selo-ok' : 'selo-neutro') + '">' + escaparHtml(x.status || '') + '</span></div>' +
+          '<label class="sel"><input type="radio" name="ap-pei-' + x.id + '" value="manter" checked onchange="MODULOS.avaliacoes.marcarEscolhaAp(this)"><span><b>Manter o PEI</b><small>Fica como esta, so deixa de apontar para a avaliacao apagada.</small></span></label>' +
+          '<label><input type="radio" name="ap-pei-' + x.id + '" value="apagar" onchange="MODULOS.avaliacoes.marcarEscolhaAp(this)"><span><b>Apagar o PEI junto</b><small>Some com as metas. Programas ja lancados a partir dele continuam.</small></span></label></div>').join('') + '</div>' : '') +
+      (rels.length || devs.length ? '<div class="caixa-info" style="margin-bottom:8px; border-left:4px solid var(--st-bad)"><small>Vao junto (dependem da avaliacao)</small>' +
+        (rels.length ? '<div style="font-size:12.5px">' + rels.length + ' relatorio(s) de avaliacao' + (rels.some(r => r.tipo === 'completo') ? ' (inclusive o completo)' : '') + '</div>' : '') +
+        (devs.length ? '<div style="font-size:12.5px">' + devs.length + ' devolutiva(s)</div>' : '') + '</div>' : '') +
+      (!peis.length && !rels.length && !devs.length ? '<p class="sub">Nada mais esta ligado a esta(s) avaliacao(oes).</p>' : '') +
+      '<div class="mensagem-erro" id="ap-erro"></div>' +
+      '<div class="barra-acoes"><button class="btn btn-fantasma" onclick="fecharModal()">Voltar</button>' +
+      '<button class="btn btn-primario" id="ap-ok" style="background:var(--st-bad)" onclick="MODULOS.avaliacoes.executarApagarAv()">&#10005; Apagar de vez</button></div>', false);
+  },
+  marcarEscolhaAp(inp) { inp.closest('.mv-escolha').querySelectorAll('label').forEach(l => l.classList.toggle('sel', l.contains(inp))); },
+  async executarApagarAv() {
+    const c = this._apagarCtx; if (!c) return;
+    if (!await popConfirmar('Tem certeza? Vai apagar ' + c.ids.length + ' avaliacao(oes) deste paciente. Esta acao nao tem volta.', { titulo: 'Ultima confirmacao', ok: 'Sim, apagar' })) return;
+    const erro = document.getElementById('ap-erro'); if (erro) erro.classList.remove('visivel');
+    const b = document.getElementById('ap-ok'); if (b) { b.disabled = true; b.textContent = 'Apagando...'; }
     const passo = async (tabela, q) => { const { error } = await q; if (error) throw new Error(tabela + ': ' + error.message); };
     try {
-      if (rels.length) await passo('relatorios_avaliacao', sb.from('relatorios_avaliacao').delete().in('id', rels));
-      await passo('relatorios_devolutiva', sb.from('relatorios_devolutiva').delete().in('avaliacao_id', ids));
-      for (const t of ['avaliacao_respostas', 'ss_respostas', 'portage_respostas']) await passo(t, sb.from(t).delete().in('avaliacao_id', ids));
-      const { error, count } = await sb.from('avaliacoes').delete({ count: 'exact' }).in('id', ids);
+      for (const pei of c.peis) {
+        const esc = (document.querySelector('input[name="ap-pei-' + pei.id + '"]:checked') || {}).value || 'manter';
+        if (esc === 'apagar') {
+          await passo('pei_metas', sb.from('pei_metas').delete().eq('pei_id', pei.id));
+          await passo('peis', sb.from('peis').delete().eq('id', pei.id));
+        } else {
+          await passo('peis', sb.from('peis').update({ avaliacao_id: null }).eq('id', pei.id));
+        }
+      }
+      if (c.rels.length) await passo('relatorios_avaliacao', sb.from('relatorios_avaliacao').delete().in('id', c.rels.map(r => r.id)));
+      if (c.devs.length) await passo('relatorios_devolutiva', sb.from('relatorios_devolutiva').delete().in('id', c.devs.map(d => d.id)));
+      for (const t of ['avaliacao_respostas', 'ss_respostas', 'portage_respostas']) await passo(t, sb.from(t).delete().in('avaliacao_id', c.ids));
+      const { error, count } = await sb.from('avaliacoes').delete({ count: 'exact' }).in('id', c.ids);
       if (error) throw new Error('avaliacoes: ' + error.message);
-      if (!count) { popAviso('Nada foi apagado: sem permissao no banco (policy avaliacoes_apagar_gestao).'); return; }
+      if (!count) throw new Error('nada foi apagado: sem permissao no banco (policy de avaliacoes para o seu perfil)');
+      fecharModal();
       popAviso(count + ' avaliacao(oes) apagada(s).');
     } catch (e) {
-      popAviso('Nao consegui apagar (' + e.message + '). Se falar em chave estrangeira, existe PEI ou outro registro ligado a essa avaliacao.');
+      const msg = 'Nao consegui apagar (' + e.message + ').' + (/foreign key|chave estrangeira|violates/i.test(e.message) ? ' Ainda existe outro registro ligado a essa avaliacao; me mande esta mensagem que eu localizo.' : '');
+      if (erro) { erro.textContent = msg; erro.classList.add('visivel'); } else popAviso(msg);
+      if (b) { b.disabled = false; b.textContent = '\u2715 Apagar de vez'; }
       return;
     }
     if (this._pacRelAv) MODULOS.pacientes.telaDetalhe(this._pacRelAv, 'avaliacao');
@@ -1491,7 +1530,7 @@ window.MODULOS.avaliacoes = {
     if (error) {
       if (anterior === undefined) delete this.respSS[itemId];
       else this.respSS[itemId] = anterior;
-      popAviso('Falha ao salvar: ' + error.message);
+      popAviso('Falha ao salvar: ' + error.message + (/policy|permission|row-level/i.test(error.message) ? ' (o seu perfil nao tem permissao no banco para alterar respostas desta avaliacao)' : ''));
       return;
     }
     const prog = document.getElementById('ss-progresso');

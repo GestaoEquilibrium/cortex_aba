@@ -10,6 +10,11 @@ window.MODULOS = window.MODULOS || {};
 window.MODULOS.admin = {
 
   PERFIS_EQUIPE: ['direcao', 'coordenador', 'terapeuta', 'aplicador', 'callcenter', 'recepcao', 'suporte'],
+  // coordenacao (patch 31) cria e gerencia acessos da equipe, mas nao mexe em direcao nem suporte
+  perfisPermitidos() {
+    const eu = window.CORTEX_SESSAO && window.CORTEX_SESSAO.profile;
+    return eu && eu.perfil === 'coordenador' ? this.PERFIS_EQUIPE.filter(x => !['direcao', 'suporte'].includes(x)) : this.PERFIS_EQUIPE;
+  },
 
   el: null,
   sessao: null,
@@ -125,7 +130,7 @@ window.MODULOS.admin = {
       '  <div class="campo c2"><label>Nome completo *</label><input id="nv-nome"></div>' +
       '  <div class="campo"><label>Perfil *</label><select id="nv-perfil" ' +
       'onchange="document.getElementById(\'nv-atende\').checked = MODULOS.admin.perfilAtendePadrao(this.value)">' +
-      this.PERFIS_EQUIPE.map(p =>
+      this.perfisPermitidos().map(p =>
         '<option value="' + p + '">' + (ROTULOS_PERFIL[p] || p) + '</option>').join('') +
       '  </select></div>' +
       '  <div class="campo c3"><label>E-mail (login) *</label>' +
@@ -250,6 +255,10 @@ window.MODULOS.admin = {
   // ─────────────── GERENCIAR USUARIO ───────────────
 
   modalUsuario(id) {
+    // coordenacao nao gerencia acessos de direcao nem de suporte
+    { const alvo = this.equipe.find(x => x.id === id) || this.familias.find(x => x.id === id);
+      const eu = window.CORTEX_SESSAO.profile;
+      if (alvo && eu.perfil === 'coordenador' && ['direcao', 'suporte'].includes(alvo.perfil)) { popAviso('Acessos de direcao e suporte sao gerenciados pela direcao.'); return; } }
     const p = this.equipe.find(x => x.id === id) || this.familias.find(x => x.id === id);
     if (!p) return;
     const eu = p.id === this.sessao.user.id;
@@ -265,7 +274,7 @@ window.MODULOS.admin = {
       (!ehFamilia && !eu
         ? '<div class="campo"><label>Mudar perfil</label>' +
           '<select id="ger-perfil">' +
-          this.PERFIS_EQUIPE.map(x =>
+          this.perfisPermitidos().map(x =>
             '<option value="' + x + '"' + (x === p.perfil ? ' selected' : '') + '>' +
             (ROTULOS_PERFIL[x] || x) + '</option>').join('') +
           '</select></div>'

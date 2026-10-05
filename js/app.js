@@ -60,7 +60,7 @@ const NAVEGACAO = [
       { id: 'termos',   rotulo: 'Termos digitais',    chave: 'termos' },
       { id: 'rh',       rotulo: 'RH',                 chave: 'rh' },
       { id: 'chat',       rotulo: 'Suporte',            chave: 'chat' },
-      { id: 'admin',      rotulo: 'Usuarios e Acessos', perfis: ['direcao','suporte'] },
+      { id: 'admin',      rotulo: 'Usuarios e Acessos', perfis: ['direcao','coordenador','suporte'] },
       { id: 'permissoes', rotulo: 'Permissoes',         perfis: ['suporte'] },
       { id: 'eventos',    rotulo: 'Supervisao', chave: 'eventos' },
       { id: 'guias',      rotulo: 'Guias',      chave: 'guias' },

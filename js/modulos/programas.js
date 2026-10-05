@@ -1363,7 +1363,7 @@ window.MODULOS.programas = {
           '<datalist id="fe-motivos"><option value="Faltou tempo na sessao"><option value="Crianca desregulada / sem engajamento"><option value="Material indisponivel">' +
           '<option value="Priorizado outro programa"><option value="Crianca chegou atrasada"><option value="Programa em revisao pela coordenacao"></datalist>'
         : '') +
-      '<div class="campo" style="margin-top:12px"><label>Evolucao diaria * <small class="sub">(ja veio com o resumo dos programas; complete)</small></label>' +
+      '<div class="campo" style="margin-top:12px"><label>Evolucao diaria <small class="sub">(ja veio com o resumo dos programas; comportamento e observacoes sao opcionais)</small></label>' +
       '<textarea id="fe-evolucao" rows="6">' + escaparHtml(resumo) + '</textarea></div>' +
       '<div class="campo"><label>Destinacao da crianca</label>' +
       '<input id="fe-destinacao" placeholder="Ex.: entregue a mae as 09:50, orientada sobre a atividade de casa"></div>' +
@@ -1385,7 +1385,9 @@ window.MODULOS.programas = {
       if (!ant || !ta) return;
       const marca = 'Comportamento e observacoes:';
       const antigo = String(ant.texto || '');
-      const corpoAntigo = antigo.includes(marca) ? antigo.slice(antigo.indexOf(marca) + marca.length).trim() : antigo.trim();
+      let corpoAntigo = antigo.includes(marca) ? antigo.slice(antigo.indexOf(marca) + marca.length).trim() : antigo.trim();
+      // evolucao anterior sem observacoes (so o resumo automatico dos programas): nada a trazer de volta
+      if (!antigo.includes(marca) && /^(Programas aplicados:|Nenhum programa aplicado)/.test(corpoAntigo)) corpoAntigo = '';
       if (corpoAntigo && !ta.value.includes(corpoAntigo)) ta.value = ta.value.replace(/Comportamento e observacoes:\s*$/, 'Comportamento e observacoes: ' + corpoAntigo);
       const dest = document.getElementById('fe-destinacao'); if (dest && !dest.value && ant.destinacao) dest.value = ant.destinacao;
       ta.insertAdjacentHTML('beforebegin', '<div class="mensagem-erro visivel" style="background:var(--st-warn-bg); color:#92400E; border-color:#FDE68A">Esta sessao ja tinha uma evolucao' +
@@ -1413,9 +1415,10 @@ window.MODULOS.programas = {
     const botao = document.getElementById('fe-salvar');
     erro.classList.remove('visivel');
 
-    let texto = document.getElementById('fe-evolucao').value.trim();
-    if (!texto || /Comportamento e observacoes:\s*$/.test(texto)) {
-      erro.textContent = 'Complete a evolucao diaria (comportamento e observacoes) antes de concluir.';
+    // Observacoes sao opcionais: se "Comportamento e observacoes:" ficou em branco, a linha vazia nao vai para a evolucao
+    let texto = document.getElementById('fe-evolucao').value.trim().replace(/\s*Comportamento e observacoes:\s*$/, '').trim();
+    if (!texto) {
+      erro.textContent = 'A evolucao diaria esta vazia. Deixe ao menos o resumo dos programas.';
       erro.classList.add('visivel');
       return;
     }

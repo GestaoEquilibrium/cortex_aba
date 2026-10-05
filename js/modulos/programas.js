@@ -1314,6 +1314,14 @@ window.MODULOS.programas = {
 
   // ═══════════════════ FECHAMENTO ═══════════════════
 
+  // Patch 31: observacao por programa no encerramento (coluna programa_sessao_registros.observacao).
+  // Enquanto o SQL nao rodar, as leituras caem para a lista sem a coluna e nada quebra.
+  async lerRegistrosSessao(sessaoId, cols) {
+    let r = await sb.from('programa_sessao_registros').select(cols + ', observacao').eq('sessao_id', sessaoId);
+    if (r.error && /observacao/i.test(r.error.message)) r = await sb.from('programa_sessao_registros').select(cols).eq('sessao_id', sessaoId);
+    return r;
+  },
+
   telaFechamento() {
     const f = this._folha;
     const linhas = f.programas.map(pp => {
@@ -1335,13 +1343,14 @@ window.MODULOS.programas = {
         ? '<p class="sub" style="margin-bottom:10px">Resumo por programa. Se algum atingiu o criterio de avanco, ' +
           'marque para promover a Dominado (decisao da coordenacao - nada vem pre-marcado).</p>' +
           linhas.map(l =>
-            '<div class="linha-doc">' +
-            '<div><b>' + escaparHtml(l.pp.programas.nome) + '</b>' +
+            '<div class="linha-doc" style="align-items:flex-start">' +
+            '<div style="flex:1; min-width:0"><b>' + escaparHtml(l.pp.programas.nome) + '</b>' +
             '<small>' + l.preenchidas + ' de ' + l.total + ' tentativas' +
             (f.tentPrevistas[l.pp.id] !== l.total ? ' (programa preve ' + f.tentPrevistas[l.pp.id] + ')' : '') + ' &middot; ' +
             l.corretos + ' corretos &middot; <b>' + l.pct + '% de independencia</b>' +
             (l.pp.programas.criterio_avanco ? ' &middot; criterio: ' + escaparHtml(l.pp.programas.criterio_avanco) : '') +
-            '</small></div>' +
+            '</small>' +
+            '<input class="fe-obs" data-pp="' + l.pp.id + '" placeholder="Observacao deste programa (opcional): como a crianca respondeu, ajuda usada, o que ajustar..." style="margin-top:6px; width:100%; font-size:12.5px"></div>' +
             '<label class="check"><input type="checkbox" class="promover" value="' + l.pp.id + '"> Dominado</label>' +
             '</div>').join('')
         : '<p class="sub">Nenhuma tentativa registrada nesta sessao.</p>') +
@@ -1364,6 +1373,11 @@ window.MODULOS.programas = {
       '  <button class="btn btn-fantasma" onclick="fecharModal()">Voltar a ficha</button>' +
       '  <button class="btn btn-primario" id="fe-salvar" onclick="MODULOS.programas.encerrarSessao()">Concluir sessao</button>' +
       '</div>', true);
+    // observacoes por programa ja gravadas (sessao reaberta) voltam para os campos
+    (async () => {
+      const { data: regs } = await this.lerRegistrosSessao(f.sessao.id, 'paciente_programa_id');
+      (regs || []).forEach(r => { const i = document.querySelector('.fe-obs[data-pp="' + r.paciente_programa_id + '"]'); if (i && r.observacao && !i.value) i.value = r.observacao; });
+    })();
     // sessao que ja tem evolucao (encerrada antes e reaberta): traz o texto anterior para nao se perder
     (async () => {
       const { data: ant } = await sb.from('evolucoes').select('texto, destinacao, aplicador:profiles!evolucoes_aplicador_id_fkey(nome)').eq('sessao_id', f.sessao.id).maybeSingle();
@@ -1424,12 +1438,15 @@ window.MODULOS.programas = {
 
       // Retrato da sessao por programa (aplicados e nao aplicados com motivo)
       const motivosTxt = [];
+      const obs = {};
+      document.querySelectorAll('.fe-obs').forEach(i => { obs[i.dataset.pp] = i.value.trim(); });
+      let colObs = true;   // vira false se o banco ainda nao tiver a coluna observacao
       for (const pp of f.programas) {
         const grade = f.fichas[pp.id];
         const c = this.contarFicha(grade);
         const naoAplicado = !c.preenchidas;
         if (naoAplicado) motivosTxt.push(pp.programas.nome + ': ' + (motivos[pp.id] || '-'));
-        const { error: eR } = await sb.from('programa_sessao_registros').upsert({
+        const reg = {
           sessao_id: f.sessao.id,
           paciente_programa_id: pp.id,
           tentativas: c.preenchidas,
@@ -1441,9 +1458,13 @@ window.MODULOS.programas = {
           pct_acertos: c.pct,
           nao_aplicado: naoAplicado,
           motivo_nao_aplicado: naoAplicado ? (motivos[pp.id] || null) : null
-        }, { onConflict: 'sessao_id,paciente_programa_id' });
+        };
+        if (colObs) reg.observacao = obs[pp.id] || null;
+        let { error: eR } = await sb.from('programa_sessao_registros').upsert(reg, { onConflict: 'sessao_id,paciente_programa_id' });
+        if (eR && colObs && /observacao/i.test(eR.message)) { colObs = false; delete reg.observacao; ({ error: eR } = await sb.from('programa_sessao_registros').upsert(reg, { onConflict: 'sessao_id,paciente_programa_id' })); }
         if (eR) throw new Error(eR.message);
       }
+      if (!colObs && Object.values(obs).some(Boolean)) popAviso('As observacoes por programa nao foram gravadas: o banco ainda nao tem a coluna (rode o SQL do patch).');
       if (motivosTxt.length) texto += '\n\nMotivo dos nao aplicados: ' + motivosTxt.join('; ') + '.';
 
       const promover = Array.from(document.querySelectorAll('.promover:checked')).map(cb => cb.value);
@@ -1481,7 +1502,7 @@ window.MODULOS.programas = {
           { const { error: _e } = await sb.from('sessoes').update({ status: 'concluida' }).in('id', ids); if (_e) popAviso('Nao foi possivel gravar (sessoes): ' + _e.message); }
           // copia dos programas (tentativas + resumo) para cada sessao marcada
           const { data: tent } = await sb.from('registros_tentativas').select('paciente_programa_id, ordem, resposta, acertou, estimulo_id, reforcador').eq('sessao_id', f.sessao.id);
-          const { data: res } = await sb.from('programa_sessao_registros').select('paciente_programa_id, tentativas, tentativas_sessao, tentativas_previstas, corretos, pct_corretos, acertos, pct_acertos, nao_aplicado, motivo_nao_aplicado').eq('sessao_id', f.sessao.id);
+          const { data: res } = await this.lerRegistrosSessao(f.sessao.id, 'paciente_programa_id, tentativas, tentativas_sessao, tentativas_previstas, corretos, pct_corretos, acertos, pct_acertos, nao_aplicado, motivo_nao_aplicado');
           for (const sid of ids) {
             await sb.from('registros_tentativas').delete().eq('sessao_id', sid);
             if (tent && tent.length) await sb.from('registros_tentativas').insert(tent.map(t => ({ ...t, sessao_id: sid, registrado_por: window.CORTEX_SESSAO.user.id })));
@@ -1583,9 +1604,7 @@ window.MODULOS.programas = {
       sb.from('sessoes')
         .select('id, data, hora_inicio, duracao_min, pacientes(nome), profissional:profiles!sessoes_aplicador_id_fkey(nome)')
         .eq('id', sessaoId).single(),
-      sb.from('programa_sessao_registros')
-        .select('paciente_programa_id, tentativas, corretos, pct_corretos, acertos, pct_acertos, paciente_programas(programas(nome, area, tentativas_padrao))')
-        .eq('sessao_id', sessaoId),
+      this.lerRegistrosSessao(sessaoId, 'paciente_programa_id, tentativas, corretos, pct_corretos, acertos, pct_acertos, paciente_programas(programas(nome, area, tentativas_padrao))'),
       sb.from('registros_tentativas')
         .select('paciente_programa_id, ordem, resposta, acertou, reforcador, estimulos(nome)')
         .eq('sessao_id', sessaoId).order('ordem'),
@@ -1633,6 +1652,7 @@ window.MODULOS.programas = {
           return '<div class="rel-alvo"><div class="rel-alvo-topo"><b>' + escaparHtml(prog ? prog.nome : '-') + '</b>' +
             '<span class="selo selo-neutro">' + fx.corretos + '/' +
             fx.tentativas + ' corretos &middot; ' + fx.pct_corretos + '%</span></div>' +
+            (fx.observacao ? '<div class="rel-obs">&#9998; ' + escaparHtml(fx.observacao) + '</div>' : '') +
             '<div class="rel-tentativas">' +
             lista.map(t => {
               const sig = t.resposta === 'I' ? 'C' : t.resposta;
@@ -1723,12 +1743,14 @@ window.MODULOS.programas = {
     if (ids.length) {
       const [rE, rR] = await Promise.all([
         sb.from('evolucoes').select('id, sessao_id, texto, destinacao, criado_em, espelho_de, aplicador_id, aplicador:profiles!evolucoes_aplicador_id_fkey(nome)').in('sessao_id', ids),
-        sb.from('programa_sessao_registros').select('sessao_id, nao_aplicado, paciente_programas(programas(nome))').in('sessao_id', ids)
+        sb.from('programa_sessao_registros').select('sessao_id, nao_aplicado, observacao, paciente_programas(programas(nome))').in('sessao_id', ids)
       ]);
-      evs = rE.data || []; regs = rR.data || [];
+      evs = rE.data || [];
+      regs = rR.data || [];
+      if (rR.error && /observacao/i.test(rR.error.message)) { const r2 = await sb.from('programa_sessao_registros').select('sessao_id, nao_aplicado, paciente_programas(programas(nome))').in('sessao_id', ids); regs = r2.data || []; }
     }
     const evPor = {}; evs.forEach(e => { evPor[e.sessao_id] = e; });
-    const progPor = {}; regs.forEach(r => { (progPor[r.sessao_id] = progPor[r.sessao_id] || []).push({ nome: (r.paciente_programas && r.paciente_programas.programas && r.paciente_programas.programas.nome) || 'programa', na: !!r.nao_aplicado }); });
+    const progPor = {}; regs.forEach(r => { (progPor[r.sessao_id] = progPor[r.sessao_id] || []).push({ nome: (r.paciente_programas && r.paciente_programas.programas && r.paciente_programas.programas.nome) || 'programa', na: !!r.nao_aplicado, obs: r.observacao || '' }); });
     const meses = [...new Set((rMeses.data || []).map(x => x.data.slice(0, 7)).concat([hojeLocal().slice(0, 7), mes]))].sort().reverse();
     const apls = {};
     sessoes.forEach(x => { if (x.aplicador_id) apls[x.aplicador_id] = x.profissional ? x.profissional.nome : '-'; });
@@ -1797,7 +1819,7 @@ window.MODULOS.programas = {
   evoNomePac() { return escaparHtml(((MODULOS.pacientes && MODULOS.pacientes.paciente && MODULOS.pacientes.paciente.nome) || '').split(' ')[0]); },
   evoChips(s) {
     const E = this._evo; const ev = E.evPor[s.id]; const progs = E.progPor[s.id] || [];
-    return (progs.length ? '<div class="evo-progs">' + progs.map(p => '<span class="selo ' + (p.na ? 'selo-warn' : 'selo-neutro') + '">' + escaparHtml(p.nome) + (p.na ? ' &middot; nao aplicado' : '') + '</span>').join('') + '</div>' : '') +
+    return (progs.length ? '<div class="evo-progs">' + progs.map(p => '<span class="selo ' + (p.na ? 'selo-warn' : 'selo-neutro') + '"' + (p.obs ? ' title="' + escaparHtml(p.obs) + '"' : '') + '>' + escaparHtml(p.nome) + (p.na ? ' &middot; nao aplicado' : '') + (p.obs ? ' &#9998;' : '') + '</span>').join('') + '</div>' : '') +
       (ev ? (ev.destinacao ? '<div class="evo-dest">&#127968; Destinacao: ' + escaparHtml(ev.destinacao) + '</div>'
                            : (s.status === 'falta' ? '' : '<div class="evo-dest evo-dest-vazia">Destinacao nao informada</div>')) : '');
   },
@@ -2152,9 +2174,7 @@ window.MODULOS.programas = {
         .select('id, data, hora_inicio, duracao_min, paciente_id, pacientes(nome, data_nascimento, nivel), ' +
                 'profissional:profiles!sessoes_aplicador_id_fkey(nome)')
         .eq('id', sessaoId).single(),
-      sb.from('programa_sessao_registros')
-        .select('paciente_programa_id, corretos, tentativas, tentativas_sessao, tentativas_previstas, pct_corretos, acertos, pct_acertos, nao_aplicado, motivo_nao_aplicado, paciente_programas(programas(nome, area, tentativas_padrao, niveis))')
-        .eq('sessao_id', sessaoId),
+      this.lerRegistrosSessao(sessaoId, 'paciente_programa_id, corretos, tentativas, tentativas_sessao, tentativas_previstas, pct_corretos, acertos, pct_acertos, nao_aplicado, motivo_nao_aplicado, paciente_programas(programas(nome, area, tentativas_padrao, niveis))'),
       sb.from('evolucoes').select('texto, destinacao, aplicador:profiles!evolucoes_aplicador_id_fkey(nome)')
         .eq('sessao_id', sessaoId),
       sb.from('comportamento_registros')
@@ -2243,7 +2263,8 @@ window.MODULOS.programas = {
           return '<tr>' +
             '<td style="padding:7px 11px; background:var(--eq-fundo); border-radius:9px 0 0 9px; font-weight:700; font-size:12px">' +
             escaparHtml(prog ? prog.nome : '-') +
-            ' <span style="color:var(--eq-cinza); font-weight:600">&middot; ' + escaparHtml(prog ? prog.area : '') + '</span></td>' +
+            ' <span style="color:var(--eq-cinza); font-weight:600">&middot; ' + escaparHtml(prog ? prog.area : '') + '</span>' +
+            (fx.observacao ? '<div style="font-weight:500; font-size:11.5px; color:var(--eq-cinza); margin-top:3px; text-align:justify">' + escaparHtml(fx.observacao) + '</div>' : '') + '</td>' +
             '<td style="padding:7px 11px; background:var(--eq-fundo); border-radius:0 9px 9px 0; text-align:right; white-space:nowrap; font-size:12px">' +
             '<b style="color:var(--eq-azul)">' + fx.pct_corretos + '%</b> de corretos (' + fx.corretos + '/' + total + notaPrev + ')' +
             '<span style="display:inline-block; vertical-align:middle; width:110px; height:7px; margin-left:8px; ' +

@@ -1915,11 +1915,17 @@ window.MODULOS.programas = {
     const b = document.getElementById('rp-ok'); b.disabled = true; b.textContent = 'Buscando...';
     const fimD = new Date(ate + '-01T12:00:00'); fimD.setMonth(fimD.getMonth() + 1); fimD.setDate(0);
     const fim = fimD.getFullYear() + '-' + String(fimD.getMonth() + 1).padStart(2, '0') + '-' + String(fimD.getDate()).padStart(2, '0');
-    let q = sb.from('sessoes').select('id, status, evolucoes(id)').eq('paciente_id', E.pacienteId).gte('data', de + '-01').lte('data', fim).neq('status', 'cancelada');
+    let q = sb.from('sessoes').select('id, status').eq('paciente_id', E.pacienteId).gte('data', de + '-01').lte('data', fim).neq('status', 'cancelada');
     if (apl) q = q.eq('aplicador_id', apl);
     const { data, error } = await q;
     if (error) { erro.textContent = error.message; erro.classList.add('visivel'); b.disabled = false; b.textContent = 'Gerar relatorio'; return; }
-    const ids = (data || []).filter(x => (x.evolucoes && x.evolucoes.length) || (comFaltas && x.status === 'falta')).map(x => x.id);
+    // evolucoes em consulta separada (evolucoes tem dois vinculos com sessoes: sessao_id e espelho_de)
+    const comEvo = new Set();
+    if ((data || []).length) {
+      const { data: evs } = await sb.from('evolucoes').select('sessao_id').in('sessao_id', data.map(x => x.id));
+      (evs || []).forEach(e => comEvo.add(e.sessao_id));
+    }
+    const ids = (data || []).filter(x => comEvo.has(x.id) || (comFaltas && x.status === 'falta')).map(x => x.id);
     if (!ids.length) { erro.textContent = 'Nenhuma evolucao nesse periodo' + (apl ? ' para essa aplicadora' : '') + '.'; erro.classList.add('visivel'); b.disabled = false; b.textContent = 'Gerar relatorio'; return; }
     fecharModal();
     this.docRelatorioRapido(ids);

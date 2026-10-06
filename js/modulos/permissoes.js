@@ -16,7 +16,6 @@ window.MODULOS.permissoes = {
     ['terapeuta', 'Terapeuta'],
     ['aplicador', 'Aplicador'],
     ['callcenter', 'Call center'],
-    ['callcenter', 'Call Center'],
     ['recepcao', 'Recepcao']
   ],
 

@@ -32,7 +32,7 @@ window.MODULOS.agenda = {
     this.sessao = sessao;
     this.dataRef = hojeLocal();
     // call center abre direto na visao por aplicador (reservas)
-    this.visao = sessao.profile.perfil === 'callcenter' ? 'equipe' : 'dia';
+    this.visao = sessao.profile.perfil === 'callcenter' ? 'equipe' : sessao.profile.perfil === 'recepcao' ? 'recepcao' : 'dia';
     await this.carregarBase();
     this.telaPrincipal();
     this.ligarTempoReal();
@@ -44,7 +44,7 @@ window.MODULOS.agenda = {
         .select('*, pacientes(id, nome, nivel), profissional:profiles!grade_horarios_aplicador_id_fkey(id, nome), salas(id, nome)')
         .eq('ativo', true).order('hora_inicio'),
       sb.from('pacientes').select('id, nome, nivel, aplicador_id').neq('status', 'encerrado').order('nome'),
-      sb.from('profiles').select('id, nome, perfil, duracao_sessao_min').eq('atende_pacientes', true).eq('ativo', true).order('nome'),
+      sb.from('profiles').select('id, nome, perfil, duracao_sessao_min, coordenador_id').eq('atende_pacientes', true).eq('ativo', true).order('nome'),
       sb.from('salas').select('*').order('nome')
     ]);
     this.grade = g.data || [];
@@ -95,10 +95,10 @@ window.MODULOS.agenda = {
       '</div>' +
       '<div class="ag-controles">' +
       '  <div class="segmento">' +
-      ['dia', 'semana', 'mes'].concat(this.podeReservar() ? ['equipe'] : []).map(v =>
+      ['dia', 'semana', 'mes'].concat(this.podeReservar() ? ['equipe'] : []).concat(this.podeRecepcao() ? ['recepcao'] : []).map(v =>
         '<button type="button" class="seg' + (this.visao === v ? ' ativo' : '') + '" data-visao="' + v + '" ' +
         'onclick="MODULOS.agenda.mudarVisao(\'' + v + '\')">' +
-        ({ dia: 'Dia', semana: 'Semana', mes: 'Mes', equipe: 'Por aplicador' })[v] + '</button>').join('') +
+        ({ dia: 'Dia', semana: 'Semana', mes: 'Mes', equipe: 'Por aplicador', recepcao: 'Recepcao' })[v] + '</button>').join('') +
       '  </div>' +
       '  <div class="ag-nav">' +
       '    <button class="botao-icone tema" onclick="MODULOS.agenda.navegar(-1)">&lsaquo;</button>' +
@@ -225,7 +225,7 @@ window.MODULOS.agenda = {
 
   navegar(delta) {
     const d = new Date(this.dataRef + 'T12:00:00');
-    if (this.visao === 'dia' || this.visao === 'equipe') d.setDate(d.getDate() + delta);
+    if (this.visao === 'dia' || this.visao === 'equipe' || this.visao === 'recepcao') d.setDate(d.getDate() + delta);
     else if (this.visao === 'semana') d.setDate(d.getDate() + delta * 7);
     else d.setMonth(d.getMonth() + delta);
     this.dataRef = d.toISOString().slice(0, 10);
@@ -238,10 +238,204 @@ window.MODULOS.agenda = {
   },
 
   desenhar() {
+    document.querySelector('.ag-nav')?.classList.remove('escondido');
+    if (this.visao === 'recepcao') { this.desenharRecepcao(); return; }
     if (this.visao === 'equipe') { this.desenharEquipe(); return; }
     if (this.visao === 'dia') this.desenharDia();
     else if (this.visao === 'semana') this.desenharSemana();
     else this.desenharMes();
+  },
+
+  // \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 VISAO RECEPCAO (patch 31 v32) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  // Outra forma de ver o mesmo dia, no molde da agenda do Med Center: filtros a esquerda (data e
+  // profissionais, por equipe), linha do tempo a direita com as sessoes em barras coloridas por
+  // situacao e o marcador de agora. Nada muda nas outras visoes; recepcao abre nela por padrao.
+  podeRecepcao() { return ['recepcao', 'callcenter', 'direcao', 'suporte'].includes(this.sessao.profile.perfil); },
+  rcModo() { try { return localStorage.getItem('cortex_rc_modo') || 'dia'; } catch (e) { return 'dia'; } },
+  mudarRcModo(m) {
+    if (m === 'semana' || m === 'mes') { this.mudarVisao(m); return; }
+    try { localStorage.setItem('cortex_rc_modo', m); } catch (e) {}
+    this.desenharRecepcao();
+  },
+  // selecao de profissionais: null = todos; guardada no navegador
+  rcSel() {
+    if (this._rcSel === undefined) {
+      try { const v = localStorage.getItem('cortex_rc_sel'); this._rcSel = v ? new Set(JSON.parse(v)) : null; } catch (e) { this._rcSel = null; }
+    }
+    return this._rcSel;
+  },
+  rcGuardarSel(sel) {
+    this._rcSel = sel;
+    try { if (sel) localStorage.setItem('cortex_rc_sel', JSON.stringify(Array.from(sel))); else localStorage.removeItem('cortex_rc_sel'); } catch (e) {}
+    this.desenharRecepcao();
+  },
+  rcTodos(marcar) { this.rcGuardarSel(marcar ? null : new Set()); },
+  rcMarcar(id, marcar) {
+    const sel = this.rcSel() ? new Set(this.rcSel()) : new Set((this.equipe || []).map(p => p.id));
+    if (marcar) sel.add(id); else sel.delete(id);
+    this.rcGuardarSel(sel.size === (this.equipe || []).length ? null : sel);
+  },
+  rcGrupo(coordId, marcar) {
+    const sel = this.rcSel() ? new Set(this.rcSel()) : new Set((this.equipe || []).map(p => p.id));
+    (this.equipe || []).filter(p => String(p.coordenador_id || '') === String(coordId || '')).forEach(p => { if (marcar) sel.add(p.id); else sel.delete(p.id); });
+    this.rcGuardarSel(sel.size === (this.equipe || []).length ? null : sel);
+  },
+  rcAbrirGrupo(coordId) {
+    this._rcAberto = this._rcAberto || new Set();
+    if (this._rcAberto.has(coordId)) this._rcAberto.delete(coordId); else this._rcAberto.add(coordId);
+    this.desenharRecepcao();
+  },
+  // "Visualizar agenda por profissional": escolher um desmarca os outros
+  rcEscolher(nome) {
+    const p = (this.equipe || []).find(x => x.nome.toLowerCase() === String(nome || '').trim().toLowerCase());
+    if (!p) return;
+    this._rcAberto = new Set([String(p.coordenador_id || '')]);
+    this.rcGuardarSel(new Set([p.id]));
+  },
+  rcData(v) { if (v) { this.dataRef = v; this.desenharRecepcao(); } },
+
+  RC_COR: { agendada: ['#8FBF9F', 'Agendada'], checkin: ['#F5B700', 'Chegou'], em_atendimento: ['#2F6FED', 'Em atendimento'], concluida: ['#35C759', 'Concluida'], falta: ['#EF4444', 'Falta'], cancelada: ['#CBD5E1', 'Cancelada'] },
+
+  async desenharRecepcao() {
+    const d = new Date(this.dataRef + 'T12:00:00');
+    const sub = document.getElementById('ag-sub');
+    if (sub) sub.textContent = this.DIAS[d.getDay() === 0 ? 7 : d.getDay()] + ', ' + d.toLocaleDateString('pt-BR');
+    document.querySelector('.ag-nav')?.classList.add('escondido');
+    await sb.rpc('gerar_sessoes_do_dia', { p_data: this.dataRef });
+    let { data: sessoes, error } = await sb.from('sessoes')
+      .select('*, pacientes(nome), profissional:profiles!sessoes_aplicador_id_fkey(nome), salas(nome)')
+      .eq('data', this.dataRef).order('hora_inicio');
+    sessoes = await this.soMinhas(sessoes);
+    this._sessoesDia = sessoes || [];
+    if (!this._coords) {
+      const { data: cs } = await sb.from('profiles').select('id, nome').eq('perfil', 'coordenador').eq('ativo', true).order('nome');
+      this._coords = cs || [];
+    }
+    const alvo = document.getElementById('ag-corpo');
+    if (!alvo) return;
+    if (error) { alvo.innerHTML = '<div class="cartao"><div class="mensagem-erro visivel">' + escaparHtml(error.message) + '</div></div>'; return; }
+    alvo.innerHTML = '<div class="rc-wrap">' + this.htmlRcFiltros() + this.htmlRcPainel(sessoes || []) + '</div>';
+    this.rcLigarAgora();
+  },
+
+  htmlRcFiltros() {
+    const sel = this.rcSel();
+    const marcado = id => !sel || sel.has(id);
+    const equipe = (this.equipe || []).slice().sort((a, b) => a.nome.localeCompare(b.nome));
+    const grupos = {};
+    equipe.forEach(p => { const k = String(p.coordenador_id || ''); (grupos[k] = grupos[k] || []).push(p); });
+    const nomeGrupo = k => { if (!k) return 'Sem equipe'; const c = (this._coords || []).find(x => x.id === k); return c ? 'Equipe ' + c.nome.split(' ')[0] : 'Equipe'; };
+    const chaves = Object.keys(grupos).sort((a, b) => (a === '') - (b === '') || nomeGrupo(a).localeCompare(nomeGrupo(b)));
+    const aberto = this._rcAberto || new Set();
+    const hoje = hojeLocal();
+    return '<aside class="cartao rc-filtros">' +
+      '<h3>Filtros &amp; Visualizacao</h3>' +
+      '<button class="btn btn-fantasma rc-hoje' + (this.dataRef === hoje ? ' ativo' : '') + '" onclick="MODULOS.agenda.rcData(\'' + hoje + '\')">&#128197; Ver agenda de hoje</button>' +
+      '<div class="campo" style="margin:12px 0 10px"><label>Data</label><input type="date" value="' + this.dataRef + '" onchange="MODULOS.agenda.rcData(this.value)"></div>' +
+      '<div class="rc-sec"><span>&#128101; Profissionais</span></div>' +
+      '<label class="rc-rotulo">Visualizar agenda por profissional</label>' +
+      '<input class="rc-busca" list="rc-profs" placeholder="Digite o nome..." onchange="MODULOS.agenda.rcEscolher(this.value); this.value = \'\'">' +
+      '<datalist id="rc-profs">' + equipe.map(p => '<option value="' + escaparHtml(p.nome) + '">').join('') + '</datalist>' +
+      '<p class="sub rc-dica">Ao selecionar, todos os outros serao desmarcados.</p>' +
+      '<label class="rc-todos"><input type="checkbox"' + (!sel ? ' checked' : '') + ' onchange="MODULOS.agenda.rcTodos(this.checked)"> <b>Todos os profissionais</b></label>' +
+      chaves.map(k => {
+        const lista = grupos[k]; const n = lista.filter(p => marcado(p.id)).length;
+        return '<div class="rc-grupo' + (aberto.has(k) ? ' aberto' : '') + '">' +
+          '<div class="rc-grupo-cab" onclick="MODULOS.agenda.rcAbrirGrupo(\'' + k + '\')">' +
+          '<input type="checkbox" title="Marcar/desmarcar a equipe inteira"' + (n === lista.length ? ' checked' : '') + ' onclick="event.stopPropagation()" onchange="MODULOS.agenda.rcGrupo(\'' + k + '\', this.checked)">' +
+          '<b>' + escaparHtml(nomeGrupo(k)) + '</b><span class="rc-conta">' + n + '/' + lista.length + '</span><span class="rc-seta">&#8964;</span></div>' +
+          (aberto.has(k) ? '<div class="rc-grupo-itens">' + lista.map(p =>
+            '<label class="rc-prof"><input type="checkbox"' + (marcado(p.id) ? ' checked' : '') + ' onchange="MODULOS.agenda.rcMarcar(\'' + p.id + '\', this.checked)"> ' + escaparHtml(p.nome) + '</label>').join('') + '</div>' : '') +
+          '</div>';
+      }).join('') +
+      '</aside>';
+  },
+
+  // posiciona barras que se sobrepoem lado a lado (colunas por bloco de sobreposicao)
+  rcColunas(lista) {
+    const ini = s => { const [h, m] = String(s.hora_inicio).slice(0, 5).split(':').map(Number); return h * 60 + m; };
+    const fim = s => ini(s) + (s.duracao_min || this.durDe(s.aplicador_id));
+    const ord = lista.slice().sort((a, b) => ini(a) - ini(b) || fim(a) - fim(b));
+    const out = []; let bloco = [], fimBloco = -1;
+    const fecha = () => {
+      const cols = [];
+      bloco.forEach(s => { let c = cols.findIndex(f => f <= ini(s)); if (c < 0) { c = cols.length; cols.push(0); } cols[c] = fim(s); s._col = c; });
+      bloco.forEach(s => { s._ncol = cols.length; out.push(s); });
+      bloco = []; fimBloco = -1;
+    };
+    ord.forEach(s => { if (bloco.length && ini(s) >= fimBloco) fecha(); bloco.push(s); fimBloco = Math.max(fimBloco, fim(s)); });
+    if (bloco.length) fecha();
+    return out;
+  },
+
+  htmlRcPainel(sessoes) {
+    const sel = this.rcSel();
+    const lista = sessoes.filter(s => !sel || sel.has(s.aplicador_id));
+    const d = new Date(this.dataRef + 'T12:00:00');
+    const titulo = d.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' });
+    const diaSemana = d.toLocaleDateString('pt-BR', { weekday: 'long' });
+    const modo = this.rcModo();
+    const ini = s => { const [h, m] = String(s.hora_inicio).slice(0, 5).split(':').map(Number); return h * 60 + m; };
+    const dur = s => s.duracao_min || this.durDe(s.aplicador_id);
+    const hojeMesmo = this.dataRef === hojeLocal();
+    const PX = 0.8;   // pixels por minuto (45 min = 36 px)
+    let h0 = 7 * 60, h1 = 18 * 60;
+    lista.forEach(s => { h0 = Math.min(h0, Math.floor(ini(s) / 60) * 60); h1 = Math.max(h1, Math.ceil((ini(s) + dur(s)) / 60) * 60); });
+    if (hojeMesmo) { const ag = new Date(); const m = ag.getHours() * 60 + ag.getMinutes(); if (m >= h0 - 60 && m <= h1 + 60) { h0 = Math.min(h0, Math.floor(m / 60) * 60); h1 = Math.max(h1, Math.ceil(m / 60) * 60); } }
+    const alt = (h1 - h0) * PX;
+    const nomeProf = s => s.profissional ? s.profissional.nome.split(' ').slice(0, 2).join(' ') : 'Sem aplicador';
+    let corpo;
+    if (modo === 'lista') {
+      corpo = !lista.length ? '<div class="vazio" style="padding:30px"><div class="simbolo-vazio">&#128197;</div><strong>Sem sessoes neste dia</strong>para os profissionais marcados.</div>' :
+        '<table class="tabela rc-lista"><thead><tr><th>Horario</th><th>Paciente</th><th>Aplicador(a)</th><th>Sala</th><th>Situacao</th></tr></thead><tbody>' +
+        lista.slice().sort((a, b) => ini(a) - ini(b)).map(s => '<tr class="clicavel" onclick="MODULOS.agenda.abrirSessao(\'' + s.id + '\')">' +
+          '<td><b>' + this.hm(s.hora_inicio) + '</b> &ndash; ' + this.somaMin(this.hm(s.hora_inicio), dur(s)) + '</td>' +
+          '<td><b>' + escaparHtml(s.pacientes ? s.pacientes.nome : '?') + '</b>' + (!s.grade_id ? ' <span class="selo selo-neutro">encaixe</span>' : '') + '</td>' +
+          '<td>' + escaparHtml(nomeProf(s)) + '</td><td>' + escaparHtml(s.salas ? s.salas.nome : '-') + '</td><td>' + this.selosSessao(s) + '</td></tr>').join('') + '</tbody></table>';
+    } else {
+      const linhas = []; for (let m = h0; m < h1; m += 15) linhas.push(m);
+      const barras = this.rcColunas(lista).map(s => {
+        const cor = (this.RC_COR[s.status] || ['#94A3B8', s.status])[0];
+        const top = (ini(s) - h0) * PX, h = Math.max(18, dur(s) * PX - 2);
+        const larg = 100 / (s._ncol || 1), esq = (s._col || 0) * larg;
+        return '<div class="rc-barra' + (s.status === 'cancelada' ? ' cancelada' : '') + '" style="top:' + top + 'px; height:' + h + 'px; left:calc(' + esq + '% + 2px); width:calc(' + larg + '% - 4px); background:' + cor + '" ' +
+          'title="' + escaparHtml((s.pacientes ? s.pacientes.nome : '') + ' \u00b7 ' + nomeProf(s) + ' \u00b7 ' + (this.RC_COR[s.status] || [0, s.status])[1]) + '" onclick="MODULOS.agenda.abrirSessao(\'' + s.id + '\')">' +
+          '<span class="rc-h">' + this.hm(s.hora_inicio) + ' - ' + this.somaMin(this.hm(s.hora_inicio), dur(s)) + '</span> - <b>' + escaparHtml(s.pacientes ? s.pacientes.nome : '?') + '</b>' +
+          ' <span class="rc-d">- ' + escaparHtml(nomeProf(s)) + ' - ' + (s.grade_id ? 'Sess\u00e3o' : 'Encaixe') + (s.salas ? ' \u00b7 ' + escaparHtml(s.salas.nome) : '') + '</span></div>';
+      }).join('');
+      corpo = '<div class="rc-grade" style="height:' + alt + 'px">' +
+        '<div class="rc-horas">' + linhas.filter(m => m % 60 === 0).map(m => '<span style="top:' + ((m - h0) * PX) + 'px">' + String(m / 60).padStart(2, '0') + ':00</span>').join('') + '</div>' +
+        '<div class="rc-faixas">' + linhas.map(m => '<div class="rc-linha' + (m % 60 === 0 ? ' hora' : '') + '" style="top:' + ((m - h0) * PX) + 'px; height:' + (15 * PX) + 'px"></div>').join('') +
+        barras + (hojeMesmo ? '<div class="rc-agora" id="rc-agora" data-h0="' + h0 + '" data-px="' + PX + '"></div>' : '') + '</div></div>' +
+        (!lista.length ? '<p class="sub" style="text-align:center; margin-top:-' + Math.round(alt / 2) + 'px; position:relative">Sem sessoes neste dia para os profissionais marcados.</p>' : '');
+    }
+    return '<section class="cartao rc-painel">' +
+      '<div class="rc-topo">' +
+      '  <div class="rc-nav"><button onclick="MODULOS.agenda.navegar(-1)" title="Dia anterior">&lsaquo;</button><button onclick="MODULOS.agenda.navegar(1)" title="Proximo dia">&rsaquo;</button></div>' +
+      '  <h3>' + escaparHtml(titulo) + '</h3>' +
+      '  <div class="rc-seg">' + [['dia', 'Dia'], ['semana', 'Semana'], ['mes', 'M\u00eas'], ['lista', 'Lista']].map(x =>
+        '<button type="button" class="' + (modo === x[0] ? 'ativo' : '') + '" onclick="MODULOS.agenda.mudarRcModo(\'' + x[0] + '\')">' + x[1] + '</button>').join('') + '</div></div>' +
+      '<div class="rc-dia">' + diaSemana + '</div>' + corpo +
+      '<div class="rc-legenda">' + Object.keys(this.RC_COR).map(k => '<span><i style="background:' + this.RC_COR[k][0] + '"></i>' + this.RC_COR[k][1] + '</span>').join('') +
+      '<span class="sub" style="margin-left:auto">' + lista.filter(s => s.status !== 'cancelada').length + ' sess' + (lista.filter(s => s.status !== 'cancelada').length === 1 ? 'ao' : 'oes') + '</span></div>' +
+      '</section>';
+  },
+
+  // marcador vermelho de "agora": posicao recalculada a cada minuto enquanto a visao estiver na tela
+  rcLigarAgora() {
+    clearInterval(this._rcTimer);
+    const pos = () => {
+      const el = document.getElementById('rc-agora'); if (!el) { clearInterval(this._rcTimer); return; }
+      const ag = new Date(); const m = ag.getHours() * 60 + ag.getMinutes();
+      const h0 = Number(el.dataset.h0), px = Number(el.dataset.px);
+      const top = (m - h0) * px;
+      const alt = el.parentElement ? el.parentElement.offsetHeight : 0;
+      el.style.display = top < 0 || top > alt ? 'none' : 'block';
+      el.style.top = top + 'px';
+      el.setAttribute('data-hora', String(ag.getHours()).padStart(2, '0') + ':' + String(ag.getMinutes()).padStart(2, '0'));
+    };
+    pos();
+    this._rcTimer = setInterval(pos, 60000);
   },
 
   // ───────────────────── VISAO POR APLICADOR (call center: reservas de horario) ─────────────────────

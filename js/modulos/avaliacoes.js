@@ -142,6 +142,7 @@ window.MODULOS.avaliacoes = {
       '  <button class="btn btn-fantasma" onclick="window.print()">&#128424; Imprimir quadro</button>' +
       '  <button class="btn-chip" onclick="MODULOS.avaliacoes.verCatalogo(\'qadi\')">Itens QADI-R</button>' +
       '  <button class="btn-chip" onclick="MODULOS.avaliacoes.verCatalogo(\'ss\')">Itens Socially Savvy</button>' +
+      (MODULOS.laudo_avaliacao && MODULOS.laudo_avaliacao.podeRegerarTodos() ? '  <button class="btn-chip" title="Reescreve os textos automaticos de todos os relatorios de avaliacao com a redacao atual do sistema" onclick="MODULOS.laudo_avaliacao.regerarTodos()">&#8635; Regerar textos dos relatorios</button>' : '') +
       '</div>' +
       '<div id="av-lista"><div class="cartao"><p class="sub">Carregando...</p></div></div>';
 

@@ -736,7 +736,7 @@ window.MODULOS.laudo_avaliacao = {
       '  <div style="display:flex; gap:8px; flex-wrap:wrap">' +
       (editavel ? '<button class="btn btn-fantasma" title="Descarta o que esta escrito na demanda, analise, comparativo, areas e conclusao e escreve de novo a partir dos dados" onclick="MODULOS.laudo_avaliacao.regerarTextos()">&#8635; Regerar textos</button>' : '') +
       (editavel ? '<button class="btn btn-primario" onclick="MODULOS.laudo_avaliacao.gerarTravar()">&#128274; Gerar e travar</button>' : '') +
-      (travado && typeof podeReabrirRelatorio === 'function' && podeReabrirRelatorio() ? '<button class="btn btn-fantasma" title="So coordenacao/direcao: volta o relatorio para rascunho para corrigir" onclick="MODULOS.laudo_avaliacao.reabrir()">&#128275; Reabrir para editar</button>' : '') +
+      (travado && typeof podeReabrirRelatorio === 'function' && podeReabrirRelatorio() ? '<button class="btn btn-fantasma" title="Coordenacao/direcao: libera o relatorio travado para editar de novo" onclick="MODULOS.laudo_avaliacao.reabrir()">&#128275; Liberar para editar</button>' : '') +
       '  <button class="btn btn-fantasma" onclick="MODULOS.laudo_avaliacao.doc()">&#128196; ' + (travado ? 'Documento' : 'Folha / Imprimir') + '</button>' +
       (travado ? pdfAssinadoBtn() : '') + '</div></div>' +
       '<div class="rm-split"><div class="rm-form">' +
@@ -802,9 +802,9 @@ window.MODULOS.laudo_avaliacao = {
   },
   async reabrir() {
     if (!podeReabrirRelatorio()) return;
-    if (!await popConfirmar('Reabrir este relatorio de avaliacao para edicao?\n\nEle volta a rascunho. O que ja foi enviado ao portal ou assinado continua como estava; depois de corrigir, gere e trave de novo (e reenvie/reassine se precisar).', { titulo: 'Reabrir relatorio', ok: 'Reabrir' })) return;
+    if (!await popConfirmar('Liberar este relatorio de avaliacao para edicao?\n\nEle volta a rascunho. O que ja foi enviado ao portal ou assinado continua como estava; depois de corrigir, gere e trave de novo (e reenvie/reassine se precisar).', { titulo: 'Liberar para editar', ok: 'Liberar' })) return;
     const { data, error } = await sb.rpc('fn_reabrir_relatorio', { p_tabela: 'relatorios_avaliacao', p_id: this._rel.id });
-    if (error || (data && data.erro)) { popAviso('Nao consegui reabrir: ' + (error ? error.message : data.erro)); return; }
+    if (error || (data && data.erro)) { popAviso('Nao consegui liberar: ' + (error ? error.message : data.erro)); return; }
     this.abrirEditor(this._rel.avaliacoes_ids && this._rel.avaliacoes_ids.length ? this._rel.avaliacoes_ids : this._rel.avaliacao_id);
   },
   // Regerar os textos automaticos deste relatorio (rascunho): o que a equipe escreveu nesses campos e substituido
@@ -935,7 +935,20 @@ window.MODULOS.laudo_avaliacao = {
     ov.innerHTML = '<div class="folha-pagina" id="doc-eq-corpo" style="max-width:900px">' +
       '<div class="pagina-cabecalho nao-imprime"><div><button class="btn-voltar" onclick="document.getElementById(\'doc-eq-overlay\').remove()">&larr; Fechar</button>' +
       '<h2>Relatorio de avaliacao &middot; documento oficial ' + (rel.status === 'rascunho' ? '<span class="selo selo-warn">rascunho</span>' : '<span class="selo selo-ok">gerado</span>') + '</h2></div>' +
-      '<button class="btn btn-primario" onclick="window.print()">&#128424; Imprimir / PDF</button>' + portalBtn() + '</div>' + corpo + '</div>';
+      '<div style="display:flex; gap:8px; flex-wrap:wrap">' +
+      (rel.status !== 'rascunho' && typeof podeReabrirRelatorio === 'function' && podeReabrirRelatorio()
+        ? '<button class="btn btn-fantasma" title="Coordenacao/direcao: volta o relatorio para rascunho para corrigir e gerar de novo" onclick="MODULOS.laudo_avaliacao.liberarDoDocumento()">&#128275; Liberar para editar</button>' : '') +
+      '<button class="btn btn-primario" onclick="window.print()">&#128424; Imprimir / PDF</button>' + portalBtn() + '</div></div>' + corpo + '</div>';
+  },
+
+  // "Liberar para editar" a partir do documento travado: reabre e cai direto no editor
+  async liberarDoDocumento() {
+    const rel = this._rel; if (!rel || !podeReabrirRelatorio()) return;
+    if (!await popConfirmar('Liberar este relatorio para edicao?\n\nEle volta a rascunho e pode ser corrigido. O que ja foi enviado ao portal ou assinado continua como estava; depois de corrigir, gere e trave de novo (e reenvie/reassine se precisar).', { titulo: 'Liberar para editar', ok: 'Liberar' })) return;
+    const { data, error } = await sb.rpc('fn_reabrir_relatorio', { p_tabela: 'relatorios_avaliacao', p_id: rel.id });
+    if (error || (data && data.erro)) { popAviso('Nao consegui liberar: ' + (error ? error.message : data.erro)); return; }
+    document.getElementById('doc-eq-overlay')?.remove();
+    this.abrirEditor(rel.avaliacoes_ids && rel.avaliacoes_ids.length ? rel.avaliacoes_ids : rel.avaliacao_id);
   },
 
   // botao "Relatorio completo": ultima aplicacao concluida de cada protocolo, unidas

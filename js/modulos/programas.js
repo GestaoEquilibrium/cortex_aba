@@ -765,7 +765,7 @@ window.MODULOS.programas = {
     this.elFolha().innerHTML = '<div class="cartao"><p class="sub">Preparando a ficha de aplicacao...</p></div>';
 
     const { data: s } = await sb.from('sessoes')
-      .select('id, data, hora_inicio, status, paciente_id, pacientes(nome)')
+      .select('id, data, hora_inicio, status, paciente_id, aplicador_id, pacientes(nome)')
       .eq('id', sessaoId).single();
     if (!s) { this._overlay ? this.fecharFolha(false) : abrirModulo('agenda'); return; }
 
@@ -1396,17 +1396,28 @@ window.MODULOS.programas = {
     // outras sessoes desta crianca no mesmo dia: a evolucao pode valer para todas (marcadas por padrao)
     (async () => {
       const extras = this._sessoesExtras || [];
-      let q = sb.from('sessoes').select('id, data, hora_inicio, status, profissional:profiles!sessoes_aplicador_id_fkey(nome)')
+      let q = sb.from('sessoes').select('id, data, hora_inicio, status, aplicador_id, profissional:profiles!sessoes_aplicador_id_fkey(nome)')
         .eq('paciente_id', f.sessao.paciente_id).neq('id', f.sessao.id).order('data').order('hora_inicio');
       q = extras.length ? q.or('id.in.(' + extras.join(',') + '),and(data.eq.' + f.sessao.data + ',status.in.(agendada,checkin,em_atendimento))')
                         : q.eq('data', f.sessao.data).in('status', ['agendada', 'checkin', 'em_atendimento']);
-      const { data: irmas } = await q;
+      const { data: todas } = await q;
       const alvo = document.getElementById('fe-irmas');
-      if (!alvo || !irmas || !irmas.length) return;
-      alvo.innerHTML = '<div class="campo" style="margin-top:10px"><label>Gravar os mesmos programas e esta evolucao tambem em <small class="sub">(desmarque as que nao)</small></label>' +
-        irmas.map(x => '<label class="check" style="display:flex; margin:4px 0"><input type="checkbox" class="fe-irma" value="' + x.id + '"' + (extras.includes(x.id) || x.data === f.sessao.data ? ' checked' : '') + '> ' +
-          (x.data !== f.sessao.data ? x.data.split('-').reverse().join('/') + ' ' : '') + String(x.hora_inicio).slice(0, 5) + ' &middot; ' + escaparHtml(x.profissional ? x.profissional.nome.split(' ').slice(0, 2).join(' ') : 'sem aplicador') +
-          (x.status === 'concluida' ? ' <span class="selo selo-neutro">ja concluida</span>' : '') + '</label>').join('') + '</div>';
+      if (!alvo || !todas || !todas.length) return;
+      // Dois horarios da MESMA aplicadora no dia = uma sessao continuada: programas e evolucao valem para os dois.
+      // Horario de OUTRA aplicadora e atendimento dela: nunca entra aqui (ela lanca a propria evolucao e os proprios programas).
+      const minha = x => !x.aplicador_id || x.aplicador_id === f.sessao.aplicador_id || extras.includes(x.id);
+      const irmas = todas.filter(minha), outras = todas.filter(x => !minha(x));
+      const nomeDe = x => escaparHtml(x.profissional ? x.profissional.nome.split(' ').slice(0, 2).join(' ') : 'sem aplicador');
+      alvo.innerHTML = (irmas.length
+        ? '<div class="campo" style="margin-top:10px"><label>Gravar os mesmos programas e esta evolucao tambem em <small class="sub">(desmarque as que nao)</small></label>' +
+          irmas.map(x => '<label class="check" style="display:flex; margin:4px 0"><input type="checkbox" class="fe-irma" value="' + x.id + '"' + (extras.includes(x.id) || x.data === f.sessao.data ? ' checked' : '') + '> ' +
+            (x.data !== f.sessao.data ? x.data.split('-').reverse().join('/') + ' ' : '') + String(x.hora_inicio).slice(0, 5) + ' &middot; ' + nomeDe(x) +
+            (x.status === 'concluida' ? ' <span class="selo selo-neutro">ja concluida</span>' : '') + '</label>').join('') + '</div>'
+        : '') +
+        (outras.length
+          ? '<p class="sub" style="margin-top:8px; font-size:12px">&#8505; Hoje a crian\u00e7a tamb\u00e9m tem ' + (outras.length === 1 ? 'sess\u00e3o' : 'sess\u00f5es') + ' com ' +
+            outras.map(x => nomeDe(x) + ' (' + String(x.hora_inicio).slice(0, 5) + ')').join(', ') + ' &mdash; ' + (outras.length === 1 ? 'ela lan\u00e7a a evolu\u00e7\u00e3o e os programas dela separadamente.' : 'cada uma lan\u00e7a a sua evolu\u00e7\u00e3o e os seus programas.') + '</p>'
+          : '');
     })();
   },
 
@@ -1497,9 +1508,11 @@ window.MODULOS.programas = {
       // Crianca com 2+ horarios no mesmo dia: a evolucao vale para todos - conclui os demais e espelha o texto
       try {
         const marcadas = Array.from(document.querySelectorAll('.fe-irma:checked')).map(c => c.value);
+        const extrasOk = this._sessoesExtras || [];
         const { data: irmasTodas } = marcadas.length
-          ? await sb.from('sessoes').select('id, data, hora_inicio, status').in('id', marcadas) : { data: [] };
-        const irmas = irmasTodas || [];
+          ? await sb.from('sessoes').select('id, data, hora_inicio, status, aplicador_id').in('id', marcadas) : { data: [] };
+        // seguranca: sessao de outra aplicadora nunca recebe copia (so as escolhidas de proposito no lancamento retroativo)
+        const irmas = (irmasTodas || []).filter(x => !x.aplicador_id || x.aplicador_id === f.sessao.aplicador_id || extrasOk.includes(x.id));
         if (irmas && irmas.length) {
           const ids = irmas.map(x => x.id);
           { const { error: _e } = await sb.from('sessoes').update({ status: 'concluida' }).in('id', ids); if (_e) popAviso('Nao foi possivel gravar (sessoes): ' + _e.message); }

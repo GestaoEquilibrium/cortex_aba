@@ -59,7 +59,7 @@ const NAVEGACAO = [
       { id: 'faltas',   rotulo: 'Gestao de Faltas',   chave: 'faltas' },
       { id: 'termos',   rotulo: 'Termos digitais',    chave: 'termos' },
       { id: 'rh',       rotulo: 'RH',                 chave: 'rh' },
-      { id: 'chat',       rotulo: 'Suporte',            chave: 'chat' },
+      { id: 'chat',       rotulo: 'Chat',               chave: 'chat' },
       { id: 'admin',      rotulo: 'Usuarios e Acessos', perfis: ['direcao','coordenador','suporte'] },
       { id: 'permissoes', rotulo: 'Permissoes',         perfis: ['suporte'] },
       { id: 'eventos',    rotulo: 'Supervisao', chave: 'eventos' },

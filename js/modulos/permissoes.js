@@ -75,7 +75,7 @@ window.MODULOS.permissoes = {
     { chave: 'rh', rotulo: 'RH', dica: 'V: consulta. E: gere.' },
     { chave: 'termos', rotulo: 'Termos digitais', dica: 'V: aceites. E: cria termos.' },
     { chave: 'auditoria', rotulo: 'Auditoria (geral)', dica: 'V: trilha de tudo.' },
-    { chave: 'chat', rotulo: 'Chat de suporte', dica: 'E: fala com o suporte.' },
+    { chave: 'chat', rotulo: 'Chat da equipe', dica: 'E: conversa com a equipe (privado e grupos). Comunicados so para gestao.' },
     { chave: 'portal_msg', rotulo: 'Conversa com a familia', dica: 'E: responde mensagens e caderninho.' }
   ],
   ehSub(chave) { return chave.includes('.') || ['pacientes_designar', 'agenda_grade', 'evolucao', 'comportamentos'].includes(chave); },

@@ -133,8 +133,12 @@ window.MODULOS.avisos = {
       const { data } = await sb.from('notificacoes').select('id, titulo, corpo, criado_em')
         .or('destinatario_perfil.eq.' + perfil + ',destinatario_id.eq.' + eu)
         .eq('lida', false).order('criado_em', { ascending: false }).limit(15);
-      (data || []).forEach(n => add('Notificacoes do sistema', 'azul', 'chat', n.titulo,
-        (n.corpo || '') + ' - ' + new Date(n.criado_em).toLocaleDateString('pt-BR'), "MODULOS.avisos.marcarLida('" + n.id + "')", 'Ok'));
+      (data || []).forEach(n => {
+        const doChat = /^(Chat: |Grupo |Comunicado de )/.test(n.titulo || '');   // mensagens do chat abrem o chat (e la viram lidas)
+        add('Notificacoes do sistema', 'azul', 'chat', n.titulo,
+          (n.corpo || '') + ' - ' + new Date(n.criado_em).toLocaleDateString('pt-BR'),
+          doChat ? "MODULOS.avisos.marcarLida('" + n.id + "'); abrirModulo('chat')" : "MODULOS.avisos.marcarLida('" + n.id + "')", doChat ? 'Abrir chat' : 'Ok');
+      });
     } catch (e) {}
 
     this.itens = itens;

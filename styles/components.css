@@ -3080,3 +3080,38 @@ body.travado .app-shell { filter: blur(2px); pointer-events: none; user-select: 
     .rc-barra { font-size: 11px; padding: 0 6px; }
     .rc-barra .rc-d { display: none; }
 }
+
+/* ── Prontuario · aba Agenda (patch 31 v33) ──────────────────────────────── */
+.pa-grid { display: grid; gap: 14px; }
+.pa-cab { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.pa-cab h3 { margin: 0 0 2px; }
+.pa-cab .sub { margin: 0; font-size: 12.5px; }
+.pa-nav { display: inline-flex; align-items: center; gap: 8px; }
+.pa-nav b { min-width: 150px; text-align: center; font-size: 13.5px; }
+.pa-semana { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.pa-semana.seis { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+@media (max-width: 720px) { .pa-semana, .pa-semana.seis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.pa-dia { border: 1px solid var(--line); border-radius: 12px; padding: 8px; background: var(--surface-alt); min-height: 70px; }
+.pa-dia.vazio { opacity: .6; }
+.pa-dia-t { font-size: 11px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-muted); margin-bottom: 6px; }
+.pa-slot { background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--acao); border-radius: 9px; padding: 6px 8px; margin-bottom: 6px; font-size: 12px; display: grid; gap: 2px; }
+.pa-slot[onclick] { cursor: pointer; }
+.pa-slot[onclick]:hover { border-color: var(--acao); }
+.pa-slot b { font-size: 13px; }
+.pa-slot span { display: flex; align-items: center; gap: 6px; }
+.pa-slot small { color: var(--ink-muted); }
+.pa-slot .evo-av { width: 20px; height: 20px; font-size: 9px; }
+.pa-livre { color: var(--ink-muted); font-size: 12px; text-align: center; padding: 10px 0; }
+.pa-tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }
+.pa-data { border-top: 1px solid var(--line); padding: 8px 0 4px; }
+.pa-data.hoje .pa-data-t { color: var(--acao); }
+.pa-data-t { font-size: 11.5px; font-weight: 700; color: var(--ink-muted); text-transform: capitalize; margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+.pa-sessao { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 10px; cursor: pointer; font-size: 13px; }
+.pa-sessao:hover { background: var(--acao-soft); }
+.pa-sessao .pa-h { min-width: 44px; }
+.pa-sessao .pa-fim { color: var(--ink-muted); font-size: 11.5px; min-width: 40px; }
+.pa-sessao .evo-av { width: 24px; height: 24px; font-size: 10px; }
+.pa-sessao .pa-quem { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pa-sessao .pa-quem small { color: var(--ink-muted); }
+.pa-sessao .pa-selos { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+@media (max-width: 720px) { .pa-tiles { grid-template-columns: repeat(2, 1fr); } .pa-sessao { flex-wrap: wrap; } .pa-sessao .pa-fim { display: none; } .pa-sessao .pa-selos { width: 100%; justify-content: flex-start; padding-left: 54px; } }

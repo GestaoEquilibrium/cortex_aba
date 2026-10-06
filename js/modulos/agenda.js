@@ -238,6 +238,11 @@ window.MODULOS.agenda = {
   },
 
   desenhar() {
+    if (!document.getElementById('ag-corpo')) {
+      // a janela da sessao foi usada fora da Agenda (aba Agenda do prontuario): atualiza a aba
+      if (this._pacAbaAlvo && this._pacAba && document.body.contains(this._pacAbaAlvo)) this.abaProntuario(this._pacAbaAlvo, this._pacAba);
+      return;
+    }
     document.querySelector('.ag-nav')?.classList.remove('escondido');
     if (this.visao === 'recepcao') { this.desenharRecepcao(); return; }
     if (this.visao === 'equipe') { this.desenharEquipe(); return; }
@@ -246,7 +251,91 @@ window.MODULOS.agenda = {
     else this.desenharMes();
   },
 
-  // \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 VISAO RECEPCAO (patch 31 v32) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  // ───────────────────── ABA "AGENDA" DO PRONTUARIO (patch 31 v33) ─────────────────────
+  // Toda a agenda da crianca num lugar: grade fixa da semana (com cada aplicador) e as sessoes do mes,
+  // de todos os profissionais, com situacao. Abrir uma sessao usa a mesma janela da Agenda.
+  async abaProntuario(alvo, pac) {
+    if (!this.sessao) this.sessao = window.CORTEX_SESSAO;
+    this._pacAbaAlvo = alvo; this._pacAba = pac;
+    if (!this.equipe || !this.equipe.length) await this.carregarBase();
+    if (this._pacMesId !== pac.id) { this._pacMes = hojeLocal().slice(0, 7); this._pacMesId = pac.id; }
+    const mes = this._pacMes;
+    const ini = mes + '-01';
+    const dFim = new Date(Number(mes.slice(0, 4)), Number(mes.slice(5, 7)), 0);
+    const fim = mes + '-' + String(dFim.getDate()).padStart(2, '0');
+    const hoje = hojeLocal();
+    const [rS, rProx, rG] = await Promise.all([
+      sb.from('sessoes').select('id, data, hora_inicio, duracao_min, status, confirmacao, grade_id, aplicador_id, profissional:profiles!sessoes_aplicador_id_fkey(nome), salas(nome)')
+        .eq('paciente_id', pac.id).gte('data', ini).lte('data', fim).order('data').order('hora_inicio'),
+      sb.from('sessoes').select('id, data, hora_inicio, profissional:profiles!sessoes_aplicador_id_fkey(nome)')
+        .eq('paciente_id', pac.id).gte('data', hoje).in('status', ['agendada', 'checkin', 'em_atendimento']).order('data').order('hora_inicio').limit(1),
+      sb.from('grade_horarios').select('id, dia_semana, hora_inicio, duracao_min, aplicador_id, profissional:profiles!grade_horarios_aplicador_id_fkey(nome), salas(nome)')
+        .eq('paciente_id', pac.id).eq('ativo', true).order('dia_semana').order('hora_inicio')
+    ]);
+    if (!document.body.contains(alvo)) return;
+    const sessoes = rS.data || [], grade = rG.data || [], prox = rProx.data && rProx.data[0];
+    const nomeP = x => x && x.profissional ? x.profissional.nome.split(' ').slice(0, 2).join(' ') : 'Sem aplicador';
+    const av = n => '<span class="evo-av ' + (typeof corAvatar === 'function' ? corAvatar(n) : 'av-1') + '">' + escaparHtml(this.iniciaisDe(n)) + '</span>';
+    const dur = x => x.duracao_min || this.durDe(x.aplicador_id);
+
+    // profissionais da crianca (grade + sessoes do mes)
+    const profs = {};
+    grade.concat(sessoes).forEach(x => { if (x.aplicador_id) profs[x.aplicador_id] = nomeP(x); });
+    const listaProfs = Object.values(profs).sort();
+
+    // ── grade fixa por dia
+    const dias = [1, 2, 3, 4, 5].concat(grade.some(g => g.dia_semana === 6) ? [6] : []);
+    const htmlGrade = '<div class="cartao"><div class="pa-cab"><div><h3>Grade fixa</h3><p class="sub">' +
+      (grade.length ? grade.length + ' hor\u00e1rio' + (grade.length === 1 ? '' : 's') + ' por semana' + (listaProfs.length ? ' &middot; ' + listaProfs.map(n => escaparHtml(n)).join(', ') : '') : 'Nenhum hor\u00e1rio fixo cadastrado.') + '</p></div>' +
+      (this.gere() ? '<button class="btn-chip" onclick="MODULOS.agenda.abrirGradeDaCrianca(\'' + pac.id + '\')">Abrir na Grade fixa</button>' : '') + '</div>' +
+      (grade.length ? '<div class="pa-semana' + (dias.length > 5 ? ' seis' : '') + '">' + dias.map(d => {
+        const do_ = grade.filter(g => g.dia_semana === d);
+        return '<div class="pa-dia' + (do_.length ? '' : ' vazio') + '"><div class="pa-dia-t">' + this.DIAS[d] + '</div>' +
+          (do_.length ? do_.map(g => '<div class="pa-slot"' + (this.gere() ? ' onclick="MODULOS.agenda.abrirGradeDaCrianca(\'' + pac.id + '\', \'' + g.id + '\')" title="Abrir este horario na grade fixa"' : '') + '>' +
+            '<b>' + this.hm(g.hora_inicio) + '</b><span>' + av(nomeP(g)) + escaparHtml(nomeP(g)) + '</span>' + (g.salas ? '<small>' + escaparHtml(g.salas.nome) + '</small>' : '') + '</div>').join('')
+            : '<div class="pa-livre">&mdash;</div>') + '</div>';
+      }).join('') + '</div>' : '') + '</div>';
+
+    // ── sessoes do mes
+    const d0 = new Date(mes + '-01T12:00:00');
+    const rotMes = d0.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+    const n = st => sessoes.filter(s => s.status === st).length;
+    const porDia = {};
+    sessoes.forEach(s => { (porDia[s.data] = porDia[s.data] || []).push(s); });
+    const htmlSess = '<div class="cartao"><div class="pa-cab"><div><h3>Sess\u00f5es</h3><p class="sub">' +
+      (prox ? 'Pr\u00f3xima: <b>' + new Date(prox.data + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' }) + ' ' + this.hm(prox.hora_inicio) + '</b> com ' + escaparHtml(nomeP(prox)) : 'Sem sess\u00e3o futura agendada') + '</p></div>' +
+      '<div class="pa-nav"><button class="botao-icone tema" onclick="MODULOS.agenda.pacMes(-1)">&lsaquo;</button><b>' + rotMes.charAt(0).toUpperCase() + rotMes.slice(1) + '</b><button class="botao-icone tema" onclick="MODULOS.agenda.pacMes(1)">&rsaquo;</button></div></div>' +
+      '<div class="pa-tiles">' + [['concluida', 'Realizadas', 'var(--st-ok)'], ['agendada', 'Agendadas', 'var(--st-neutro)'], ['falta', 'Faltas', 'var(--st-bad)'], ['cancelada', 'Canceladas', '#94A3B8']]
+        .map(t => '<div class="agd-tile" style="border-left-color:' + t[2] + '"><small>' + t[1] + '</small><b>' + n(t[0]) + '</b></div>').join('') + '</div>' +
+      (sessoes.length ? Object.keys(porDia).sort().map(data => {
+        const dt = new Date(data + 'T12:00:00');
+        return '<div class="pa-data' + (data === hoje ? ' hoje' : '') + '"><div class="pa-data-t">' + dt.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '') + ' <b>' + dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) + '</b>' + (data === hoje ? ' <span class="selo selo-ok">hoje</span>' : '') + '</div>' +
+          porDia[data].map(s => '<div class="pa-sessao" onclick="MODULOS.agenda.abrirSessao(\'' + s.id + '\')">' +
+            '<b class="pa-h">' + this.hm(s.hora_inicio) + '</b><span class="pa-fim">' + this.somaMin(this.hm(s.hora_inicio), dur(s)) + '</span>' +
+            av(nomeP(s)) + '<span class="pa-quem">' + escaparHtml(nomeP(s)) + (s.salas ? ' <small>&middot; ' + escaparHtml(s.salas.nome) + '</small>' : '') + (!s.grade_id ? ' <span class="selo selo-neutro">encaixe</span>' : '') + '</span>' +
+            '<span class="pa-selos">' + this.selosSessao(s) + '</span></div>').join('') + '</div>';
+      }).join('') : '<p class="sub" style="padding:14px 0 4px">Nenhuma sess\u00e3o neste m\u00eas.</p>') + '</div>';
+
+    alvo.innerHTML = '<div class="pa-grid">' + htmlGrade + htmlSess + '</div>';
+  },
+  pacMes(delta) {
+    const d = new Date(this._pacMes + '-15T12:00:00'); d.setMonth(d.getMonth() + delta);
+    this._pacMes = d.toISOString().slice(0, 10).slice(0, 7);
+    if (this._pacAbaAlvo && this._pacAba) this.abaProntuario(this._pacAbaAlvo, this._pacAba);
+  },
+  // abre a Grade fixa ja filtrada pela crianca (e, se pedido, o horario escolhido)
+  abrirGradeDaCrianca(pacId, horarioId) {
+    abrirModulo('agenda');
+    setTimeout(async () => {
+      if (!this.equipe || !this.equipe.length) await this.carregarBase();
+      this.telaGrade();
+      const sel = document.getElementById('ag-f-pac');
+      if (sel) { sel.value = pacId; this.desenharGrade(); }
+      if (horarioId) this.modalHorario(horarioId);
+    }, 150);
+  },
+
+  // ───────────────────── VISAO RECEPCAO (patch 31 v32) ─────────────────────
   // Outra forma de ver o mesmo dia, no molde da agenda do Med Center: filtros a esquerda (data e
   // profissionais, por equipe), linha do tempo a direita com as sessoes em barras coloridas por
   // situacao e o marcador de agora. Nada muda nas outras visoes; recepcao abre nela por padrao.

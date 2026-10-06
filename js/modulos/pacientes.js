@@ -297,6 +297,7 @@ window.MODULOS.pacientes = {
 
   ABAS: [
     { id: 'visao',      rotulo: 'Visao geral' },
+    { id: 'agenda',     rotulo: 'Agenda' },
     { id: 'anamnese',   rotulo: 'Anamnese',   sprint: 'Sprint 3' },
     { id: 'avaliacao',  rotulo: 'Avaliacao',  sprint: 'Sprint 7' },
     { id: 'plano',      rotulo: 'Plano' },
@@ -466,6 +467,11 @@ window.MODULOS.pacientes = {
     const aba = this.ABAS.find(a => a.id === id);
 
     if (id === 'visao') { alvo.innerHTML = this.htmlVisaoGeral(p); return; }
+    if (id === 'agenda') {
+      alvo.innerHTML = '<div class="cartao"><p class="sub">Carregando a agenda da crianca...</p></div>';
+      MODULOS.agenda.abaProntuario(alvo, p);
+      return;
+    }
     if (id === 'documentos') {
       alvo.innerHTML = this.htmlDocumentos(p) + '<div id="pac-anexos"></div><div id="pac-assinados"></div><div id="pac-portal"><div class="cartao"><p class="sub">Carregando portal...</p></div></div>';
       this.listarAssinados(p.id);

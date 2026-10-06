@@ -1408,11 +1408,23 @@ window.MODULOS.programas = {
       const minha = x => !x.aplicador_id || x.aplicador_id === f.sessao.aplicador_id || extras.includes(x.id);
       const irmas = todas.filter(minha), outras = todas.filter(x => !minha(x));
       const nomeDe = x => escaparHtml(x.profissional ? x.profissional.nome.split(' ').slice(0, 2).join(' ') : 'sem aplicador');
+      // a outra sessao ja tem lancamento proprio? (evolucao ou tentativas) - entao e outro atendimento, nao uma continuacao
+      const comLanc = new Set();
+      if (irmas.length) {
+        const ids = irmas.map(x => x.id);
+        const [rE, rT] = await Promise.all([
+          sb.from('evolucoes').select('sessao_id, espelho_de').in('sessao_id', ids),
+          sb.from('registros_tentativas').select('sessao_id').in('sessao_id', ids).limit(500)
+        ]);
+        (rE.data || []).forEach(e => { if (e.espelho_de !== f.sessao.id) comLanc.add(e.sessao_id); });
+        (rT.data || []).forEach(t => comLanc.add(t.sessao_id));
+      }
+      // NADA vem marcado sozinho (decisao de Wess, 06/10): so quem escolheu as sessoes no lancamento retroativo
       alvo.innerHTML = (irmas.length
-        ? '<div class="campo" style="margin-top:10px"><label>Gravar os mesmos programas e esta evolucao tambem em <small class="sub">(desmarque as que nao)</small></label>' +
-          irmas.map(x => '<label class="check" style="display:flex; margin:4px 0"><input type="checkbox" class="fe-irma" value="' + x.id + '"' + (extras.includes(x.id) || x.data === f.sessao.data ? ' checked' : '') + '> ' +
+        ? '<div class="campo" style="margin-top:10px"><label>Esta sessao vale tambem para outro horario da crianca? <small class="sub">(marque so se foi um atendimento continuado; os programas e a evolucao sao copiados para o horario marcado)</small></label>' +
+          irmas.map(x => '<label class="check" style="display:flex; margin:4px 0"><input type="checkbox" class="fe-irma" value="' + x.id + '"' + (extras.includes(x.id) ? ' checked' : '') + '> ' +
             (x.data !== f.sessao.data ? x.data.split('-').reverse().join('/') + ' ' : '') + String(x.hora_inicio).slice(0, 5) + ' &middot; ' + nomeDe(x) +
-            (x.status === 'concluida' ? ' <span class="selo selo-neutro">ja concluida</span>' : '') + '</label>').join('') + '</div>'
+            (comLanc.has(x.id) ? ' <span class="selo selo-warn" title="Este horario ja tem programas ou evolucao proprios; marcar substitui o que esta la">ja tem lancamento</span>' : (x.status === 'concluida' ? ' <span class="selo selo-neutro">ja concluida</span>' : '')) + '</label>').join('') + '</div>'
         : '') +
         (outras.length
           ? '<p class="sub" style="margin-top:8px; font-size:12px">&#8505; Hoje a crian\u00e7a tamb\u00e9m tem ' + (outras.length === 1 ? 'sess\u00e3o' : 'sess\u00f5es') + ' com ' +
@@ -1512,7 +1524,25 @@ window.MODULOS.programas = {
         const { data: irmasTodas } = marcadas.length
           ? await sb.from('sessoes').select('id, data, hora_inicio, status, aplicador_id').in('id', marcadas) : { data: [] };
         // seguranca: sessao de outra aplicadora nunca recebe copia (so as escolhidas de proposito no lancamento retroativo)
-        const irmas = (irmasTodas || []).filter(x => !x.aplicador_id || x.aplicador_id === f.sessao.aplicador_id || extrasOk.includes(x.id));
+        let irmas = (irmasTodas || []).filter(x => !x.aplicador_id || x.aplicador_id === f.sessao.aplicador_id || extrasOk.includes(x.id));
+        // alvo que ja tem lancamento proprio: confirma antes de substituir
+        if (irmas.length) {
+          const idsChk = irmas.map(x => x.id);
+          const [rE, rT] = await Promise.all([
+            sb.from('evolucoes').select('sessao_id, espelho_de').in('sessao_id', idsChk),
+            sb.from('registros_tentativas').select('sessao_id').in('sessao_id', idsChk).limit(500)
+          ]);
+          const comLanc = new Set();
+          (rE.data || []).forEach(e => { if (e.espelho_de !== f.sessao.id) comLanc.add(e.sessao_id); });
+          (rT.data || []).forEach(t => comLanc.add(t.sessao_id));
+          const manter = [];
+          for (const x of irmas) {
+            if (!comLanc.has(x.id)) { manter.push(x); continue; }
+            const ok = await popConfirmar('O horario das ' + String(x.hora_inicio).slice(0, 5) + ' ja tem programas ou evolucao lancados. Substituir pelo que voce lancou agora?\n\nSe foi outro atendimento, responda Nao.', { titulo: 'Horario ja lancado', ok: 'Substituir', cancelar: 'Nao, manter o que esta la' });
+            if (ok) manter.push(x);
+          }
+          irmas = manter;
+        }
         if (irmas && irmas.length) {
           const ids = irmas.map(x => x.id);
           { const { error: _e } = await sb.from('sessoes').update({ status: 'concluida' }).in('id', ids); if (_e) popAviso('Nao foi possivel gravar (sessoes): ' + _e.message); }

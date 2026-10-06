@@ -1780,7 +1780,7 @@ window.MODULOS.programas = {
     const [rS, rMeses] = await Promise.all([
       sb.from('sessoes').select('id, data, hora_inicio, duracao_min, status, aplicador_id, profissional:profiles!sessoes_aplicador_id_fkey(nome), salas(nome)')
         .eq('paciente_id', pacienteId).gte('data', ini).lte('data', fim).neq('status', 'cancelada')
-        .order('data', { ascending: false }).order('hora_inicio', { ascending: false }),
+        .order('data').order('hora_inicio'),   // crescente: do dia 1 ao fim do mes (decisao de Wess, 06/10)
       sb.from('sessoes').select('data').eq('paciente_id', pacienteId).neq('status', 'cancelada').order('data', { ascending: false }).limit(2000)
     ]);
     const sessoes = rS.data || [];
@@ -1796,6 +1796,13 @@ window.MODULOS.programas = {
       if (rR.error && /observacao/i.test(rR.error.message)) { const r2 = await sb.from('programa_sessao_registros').select('sessao_id, nao_aplicado, paciente_programas(programas(nome))').in('sessao_id', ids); regs = r2.data || []; }
     }
     const evPor = {}; evs.forEach(e => { evPor[e.sessao_id] = e; });
+    // evolucao lancada junto para dois horarios (espelho): a copia some da lista e o cartao da origem mostra os dois horarios
+    const sessPor = {}; sessoes.forEach(x => { sessPor[x.id] = x; });
+    const espelhoDe = {}, ocultas = new Set();
+    evs.forEach(e => {
+      const orig = e.espelho_de && evPor[e.espelho_de];
+      if (orig && sessPor[e.sessao_id] && (orig.texto || '').trim() === (e.texto || '').trim()) { (espelhoDe[e.espelho_de] = espelhoDe[e.espelho_de] || []).push(e.sessao_id); ocultas.add(e.sessao_id); }
+    });
     const progPor = {}; regs.forEach(r => { (progPor[r.sessao_id] = progPor[r.sessao_id] || []).push({ nome: (r.paciente_programas && r.paciente_programas.programas && r.paciente_programas.programas.nome) || 'programa', na: !!r.nao_aplicado, obs: r.observacao || '' }); });
     const meses = [...new Set((rMeses.data || []).map(x => x.data.slice(0, 7)).concat([hojeLocal().slice(0, 7), mes]))].sort().reverse();
     const apls = {};
@@ -1803,7 +1810,7 @@ window.MODULOS.programas = {
     evs.forEach(e => { if (e.aplicador_id && !apls[e.aplicador_id]) apls[e.aplicador_id] = e.aplicador ? e.aplicador.nome : '-'; });
 
     if (!this._evoSel || this._evoSel.pacienteId !== pacienteId) this._evoSel = { pacienteId, ids: new Set(), info: {} };
-    this._evo = { pacienteId, mes, visao, sessoes, evPor, progPor, meses, apls, busca: '', apl: '', dia: null };
+    this._evo = { pacienteId, mes, visao, sessoes, evPor, progPor, meses, apls, busca: '', apl: '', dia: null, sessPor, espelhoDe, ocultas };
     const rotMes = m => this.EVO_MESES[parseInt(m.slice(5, 7), 10) - 1] + ' ' + m.slice(0, 4);
     return '<div class="evo-barra nao-imprime">' +
       (perm('evolucao') === 'E' ? '<button class="btn btn-primario" title="Lancamento retroativo: escolha a data, a sessao daquele dia, e escreva a evolucao dela." onclick="MODULOS.programas.modalLancarEvolucao(\'' + pacienteId + '\')">+ Lancar evolucao</button>' : '') +
@@ -1845,6 +1852,7 @@ window.MODULOS.programas = {
   evoSessoesFiltradas() {
     const E = this._evo;
     return E.sessoes.filter(s => {
+      if (E.ocultas && E.ocultas.has(s.id)) return false;   // copia espelhada: aparece junto da origem
       if (E.apl && s.aplicador_id !== E.apl) return false;
       if (E.busca) { const ev = E.evPor[s.id]; const t = ((ev && ev.texto) || '') + ' ' + ((ev && ev.destinacao) || ''); if (!t.toLowerCase().includes(E.busca)) return false; }
       return true;
@@ -1863,6 +1871,13 @@ window.MODULOS.programas = {
     return '<span class="evo-av ' + (typeof corAvatar === 'function' ? corAvatar(nome) : 'av-1') + '">' + escaparHtml(ini) + '</span>';
   },
   evoNomePac() { return escaparHtml(((MODULOS.pacientes && MODULOS.pacientes.paciente && MODULOS.pacientes.paciente.nome) || '').split(' ')[0]); },
+  // "tambem as 08:30": quando a mesma evolucao vale para outro(s) horario(s) do dia
+  evoSeloEspelho(s) {
+    const E = this._evo; const outros = E.espelhoDe && E.espelhoDe[s.id];
+    if (!outros || !outros.length) return '';
+    const horas = outros.map(id => E.sessPor[id]).filter(Boolean).map(x => String(x.hora_inicio).slice(0, 5)).sort();
+    return '<span class="selo selo-neutro" title="Esta evolucao foi lancada junto para os dois horarios do dia">tamb\u00e9m \u00e0s ' + horas.join(' e ') + '</span>';
+  },
   evoChips(s) {
     const E = this._evo; const ev = E.evPor[s.id]; const progs = E.progPor[s.id] || [];
     return (progs.length ? '<div class="evo-progs">' + progs.map(p => '<span class="selo ' + (p.na ? 'selo-warn' : 'selo-neutro') + '"' + (p.obs ? ' title="' + escaparHtml(p.obs) + '"' : '') + '>' + escaparHtml(p.nome) + (p.na ? ' &middot; nao aplicado' : '') + (p.obs ? ' &#9998;' : '') + '</span>').join('') + '</div>' : '') +
@@ -1884,7 +1899,7 @@ window.MODULOS.programas = {
     const E = this._evo; if (!E) return;
     const corpo = document.getElementById('evo-corpo'); if (!corpo) return;
     const lista = this.evoSessoesFiltradas();
-    const nEvo = E.sessoes.filter(s => E.evPor[s.id]).length;
+    const nEvo = E.sessoes.filter(s => E.evPor[s.id] && !(E.ocultas && E.ocultas.has(s.id))).length;
     const nSem = E.sessoes.filter(s => this.evoPendente(s)).length;
     const nFalta = E.sessoes.filter(s => s.status === 'falta').length;
     const resumo = document.getElementById('evo-resumo');
@@ -1919,7 +1934,8 @@ window.MODULOS.programas = {
         '<b>' + fmt(s.data) + ' as ' + String(s.hora_inicio).slice(0, 5) + '</b>' + this.evoAvatar(nomeApl) +
         '<small class="sub">' + escaparHtml(nomeApl.split(' ').slice(0, 2).join(' ')) + '</small>' +
         (s.status === 'falta' ? '<span class="selo selo-bad">falta</span>' : '') +
-        (ev.espelho_de ? '<span class="selo selo-neutro" title="Mesma evolucao do outro horario do dia">mesma do outro horario</span>' : '') +
+        this.evoSeloEspelho(s) +
+        (ev.espelho_de && !(E.ocultas && E.ocultas.has(s.id)) ? '<span class="selo selo-neutro" title="Mesma evolucao do outro horario do dia">mesma do outro horario</span>' : '') +
         this.evoAcoes(s, ev, false) + '</div>' +
         '<div class="evo-txt' + (longo ? ' curto' : '') + '">' + escaparHtml(ev.texto || '') + '</div>' +
         (longo ? '<div class="evo-mais" onclick="MODULOS.programas.evoExpandir(this)">ver tudo</div>' : '') +
@@ -1990,8 +2006,10 @@ window.MODULOS.programas = {
     // evolucoes em consulta separada (evolucoes tem dois vinculos com sessoes: sessao_id e espelho_de)
     const comEvo = new Set();
     if ((data || []).length) {
-      const { data: evs } = await sb.from('evolucoes').select('sessao_id').in('sessao_id', data.map(x => x.id));
-      (evs || []).forEach(e => comEvo.add(e.sessao_id));
+      const { data: evs } = await sb.from('evolucoes').select('sessao_id, espelho_de').in('sessao_id', data.map(x => x.id));
+      const todos = new Set((evs || []).map(e => e.sessao_id));
+      // espelho (mesma evolucao lancada para dois horarios do dia) entra uma vez so no relatorio
+      (evs || []).forEach(e => { if (!(e.espelho_de && todos.has(e.espelho_de))) comEvo.add(e.sessao_id); });
     }
     const ids = (data || []).filter(x => comEvo.has(x.id) || (comFaltas && x.status === 'falta')).map(x => x.id);
     if (!ids.length) { erro.textContent = 'Nenhuma evolucao nesse periodo' + (apl ? ' para essa aplicadora' : '') + '.'; erro.classList.add('visivel'); b.disabled = false; b.textContent = 'Gerar relatorio'; return; }
@@ -2099,7 +2117,7 @@ window.MODULOS.programas = {
       const pend = this.evoPendente(s);
       return '<div class="evo-leitura"><h3>' + this.evoAvatar(nomeApl) + DIAS[new Date(s.data + 'T12:00:00').getDay()] + ', ' + fmt(s.data) + ' as ' + String(s.hora_inicio).slice(0, 5) + '</h3>' +
         '<div class="evo-meta"><span>' + escaparHtml(nomeApl) + '</span>' + (s.duracao_min ? '<span>&middot; ' + s.duracao_min + ' min</span>' : '') + (s.salas ? '<span>&middot; ' + escaparHtml(s.salas.nome) + '</span>' : '') +
-        '<span class="selo ' + (s.status === 'concluida' ? 'selo-ok' : s.status === 'falta' ? 'selo-bad' : 'selo-neutro') + '">' + escaparHtml(String(s.status).replace('_', ' ')) + '</span></div>' +
+        '<span class="selo ' + (s.status === 'concluida' ? 'selo-ok' : s.status === 'falta' ? 'selo-bad' : 'selo-neutro') + '">' + escaparHtml(String(s.status).replace('_', ' ')) + '</span>' + this.evoSeloEspelho(s) + '</div>' +
         (ev ? '<p class="evo-txt-cheio">' + escaparHtml(ev.texto || '') + '</p>' + this.evoChips(s) + '<div class="evo-rod">' + this.evoAcoes(s, ev, true) + '</div>'
             : '<p class="sub" style="margin-top:10px">' + (pend ? 'Sessao sem evolucao.' : 'Ainda sem evolucao.') + '</p>' + this.evoChips(s) +
               (pend && perm('evolucao') === 'E' ? '<div class="evo-rod">' + this.evoBtnEscrever(s, 'btn btn-primario') + '</div>' : '')) +

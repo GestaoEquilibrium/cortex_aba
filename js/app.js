@@ -393,7 +393,7 @@ async function aplicarHoje() {
   const hoje = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   const eu = window.CORTEX_SESSAO.user.id;
   let { data: sess } = await sb.from('sessoes')
-    .select('id, hora_inicio, status, paciente_id, aplicador_id, pacientes(nome, foto_path)')
+    .select('id, data, hora_inicio, status, paciente_id, aplicador_id, pacientes(nome, foto_path), profissional:profiles!sessoes_aplicador_id_fkey(nome)')
     .eq('data', hoje).not('status', 'in', '("cancelada")').order('hora_inicio');
   sess = sess || [];
   if (ehEquipe()) { const meus = await meusPacientesIds(); sess = sess.filter(s => s.aplicador_id === eu || meus.has(s.paciente_id)); }
@@ -401,9 +401,11 @@ async function aplicarHoje() {
   pagina.innerHTML = '<div class="pagina-cabecalho"><div><h2>Aplicar hoje</h2><p class="sub">' + d.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' }) + ' &middot; ' + sess.length + ' sessao(oes)</p></div></div>' +
     (sess.length ? sess.map(s => {
       const st = ST[s.status] || ['selo-neutro', s.status];
-      return '<div class="cartao cel-sessao" onclick="' + (s.status === 'concluida' ? 'MODULOS.programas.docEvolucaoDiaria(\'' + s.id + '\')' : 'MODULOS.programas.abrirFolha(\'' + s.id + '\', true)') + '">' +
+      // patch 37: horario de outra aplicadora abre a ficha so depois de confirmar (cada uma lanca no proprio horario)
+      const deOutra = s.aplicador_id && s.aplicador_id !== eu ? (s.profissional ? s.profissional.nome.split(' ').slice(0, 2).join(' ') : 'outra aplicadora') : '';
+      return '<div class="cartao cel-sessao' + (deOutra ? ' de-outra' : '') + '" onclick="' + (s.status === 'concluida' ? 'MODULOS.programas.docEvolucaoDiaria(\'' + s.id + '\')' : 'MODULOS.programas.abrirFichaDaSessao(\'' + s.id + '\')') + '">' +
         '<div class="avatar-paciente ' + corAvatar(s.pacientes.nome) + '">' + s.pacientes.nome.split(' ').slice(0, 2).map(x => x[0]).join('').toUpperCase() + '</div>' +
-        '<div class="cel-sessao-txt"><b>' + escaparHtml(s.pacientes.nome) + '</b><small>' + String(s.hora_inicio).slice(0, 5) + (s.status === 'concluida' ? ' &middot; encerrada &middot; toque para ver o relatorio' : ' &middot; toque para abrir a ficha') + '</small></div>' +
+        '<div class="cel-sessao-txt"><b>' + escaparHtml(s.pacientes.nome) + '</b><small>' + String(s.hora_inicio).slice(0, 5) + (deOutra ? ' &middot; horario de ' + escaparHtml(deOutra) : '') + (s.status === 'concluida' ? ' &middot; encerrada &middot; toque para ver o relatorio' : ' &middot; toque para abrir a ficha') + '</small></div>' +
         '<span class="selo ' + st[0] + '">' + st[1] + '</span></div>';
     }).join('') : '<div class="cartao"><div class="vazio"><strong>Nenhuma sessao hoje</strong>Quando houver, ela aparece aqui e um toque abre a ficha.</div></div>');
 }

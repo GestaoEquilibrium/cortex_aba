@@ -3153,3 +3153,7 @@ body.travado .app-shell { filter: blur(2px); pointer-events: none; user-select: 
 [data-modo="escuro"] .agd-card.feriado, [data-modo="escuro"] .chip-sessao.feriado, [data-modo="escuro"] .mes-dia.feriado { background: rgba(236, 72, 153, .08); border-color: rgba(236, 72, 153, .3); }
 [data-modo="escuro"] .agenda-dia.feriado { background: linear-gradient(180deg, rgba(236, 72, 153, .10), var(--surface) 75%); border-color: rgba(236, 72, 153, .3); }
 [data-modo="escuro"] .agenda-fer, [data-modo="escuro"] .mes-fer, [data-modo="escuro"] .agd-minical-g span.fer { color: #F9A8D4; }
+
+/* ══════════════ Horario de outra aplicadora (patch 37) ══════════════ */
+.sess-escolha.de-outra small { color: var(--st-warn); font-weight: 700; }
+.cel-sessao.de-outra { opacity: .8; border-style: dashed; }

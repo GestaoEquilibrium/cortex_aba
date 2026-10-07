@@ -285,6 +285,7 @@ function montarSidebar(perfil) {
       nav.appendChild(a);
     });
   });
+  if (window.TRANS) TRANS.prepararMenu();   // patch 32: pilula que desliza entre os itens
 }
 
 // ─────────────── CELULAR: barra inferior + cabecalho + folha "Mais" ───────────────
@@ -411,7 +412,12 @@ function corAvatar(nome) {
   return 'av-' + (h % 6 + 1);
 }
 
+// Patch 32: a troca de tela passa pela camada de transicoes (js/transicoes.js), quando houver
 function abrirModulo(id) {
+  if (window.TRANS) { TRANS.trocarTela(() => abrirModuloAgora(id)); return; }
+  abrirModuloAgora(id);
+}
+function abrirModuloAgora(id) {
   document.querySelectorAll('.nav-item').forEach(n =>
     n.classList.toggle('ativa', n.dataset.modulo === id));
 

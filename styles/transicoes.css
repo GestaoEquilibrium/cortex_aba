@@ -1,0 +1,77 @@
+/* ============================================================================
+   CORTEX aba - styles/transicoes.css  (patch 32)
+   Transicoes de tela: pilula do menu que desliza, conteudo que sai e entra (View Transitions), cartao da crianca que
+   vira a capa do prontuario, indicador das abas, abas fixas ao rolar, revelar ao rolar.
+   Camada so de aparencia e movimento: apagar este arquivo e js/transicoes.js volta ao patch 31.
+   ============================================================================ */
+:root {
+    --mola: cubic-bezier(.34, 1.32, .64, 1);
+    --saida-suave: cubic-bezier(.22, 1, .36, 1);
+}
+
+/* ── Pilula do menu (desliza entre os itens) ───────────────────────────── */
+.sidebar-nav { position: relative; }
+.nav-pilula { position: absolute; left: 10px; right: 10px; top: 0; height: 40px; border-radius: var(--raio-xs, 10px);
+    background: linear-gradient(135deg, #B45309 0%, #F59E0B 100%); box-shadow: 0 6px 18px rgba(245, 158, 11, .35);
+    view-transition-name: nav-pilula; pointer-events: none; z-index: 0; opacity: 0; }
+html:not(.com-vt) .nav-pilula { transition: top .5s var(--mola), height .3s ease, opacity .2s ease; }
+.com-pilula .nav-item { position: relative; z-index: 1; }
+.com-pilula .nav-item.ativa, .com-pilula .nav-item.ativa:hover, [data-modo="escuro"] .com-pilula .nav-item.ativa { background: transparent !important; box-shadow: none !important; }
+.com-pilula .nav-item.ativa .icone { color: #fff; }
+
+/* ── Troca de tela (View Transitions) ───────────────────────────────────── */
+html.com-vt .app-main { view-transition-name: conteudo; }
+html.com-vt .app-main > * { animation: none; }
+::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+/* o que fica fixo na tela (cabecalho e barra do celular, sino, chat) nao entra na troca e fica por cima */
+html.com-vt .cab-celular { view-transition-name: fixo-cab; }
+html.com-vt .barra-celular { view-transition-name: fixo-barra; }
+html.com-vt .avisos-fab { view-transition-name: fixo-sino; }
+html.com-vt .chat-fab { view-transition-name: fixo-chat; }
+::view-transition-group(fixo-cab), ::view-transition-group(fixo-barra), ::view-transition-group(fixo-sino), ::view-transition-group(fixo-chat),
+::view-transition-old(fixo-cab), ::view-transition-new(fixo-cab), ::view-transition-old(fixo-barra), ::view-transition-new(fixo-barra),
+::view-transition-old(fixo-sino), ::view-transition-new(fixo-sino), ::view-transition-old(fixo-chat), ::view-transition-new(fixo-chat) { animation: none; }
+::view-transition-old(conteudo) { animation: vt-sai .2s cubic-bezier(.4, 0, 1, 1) both; }
+::view-transition-new(conteudo) { animation: vt-entra .46s var(--saida-suave) .05s both; }
+::view-transition-group(nav-pilula) { animation-duration: .52s; animation-timing-function: var(--mola); }
+::view-transition-old(nav-pilula), ::view-transition-new(nav-pilula) { animation: none; }
+@keyframes vt-sai { to { opacity: 0; transform: translateY(-10px) scale(.992); filter: blur(4px); } }
+@keyframes vt-entra { from { opacity: 0; transform: translateY(16px); filter: blur(6px); } }
+@keyframes vt-some { to { opacity: 0; } }
+@keyframes vt-aparece { from { opacity: 0; } }
+
+/* cartao da crianca vira a capa do prontuario */
+html[data-vt="prontuario"]::view-transition-old(conteudo) { animation: vt-some .24s ease both; }
+html[data-vt="prontuario"]::view-transition-new(conteudo) { animation: vt-entra .5s var(--saida-suave) .16s both; }
+::view-transition-group(pac-capa) { animation-duration: .6s; animation-timing-function: var(--saida-suave); background: var(--surface); border-radius: var(--raio); box-shadow: var(--shadow-lg); }
+::view-transition-old(pac-capa), ::view-transition-new(pac-capa) { height: auto; object-fit: none; object-position: left top; }
+::view-transition-old(pac-capa) { animation: vt-some .16s ease both; }
+::view-transition-new(pac-capa) { animation: vt-aparece .26s ease .34s both; }
+::view-transition-group(pac-av), ::view-transition-group(pac-nome) { animation-duration: .6s; animation-timing-function: var(--saida-suave); }
+.vt-nome { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; }
+.capa-info h2 .vt-nome { white-space: normal; }
+.cartao-paciente.abrindo { transform: scale(.985) !important; box-shadow: 0 0 0 3px rgba(245, 158, 11, .35), var(--shadow-md) !important; }
+
+/* ── Revelar ao rolar e cascata ─────────────────────────────────────────── */
+.rv { opacity: 0; transform: translateY(18px) scale(.985); }
+.rv.rv-ok { opacity: 1; transform: none; transition: opacity .62s var(--saida-suave), transform .62s var(--saida-suave); transition-delay: calc(var(--rv-i, 0) * 55ms); }
+
+/* ── Prontuario: indicador das abas e abas fixas ao rolar ───────────────── */
+#pac-abas { position: sticky; top: 8px; z-index: 15; }
+#pac-abas .aba { position: relative; z-index: 1; }
+#pac-abas.com-ind .aba.ativa { background: transparent !important; }
+.aba-ind { position: absolute; top: 6px; bottom: 6px; left: 0; width: 0; border-radius: var(--raio-xs, 10px); background: var(--acao-soft); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--acao) 22%, transparent); transition: left .48s var(--mola), width .48s var(--mola); z-index: 0; pointer-events: none; }
+.abas-quem { display: inline-flex; align-items: center; gap: 8px; max-width: 0; opacity: 0; overflow: hidden; white-space: nowrap; flex: none; transition: max-width .45s var(--saida-suave), opacity .25s ease, margin .45s var(--saida-suave); }
+.abas-quem .capa-avatar { width: 28px !important; height: 28px !important; font-size: 11px !important; border-radius: 50%; flex: none; }
+.abas-quem b { font-size: 13px; max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
+#pac-abas.preso { background: var(--glass-bg); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); box-shadow: var(--shadow-lg); }
+#pac-abas.preso .abas-quem { max-width: 240px; opacity: 1; margin: 0 8px 0 4px; }
+
+@media (max-width: 720px) {
+    #pac-abas { top: 60px; }
+    .abas-quem { display: none; }   /* no celular o nome ja fica no cabecalho */
+}
+@media (prefers-reduced-motion: reduce) {
+    .rv { opacity: 1; transform: none; }
+    .aba-ind, .nav-pilula, .abas-quem { transition: none !important; }
+}

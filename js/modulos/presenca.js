@@ -88,7 +88,7 @@ window.MODULOS.presenca = {
     }).sort((a, b) => (a.principal || '~').localeCompare(b.principal || '~') || a.primeira.localeCompare(b.primeira) || a.nome.localeCompare(b.nome));
   },
 
-  gerar() {
+  async gerar() {
     const base = document.getElementById('lp-data').value;
     const segunda = this.segundaDaSemana(base);
     const alvo = document.getElementById('lp-conteudo');
@@ -103,6 +103,10 @@ window.MODULOS.presenca = {
 
     const fim = new Date(segunda); fim.setDate(segunda.getDate() + 4);
     const geradoEm = new Date().toLocaleDateString('pt-BR');
+    // patch 36: dia marcado como feriado na agenda nao tem folha
+    const iso = x => x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0');
+    const feriados = MODULOS.agenda && MODULOS.agenda.carregarFeriados ? await MODULOS.agenda.carregarFeriados(iso(segunda), iso(fim)) : {};
+    const pulados = [];
 
     // monta as folhas (dia x turno) primeiro para saber o total
     const folhas = [];
@@ -113,6 +117,7 @@ window.MODULOS.presenca = {
       // so horarios com crianca: reservas da grade (rotulo sem paciente) ficam fora da lista
       const doDia = this.grade.filter(h => h.dia_semana === d && h.paciente_id);
       if (doDia.length === 0) continue;
+      if (feriados[iso(dia)]) { pulados.push(dataFmt.slice(0, 5) + ' (' + feriados[iso(dia)] + ')'); continue; }
       for (const t of this.TURNOS) {
         const itens = doDia.filter(h => String(h.hora_inicio).slice(0, 5) >= t.de && String(h.hora_inicio).slice(0, 5) < t.ate);
         if (itens.length === 0) continue;
@@ -124,13 +129,14 @@ window.MODULOS.presenca = {
       alvo.innerHTML = '<div class="cartao"><div class="vazio">' +
         '<div class="simbolo-vazio">&#10003;</div>' +
         '<strong>Sem atendimentos nesta semana</strong>' +
-        'A grade nao tem horarios de segunda a sexta.' +
+        (pulados.length ? 'Feriado: ' + escaparHtml(pulados.join(', ')) + '.' : 'A grade nao tem horarios de segunda a sexta.') +
         '</div></div>';
       return;
     }
 
     const html = '<p class="sub nao-imprime" style="margin-bottom:12px">Semana de ' +
-      segunda.toLocaleDateString('pt-BR') + ' a ' + fim.toLocaleDateString('pt-BR') + ' &middot; ' + folhas.length + ' folha(s): uma por dia e turno. Imprimir sai tudo de uma vez.</p>' +
+      segunda.toLocaleDateString('pt-BR') + ' a ' + fim.toLocaleDateString('pt-BR') + ' &middot; ' + folhas.length + ' folha(s): uma por dia e turno. Imprimir sai tudo de uma vez.' +
+      (pulados.length ? ' <span class="selo selo-feriado">Feriado sem folha: ' + escaparHtml(pulados.join(', ')) + '</span>' : '') + '</p>' +
       folhas.map((f, i) => this.folha(f, i, folhas.length, geradoEm)).join('');
 
     alvo.innerHTML = html;

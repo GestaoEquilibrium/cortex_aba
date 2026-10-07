@@ -322,7 +322,7 @@ window.MODULOS.gerencial = {
     // Mesmas colunas e rotulos da exportacao "atendimentos_prontuario" do outro sistema
     const STATUS_EXT = { concluida: 'Concluido / Realizado', falta: 'Falta', checkin: 'Em Espera (Recepcao)', em_atendimento: 'Em Atendimento', agendada: 'Agendado' };
     const statusExt = s => s.status === 'cancelada'
-      ? (s.motivo_cancelamento === 'clinica' || s.motivo_cancelamento === 'profissional' ? 'Cancelado (Clinica)' : 'Cancelado (Paciente)')
+      ? (['clinica', 'profissional', 'feriado'].includes(s.motivo_cancelamento) ? 'Cancelado (Clinica)' : 'Cancelado (Paciente)')
       : s.status === 'agendada' && s.confirmacao === 'confirmada' ? 'Confirmado' : (STATUS_EXT[s.status] || s.status);
     const evoDe = s => { const e = s.evolucoes; const t = Array.isArray(e) ? (e[0] && e[0].texto) : (e && e.texto); return t || ''; };
     const cab = ['ID Agendamento', 'Data', 'Horario', 'Paciente', 'Profissional', 'Procedimento', 'Status', 'Convenio', 'Prontuario Evoluido?', 'Conteudo da Evolucao'];

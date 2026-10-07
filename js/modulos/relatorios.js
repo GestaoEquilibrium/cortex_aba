@@ -78,10 +78,16 @@ window.MODULOS.relatorios = {
   // ─────────────── DADOS DO MES (tudo que o relatorio usa) ───────────────
   async dadosDoMes(pacienteId, mes) {
     const { inicio, fim } = this.intervaloMes(mes);
-    const { data: sessoes } = await sb.from('sessoes')
-      .select('id, data, hora_inicio, status').eq('paciente_id', pacienteId)
-      .gte('data', inicio).lte('data', fim).order('data').order('hora_inicio');
+    const [{ data: sessoes }, rFer] = await Promise.all([
+      sb.from('sessoes')
+        .select('id, data, hora_inicio, status, motivo_cancelamento').eq('paciente_id', pacienteId)
+        .gte('data', inicio).lte('data', fim).order('data').order('hora_inicio'),
+      // patch 36: feriados marcados na agenda (sem o SQL rodado, a consulta falha e o mes sai sem feriados)
+      sb.from('feriados').select('data, nome').gte('data', inicio).lte('data', fim)
+    ]);
     const lista = sessoes || [];
+    const feriados = {};
+    if (!rFer.error) (rFer.data || []).forEach(f => { feriados[f.data] = f.nome; });
     const ids = lista.map(s => s.id);
     let fotos = [], evolucoes = [], compRegs = [];
     if (ids.length) {
@@ -106,7 +112,7 @@ window.MODULOS.relatorios = {
     const naoAplicados = fotos.filter(f => f.nao_aplicado && f.motivo_nao_aplicado !== 'Falta da crianca').map(f => ({
       nome: f.paciente_programas?.programas?.nome || 'programa', motivo: f.motivo_nao_aplicado, data: dataDe[f.sessao_id] }));
     return {
-      sessoes: lista,
+      sessoes: lista, feriados,
       concluidas: new Set(lista.filter(s => s.status === 'concluida').map(s => s.data)).size,
       faltas: new Set(lista.filter(s => s.status === 'falta').map(s => s.data)).size,
       canceladas: new Set(lista.filter(s => s.status === 'cancelada').map(s => s.data)).size,
@@ -356,17 +362,21 @@ window.MODULOS.relatorios = {
 
   // ─────────────── HTML DA FOLHA (usado na previa, no documento e no snapshot) ───────────────
   // Frequencia por DIA (nao por horario): crianca com 2 horarios no mesmo dia conta uma unica presenca ou falta.
-  // Regra do dia: alguma concluida -> P; senao alguma falta -> F; senao (so canceladas) -> cancelada.
+  // Regra do dia: alguma concluida -> P; senao alguma falta -> F; senao, se o dia e feriado (marcado na agenda
+  // ou sessao cancelada como feriado) -> FERIADO (sempre aparece, nao conta P nem F); senao (so canceladas) -> cancelada.
   diasFrequencia(dados, mostrarCanceladas) {
     const porDia = {};
+    const feriados = dados.feriados || {};
     dados.sessoes.forEach(s => {
       if (!['concluida', 'falta', 'cancelada'].includes(s.status)) return;
-      const d = porDia[s.data] = porDia[s.data] || { data: s.data, concluida: 0, falta: 0, cancelada: 0, horarios: [] };
+      const d = porDia[s.data] = porDia[s.data] || { data: s.data, concluida: 0, falta: 0, cancelada: 0, feriado: 0, horarios: [] };
       d[s.status]++; d.horarios.push(String(s.hora_inicio).slice(0, 5));
+      if (s.status === 'cancelada' && s.motivo_cancelamento === 'feriado') d.feriado++;
     });
     return Object.values(porDia).map(d => ({
       data: d.data, horarios: d.horarios,
-      status: d.concluida ? 'concluida' : d.falta ? 'falta' : 'cancelada'
+      status: d.concluida ? 'concluida' : d.falta ? 'falta' : (d.feriado || feriados[d.data]) ? 'feriado' : 'cancelada',
+      feriado: feriados[d.data] || ''
     })).filter(d => d.status !== 'cancelada' || mostrarCanceladas).sort((a, b) => a.data.localeCompare(b.data));
   },
 
@@ -380,20 +390,25 @@ window.MODULOS.relatorios = {
     const cols = Object.keys(porDow).map(Number).sort();
     if (!cols.length) return '<p class="sub" style="text-align:center">Sem sess\u00f5es registradas no m\u00eas.</p>';
     const maxL = Math.max(...cols.map(c => porDow[c].length));
-    let presencas = 0, faltas = 0;
-    dias.forEach(d => { if (d.status === 'concluida') presencas++; if (d.status === 'falta') faltas++; });
+    let presencas = 0, faltas = 0, nFeriados = 0;
+    dias.forEach(d => { if (d.status === 'concluida') presencas++; if (d.status === 'falta') faltas++; if (d.status === 'feriado') nFeriados++; });
     let html = '<table class="deq-freq deq-freq-dias"><tr>' + cols.map(c => '<th>' + this.NOMES_DIA[c] + '</th>').join('') + '</tr>';
     for (let i = 0; i < maxL; i++) {
       html += '<tr>' + cols.map(c => {
         const s = porDow[c][i];
         if (!s) return '<td class="vazia"></td>';
         const d = s.data.slice(8, 10) + '/' + s.data.slice(5, 7);
+        if (s.status === 'feriado') {
+          return '<td class="deq-fferiado"><span class="deq-fdata">' + d + '</span> <span class="deq-ffer">FERIADO</span>' +
+            (s.feriado ? '<small class="deq-fh">' + escaparHtml(s.feriado) + '</small>' : '') + '</td>';
+        }
         const st = s.status === 'concluida' ? '( X ) P (&nbsp;&nbsp;) F' : s.status === 'falta' ? '(&nbsp;&nbsp;) P ( X ) F' : '<span class="deq-fv">cancelada</span>';
         return '<td title="' + s.horarios.join(', ') + '"><span class="deq-fdata">' + d + '</span> <span class="' + (s.status === 'concluida' ? 'deq-fp' : s.status === 'falta' ? 'deq-ff' : '') + '">' + st + '</span>' +
           (s.horarios.length > 1 ? '<small class="deq-fh">' + s.horarios.length + ' hor&aacute;rios</small>' : '') + '</td>';
       }).join('') + '</tr>';
     }
-    html += '</table><div class="deq-freq-rodape"><span>P: PRESEN\u00c7A / F: FALTA</span><span>Presen\u00e7as <b>' + presencas + '</b> \u00b7 Faltas <b>' + faltas + '</b>' +
+    html += '</table><div class="deq-freq-rodape"><span>P: PRESEN\u00c7A / F: FALTA' + (nFeriados ? ' \u00b7 FERIADO: n\u00e3o conta' : '') + '</span><span>Presen\u00e7as <b>' + presencas + '</b> \u00b7 Faltas <b>' + faltas + '</b>' +
+      (nFeriados ? ' \u00b7 Feriados <b>' + nFeriados + '</b>' : '') +
       ((presencas + faltas) ? ' \u00b7 Assiduidade <b>' + Math.round(presencas * 100 / (presencas + faltas)) + '%</b>' : '') + '</span></div>';
     return html;
   },

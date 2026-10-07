@@ -711,7 +711,85 @@ window.MODULOS.agenda = {
       confirmada: '<span class="selo selo-ok">Confirmada</span>',
       desmarcada: '<span class="selo selo-bad">Desmarcada</span>'
     }[s.confirmacao] || '';
+    if (this.ehFeriado(s)) return '<span class="selo selo-feriado">Feriado</span>';
     return '<span class="selo ' + st[0] + '">' + st[1] + '</span>' + cf;
+  },
+
+  // ─────────────── FERIADOS (patch 36) ───────────────
+  // Quem cuida da grade marca o dia como feriado: as sessoes agendadas do dia viram "cancelada" com motivo
+  // 'feriado' (fn_marcar_feriado no banco) e as que a grade gerar depois para esse dia ja nascem assim
+  // (gatilho trg_sessao_feriado). Desmarcar devolve para agendada so as que o feriado cancelou.
+  // No relatorio mensal o dia sai como FERIADO e nao conta como presenca nem como falta.
+  ehFeriado(s) { return !!s && s.status === 'cancelada' && s.motivo_cancelamento === 'feriado'; },
+  async carregarFeriados(ini, fim) {
+    const { data, error } = await sb.from('feriados').select('data, nome').gte('data', ini).lte('data', fim);
+    const m = {};
+    if (!error) (data || []).forEach(f => { m[f.data] = f.nome; });
+    return m;
+  },
+  // feriados nacionais do ano (os moveis saem da Pascoa): so para sugerir o nome ao marcar
+  feriadosNacionais(ano) {
+    const a = ano % 19, b = Math.floor(ano / 100), c = ano % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25),
+      g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4,
+      l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
+    const pascoa = new Date(ano, Math.floor((h + l - 7 * m + 114) / 31) - 1, ((h + l - 7 * m + 114) % 31) + 1, 12);
+    const iso = x => x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0');
+    const desl = n => { const x = new Date(pascoa); x.setDate(x.getDate() + n); return iso(x); };
+    return [
+      [ano + '-01-01', 'Confraterniza\u00e7\u00e3o Universal'], [desl(-48), 'Carnaval'], [desl(-47), 'Carnaval'], [desl(-2), 'Sexta-feira Santa'],
+      [ano + '-04-21', 'Tiradentes'], [ano + '-05-01', 'Dia do Trabalho'], [desl(60), 'Corpus Christi'], [ano + '-09-07', 'Independ\u00eancia do Brasil'],
+      [ano + '-10-12', 'Nossa Senhora Aparecida'], [ano + '-11-02', 'Finados'], [ano + '-11-15', 'Proclama\u00e7\u00e3o da Rep\u00fablica'],
+      [ano + '-11-20', 'Dia da Consci\u00eancia Negra'], [ano + '-12-25', 'Natal']
+    ].sort((x, y) => x[0].localeCompare(y[0]));
+  },
+  faixaFeriado(dt, nome) {
+    const pode = this.gere();
+    return '<div class="fer-faixa"><span class="fer-ic">&#9733;</span><div class="fer-t"><b>Feriado &middot; ' + escaparHtml(nome) + '</b>' +
+      '<small>As sessoes agendadas do dia sairam como feriado. Nao contam como presenca nem falta; no relatorio mensal o dia aparece como FERIADO.</small></div>' +
+      (pode ? '<button type="button" class="btn-chip" onclick="MODULOS.agenda.desmarcarFeriado(\'' + dt + '\')">Desmarcar feriado</button>' : '') +
+      '</div>';
+  },
+  // Ideia A (Wess, 07/10/2026): marca direto no dia, pelo botao da agenda do dia
+  async modalFeriado(dt) {
+    const d = new Date(dt + 'T12:00:00');
+    const sug = (this.feriadosNacionais(d.getFullYear()).find(x => x[0] === dt) || [])[1] || '';
+    // conta na clinica toda (o feriado vale para todos, nao so para a equipe que esta na tela)
+    const { count, error: eC } = await sb.from('sessoes').select('id', { count: 'exact', head: true }).eq('data', dt).eq('status', 'agendada');
+    const nAg = eC ? null : (count || 0);
+    abrirModal('Marcar feriado',
+      '<p style="margin:0 0 10px"><b>' + this.DIAS[d.getDay() === 0 ? 7 : d.getDay()] + ', ' + d.toLocaleDateString('pt-BR') + '</b></p>' +
+      '<div class="campo"><label>Nome do feriado</label><input id="fer-nome" maxlength="80" placeholder="Ex.: Nossa Senhora Aparecida, ponto facultativo..." value="' + escaparHtml(sug) + '"></div>' +
+      '<div class="fer-aviso">' + (nAg != null ? 'As <b>' + nAg + ' sessao(oes) agendadas</b> deste dia (clinica toda) saem' : 'As sessoes agendadas deste dia (clinica toda) saem') +
+      ' da agenda como <b>feriado</b> (canceladas, sem contar falta). Sessoes ja atendidas ficam como estao. No relatorio mensal o dia aparece como FERIADO.</div>' +
+      '<div class="mensagem-erro" id="fer-erro"></div>' +
+      '<div class="barra-acoes"><button class="btn btn-fantasma" onclick="fecharModal()">Cancelar</button>' +
+      '<button class="btn btn-primario" id="fer-ok" onclick="MODULOS.agenda.salvarFeriado(\'' + dt + '\')">&#9733; Marcar feriado</button></div>', false, 'agenda');
+    setTimeout(() => document.getElementById('fer-nome')?.focus(), 50);
+  },
+  async salvarFeriado(dt) {
+    const campo = document.getElementById('fer-nome');
+    const nome = (campo ? campo.value : '').trim();
+    const erro = document.getElementById('fer-erro');
+    if (!nome) { if (erro) { erro.textContent = 'Escreva o nome do feriado.'; erro.classList.add('visivel'); } return false; }
+    const b = document.getElementById('fer-ok'); if (b) { b.disabled = true; b.textContent = 'Marcando...'; }
+    const { data, error } = await sb.rpc('fn_marcar_feriado', { p_data: dt, p_nome: nome });
+    if (error) {
+      const msg = /fn_marcar_feriado|function|schema cache/i.test(error.message) ? 'Falta rodar o SQL do patch 36 no banco.' : error.message;
+      if (erro) { erro.textContent = 'Nao consegui marcar: ' + msg; erro.classList.add('visivel'); }
+      if (b) { b.disabled = false; b.textContent = '\u2605 Marcar feriado'; }
+      return false;
+    }
+    fecharModal();
+    this.desenhar();
+    return data;
+  },
+  async desmarcarFeriado(dt) {
+    const d = new Date(dt + 'T12:00:00').toLocaleDateString('pt-BR');
+    if (!await popConfirmar('Desmarcar o feriado de ' + d + '?\n\nAs sessoes que o feriado cancelou voltam como agendadas.', { titulo: 'Desmarcar feriado', ok: 'Desmarcar' })) return false;
+    const { error } = await sb.rpc('fn_desmarcar_feriado', { p_data: dt });
+    if (error) { popAviso('Nao consegui desmarcar: ' + error.message); return false; }
+    this.desenhar();
+    return true;
   },
 
   // ───────────────────────── VISAO DIA ─────────────────────────
@@ -734,6 +812,8 @@ window.MODULOS.agenda = {
       .select('*, pacientes(nome), profissional:profiles!sessoes_aplicador_id_fkey(nome), salas(nome)')
       .eq('data', this.dataRef).order('hora_inicio');
     sessoes = await this.soMinhas(sessoes);
+    // feriados do mes (faixa do dia e mini-calendario)
+    { const m = this.dataRef.slice(0, 7); this._feriadosMes = await this.carregarFeriados(m + '-01', m + '-31'); }
     // colunas extras da grade (aplicadores com jornada no dia) respeitam o escopo Minha equipe | Geral
     this._equipeDia = [];
     if (this.gere()) {
@@ -757,17 +837,19 @@ window.MODULOS.agenda = {
     this._sessoesDia = sessoes || [];
     const lista = (sessoes || []).filter(s => s.status !== 'cancelada');
     const n = st => lista.filter(s => s.status === st).length;
-    const topo = '<div class="agd-topo">' +
+    const ferNome = (this._feriadosMes || {})[this.dataRef];
+    const topo = (ferNome ? this.faixaFeriado(this.dataRef, ferNome) : '') + '<div class="agd-topo">' +
       '<div class="agd-tiles">' +
       [['agendada', 'Aguardando', 'var(--st-neutro)'], ['checkin', 'Chegaram', '#2563EB'], ['em_atendimento', 'Em atendimento', '#D97706'], ['concluida', 'Concluidas', 'var(--st-ok)'], ['falta', 'Faltas', 'var(--st-bad)']]
         .map(t => '<div class="agd-tile" style="border-left-color:' + t[2] + '"><small>' + t[1] + '</small><b>' + n(t[0]) + '</b></div>').join('') + '</div>' +
+      (!ferNome && this.gere() ? '<button type="button" class="btn-chip" onclick="MODULOS.agenda.modalFeriado(\'' + this.dataRef + '\')">&#9733; Marcar feriado</button>' : '') +
       '<div class="toggle-visao agd-modo"><button type="button" class="' + (modo === 'grade' ? 'ativo' : '') + '" onclick="MODULOS.agenda.mudarModoDia(\'grade\')">Grade</button>' +
       '<button type="button" class="' + (modo === 'linha' ? 'ativo' : '') + '" onclick="MODULOS.agenda.mudarModoDia(\'linha\')">Linha</button></div></div>';
 
     if (!sessoes || sessoes.length === 0) {
       alvo.innerHTML = topo + '<div class="cartao"><div class="vazio">' +
-        '<div class="simbolo-vazio">&#128197;</div><strong>Sem sessoes neste dia</strong>' +
-        'A grade fixa nao tem horarios para esta data.</div></div>';
+        '<div class="simbolo-vazio">' + (ferNome ? '&#9733;' : '&#128197;') + '</div><strong>' + (ferNome ? 'Feriado' : 'Sem sessoes neste dia') + '</strong>' +
+        (ferNome ? 'Nenhuma sessao neste dia.' : 'A grade fixa nao tem horarios para esta data.') + '</div></div>';
       return;
     }
     alvo.innerHTML = topo + (modo === 'grade' ? this.htmlDiaGrade(sessoes) : this.htmlDiaLinha(sessoes));
@@ -790,7 +872,7 @@ window.MODULOS.agenda = {
       s.status === 'agendada' ? '<button type="button" class="btn-chip" onclick="event.stopPropagation(); MODULOS.agenda.acaoRapida(\'' + s.id + '\', \'checkin\')">Check-in</button>' :
       s.status === 'checkin' ? '<button type="button" class="btn-chip cheio" onclick="event.stopPropagation(); MODULOS.agenda.acaoRapida(\'' + s.id + '\', \'em_atendimento\')">Iniciar</button>' :
       s.status === 'em_atendimento' ? '<button type="button" class="btn-chip cheio" onclick="event.stopPropagation(); MODULOS.agenda.abrirSessao(\'' + s.id + '\')">Concluir</button>' : '';
-    return '<div class="agd-card' + (passada ? ' passada' : '') + ' ck-st-' + s.status + '" onclick="MODULOS.agenda.abrirSessao(\'' + s.id + '\')">' +
+    return '<div class="agd-card' + (passada ? ' passada' : '') + ' ck-st-' + s.status + (this.ehFeriado(s) ? ' feriado' : '') + '" onclick="MODULOS.agenda.abrirSessao(\'' + s.id + '\')">' +
       '<span class="evo-av ' + (typeof corAvatar === 'function' ? corAvatar(prof) : 'av-1') + '">' + escaparHtml(this.iniciaisDe(prof)) + '</span>' +
       '<span class="agd-n"><b>' + escaparHtml(s.pacientes ? s.pacientes.nome : '?') + '</b><small>' + escaparHtml(prof) + (s.salas ? ' &middot; ' + escaparHtml(s.salas.nome) : '') + '</small></span>' +
       '<span class="agd-selos">' + this.selosSessao(s) + (semEvo ? '<span class="selo selo-sem-evo" title="Sessao encerrada sem evolucao">&#9998; sem evolucao</span>' : '') + '</span>' +
@@ -834,13 +916,13 @@ window.MODULOS.agenda = {
       if (!l.length) return '<td class="ag-eq-fora"' + pos + '></td>';
       const arr = podeMover && l.length === 1 && ['agendada', 'checkin'].includes(l[0].status) && c.id !== 'sem'
         ? ' draggable="true" data-sid="' + l[0].id + '"' : '';
-      return '<td class="ag-eq-cel ' + (ST[l[0].status] || '') + '"' + pos + arr + ' onclick="MODULOS.agenda.abrirSessao(\'' + l[0].id + '\')" title="' + (arr ? 'Abrir sessao - arraste para outro aplicador ou horario' : 'Abrir sessao') + '">' +
+      return '<td class="ag-eq-cel ' + (this.ehFeriado(l[0]) ? 'ag-eq-feriado' : ST[l[0].status] || '') + '"' + pos + arr + ' onclick="MODULOS.agenda.abrirSessao(\'' + l[0].id + '\')" title="' + (arr ? 'Abrir sessao - arraste para outro aplicador ou horario' : 'Abrir sessao') + '">' +
         l.map(s => '<b>' + escaparHtml((s.pacientes ? s.pacientes.nome : '?').split(' ').slice(0, 2).join(' ')) + '</b><small>' + (s.salas ? escaparHtml(s.salas.nome) + ' &middot; ' : '') + this.selosSessao(s).replace(/<[^>]+>/g, ' ').trim() + '</small>').join('<hr style="border:none; border-top:1px dashed var(--line); margin:3px 0">') + '</td>';
     };
     const grade = '<div class="cartao ag-eq-wrap"><table class="ag-eq" id="ag-dia-grade"><thead><tr><th class="ag-eq-h"></th>' +
       cols.map(c => '<th' + (c.vazio ? ' class="ag-eq-sem"' : '') + '><span class="evo-av ' + (typeof corAvatar === 'function' ? corAvatar(c.nome) : 'av-1') + '" style="margin-right:6px; vertical-align:middle">' + escaparHtml(this.iniciaisDe(c.nome)) + '</span><b>' + escaparHtml(c.nome.split(' ').slice(0, 2).join(' ')) + '</b>' + (c.vazio ? '<small>sem sessoes</small>' : '') + '</th>').join('') + '</tr></thead><tbody>' +
       horas.map(h => '<tr><td class="ag-eq-h">' + h + '</td>' + cols.map(c => cel(c, h)).join('') + '</tr>').join('') + '</tbody></table></div>' +
-      '<div class="agd-legenda">' + [['ag-eq-agendada', 'Aguardando'], ['ag-eq-checkin', 'Chegou'], ['ag-eq-atend', 'Em atendimento'], ['ag-eq-concluida', 'Concluida'], ['ag-eq-falta', 'Falta']].map(x => '<span><i class="' + x[0] + '"></i>' + x[1] + '</span>').join('') +
+      '<div class="agd-legenda">' + [['ag-eq-agendada', 'Aguardando'], ['ag-eq-checkin', 'Chegou'], ['ag-eq-atend', 'Em atendimento'], ['ag-eq-concluida', 'Concluida'], ['ag-eq-falta', 'Falta']].concat(sessoes.some(s => this.ehFeriado(s)) ? [['ag-eq-feriado', 'Feriado']] : []).map(x => '<span><i class="' + x[0] + '"></i>' + x[1] + '</span>').join('') +
       '<span style="margin-left:auto">' + (podeMover ? '&#10021; Arraste a sessao para outro aplicador ou horario &middot; ' : '') + 'Toque na sessao para abrir</span></div>';
     return '<div class="agd-grade-wrap">' + this.htmlMiniCalendario() + '<div>' + grade + '</div></div>';
   },
@@ -953,7 +1035,8 @@ window.MODULOS.agenda = {
     for (let d = 1; d <= nDias; d++) {
       const k = this.dataRef.slice(0, 8) + String(d).padStart(2, '0');
       const dow = new Date(ano, mes - 1, d).getDay();
-      cels += '<span class="' + (k === this.dataRef ? 'sel' : dow === 0 || dow === 6 ? 'fds' : 'd') + (k === hoje ? ' hoje' : '') + '" onclick="MODULOS.agenda.dataRef = \'' + k + '\'; MODULOS.agenda.desenhar()">' + d + '</span>';
+      const fer = (this._feriadosMes || {})[k];
+      cels += '<span class="' + (k === this.dataRef ? 'sel' : dow === 0 || dow === 6 ? 'fds' : 'd') + (k === hoje ? ' hoje' : '') + (fer ? ' fer' : '') + '"' + (fer ? ' title="Feriado: ' + escaparHtml(fer) + '"' : '') + ' onclick="MODULOS.agenda.dataRef = \'' + k + '\'; MODULOS.agenda.desenhar()">' + d + '</span>';
     }
     const mesAnt = () => { const x = new Date(ano, mes - 2, 1); return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-01'; };
     const mesProx = () => { const x = new Date(ano, mes, 1); return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-01'; };
@@ -977,9 +1060,10 @@ window.MODULOS.agenda = {
     await Promise.all(datas.map(dt => sb.rpc('gerar_sessoes_do_dia', { p_data: dt })));
 
     let { data: sessoes } = await sb.from('sessoes')
-      .select('id, data, hora_inicio, status, confirmacao, paciente_id, aplicador_id, pacientes(nome), profissional:profiles!sessoes_aplicador_id_fkey(nome), salas(nome)')
+      .select('id, data, hora_inicio, status, motivo_cancelamento, confirmacao, paciente_id, aplicador_id, pacientes(nome), profissional:profiles!sessoes_aplicador_id_fkey(nome), salas(nome)')
       .gte('data', datas[0]).lte('data', datas[4]).order('hora_inicio');
     sessoes = await this.soMinhas(sessoes);
+    const feriados = await this.carregarFeriados(datas[0], datas[4]);
 
     const alvo = document.getElementById('ag-corpo');
     if (!alvo) return;
@@ -988,13 +1072,15 @@ window.MODULOS.agenda = {
     datas.forEach((dt, i) => {
       const doDia = (sessoes || []).filter(s => s.data === dt);
       const hoje = dt === hojeLocal();
-      html += '<div class="agenda-dia' + (hoje ? ' hoje' : '') + '">' +
+      const fer = feriados[dt];
+      html += '<div class="agenda-dia' + (hoje ? ' hoje' : '') + (fer ? ' feriado' : '') + '">' +
         '<div class="agenda-dia-titulo">' + this.DIAS[i + 1] + ' ' +
         dt.slice(8, 10) + '/' + dt.slice(5, 7) +
-        ' <span class="selo selo-neutro">' + doDia.length + '</span></div>';
+        (fer ? ' <span class="selo selo-feriado">Feriado</span>' : ' <span class="selo selo-neutro">' + doDia.length + '</span>') + '</div>' +
+        (fer ? '<div class="agenda-fer">&#9733; ' + escaparHtml(fer) + '</div>' : '');
       if (doDia.length === 0) html += '<div class="agenda-vazio">&mdash;</div>';
       doDia.forEach(s => {
-        html += '<div class="chip-sessao clicavel ck-st-' + s.status + '" ' +
+        html += '<div class="chip-sessao clicavel ck-st-' + s.status + (this.ehFeriado(s) ? ' feriado' : '') + '" ' +
           'onclick="MODULOS.agenda.abrirSessao(\'' + s.id + '\')">' +
           '<b>' + s.hora_inicio.slice(0, 5) + '</b> ' +
           '<span class="chip-nome">' + escaparHtml(s.pacientes ?
@@ -1023,6 +1109,7 @@ window.MODULOS.agenda = {
       .select('data, status, paciente_id, aplicador_id')
       .gte('data', this.fmt(primeiro)).lte('data', this.fmt(ultimo));
     sessoes = await this.soMinhas(sessoes);
+    const feriados = await this.carregarFeriados(this.fmt(primeiro), this.fmt(ultimo));
 
     const porDia = {};
     (sessoes || []).forEach(s => {
@@ -1051,10 +1138,11 @@ window.MODULOS.agenda = {
       const info = porDia[dt];
       const previsto = !info && dow <= 6 ? gradePorDow[dow] : null;
 
-      html += '<div class="mes-dia' + (dt === hoje ? ' hoje' : '') + '" ' +
+      const fer = feriados[dt];
+      html += '<div class="mes-dia' + (dt === hoje ? ' hoje' : '') + (fer ? ' feriado' : '') + '" ' +
         'onclick="MODULOS.agenda.abrirDia(\'' + dt + '\')">' +
         '<span class="mes-num">' + dia + '</span>' +
-        (info
+        (fer ? '<span class="mes-fer">&#9733; ' + escaparHtml(fer) + '</span>' : info
           ? '<span class="mes-info">' + info.total + ' sessao(oes)' +
             (info.faltas ? ' <b class="mes-falta">' + info.faltas + 'F</b>' : '') + '</span>'
           : previsto

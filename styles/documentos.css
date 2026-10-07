@@ -381,3 +381,9 @@ table.deq-pagina .deq-rodape { margin-top: 0; }
     text-justify: inter-word;
 }
 .doc-eq .deq-texto table, .doc-eq .deq-texto .deq-grade2, .doc-eq .deq-texto .deq-graf-item { text-align: initial; }
+
+/* ── Feriado no quadro de frequencia do mensal (patch 36): nao conta P nem F ── */
+.deq-ffer { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 6px; background: var(--eq-amarelo); color: #3B2506;
+    font-size: 10px; font-weight: 800; letter-spacing: .04em; vertical-align: middle; }
+.deq-freq td.deq-fferiado { background: #FFFBEF; }
+@media print { .deq-ffer, .deq-freq td.deq-fferiado { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }

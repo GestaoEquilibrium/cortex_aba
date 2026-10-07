@@ -1,0 +1,127 @@
+/* ============================================================================
+   CORTEX aba - styles/cores.css  (patch 35)
+   Cor do sistema escolhida por cada pessoa (ideia B). Quase tudo aqui so vale com data-cor no <html>
+   (quem fica no Ambar ve o sistema exatamente como antes). Os valores das cores vem de
+   js/cores.js (bloco <style id="cores-usuario">): --acao, --acao-forte, --acao-vivo,
+   --acao-luz, --acao-tinta, --pilula, --pilula-ink (e, com data-cor-tudo, fundo, linhas e sidebar).
+   Cores de dado/status nao entram aqui. Valem sempre: a tela Meu perfil > Aparencia e a borda dos
+   cartoes no modo escuro. Apagar este arquivo e js/cores.js volta ao patch 34.
+   ============================================================================ */
+
+/* ── Tokens derivados ─────────────────────────────────────────────────── */
+html:root[data-cor] {
+    --chip: linear-gradient(135deg, var(--acao-vivo) 0%, var(--acao) 100%);
+    --mao: var(--acao-luz);
+    --grad-primary: linear-gradient(135deg, var(--acao-forte) 0%, var(--acao-vivo) 100%);
+    --grad-hover: linear-gradient(135deg, color-mix(in srgb, var(--acao-forte) 82%, #000) 0%, var(--acao) 100%);
+    --glow-blue: 0 8px 24px color-mix(in srgb, var(--acao-vivo) 38%, transparent);
+    --glow-ambar: 0 8px 24px color-mix(in srgb, var(--acao-vivo) 38%, transparent);
+    --cor-aro: color-mix(in srgb, var(--acao-vivo) 35%, transparent);
+}
+
+/* ── Sidebar ──────────────────────────────────────────────────────────── */
+html[data-cor] .sidebar::before {
+    background: radial-gradient(closest-side, color-mix(in srgb, var(--acao-vivo) 42%, transparent), transparent 70%),
+                radial-gradient(closest-side, rgba(47, 111, 237, .35), transparent 70%);
+}
+html[data-cor] .marca .simbolo { background: var(--grad-primary); color: #fff; box-shadow: var(--glow-ambar); }
+html[data-cor] .nav-grupo-titulo { color: var(--acao-luz); }
+html[data-cor] .marca .nome .mao { color: var(--acao-luz); }
+html[data-cor] .nav-item { --nav-accent: var(--acao-luz); }
+html[data-cor] .nav-item.ativa, html[data-cor] .nav-item.ativa:hover {
+    background: var(--grad-primary); color: #fff; box-shadow: 0 6px 18px var(--cor-aro);
+}
+html[data-cor] .nav-item.ativa .nav-conta { color: var(--acao-forte); }
+html[data-cor] .nav-pilula { background: var(--grad-primary); box-shadow: 0 6px 18px var(--cor-aro); }
+html[data-cor] .com-pilula .nav-item.ativa, html[data-cor] .com-pilula .nav-item.ativa:hover { background: transparent !important; box-shadow: none !important; }
+html[data-cor] .clicavel-perfil:hover .usuario-perfil { color: var(--acao-luz); }
+html[data-cor] .ver-como-selo { background: color-mix(in srgb, var(--acao-vivo) 18%, transparent); color: var(--acao-luz); }
+
+/* ── Celular: cabecalho e barra de baixo ──────────────────────────────── */
+@media (max-width: 720px) {
+    html[data-cor] .cab-cel-marca .simbolo { background: var(--grad-primary); color: #fff; }
+    html[data-cor] .cab-cel-marca .mao { color: var(--acao-luz); }
+    html[data-cor] .barra-celular button.ativo { color: var(--acao); }
+    html[data-cor] .barra-celular button.ativo .icone { background: var(--acao-soft); }
+}
+
+/* ── Cartoes, foco, destaques ─────────────────────────────────────────── */
+html[data-cor] .cartao-paciente:hover, html[data-cor] .kpi:hover, html[data-cor] .azulejo:hover, html[data-cor] .cel-sessao:hover,
+html[data-cor] .at-item:hover, html[data-cor] .sel-item:hover { border-color: color-mix(in srgb, var(--acao) 30%, transparent); }
+html[data-cor] .cartao-paciente.abrindo { box-shadow: 0 0 0 3px var(--cor-aro), var(--shadow-md) !important; }
+html[data-cor] .avisos-fab { box-shadow: 0 10px 28px rgba(10, 20, 40, .35), 0 0 0 4px color-mix(in srgb, var(--acao-vivo) 18%, transparent); }
+html[data-cor] .avisos-fab:hover { box-shadow: 0 14px 32px rgba(10, 20, 40, .4), 0 0 0 5px color-mix(in srgb, var(--acao-vivo) 26%, transparent); }
+html[data-cor] .trava-cadeado { background: var(--grad-primary); box-shadow: 0 12px 30px var(--cor-aro); }
+html[data-cor] .sess-avatar { color: var(--acao-luz); border-color: color-mix(in srgb, var(--acao-luz) 50%, transparent); }
+html[data-cor] .ver-usuario-barra { background: var(--acao-tinta); color: var(--acao-luz); border-color: color-mix(in srgb, var(--acao-vivo) 50%, transparent); }
+html[data-cor] .ver-usuario-barra small { color: color-mix(in srgb, var(--acao-luz) 75%, transparent); }
+html[data-cor] .ver-usuario-barra button { background: var(--grad-primary); }
+
+/* graficos de destaque (nao sao cor de status) */
+html[data-cor] .prof-barra.lider { background: linear-gradient(90deg, var(--acao), var(--acao-vivo)); }
+html[data-cor] .sem2-barra { background: linear-gradient(180deg, var(--acao-vivo), var(--acao)); }
+html[data-cor] .ini-barra i { background: linear-gradient(90deg, var(--acao-forte), var(--acao-vivo)); }
+
+/* Inicio "Agora na clinica" */
+html[data-cor] .ini-heroi::after { background: radial-gradient(closest-side, color-mix(in srgb, var(--acao-vivo) 45%, transparent), transparent 70%); }
+html[data-cor] .ini-nums b { color: var(--acao-luz); }
+html[data-cor] .ini-ag-card.atual { border-color: var(--acao-vivo); box-shadow: 0 0 0 3px color-mix(in srgb, var(--acao-vivo) 18%, transparent); }
+
+/* Agenda do dia */
+html[data-cor] .agd-bloco.agora::before { background: var(--acao-vivo); border-color: var(--acao-vivo); box-shadow: 0 0 0 4px color-mix(in srgb, var(--acao-vivo) 25%, transparent); }
+html[data-cor] .agd-hora small, html[data-cor] .agd-bloco.agora .agd-hora { color: var(--acao); }
+html[data-cor] .agd-minical-g span.hoje { box-shadow: inset 0 0 0 1.5px var(--acao-vivo); }
+html[data-cor] .agd-minical-g span.sel { background: var(--grad-primary); }
+html[data-cor] .rc-linha { border-top-color: color-mix(in srgb, var(--acao) 10%, transparent); }
+
+/* ══════════ "Sistema todo na cor" (data-cor-tudo): sidebar, fundo e cabecalhos no tom escolhido ══════════ */
+html[data-cor][data-cor-tudo] {
+    --grad-aurora: linear-gradient(135deg, var(--acao-forte) 0%, var(--acao-vivo) 55%, var(--acao-par) 100%);
+    --gd-heroi: linear-gradient(135deg, var(--side-bg-2) 0%, var(--acao) 60%, var(--acao-vivo) 100%);
+}
+html[data-cor][data-cor-tudo] .sidebar::before {
+    background: radial-gradient(closest-side, color-mix(in srgb, var(--acao-vivo) 46%, transparent), transparent 70%),
+                radial-gradient(closest-side, color-mix(in srgb, var(--acao-par) 34%, transparent), transparent 70%);
+}
+html[data-cor][data-cor-tudo] .ini-heroi { background: linear-gradient(135deg, var(--side-bg) 0%, var(--side-bg-2) 60%, var(--acao-lado3) 100%); }
+html[data-cor][data-cor-tudo] .avisos-fab { background: linear-gradient(135deg, var(--side-bg-2), var(--side-bg)); }
+html[data-cor][data-cor-tudo] .cartao, html[data-cor][data-cor-tudo] .kpi, html[data-cor][data-cor-tudo] .capa,
+html[data-cor][data-cor-tudo] .abas, html[data-cor][data-cor-tudo] .caixa-info { border-color: var(--line); }
+
+@media print {
+    html[data-cor] .sidebar::before { display: none; }
+}
+
+/* ══════════ Meu perfil > Aparencia (vale sempre) ══════════ */
+.mp-cores { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px 4px; }
+.mp-cores.c7 { grid-template-columns: repeat(7, 1fr); }
+.mp-cor-op { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 2px 6px; border: none; background: none;
+    border-radius: 14px; cursor: pointer; font: inherit; color: var(--ink-muted); transition: background .18s ease, transform .25s var(--mola, ease); }
+.mp-cor-op:hover { background: var(--surface-alt); transform: translateY(-2px); }
+.mp-cor-op i { width: 42px; height: 42px; border-radius: 50%; background: linear-gradient(135deg, var(--op-a) 0%, var(--op-b) 100%);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--op-b) 35%, transparent), inset 0 0 0 1px rgba(255, 255, 255, .18);
+    display: grid; place-items: center; transition: box-shadow .2s ease, transform .25s var(--mola, ease); }
+.mp-cor-op span { font-size: 11.5px; font-weight: 700; line-height: 1.15; text-align: center; }
+.mp-cor-op span small { display: block; font-size: 9.5px; font-weight: 600; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .05em; }
+.mp-cor-op.sel { color: var(--ink); }
+.mp-cor-op.sel i { box-shadow: 0 0 0 3px var(--surface), 0 0 0 5.5px var(--op-b), 0 6px 16px color-mix(in srgb, var(--op-b) 40%, transparent); transform: scale(1.04); }
+.mp-cor-op.sel i::after { content: ''; width: 16px; height: 9px; border-left: 3px solid #fff; border-bottom: 3px solid #fff; transform: translateY(-2px) rotate(-45deg); }
+.mp-cor-op.livre i { background: conic-gradient(from 210deg, #F43F5E, #F59E0B, #EAB308, #22C55E, #06B6D4, #3B82F6, #8B5CF6, #EC4899, #F43F5E); }
+.mp-cor-op.livre.sel i { background: linear-gradient(135deg, var(--op-a) 0%, var(--op-b) 100%); }
+.mp-cor-op.livre input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: none; padding: 0; }
+.mp-tudo { display: flex; gap: 10px; align-items: flex-start; margin-top: 14px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; cursor: pointer; }
+.mp-tudo input { margin-top: 2px; }
+.mp-tudo b { display: block; font-size: 13px; }
+.mp-tudo small { display: block; font-size: 12px; color: var(--ink-soft); line-height: 1.45; }
+.mp-previa { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 14px; padding: 12px 14px; border-radius: 14px; background: var(--surface-alt); border: 1px dashed var(--line-strong); }
+.mp-previa > small { width: 100%; font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft); }
+.mp-previa .btn, .mp-previa .toggle-visao button { pointer-events: none; }
+.mp-modo { display: inline-flex; }
+.mp-modo button { min-width: 108px; }
+@media (max-width: 720px) {
+    .mp-cores, .mp-cores.c7 { grid-template-columns: repeat(4, 1fr); }
+    .mp-modo { display: flex; } .mp-modo button { flex: 1; min-width: 0; }
+}
+
+/* ══════════ Modo escuro: borda dos cartoes no tom da linha (antes ficava clara demais) — vale para todos ══════════ */
+[data-modo="escuro"] :is(.cartao, .kpi, .capa, .abas, .caixa-info) { border-color: var(--line); }

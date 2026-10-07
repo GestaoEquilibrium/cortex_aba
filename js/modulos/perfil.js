@@ -34,7 +34,6 @@ window.MODULOS.perfil = {
       fotoUrl = data ? data.signedUrl : null;
     }
 
-    const gestaoTrava = ['direcao', 'suporte'].includes(window.CORTEX_SESSAO.profile.perfil_real || window.CORTEX_SESSAO.profile.perfil);
     document.getElementById('meu-perfil-corpo').style.maxWidth = '560px';
     document.getElementById('meu-perfil-corpo').innerHTML =
       '<div class="pagina-cabecalho">' +
@@ -42,8 +41,7 @@ window.MODULOS.perfil = {
       '  <h2>Meu perfil</h2>' +
       '  <p class="sub">Seus dados pessoais e sua foto. O que for da conta (e-mail, perfil de acesso) fica com a coordenacao.</p></div>' +
       '</div>' +
-      (gestaoTrava ? '<div class="abas" style="margin-bottom:12px"><button type="button" class="aba ativa" onclick="MODULOS.perfil.abrir()">Dados</button>' +
-        '<button type="button" class="aba" onclick="MODULOS.perfil.abrirTrava()">&#128274; Trava de acesso</button></div>' : '') +
+      this.abasPerfil('dados') +
 
       '<div class="cartao" style="display:flex; gap:16px; align-items:center">' +
       '  <div class="avatar" id="mp-avatar" style="width:84px; height:84px; font-size:26px; flex:none">' +
@@ -91,12 +89,81 @@ window.MODULOS.perfil = {
       '</div></div>';
   },
 
+  // abas de Meu perfil: Dados e Aparencia para todos; Trava de acesso so para direcao/suporte
+  abasPerfil(ativa) {
+    const gestaoTrava = ['direcao', 'suporte'].includes(window.CORTEX_SESSAO.profile.perfil_real || window.CORTEX_SESSAO.profile.perfil);
+    const aba = (id, rot, fn) => '<button type="button" class="aba' + (ativa === id ? ' ativa' : '') + '"' +
+      (ativa === id ? '' : ' onclick="MODULOS.perfil.' + fn + '()"') + '>' + rot + '</button>';
+    return '<div class="abas" style="margin-bottom:12px">' + aba('dados', 'Dados', 'abrir') + aba('aparencia', 'Aparencia', 'abrirAparencia') +
+      (gestaoTrava ? aba('trava', '&#128274; Trava de acesso', 'abrirTrava') : '') + '</div>';
+  },
+
+  // ── Aparencia (patch 35): cada pessoa escolhe a cor do sistema e o modo claro/escuro ──
+  // Ideia B (Wess, 07/10/2026): 12 cores + cor livre e "Sistema todo na cor" ligado por padrao.
+  async abrirAparencia() {
+    const corpo = document.getElementById('meu-perfil-corpo'); if (!corpo) return;
+    corpo.style.maxWidth = '640px';
+    corpo.innerHTML = '<div class="pagina-cabecalho"><div>' +
+      '<button class="btn-voltar" onclick="document.getElementById(\'meu-perfil-overlay\').remove()">&larr; Fechar</button><h2>Meu perfil</h2>' +
+      '<p class="sub">A cor e o modo valem so para voce, em qualquer aparelho em que voce entrar.</p></div></div>' +
+      this.abasPerfil('aparencia') + '<div id="mp-aparencia"></div>';
+    this.desenharAparencia();
+  },
+  desenharAparencia(msg) {
+    const alvo = document.getElementById('mp-aparencia'); if (!alvo) return;
+    if (!window.CORES) { alvo.innerHTML = '<div class="cartao"><p class="sub">Recarregue a pagina para escolher a cor.</p></div>'; return; }
+    const at = CORES.atual();
+    const livre = /^#/.test(at.cor);
+    const tons = id => { const pal = CORES.resolver(id); return pal ? CORES.gerar(pal.h, pal.c).claro : { forte: '#B45309', vivo: '#F59E0B' }; };
+    const op = p => {
+      const c = tons(p.id), sel = at.cor === p.id;
+      return '<button type="button" class="mp-cor-op' + (sel ? ' sel' : '') + '" style="--op-a:' + c.forte + '; --op-b:' + c.vivo + '" ' +
+        'onclick="MODULOS.perfil.escolherCor(\'' + p.id + '\')" aria-pressed="' + sel + '"><i></i><span>' + p.nome + (p.padrao ? ' <small>padrao</small>' : '') + '</span></button>';
+    };
+    const cLivre = livre ? tons(at.cor) : null;
+    const modo = typeof modoEscolhido === 'function' ? modoEscolhido() : 'auto';
+    const bm = (id, rot) => '<button type="button" class="' + (modo === id ? 'ativo' : '') + '" onclick="MODULOS.perfil.escolherModo(\'' + id + '\')">' + rot + '</button>';
+    alvo.innerHTML =
+      '<div class="cartao"><h3>Cor do sistema</h3>' +
+      '<p class="sub" style="margin-bottom:12px">Muda botoes, menu, abas e destaques. As cores de situacao (em dia, atencao, falta) continuam as mesmas para todo mundo.</p>' +
+      '<div class="mp-cores c7">' + CORES.PALETAS.map(op).join('') +
+      '<label class="mp-cor-op livre' + (livre ? ' sel' : '') + '"' + (cLivre ? ' style="--op-a:' + cLivre.forte + '; --op-b:' + cLivre.vivo + '"' : '') + ' title="Escolher qualquer cor">' +
+      '<i></i><span>Cor livre</span>' +
+      '<input type="color" value="' + (livre ? at.cor.toLowerCase() : '#2f6fed') + '" oninput="MODULOS.perfil.provarLivre(this.value)" onchange="MODULOS.perfil.escolherCor(this.value)"></label>' +
+      '</div>' +
+      '<label class="mp-tudo"><input type="checkbox" id="mp-tudo"' + (at.tudo ? ' checked' : '') + ' onchange="MODULOS.perfil.escolherCor(CORES.atual().cor)">' +
+      '<span><b>Sistema todo na cor</b><small>O menu lateral, o fundo e os cabecalhos tambem ganham o tom da cor. Desligado, so os destaques mudam.</small></span></label>' +
+      '<div class="mp-previa"><small>Previa</small>' +
+      '<button type="button" class="btn btn-primario" tabindex="-1">Salvar</button>' +
+      '<button type="button" class="btn btn-fantasma" tabindex="-1">Cancelar</button>' +
+      '<span class="toggle-visao" style="display:inline-flex"><button type="button" class="ativo" tabindex="-1">Dia</button><button type="button" tabindex="-1">Semana</button></span>' +
+      '<span class="selo selo-ok">em dia</span><span class="selo selo-warn">atencao</span><span class="selo selo-bad">falta</span></div>' +
+      '</div>' +
+      '<div class="cartao"><h3>Modo</h3><p class="sub" style="margin-bottom:10px">Automatico segue o celular ou o computador (escurece a noite, se ele estiver assim).</p>' +
+      '<div class="toggle-visao mp-modo">' + bm('claro', '&#9728; Claro') + bm('escuro', '&#9790; Escuro') + bm('auto', 'Automatico') + '</div></div>' +
+      (msg ? '<div class="mensagem-erro visivel" style="background:var(--st-warn-bg); color:#92400E; border-color:#FDE68A">' + escaparHtml(msg) + '</div>' : '');
+  },
+  // cor livre: mostra ao vivo enquanto arrasta; grava quando solta
+  provarLivre(hex) {
+    const t = document.getElementById('mp-tudo');
+    CORES.aplicar(hex, t ? t.checked : true);
+  },
+  async escolherCor(cor) {
+    const t = document.getElementById('mp-tudo');
+    const r = await CORES.escolher(cor, t ? t.checked : true);
+    this.desenharAparencia(r.ok ? '' : 'A cor ficou neste aparelho, mas nao consegui guardar no seu perfil: ' + r.erro);
+  },
+  escolherModo(m) {
+    definirModo(m);
+    this.desenharAparencia();
+  },
+
   // ── Trava de acesso (patch 31): direcao/suporte escolhem quem fica travado e a palavra ──
   async abrirTrava() {
     const corpo = document.getElementById('meu-perfil-corpo'); if (!corpo) return;
     corpo.style.maxWidth = '920px';
     corpo.innerHTML = '<div class="pagina-cabecalho"><div><button class="btn-voltar" onclick="document.getElementById(\'meu-perfil-overlay\').remove()">&larr; Fechar</button><h2>Meu perfil</h2></div></div>' +
-      '<div class="abas" style="margin-bottom:12px"><button type="button" class="aba" onclick="MODULOS.perfil.abrir()">Dados</button><button type="button" class="aba ativa">&#128274; Trava de acesso</button></div>' +
+      this.abasPerfil('trava') +
       '<div id="mp-trava"><p class="sub">Carregando...</p></div>';
     await this.desenharTrava();
   },

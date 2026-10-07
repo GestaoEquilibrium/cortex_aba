@@ -104,6 +104,9 @@ async function iniciarApp() {
     } else { try { sessionStorage.removeItem('cortex_ver_usuario'); } catch (e) {} }
   }
 
+  // Patch 35: cor e modo escolhidos pela pessoa (Meu perfil > Aparencia); o do perfil vale em qualquer aparelho
+  if (window.CORES) CORES.sincronizar(window.CORTEX_VER_USUARIO ? window.CORTEX_VER_USUARIO.meuId : sessao.user.id).catch(() => null);
+
   await carregarPermissoes(profile.perfil);
   await carregarDataPendencias();
 

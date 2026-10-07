@@ -344,6 +344,35 @@ table.deq-pagina .deq-rodape { margin-top: 0; }
     .deq-conf { break-inside: avoid; page-break-inside: avoid; }
 }
 
+/* ── Lista de presenca (patch 33): no estilo da folha de papel da recepcao ──────────────
+   titulo com turno e horario, colunas Presenca/Falta para marcar X, linhas em branco para encaixes */
+.lp-doc .deq-cab-t h1 { font-size: 15px; letter-spacing: .1px; white-space: nowrap; }
+.lp-doc .deq-cab-t h1 .lp-faixa { color: var(--eq-azul-escuro); font-weight: 700; font-size: 12px; }
+.lp-doc .deq-cab-t { min-width: 0; }
+.lp-doc .deq-pilula { font-size: 11px; padding: 6px 12px; white-space: nowrap; flex: none; }
+.lp-doc .lp-tab { margin-top: 4px; }
+.lp-lista { table-layout: fixed; }
+.lp-lista td { height: 8.6mm; padding: 3px 9px; }
+.lp-lista th { padding: 7px 9px; font-size: 9px; line-height: 1.2; }
+.lp-lista td.pac { font-size: 11.5px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lp-lista td.pac small { display: block; font-size: 9px; font-weight: 600; color: var(--eq-cinza); margin-top: 1px; overflow: hidden; text-overflow: ellipsis; }
+.lp-lista td.apl { font-size: 11px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lp-lista td.mk, .lp-lista td.sess { width: auto; }
+.lp-lista td.ass { width: auto; border-left: 1px solid var(--eq-linha); }
+.lp-lista .lp-x { display: inline-block; width: 15px; height: 15px; border: 1.5px solid #94A3B8; border-radius: 4px; background: #fff; vertical-align: middle; }
+.lp-lista tr.lp-novo td { border-top: 1.5px solid #B9CCDD; }
+.lp-lista tr.lp-branca td { background: #fff !important; }
+.lp-totais { display: flex; gap: 10px; margin-top: 12px; }
+.lp-totais span { flex: 1; display: flex; align-items: center; justify-content: space-between; gap: 8px; border: 1px solid var(--eq-linha); border-radius: 10px; padding: 7px 11px; }
+.lp-totais small { font-size: 9px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--eq-azul); }
+.lp-totais b { font-size: 14px; }
+.lp-totais i { display: block; width: 46px; height: 18px; border-bottom: 1px solid #94A3B8; }
+.lp-doc .deq-conf { margin-top: 10px; }
+@media print {
+    .lp-lista .lp-x, .lp-lista tr.lp-novo td { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .lp-totais { break-inside: avoid; page-break-inside: avoid; }
+}
+
 /* ── Patch 31 (01/10/2026, decisao de Wess): todo texto corrido dos documentos sai justificado.
    So os blocos de prosa (.deq-texto e os paragrafos paginados do PDF); cabecalho, quadros de dados,
    tabelas, graficos, assinatura e rodape continuam como estao. ── */

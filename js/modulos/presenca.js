@@ -1,16 +1,25 @@
 // ============================================================================
 // CORTEX aba - js/modulos/presenca.js
 // Sprint 6: lista de presenca semanal gerada automaticamente da grade fixa,
-// organizada por dia e turno, no formato do Formulario 05 (pronta a imprimir):
-// paciente, horarios, sessoes no turno, aplicador e campo de assinatura.
+// organizada por dia e turno, no formato do Formulario 05 (pronta a imprimir).
 // Patch 31: folhas no padrao dos documentos Equilibrium (doc-eq).
+// Patch 33: no estilo da folha de papel da recepcao — titulo com o turno e o horario,
+// colunas Presenca e Falta para marcar com X, criancas na ordem das aplicadoras e
+// linhas em branco ate o fim da folha para os encaixes do dia.
 // ============================================================================
 
 window.MODULOS = window.MODULOS || {};
 
 window.MODULOS.presenca = {
 
-  DIAS: ['', 'Segunda-feira', 'Terca-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira'],
+  DIAS: ['', 'SEGUNDA-FEIRA', 'TER&Ccedil;A-FEIRA', 'QUARTA-FEIRA', 'QUINTA-FEIRA', 'SEXTA-FEIRA'],
+  // horario de cada turno no titulo da folha (corte dos turnos as 13:00)
+  TURNOS: [
+    { id: 'manha', rotulo: 'MANH&Atilde;', faixa: '7H &Agrave;S 13H', cor: 'deq-teal', de: '00:00', ate: '13:00' },
+    { id: 'tarde', rotulo: 'TARDE', faixa: '13H &Agrave;S 19H', cor: 'deq-amarelo', de: '13:00', ate: '24:00' }
+  ],
+  LINHAS_FOLHA: 21,    // criancas + linhas em branco numa folha A4
+  BRANCAS_MIN: 4,      // linhas em branco garantidas mesmo com a folha cheia
 
   el: null,
   sessao: null,
@@ -25,7 +34,7 @@ window.MODULOS.presenca = {
     el.innerHTML =
       '<div class="pagina-cabecalho nao-imprime">' +
       '  <div><h2>Lista de Presenca</h2>' +
-      '  <p class="sub">Gerada automaticamente da grade fixa, por dia e turno (Formulario 05).</p></div>' +
+      '  <p class="sub">Gerada automaticamente da grade fixa, uma folha por dia e turno (Formulario 05).</p></div>' +
       '  <div style="display:flex; gap:8px; align-items:center">' +
       '    <input type="date" id="lp-data" value="' + hoje + '" onchange="MODULOS.presenca.gerar()" ' +
       '      style="padding:8px 12px; border:1.5px solid var(--line); border-radius:12px; font:inherit; font-size:13px; background:var(--surface); color:var(--ink)">' +
@@ -57,8 +66,28 @@ window.MODULOS.presenca = {
     return d;
   },
 
-  // Patch 31: lista no padrao dos documentos Equilibrium (timbre, filete, quadro de dados,
-  // tabela azul, rodape) — uma folha A4 por dia e turno, com horarios e selo de sessoes.
+  // uma crianca por linha: horarios do turno, quantas sessoes e com quem.
+  // Ordem da folha: pela aplicadora da primeira sessao da crianca no turno, depois pelo horario.
+  montarLinhas(itens) {
+    const porPaciente = {};
+    itens.forEach(h => {
+      const k = h.paciente_id;
+      const apl = h.profissional ? h.profissional.nome : '';
+      if (!porPaciente[k]) porPaciente[k] = { nome: h.pacientes ? h.pacientes.nome : '?', horas: [], aplicadores: [], principal: apl, primeira: String(h.hora_inicio).slice(0, 5) };
+      const p = porPaciente[k];
+      const hr = String(h.hora_inicio).slice(0, 5);
+      p.horas.push(hr);
+      if (hr < p.primeira) { p.primeira = hr; p.principal = apl; }
+      if (apl && !p.aplicadores.includes(apl)) p.aplicadores.push(apl);
+    });
+    return Object.values(porPaciente).map(p => {
+      p.horas.sort();
+      // a aplicadora da primeira sessao vem primeiro
+      p.aplicadores.sort((a, b) => (a === p.principal ? -1 : b === p.principal ? 1 : a.localeCompare(b)));
+      return p;
+    }).sort((a, b) => (a.principal || '~').localeCompare(b.principal || '~') || a.primeira.localeCompare(b.primeira) || a.nome.localeCompare(b.nome));
+  },
+
   gerar() {
     const base = document.getElementById('lp-data').value;
     const segunda = this.segundaDaSemana(base);
@@ -73,8 +102,6 @@ window.MODULOS.presenca = {
     }
 
     const fim = new Date(segunda); fim.setDate(segunda.getDate() + 4);
-    const fmtCurta = d => d.toLocaleDateString('pt-BR').slice(0, 5);
-    const semana = fmtCurta(segunda) + ' a ' + fim.toLocaleDateString('pt-BR');
     const geradoEm = new Date().toLocaleDateString('pt-BR');
 
     // monta as folhas (dia x turno) primeiro para saber o total
@@ -86,20 +113,10 @@ window.MODULOS.presenca = {
       // so horarios com crianca: reservas da grade (rotulo sem paciente) ficam fora da lista
       const doDia = this.grade.filter(h => h.dia_semana === d && h.paciente_id);
       if (doDia.length === 0) continue;
-      const turnos = [['Manha', 'Manh&atilde;', 'deq-teal', doDia.filter(h => h.hora_inicio < '13:00')],
-                      ['Tarde', 'Tarde', 'deq-amarelo', doDia.filter(h => h.hora_inicio >= '13:00')]];
-      for (const [turno, turnoHtml, cor, itens] of turnos) {
+      for (const t of this.TURNOS) {
+        const itens = doDia.filter(h => String(h.hora_inicio).slice(0, 5) >= t.de && String(h.hora_inicio).slice(0, 5) < t.ate);
         if (itens.length === 0) continue;
-        // agrupa por paciente: horarios, n sessoes no turno e aplicadores
-        const porPaciente = {};
-        itens.forEach(h => {
-          const k = h.paciente_id;
-          if (!porPaciente[k]) porPaciente[k] = { nome: h.pacientes ? h.pacientes.nome : '?', horas: [], aplicadores: [] };
-          porPaciente[k].horas.push(String(h.hora_inicio).slice(0, 5));
-          if (h.profissional && !porPaciente[k].aplicadores.includes(h.profissional.nome)) porPaciente[k].aplicadores.push(h.profissional.nome);
-        });
-        const lista = Object.values(porPaciente).sort((a, b) => a.nome.localeCompare(b.nome));
-        folhas.push({ d, dataFmt, turno, turnoHtml, cor, lista });
+        folhas.push({ d, dataFmt, t, lista: this.montarLinhas(itens) });
       }
     }
 
@@ -112,48 +129,58 @@ window.MODULOS.presenca = {
       return;
     }
 
-    const nomeCurto = n => n.split(' ').slice(0, 2).join(' ');
-    const folha = (f, i) =>
-      '<div class="lp-folha"><div class="doc-eq lp-doc">' +
+    const html = '<p class="sub nao-imprime" style="margin-bottom:12px">Semana de ' +
+      segunda.toLocaleDateString('pt-BR') + ' a ' + fim.toLocaleDateString('pt-BR') + ' &middot; ' + folhas.length + ' folha(s): uma por dia e turno. Imprimir sai tudo de uma vez.</p>' +
+      folhas.map((f, i) => this.folha(f, i, folhas.length, geradoEm)).join('');
+
+    alvo.innerHTML = html;
+  },
+
+  nomeCurto(n) { return String(n || '').split(' ').slice(0, 2).join(' '); },
+  caixa() { return '<span class="lp-x" aria-hidden="true"></span>'; },
+
+  folha(f, i, total, geradoEm) {
+    const brancas = Math.max(this.BRANCAS_MIN, this.LINHAS_FOLHA - f.lista.length);
+    const cab =
       '<div class="deq-cab">' +
       '  <img src="icones/equilibrium.png" alt="Equilibrium">' +
-      '  <div class="deq-cab-t"><h1>LISTA DE PRESEN&Ccedil;A</h1>' +
-      '  <p>Equilibrium Terapia Infantil &middot; Psicoterapia ABA &middot; Formul&aacute;rio 05 &middot; turno da ' + (f.turno === 'Manha' ? 'manh&atilde;' : 'tarde') + '</p></div>' +
-      '  <span class="deq-pilula">' + this.DIAS[f.d].toUpperCase() + ' &middot; ' + f.dataFmt + '</span>' +
+      '  <div class="deq-cab-t"><h1>LISTA DE PRESEN&Ccedil;A &ndash; TURNO ' + f.t.rotulo + ' <span class="lp-faixa">(' + f.t.faixa + ')</span></h1>' +
+      '  <p>Equilibrium Terapia Infantil &middot; Psicoterapia ABA &middot; Formul&aacute;rio 05</p></div>' +
+      '  <span class="deq-pilula">' + this.DIAS[f.d] + ': ' + f.dataFmt + '</span>' +
+      '</div>';
+    const rodape =
+      '<div class="lp-totais">' +
+      '  <span><small>Crian&ccedil;as na grade</small><b>' + f.lista.length + '</b></span>' +
+      '  <span><small>Presen&ccedil;as</small><i></i></span>' +
+      '  <span><small>Faltas</small><i></i></span>' +
+      '  <span><small>Encaixes</small><i></i></span>' +
       '</div>' +
-      '<div class="deq-caixa deq-dados" style="grid-template-columns:1fr 1fr 1fr 1.4fr; margin-top:8px">' +
-      '  <div><small>Data</small><b>' + f.dataFmt + '</b></div>' +
-      '  <div><small>Turno</small><b>' + f.turnoHtml + '</b></div>' +
-      '  <div><small>Crian&ccedil;as</small><b>' + f.lista.length + '</b></div>' +
-      '  <div style="border-right:none"><small>Semana</small><b>' + semana + '</b></div>' +
-      '</div>' +
-      '<h2><span class="ponto ' + f.cor + '"></span>Presen&ccedil;as do turno <small>&middot; assinatura do respons&aacute;vel por crian&ccedil;a</small></h2>' +
-      '<div class="deq-caixa lp-tab" style="margin-top:4px"><table class="deq-lista"><thead><tr>' +
-      '<th class="c">#</th><th>Paciente</th><th>Hor&aacute;rios</th><th class="c">Sess&otilde;es</th><th>Aplicador(a)</th><th>Assinatura do respons&aacute;vel</th>' +
-      '</tr></thead><tbody>' +
-      f.lista.map((p, n) =>
-        '<tr><td class="n c">' + String(n + 1).padStart(2, '0') + '</td>' +
-        '<td class="pac">' + escaparHtml(p.nome) + '</td>' +
-        '<td class="hor">' + p.horas.join(' &middot; ') + '</td>' +
-        '<td class="sess c"><b' + (p.horas.length > 1 ? ' class="dupla"' : '') + '>' + p.horas.length + '</b></td>' +
-        '<td>' + escaparHtml(p.aplicadores.map(nomeCurto).join(' / ')) + '</td>' +
-        '<td class="ass"><span></span></td></tr>').join('') +
-      '</tbody></table></div>' +
-      '<div class="deq-legenda"><span><i style="background:#EEF5FB; border:1px solid #CFE0F0"></i>1 sess&atilde;o no turno</span>' +
-      '<span><i style="background:var(--eq-amarelo)"></i>2 sess&otilde;es (hor&aacute;rio duplo)</span>' +
-      '<span>O respons&aacute;vel assina na entrega da crian&ccedil;a.</span></div>' +
       '<div class="deq-conf"><div class="deq-assinatura">Recep&ccedil;&atilde;o &middot; confer&ecirc;ncia do turno</div><div class="deq-assinatura">Coordena&ccedil;&atilde;o</div></div>' +
       '<div class="deq-rodape">' +
       '  <span>Equilibrium Terapia Infantil &middot; Uberl&acirc;ndia/MG</span>' +
       '  <span class="pontos"><i style="background:var(--eq-teal)"></i><i style="background:var(--eq-amarelo)"></i><i style="background:var(--eq-rosa)"></i><i style="background:var(--eq-azul)"></i></span>' +
-      '  <span>Gerado pelo CORTEX aba &middot; ' + geradoEm + ' &middot; folha ' + (i + 1) + ' de ' + folhas.length + '</span>' +
-      '</div>' +
-      '</div></div>';
+      '  <span>Gerado pelo CORTEX aba &middot; ' + geradoEm + ' &middot; folha ' + (i + 1) + ' de ' + total + '</span>' +
+      '</div>';
+    return '<div class="lp-folha"><div class="doc-eq lp-doc">' + cab + this.tabela(f, brancas) + rodape + '</div></div>';
+  },
 
-    const html = '<p class="sub nao-imprime" style="margin-bottom:12px">Semana de ' +
-      segunda.toLocaleDateString('pt-BR') + ' a ' + fim.toLocaleDateString('pt-BR') + ' &middot; ' + folhas.length + ' folha(s): uma por dia e turno. Imprimir sai tudo de uma vez.</p>' +
-      folhas.map(folha).join('');
-
-    alvo.innerHTML = html;
+  // igual a folha de papel (opcao A escolhida por Wess, 07/10/2026): uma tabela so, aplicadora em cada linha
+  tabela(f, brancas) {
+    const sess = p => '<b' + (p.horas.length > 1 ? ' class="dupla"' : '') + '>' + p.horas.length + '</b>';
+    let ant = null;
+    const linhas = f.lista.map(p => {
+      const novo = p.principal !== ant; ant = p.principal;
+      return '<tr' + (novo ? ' class="lp-novo"' : '') + '>' +
+        '<td class="pac">' + escaparHtml(p.nome) + '<small>' + p.horas.join(' &middot; ') + '</small></td>' +
+        '<td class="sess c">' + sess(p) + '</td>' +
+        '<td class="apl">' + escaparHtml(p.aplicadores.length > 1 ? p.aplicadores.map(x => x.split(' ')[0]).join(' / ') : this.nomeCurto(p.aplicadores[0] || '')) + '</td>' +
+        '<td class="c mk">' + this.caixa() + '</td><td class="c mk">' + this.caixa() + '</td>' +
+        '<td class="ass"></td></tr>';
+    }).join('');
+    const vazias = Array.from({ length: brancas }, () => '<tr class="lp-branca"><td class="pac"></td><td></td><td></td><td class="c mk">' + this.caixa() + '</td><td class="c mk">' + this.caixa() + '</td><td class="ass"></td></tr>').join('');
+    return '<div class="deq-caixa lp-tab"><table class="deq-lista lp-lista"><colgroup><col style="width:34%"><col style="width:9%"><col style="width:17%"><col style="width:8.5%"><col style="width:8.5%"><col></colgroup><thead><tr>' +
+      '<th>Paciente</th><th class="c">N&ordm; sess&atilde;o/dia</th><th>Aplicador(a)</th><th class="c">Presen&ccedil;a</th><th class="c">Falta</th><th>Ass. respons&aacute;vel</th>' +
+      '</tr></thead><tbody>' + linhas + vazias + '</tbody></table></div>' +
+      '<div class="deq-legenda"><span><i style="background:var(--eq-amarelo)"></i>2 sess&otilde;es no turno (hor&aacute;rio duplo)</span><span>Marque X em Presen&ccedil;a ou Falta. Linhas em branco: encaixes do dia.</span></div>';
   }
 };

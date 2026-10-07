@@ -814,17 +814,18 @@ window.MODULOS.pei = {
 
     // Tabela unica: AREA DE ESTIMULO | META (lista) | RECURSO (da area) | PRAZO (um por meta)
     const td = 'padding:7px 9px; border:1px solid var(--eq-linha); vertical-align:top; line-height:1.5; font-size:11px';
-    const blocos = '<table style="width:100%; border-collapse:collapse; margin-top:8px">' +
-      '<tr>' + ['&Aacute;REA DE EST&Iacute;MULO', 'META', 'RECURSO', 'PRAZO'].map((h, i) =>
+    // patch 38: na impressao a tabela quebra entre paginas onde couber (cabecalho repete; cada area fica inteira)
+    const blocos = '<table class="deq-pei-tab" style="width:100%; border-collapse:collapse; margin-top:8px">' +
+      '<thead><tr>' + ['&Aacute;REA DE EST&Iacute;MULO', 'META', 'RECURSO', 'PRAZO'].map((h, i) =>
         '<th style="text-align:' + (i === 0 || i === 3 ? 'center' : 'left') + '; padding:7px 9px; background:var(--eq-azul); color:#fff; font-size:10px; letter-spacing:.06em; border:1px solid var(--eq-azul)' +
-        (i === 0 ? '; width:17%' : i === 2 ? '; width:27%' : i === 3 ? '; width:15%' : '') + '">' + h + '</th>').join('') + '</tr>' +
+        (i === 0 ? '; width:17%' : i === 2 ? '; width:27%' : i === 3 ? '; width:15%' : '') + '">' + h + '</th>').join('') + '</tr></thead><tbody>' +
       Object.entries(porArea).map(([area, lista]) =>
         '<tr>' +
         '<td style="' + td + '; text-align:center; font-weight:800; color:var(--eq-azul-escuro); text-transform:uppercase">' + escaparHtml(area) + '</td>' +
         '<td style="' + td + '">' + lista.map(m => '&ndash; ' + escaparHtml(m.meta).replace(/;?$/, ';')).join('<br>') + '</td>' +
         '<td style="' + td + '">' + escaparHtml((lista.find(m => m.recurso) || {}).recurso || '&mdash;') + '</td>' +
         '<td style="' + td + '; text-align:center">' + [...new Set(lista.map(m => m.prazo).filter(Boolean))].map(p => escaparHtml(p)).join('<br>') + '</td>' +
-        '</tr>').join('') + '</table>';
+        '</tr>').join('') + '</tbody></table>';
     const idade = (() => { const a = new Date(pei.pacientes.data_nascimento + 'T12:00:00'), b = new Date(pei.periodo_inicio ? pei.periodo_inicio + 'T12:00:00' : Date.now());
       let m = (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth()); if (b.getDate() < a.getDate()) m--; return Math.floor(m / 12) + ' anos e ' + (m % 12) + ' meses'; })();
 

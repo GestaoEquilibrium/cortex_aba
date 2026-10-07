@@ -387,3 +387,11 @@ table.deq-pagina .deq-rodape { margin-top: 0; }
     font-size: 10px; font-weight: 800; letter-spacing: .04em; vertical-align: middle; }
 .deq-freq td.deq-fferiado { background: #FFFBEF; }
 @media print { .deq-ffer, .deq-freq td.deq-fferiado { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+
+/* ── PEI (patch 38): a tabela de metas quebra entre paginas onde couber, sem deixar a primeira folha vazia.
+   O cabecalho azul repete na folha seguinte e cada area (linha) fica inteira. ── */
+@media print {
+    .doc-eq table.deq-pei-tab { break-inside: auto; page-break-inside: auto; }
+    .deq-pei-tab thead { display: table-header-group; }
+    .deq-pei-tab tr { break-inside: avoid; page-break-inside: avoid; }
+}

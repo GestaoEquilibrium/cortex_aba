@@ -708,7 +708,7 @@ window.MODULOS.programas = {
         escaparHtml(x.profissional ? x.profissional.nome.split(' ').slice(0, 2).join(' ') : 'sem aplicador') + (minha ? ' (voce)' : deOutra ? ' &middot; horario dela' : '') + '</small></div>' +
         '<div class="pac-selos"><span class="selo ' + st[0] + '">' + st[1] + '</span>' +
         (x.status === 'concluida' ? '<button class="btn-chip" onclick="fecharModal(); MODULOS.programas.docEvolucaoDiaria(\'' + x.id + '\', true)">Relatorio</button>' : '') +
-        (x.status === 'falta' ? '' :
+        (x.status === 'falta' ? '' : x.data > hoje ? '<span class="selo selo-neutro" title="Programas so podem ser lancados no dia da sessao ou depois">futura</span>' :
           '<label class="check" title="Marque para lancar os mesmos programas e a evolucao em mais de uma sessao"><input type="checkbox" class="sess-multi" value="' + x.id + '"> junto</label>' +
           '<button class="btn-chip cheio" onclick="MODULOS.programas.lancarNesta(\'' + x.id + '\')">Lancar nesta</button>') +
         '</div></div>';
@@ -747,6 +747,7 @@ window.MODULOS.programas = {
     this._sessoesExtras = ids.filter(id => id !== principal);
     this.abrirFolha(principal, true);
   },
+  ehGestao() { const p = window.CORTEX_SESSAO.profile; return ['direcao', 'coordenador', 'suporte'].includes(p.perfil_real || p.perfil); },
   // abrir a ficha direto por uma sessao (celular "Aplicar hoje"): mesma confirmacao para horario de outra aplicadora
   async abrirFichaDaSessao(id) {
     const { data: s } = await sb.from('sessoes').select('id, data, hora_inicio, aplicador_id, profissional:profiles!sessoes_aplicador_id_fkey(nome)').eq('id', id).maybeSingle();
@@ -756,6 +757,7 @@ window.MODULOS.programas = {
   },
   async confirmarHorarioDeOutra(lista) {
     const eu = window.CORTEX_SESSAO.user.id;
+    if (lista.some(x => x.data && x.data > this.hojeLocal())) { popAviso('Essa sessao ainda nao aconteceu. Programas so podem ser lancados no dia da sessao ou depois: confira a data.'); return false; }
     const outras = lista.filter(x => x.aplicador_id && x.aplicador_id !== eu);
     if (!outras.length) return true;
     const ids = outras.map(x => x.id);
@@ -766,6 +768,12 @@ window.MODULOS.programas = {
     const com = new Set([...(rT.data || []).map(t => t.sessao_id), ...(rE.data || []).map(e => e.sessao_id)]);
     const nome = x => x.profissional ? x.profissional.nome.split(' ').slice(0, 2).join(' ') : 'outra aplicadora';
     const fmt = d => d.split('-').reverse().join('/').slice(0, 5);
+    if (com.size && !this.ehGestao()) {
+      const x = outras.find(o => com.has(o.id));
+      popAviso('O horario das ' + String(x.hora_inicio).slice(0, 5) + ' de ' + fmt(x.data) + ' e de ' + nome(x) + ' e ela ja lancou programas ou evolucao nele.\n\n' +
+        'Lance o seu atendimento no seu proprio horario. Se o seu horario nao aparece na lista, peca a coordenacao.');
+      return false;
+    }
     const desc = outras.map(x => '\u2022 ' + fmt(x.data) + ' as ' + String(x.hora_inicio).slice(0, 5) + ' \u00b7 ' + nome(x) +
       (com.has(x.id) ? ' (ela ja lancou programas ou evolucao)' : '')).join('\n');
     return popConfirmar('Este horario e de outra aplicadora:\n' + desc + '\n\nCada aplicadora lanca no proprio horario. ' +
@@ -816,7 +824,7 @@ window.MODULOS.programas = {
         .eq('paciente_id', s.paciente_id)
         .eq('status', 'em_intervencao'),
       sb.from('registros_tentativas')
-        .select('id, paciente_programa_id, ordem, resposta, acertou, estimulo_id, reforcador')
+        .select('id, paciente_programa_id, ordem, resposta, acertou, estimulo_id, reforcador, registrado_por')
         .eq('sessao_id', sessaoId),
       sb.from('estimulos').select('id, nome, categoria').eq('ativo', true).order('categoria').order('nome'),
       sb.from('reforcadores').select('nome').order('nome').limit(200),
@@ -873,6 +881,8 @@ window.MODULOS.programas = {
       // patch 37: tentativas que existiam quando a ficha abriu (as da tela). Se aparecer outra no banco depois,
       // alguem gravou nesta sessao enquanto a ficha estava aberta: nao apagar.
       idsBase: new Set((rRegs.data || []).map(r => r.id)),
+      // tentativas de outra pessoa ja gravadas aqui: a aplicadora nao grava por cima (so a coordenacao)
+      bloqueioAlheio: !this.ehGestao() && (rRegs.data || []).some(r => r.registrado_por && r.registrado_por !== window.CORTEX_SESSAO.user.id && r.resposta !== 'FA'),
       donaOutra: s.aplicador_id && s.aplicador_id !== window.CORTEX_SESSAO.user.id ? (s.profissional ? s.profissional.nome.split(' ').slice(0, 2).join(' ') : 'outra aplicadora') : '',
       programas: pps,
       podeConfig: podeConfig,
@@ -924,7 +934,8 @@ window.MODULOS.programas = {
     if (this.celular() && f.programas.length) { this.desenharFolhaCelular(); return; }
 
     let corpo = (this._avisoConcluida ? '<div class="mensagem-erro visivel" style="background:var(--st-warn-bg); color:#92400E; border-color:#FDE68A; margin-bottom:10px">Esta sessao ja estava concluida. O que voce lancar aqui atualiza os registros dela.</div>' : '') +
-      (f.donaOutra ? '<div class="mensagem-erro visivel" style="margin-bottom:10px">Este horario e de <b>' + escaparHtml(f.donaOutra) + '</b>. O que voce lancar aqui fica no horario dela; o seu atendimento deve ser lancado no seu proprio horario.</div>' : '') +
+      (f.bloqueioAlheio ? '<div class="mensagem-erro visivel" style="margin-bottom:10px">Esta sessao ja tem programas lancados por outra pessoa. Para nao misturar os lancamentos, voce nao consegue gravar aqui: lance no seu proprio horario ou peca a coordenacao para corrigir.</div>'
+        : f.donaOutra ? '<div class="mensagem-erro visivel" style="margin-bottom:10px">Este horario e de <b>' + escaparHtml(f.donaOutra) + '</b>. O que voce lancar aqui fica no horario dela; o seu atendimento deve ser lancado no seu proprio horario.</div>' : '') +
       (f.faixaComp || '');
     const doDia = this.programasDoDia();
     if (f.idx >= doDia.length) f.idx = Math.max(0, doDia.length - 1);
@@ -1127,7 +1138,8 @@ window.MODULOS.programas = {
         : '<h2>O que vamos aplicar hoje &middot; ' + escaparHtml(s.pacientes.nome) + '</h2>') +
       '<p class="sub">' + new Date(s.data + 'T12:00:00').toLocaleDateString('pt-BR') + ' as ' + s.hora_inicio.slice(0, 5) +
       (f.podeConfig ? ' &middot; Marque os programas desta sessao. Depois eles aparecem um de cada vez.' : ' &middot; Programas configurados pela coordenacao. Toque em Aplicar no que vai comecar.') + '</p></div></div>' +
-      (f.donaOutra ? '<div class="mensagem-erro visivel" style="margin-bottom:10px">Este horario e de <b>' + escaparHtml(f.donaOutra) + '</b>. O que voce lancar aqui fica no horario dela; o seu atendimento deve ser lancado no seu proprio horario.</div>' : '') +
+      (f.bloqueioAlheio ? '<div class="mensagem-erro visivel" style="margin-bottom:10px">Esta sessao ja tem programas lancados por outra pessoa. Para nao misturar os lancamentos, voce nao consegue gravar aqui: lance no seu proprio horario ou peca a coordenacao para corrigir.</div>'
+        : f.donaOutra ? '<div class="mensagem-erro visivel" style="margin-bottom:10px">Este horario e de <b>' + escaparHtml(f.donaOutra) + '</b>. O que voce lancar aqui fica no horario dela; o seu atendimento deve ser lancado no seu proprio horario.</div>' : '') +
       (f.faixaComp || '') +
       '<div class="cartao"><div class="sel-lista">' +
       f.programas.map(pp => {
@@ -1300,17 +1312,33 @@ window.MODULOS.programas = {
     this.desenharFolha();
   },
 
-  async salvarFichas(avisar) {
+  // patch 37: uma gravacao por vez. A gravacao automatica (a cada 5 marcas) e a de trocar de programa corriam juntas:
+  // as duas apagavam e as duas inseriam, e as tentativas ficavam duplicadas (20 em vez de 10).
+  salvarFichas(avisar) {
+    const vez = (this._filaSalvar || Promise.resolve()).then(() => this.salvarFichasAgora(avisar));
+    this._filaSalvar = vez.catch(() => false);
+    return vez;
+  },
+  async salvarFichasAgora(avisar) {
     const f = this._folha;
     this._conflito = false;
     try {
       // patch 37: protecao contra apagar o lancamento de outra pessoa (duas fichas abertas na mesma sessao)
       if (f.idsBase) {
         const { data: atuais, error: eA } = await sb.from('registros_tentativas')
-          .select('id, registrado_por, profissional:profiles!registros_tentativas_registrado_por_fkey(nome)').eq('sessao_id', f.sessao.id);
+          .select('id, registrado_por, resposta, profissional:profiles!registros_tentativas_registrado_por_fkey(nome)').eq('sessao_id', f.sessao.id);
         let lista = atuais;
-        if (eA) { const r2 = await sb.from('registros_tentativas').select('id, registrado_por').eq('sessao_id', f.sessao.id); if (r2.error) throw new Error(r2.error.message); lista = r2.data; }
+        if (eA) { const r2 = await sb.from('registros_tentativas').select('id, registrado_por, resposta').eq('sessao_id', f.sessao.id); if (r2.error) throw new Error(r2.error.message); lista = r2.data; }
         const eu = window.CORTEX_SESSAO.user.id;
+        // tentativas de outra pessoa nesta sessao: a aplicadora nao consegue apaga-las (regra do banco), entao gravar
+        // por cima so misturaria os dois lancamentos. So a coordenacao substitui.
+        const alheias = (lista || []).filter(r => r.registrado_por && r.registrado_por !== eu && r.resposta !== 'FA');
+        if (alheias.length && !this.ehGestao()) {
+          const quem = [...new Set(alheias.map(r => r.profissional ? r.profissional.nome.split(' ').slice(0, 2).join(' ') : 'outra pessoa'))].join(', ');
+          this._conflito = true;
+          throw new Error('Esta sessao ja tem programas lancados por ' + quem + '. Para nao misturar os dois lancamentos, nada foi gravado aqui. ' +
+            'Lance o seu atendimento no seu proprio horario; se este horario e seu e o lancamento dela entrou aqui por engano, peca a coordenacao para corrigir.');
+        }
         const novos = (lista || []).filter(r => !f.idsBase.has(r.id) && r.registrado_por !== eu);
         if (novos.length) {
           const quem = [...new Set(novos.map(r => r.profissional ? r.profissional.nome.split(' ').slice(0, 2).join(' ') : 'outra pessoa'))].join(', ');

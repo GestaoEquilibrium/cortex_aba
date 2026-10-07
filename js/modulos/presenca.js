@@ -177,7 +177,8 @@ window.MODULOS.presenca = {
         '<td class="c mk">' + this.caixa() + '</td><td class="c mk">' + this.caixa() + '</td>' +
         '<td class="ass"></td></tr>';
     }).join('');
-    const vazias = Array.from({ length: brancas }, () => '<tr class="lp-branca"><td class="pac"></td><td></td><td></td><td class="c mk">' + this.caixa() + '</td><td class="c mk">' + this.caixa() + '</td><td class="ass"></td></tr>').join('');
+    // linhas para encaixe: sem quadradinho (so aparecem onde ja tem crianca)
+    const vazias = Array.from({ length: brancas }, () => '<tr class="lp-branca"><td class="pac"></td><td></td><td></td><td class="mk"></td><td class="mk"></td><td class="ass"></td></tr>').join('');
     return '<div class="deq-caixa lp-tab"><table class="deq-lista lp-lista"><colgroup><col style="width:34%"><col style="width:9%"><col style="width:17%"><col style="width:8.5%"><col style="width:8.5%"><col></colgroup><thead><tr>' +
       '<th>Paciente</th><th class="c">N&ordm; sess&atilde;o/dia</th><th>Aplicador(a)</th><th class="c">Presen&ccedil;a</th><th class="c">Falta</th><th>Ass. respons&aacute;vel</th>' +
       '</tr></thead><tbody>' + linhas + vazias + '</tbody></table></div>' +

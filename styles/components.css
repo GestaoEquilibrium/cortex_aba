@@ -816,6 +816,11 @@
 }
 .pei-meta:last-child { border-bottom: none; }
 .pei-check { padding-top: 8px; }
+/* patch 33: edicao do PEI pronto */
+.pei-ed-meta .pei-rp { grid-template-columns: minmax(0, 1fr) 132px; align-items: center; }
+.pei-ed-meta .pei-rp > .btn-chip, .pei-ed-meta .pei-rp > .selo { width: 100%; justify-content: center; text-align: center; }
+.pei-ed-meta.removida .pei-campos input, .pei-ed-meta.removida .pei-campos select { text-decoration: line-through; opacity: .45; }
+.pei-ed-meta.removida { background: var(--st-bad-bg); border-radius: 10px; }
 .pei-campos { flex: 1; display: flex; flex-direction: column; gap: 6px; }
 .pei-campos input {
     width: 100%;

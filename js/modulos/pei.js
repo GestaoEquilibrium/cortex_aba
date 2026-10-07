@@ -71,6 +71,7 @@ window.MODULOS.pei = {
         '<div class="pac-selos">' +
         '<span class="selo ' + (p.status === 'ativo' ? 'selo-ok">Ativo' : 'selo-neutro">' + p.status) + '</span>' +
         '<button class="btn-chip" onclick="MODULOS.pei.abrirVisual(\'' + p.id + '\')">Abrir</button>' +
+        (this.podeGerir() ? '<button class="btn-chip" onclick="MODULOS.pei.abrirEdicao(\'' + p.id + '\')">&#9998; Editar</button>' : '') +
         '</div></div>').join('')
       : '<p class="sub">Nenhum PEI elaborado ainda.</p>') +
       '</div>';
@@ -341,7 +342,9 @@ window.MODULOS.pei = {
       '    <button class="btn-voltar" onclick="MODULOS.pacientes.telaDetalhe(\'' + pei.pacientes.id + '\', \'pei\')">&larr; Prontuario</button>' +
       '    <h2>Plano de Ensino Individualizado</h2>' +
       '  </div>' +
-      '  <button class="btn btn-primario" onclick="MODULOS.pei.docPEI(\'' + pei.id + '\')">&#128424; Imprimir / Enviar ao portal</button>' +
+      '  <div style="display:flex; gap:8px; flex-wrap:wrap">' +
+      (this.podeGerir() ? '<button class="btn btn-fantasma" onclick="MODULOS.pei.abrirEdicao(\'' + pei.id + '\')">&#9998; Editar PEI</button>' : '') +
+      '  <button class="btn btn-primario" onclick="MODULOS.pei.docPEI(\'' + pei.id + '\')">&#128424; Imprimir / Enviar ao portal</button></div>' +
       '</div>' +
 
       '<div class="cartao"><div class="doc-eq">' +
@@ -370,6 +373,181 @@ window.MODULOS.pei = {
       '  <span>CORTEX aba</span>' +
       '</div>' +
       '</div></div>';
+  },
+
+  // ─────────────────── EDITAR PEI JA PRONTO (patch 33) ───────────────────
+  // Identificacao (finalidade, periodo, responsavel) e metas: texto, prazo, recurso da area, metas novas
+  // e remover metas. Meta com programa ja lancado pode ser corrigida, mas nao removida (o programa
+  // continua apontando para ela). O que ja foi impresso ou enviado ao portal fica como estava.
+
+  async abrirEdicao(peiId) {
+    if (!this.podeGerir()) { popAviso('Sem permissao para editar o PEI.'); return; }
+    const el = this.el();
+    el.innerHTML = '<div class="cartao"><p class="sub">Carregando PEI...</p></div>';
+    const { data: pei, error } = await sb.from('peis')
+      .select('*, pacientes(id, nome, aplicador_id), pei_metas(*)')
+      .eq('id', peiId).single();
+    if (error || !pei) { el.innerHTML = '<div class="cartao"><div class="mensagem-erro visivel">Nao foi possivel abrir o PEI' + (error ? ': ' + escaparHtml(error.message) : '') + '</div></div>'; return; }
+    const [{ data: equipe }, { data: pps }, { data: av }] = await Promise.all([
+      sb.from('profiles').select('id, nome').eq('ativo', true).eq('responsavel_tecnico', true).order('nome'),
+      sb.from('paciente_programas').select('pei_meta_id, status').eq('paciente_id', pei.paciente_id).not('pei_meta_id', 'is', null),
+      pei.avaliacao_id ? sb.from('avaliacoes').select('protocolo').eq('id', pei.avaliacao_id).maybeSingle() : Promise.resolve({ data: null })
+    ]);
+    const comPrograma = new Set((pps || []).map(x => x.pei_meta_id));
+    const metas = (pei.pei_metas || []).sort((a, b) => a.ordem - b.ordem);
+    // mesmas areas do construtor: Socially Savvy (ou PEI sem avaliacao) usa as areas do SS; QADI/Portage, as do QADI-R
+    const protocolo = av ? av.protocolo : null;
+    const areas = [...new Set(metas.map(m => m.area))];
+    const todas = [...new Set(areas.concat(protocolo && protocolo !== 'ss' ? MODULOS.avaliacoes.AREAS : MODULOS.avaliacoes.SS_AREAS))];
+    this._edicao = { pei, comPrograma, seq: 0, todas };
+
+    el.innerHTML =
+      '<div class="pagina-cabecalho">' +
+      '  <div>' +
+      '    <button class="btn-voltar" onclick="MODULOS.pei.abrirVisual(\'' + pei.id + '\')">&larr; Voltar ao PEI</button>' +
+      '    <h2>Editar PEI &middot; ' + escaparHtml(pei.pacientes.nome) + '</h2>' +
+      '    <p class="sub">Corrija os textos, troque prazos e recursos, inclua ou remova metas. Meta com programa ja lancado pode ser corrigida, mas nao removida. ' +
+      'O que ja foi impresso ou enviado ao portal continua como estava: depois de salvar, envie de novo se precisar.</p>' +
+      '  </div>' +
+      '  <button class="btn btn-primario" id="pei-ed-salvar1" onclick="MODULOS.pei.salvarEdicao()">Salvar alteracoes</button>' +
+      '</div>' +
+      '<div class="cartao faixa-azul"><h3>Identificacao (Formulario 02)</h3>' +
+      '<div class="grade-form">' +
+      '  <div class="campo c3"><label>Finalidade</label>' +
+      '    <textarea id="pei-ed-finalidade" rows="4">' + escaparHtml(pei.finalidade || '') + '</textarea></div>' +
+      '  <div class="campo"><label>Periodo - inicio</label><input type="date" id="pei-ed-inicio" value="' + (pei.periodo_inicio || '') + '"></div>' +
+      '  <div class="campo"><label>Periodo - fim</label><input type="date" id="pei-ed-fim" value="' + (pei.periodo_fim || '') + '"></div>' +
+      '  <div class="campo"><label>Responsavel tecnico (assina)</label><select id="pei-ed-prof">' +
+      ((equipe || []).some(m => m.id === pei.profissional_id) || !pei.profissional_id ? '' : '<option value="' + pei.profissional_id + '" selected>(responsavel atual)</option>') +
+      (equipe || []).map(m => '<option value="' + m.id + '"' + (m.id === pei.profissional_id ? ' selected' : '') + '>' + escaparHtml(m.nome) + '</option>').join('') +
+      '  </select></div>' +
+      '</div></div>' +
+      '<div id="pei-ed-areas">' + areas.map(a => this.htmlAreaEdicao(a, metas.filter(m => m.area === a))).join('') + '</div>' +
+      '<div class="cartao" id="pei-ed-nova-area"' + (todas.some(a => !areas.includes(a)) ? '' : ' hidden') + '><h3>Metas em outra area</h3>' +
+      '<div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center"><select id="pei-ed-area-sel">' +
+      todas.filter(a => !areas.includes(a)).map(a => '<option value="' + escaparHtml(a) + '">' + escaparHtml(a) + '</option>').join('') +
+      '</select><button type="button" class="btn-chip" onclick="MODULOS.pei.addAreaEdicao()">+ Incluir area</button></div></div>' +
+      '<div class="mensagem-erro" id="pei-ed-erro"></div>' +
+      '<div class="barra-acoes">' +
+      '  <button class="btn btn-fantasma" onclick="MODULOS.pei.abrirVisual(\'' + pei.id + '\')">Cancelar</button>' +
+      '  <button class="btn btn-primario" id="pei-ed-salvar2" onclick="MODULOS.pei.salvarEdicao()">Salvar alteracoes</button>' +
+      '</div>';
+  },
+
+  htmlAreaEdicao(area, lista) {
+    const rec = (lista.find(m => m.recurso) || {}).recurso || '';
+    const k = ++this._edicao.seq;
+    return '<div class="cartao pei-ed-area" data-area="' + escaparHtml(area) + '"><h3>' + escaparHtml(area) +
+      ' <span class="selo selo-neutro pei-ed-conta">' + lista.length + ' meta(s)</span></h3>' +
+      '<div class="campo" style="margin-bottom:8px"><label>Recursos da area <small class="sub">(vale para todas as metas de ' + escaparHtml(area) + ')</small></label>' +
+      '<input class="pm-recurso-area" id="pei-ed-rec-' + k + '" value="' + escaparHtml(rec) + '" placeholder="Ex.: cartoes de objetos, espelho, bonecos, livros, rotina visual"></div>' +
+      '<div class="pei-ed-lista">' + lista.map(m => this.htmlMetaEdicao(m)).join('') + '</div>' +
+      '<button type="button" class="btn-chip" style="margin-top:8px" onclick="MODULOS.pei.addMetaEdicao(this)">+ Meta</button></div>';
+  },
+
+  htmlMetaEdicao(m) {
+    const k = ++this._edicao.seq;
+    const travada = m.id && this._edicao.comPrograma.has(m.id);
+    const prazos = this.PRAZOS.includes(m.prazo) || !m.prazo ? this.PRAZOS : [m.prazo].concat(this.PRAZOS);
+    return '<div class="pei-meta pei-ed-meta" data-id="' + (m.id || '') + '">' +
+      '<div class="pei-campos">' +
+      '  <input class="pm-meta" id="pei-ed-meta-' + k + '" value="' + escaparHtml(m.meta || '') + '" placeholder="Meta">' +
+      '  <div class="pei-rp"><select class="pm-prazo" id="pei-ed-prazo-' + k + '">' + prazos.map(p => '<option value="' + escaparHtml(p) + '"' + (p === (m.prazo || this.PRAZOS[0]) ? ' selected' : '') + '>' + escaparHtml(p) + '</option>').join('') + '</select>' +
+      (travada
+        ? '<span class="selo selo-info" title="Esta meta ja virou programa: pode corrigir o texto e o prazo, mas nao remover">programa lancado</span>'
+        : '<button type="button" class="btn-chip pei-ed-tirar" onclick="MODULOS.pei.tirarMetaEdicao(this)" title="Remover esta meta do PEI">&#10005; Remover</button>') +
+      '  </div>' +
+      '</div></div>';
+  },
+
+  contarArea(card) {
+    const n = card.querySelectorAll('.pei-ed-meta:not(.removida)').length;
+    const s = card.querySelector('.pei-ed-conta'); if (s) s.textContent = n + ' meta(s)';
+  },
+  addMetaEdicao(botao) {
+    const card = botao.closest('.pei-ed-area');
+    const div = document.createElement('div'); div.innerHTML = this.htmlMetaEdicao({ meta: '' });
+    const nova = div.firstChild; card.querySelector('.pei-ed-lista').appendChild(nova);
+    nova.querySelector('.pm-meta').focus();
+    this.contarArea(card);
+  },
+  tirarMetaEdicao(botao) {
+    const linha = botao.closest('.pei-ed-meta'), card = botao.closest('.pei-ed-area');
+    if (!linha.dataset.id) { linha.remove(); this.contarArea(card); return; }
+    // meta ja gravada: some da tela e sai do banco quando salvar (da para desfazer antes)
+    const removida = !linha.classList.contains('removida');
+    linha.classList.toggle('removida', removida);
+    linha.querySelectorAll('input, select').forEach(x => { x.disabled = removida; });
+    botao.innerHTML = removida ? '&#8634; Desfazer' : '&#10005; Remover';
+    this.contarArea(card);
+  },
+  addAreaEdicao() {
+    const sel = document.getElementById('pei-ed-area-sel'); if (!sel || !sel.value) return;
+    const area = sel.value;
+    const div = document.createElement('div'); div.innerHTML = this.htmlAreaEdicao(area, []);
+    const card = div.firstChild; document.getElementById('pei-ed-areas').appendChild(card);
+    sel.querySelector('option[value="' + CSS.escape(area) + '"]')?.remove();
+    if (!sel.options.length) document.getElementById('pei-ed-nova-area').hidden = true;
+    this.addMetaEdicao(card.querySelector('.btn-chip'));
+  },
+
+  async salvarEdicao() {
+    const ctx = this._edicao; if (!ctx) return;
+    const erro = document.getElementById('pei-ed-erro'); erro.classList.remove('visivel');
+    const botoes = ['pei-ed-salvar1', 'pei-ed-salvar2'].map(id => document.getElementById(id)).filter(Boolean);
+    const falha = msg => { erro.textContent = msg; erro.classList.add('visivel'); botoes.forEach(b => { b.disabled = false; b.textContent = 'Salvar alteracoes'; }); window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }); };
+    const inicio = document.getElementById('pei-ed-inicio').value || null, fim = document.getElementById('pei-ed-fim').value || null;
+    if (inicio && fim && fim < inicio) { falha('O fim do periodo esta antes do inicio.'); return; }
+
+    // le a tela: metas mantidas/novas (na ordem da tela) e metas removidas
+    const manter = [], novas = [], tirar = [];
+    let ordem = 0;
+    document.querySelectorAll('.pei-ed-area').forEach(card => {
+      const area = card.dataset.area;
+      const rec = (card.querySelector('.pm-recurso-area').value || '').trim() || null;
+      card.querySelectorAll('.pei-ed-meta').forEach(l => {
+        const id = l.dataset.id;
+        if (l.classList.contains('removida')) { if (id) tirar.push(id); return; }
+        const texto = l.querySelector('.pm-meta').value.trim();
+        if (!texto) { if (id && !ctx.comPrograma.has(id)) tirar.push(id); return; }
+        const reg = { area, meta: texto, recurso: rec, prazo: l.querySelector('.pm-prazo').value || null, ordem: ++ordem };
+        if (id) manter.push(Object.assign({ id }, reg)); else novas.push(reg);
+      });
+    });
+    if (!manter.length && !novas.length) { falha('O PEI precisa de ao menos uma meta.'); return; }
+    if (tirar.length && !await popConfirmar('Remover ' + tirar.length + ' meta(s) deste PEI? As outras alteracoes tambem serao salvas.', { titulo: 'Remover metas', ok: 'Remover e salvar' })) return;
+
+    botoes.forEach(b => { b.disabled = true; b.textContent = 'Salvando...'; });
+    const pei = ctx.pei;
+    try {
+      const { data: up, error: e1 } = await sb.from('peis').update({
+        finalidade: document.getElementById('pei-ed-finalidade').value.trim() || null,
+        periodo_inicio: inicio, periodo_fim: fim,
+        profissional_id: document.getElementById('pei-ed-prof').value || null
+      }).eq('id', pei.id).select('id');
+      if (e1) throw new Error('PEI: ' + e1.message);
+      if (!up || !up.length) throw new Error('o banco nao deixou alterar o PEI (permissao do seu perfil)');
+      for (const m of manter) {
+        const { id, ...campos } = m;
+        const { error } = await sb.from('pei_metas').update(campos).eq('id', id);
+        if (error) throw new Error('meta "' + m.meta.slice(0, 40) + '": ' + error.message);
+      }
+      if (novas.length) {
+        const { error } = await sb.from('pei_metas').insert(novas.map(m => Object.assign({ pei_id: pei.id }, m)));
+        if (error) throw new Error('metas novas: ' + error.message);
+      }
+      if (tirar.length) {
+        const { error, count } = await sb.from('pei_metas').delete({ count: 'exact' }).in('id', tirar);
+        if (error) throw new Error('remover metas: ' + error.message);
+        if (count === 0) throw new Error('o banco nao deixou remover as metas (falta rodar o SQL do patch 33). As outras alteracoes foram salvas');
+      }
+    } catch (e) {
+      falha('Nao foi possivel salvar tudo: ' + e.message + '.');
+      return;
+    }
+    this._edicao = null;
+    await this.abrirVisual(pei.id);
+    popAviso('PEI atualizado.' + (tirar.length ? ' ' + tirar.length + ' meta(s) removida(s).' : ''));
   },
 
   // ─────────────────── RELATORIO DE DEVOLUTIVA ───────────────────

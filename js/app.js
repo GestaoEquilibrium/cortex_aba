@@ -795,6 +795,35 @@ function paginarDocumentoPdf(doc, wrap) {
       else { pg = novaPagina(); paginas.push(pg); }
       continue;
     }
+    // patch 38: tabela com cabecalho (thead) quebra entre linhas, como na impressao: o cabecalho repete na pagina
+    // seguinte e cada linha (no PEI, cada area) fica inteira
+    if (u.tagName === 'TABLE' && u.tHead && u.tBodies.length && u.tBodies[0].rows.length) {
+      const linhas = [...u.tBodies[0].rows];
+      const parte = u.cloneNode(false); parte.appendChild(u.tHead.cloneNode(true));
+      const corpo = document.createElement('tbody'); parte.appendChild(corpo);
+      pg._cont.replaceChild(parte, u);
+      let n = 0;
+      while (n < linhas.length) { corpo.appendChild(linhas[n]); if (cabe()) { n++; continue; } corpo.removeChild(linhas[n]); break; }
+      if (n === 0 && vazia()) { corpo.appendChild(linhas[0]); n = 1; }   // linha maior que a pagina: fica e transborda (raro)
+      if (n === 0) {
+        // nenhuma linha coube no fim desta pagina: a tabela vai inteira para a proxima (com o titulo, se ficou orfao)
+        pg._cont.removeChild(parte);
+        linhas.forEach(l => u.tBodies[0].appendChild(l));
+        const ult = pg._cont.lastElementChild;
+        if (ult && /^H[23]$/.test(ult.tagName)) { pg._cont.removeChild(ult); fila.unshift(ult); }
+        fila.unshift(u);
+        pg = novaPagina(); paginas.push(pg);
+        continue;
+      }
+      if (n < linhas.length) {
+        const resto = u.cloneNode(false); resto.appendChild(u.tHead.cloneNode(true));
+        const tb = document.createElement('tbody'); linhas.slice(n).forEach(l => tb.appendChild(l)); resto.appendChild(tb);
+        resto.style.marginTop = '0';
+        fila.unshift(resto);
+        pg = novaPagina(); paginas.push(pg);
+      }
+      continue;
+    }
     if (vazia()) continue;                    // unidade maior que a pagina: fica e transborda (raro)
     pg._cont.removeChild(u);
     // titulo orfao no fim da pagina vai junto para a proxima

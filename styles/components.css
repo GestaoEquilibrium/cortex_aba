@@ -2681,6 +2681,11 @@
 .evo-item::before { content: ''; position: absolute; left: -27px; top: 16px; width: 12px; height: 12px; border-radius: 50%; background: var(--acao); border: 3px solid var(--surface); box-shadow: 0 0 0 2px var(--acao); }
 .evo-item.falta::before { background: var(--st-bad); box-shadow: 0 0 0 2px var(--st-bad); }
 .evo-item.sem::before { background: var(--surface); box-shadow: 0 0 0 2px var(--st-warn); }
+/* patch 42: evolucoes da mais recente para a mais antiga; sessoes futuras do mes ficam embaixo */
+.evo-sep { position: relative; margin: 18px 0 10px; font-size: 11.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-muted); }
+.evo-sep::before { content: ''; position: absolute; left: -26px; top: 50%; width: 10px; height: 2px; background: var(--line-strong); }
+.evo-item.futura::before { box-shadow: 0 0 0 2px var(--line-strong); }
+.evo-item.futura .evo-card { opacity: .78; }
 .evo-card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
 .evo-card-vazia { border-style: dashed; }
 .evo-cab { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }

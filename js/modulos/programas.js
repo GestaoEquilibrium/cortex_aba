@@ -1920,7 +1920,7 @@ window.MODULOS.programas = {
     const [rS, rMeses] = await Promise.all([
       sb.from('sessoes').select('id, data, hora_inicio, duracao_min, status, aplicador_id, profissional:profiles!sessoes_aplicador_id_fkey(nome), salas(nome)')
         .eq('paciente_id', pacienteId).gte('data', ini).lte('data', fim).neq('status', 'cancelada')
-        .order('data').order('hora_inicio'),   // crescente: do dia 1 ao fim do mes (decisao de Wess, 06/10)
+        .order('data', { ascending: false }).order('hora_inicio', { ascending: false }),   // decrescente: as mais recentes em cima (Wess, 08/10; antes era do dia 1 ao fim do mes)
       sb.from('sessoes').select('data').eq('paciente_id', pacienteId).neq('status', 'cancelada').order('data', { ascending: false }).limit(2000)
     ]);
     const sessoes = rS.data || [];
@@ -2054,10 +2054,14 @@ window.MODULOS.programas = {
   evoHtmlLinha(lista) {
     const E = this._evo; const fmt = d => d.split('-').reverse().join('/');
     const podeE = perm('evolucao') === 'E';
-    return '<div class="evo-tl">' + lista.map(s => {
+    // patch 42: mais recentes em cima; sessoes que ainda vao acontecer no mes ficam embaixo, da mais proxima para a mais longe
+    const hoje = this.hojeLocal();
+    const futura = s => s.data > hoje && !E.evPor[s.id];
+    const feitas = lista.filter(s => !futura(s)), proximas = lista.filter(futura).reverse();
+    const item = s => {
       const ev = E.evPor[s.id];
       const nomeApl = (ev && ev.aplicador ? ev.aplicador.nome : (s.profissional ? s.profissional.nome : '-'));
-      const cls = s.status === 'falta' ? ' falta' : (!ev ? ' sem' : '');
+      const cls = s.status === 'falta' ? ' falta' : (!ev ? (futura(s) ? ' sem futura' : ' sem') : '');
       if (!ev) {
         const pend = this.evoPendente(s);
         return '<div class="evo-item' + cls + '"><div class="evo-card evo-card-vazia"><div class="evo-cab"><b>' + fmt(s.data) + ' as ' + String(s.hora_inicio).slice(0, 5) + '</b>' +
@@ -2080,7 +2084,9 @@ window.MODULOS.programas = {
         '<div class="evo-txt' + (longo ? ' curto' : '') + '">' + escaparHtml(ev.texto || '') + '</div>' +
         (longo ? '<div class="evo-mais" onclick="MODULOS.programas.evoExpandir(this)">ver tudo</div>' : '') +
         this.evoChips(s) + '</div></div>';
-    }).join('') + '</div>';
+    };
+    return '<div class="evo-tl">' + feitas.map(item).join('') +
+      (proximas.length ? '<div class="evo-sep">Proximas sessoes do mes</div>' + proximas.map(item).join('') : '') + '</div>';
   },
   evoExpandir(el) { const t = el.previousElementSibling; t.classList.toggle('curto'); el.textContent = t.classList.contains('curto') ? 'ver tudo' : 'ver menos'; },
 
@@ -2242,7 +2248,8 @@ window.MODULOS.programas = {
     const diasCom = {};
     E.sessoes.forEach(s => { const d = diasCom[s.data] = diasCom[s.data] || { ev: false, falta: false, sem: false }; if (E.evPor[s.id]) d.ev = true; if (s.status === 'falta') d.falta = true; if (this.evoPendente(s)) d.sem = true; });
     const diasLista = [...new Set(lista.map(s => s.data))].sort();
-    if (!E.dia || !diasLista.includes(E.dia)) E.dia = diasLista[diasLista.length - 1];
+    // dia aberto de inicio: o mais recente que ja aconteceu (nao uma sessao futura do fim do mes)
+    if (!E.dia || !diasLista.includes(E.dia)) { const ate = diasLista.filter(d => d <= this.hojeLocal()); E.dia = ate.length ? ate[ate.length - 1] : diasLista[0]; }
     const idx = diasLista.indexOf(E.dia);
     const [ano, mes] = E.mes.split('-').map(Number);
     const primeiro = new Date(ano, mes - 1, 1), nDias = new Date(ano, mes, 0).getDate();

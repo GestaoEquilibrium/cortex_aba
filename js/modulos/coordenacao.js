@@ -148,7 +148,7 @@ window.MODULOS.coordenacao = {
     const { data: sess } = await sb.from('sessoes')
       .select('id, data, hora_inicio, status, paciente_id, aplicador_id')
       .in('paciente_id', ids).gte('data', ini).lte('data', fim)
-      .not('status', 'in', '("cancelada")').order('data', { ascending: false }).order('hora_inicio');
+      .not('status', 'in', '("cancelada")').order('data', { ascending: false }).order('hora_inicio', { ascending: false });   // mais recentes em cima
     const sids = (sess || []).map(s => s.id);
     if (!sids.length) { alvo.innerHTML = '<p class="sub">Nenhuma sessao no periodo.</p>'; return; }
     const evs = [], regs = [];

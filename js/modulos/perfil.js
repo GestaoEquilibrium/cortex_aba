@@ -142,8 +142,20 @@ window.MODULOS.perfil = {
       '</div>' +
       '<div class="cartao"><h3>Modo</h3><p class="sub" style="margin-bottom:10px">Automatico segue o celular ou o computador (escurece a noite, se ele estiver assim).</p>' +
       '<div class="toggle-visao mp-modo">' + bm('claro', '&#9728; Claro') + bm('escuro', '&#9790; Escuro') + bm('auto', 'Automatico') + '</div></div>' +
+      this.htmlCapivara() +
       (msg ? '<div class="mensagem-erro visivel" style="background:var(--st-warn-bg); color:#92400E; border-color:#FDE68A">' + escaparHtml(msg) + '</div>' : '');
   },
+  // patch 41: capivara no canto (vale para a pessoa, neste aparelho)
+  htmlCapivara() {
+    if (!window.CAPIVARA) return '';
+    const p = CAPIVARA.prefs();
+    const b = (chave, val, rot) => '<button type="button" class="' + (p[chave] === val ? 'ativo' : '') + '" onclick="MODULOS.perfil.capivara(\'' + chave + '\', ' + val + ')">' + rot + '</button>';
+    return '<div class="cartao"><h3>Capivara</h3><div class="mp-capi"><img src="icones/capivara/capivara.png" alt="">' +
+      '<div><p class="sub" style="margin-bottom:8px">Ela fica no canto da tela, ao lado do sino: passeia, dorme quando ninguem mexe, grita quando chega aviso e gosta de carinho (passe o mouse em cima ou segure o dedo).</p>' +
+      '<div style="display:flex; gap:10px; flex-wrap:wrap"><div class="toggle-visao">' + b('on', true, 'Ligada') + b('on', false, 'Desligada') + '</div>' +
+      '<div class="toggle-visao">' + b('som', true, '&#128266; Com som') + b('som', false, 'Sem som') + '</div></div></div></div></div>';
+  },
+  capivara(chave, valor) { CAPIVARA.definir(chave, valor); this.desenharAparencia(); },
   // cor livre: mostra ao vivo enquanto arrasta; grava quando solta
   provarLivre(hex) {
     const t = document.getElementById('mp-tudo');

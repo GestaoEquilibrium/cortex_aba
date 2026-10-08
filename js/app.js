@@ -196,6 +196,8 @@ async function iniciarApp() {
     // Patch 31: nenhum pop-up de pendencia abre sozinho na entrada. Tudo fica na Central de avisos
     // (sino flutuante com contador; no celular, sino no cabecalho) e abre quando a pessoa quiser.
     try { MODULOS.avisos?.iniciar?.(); } catch (e) { console.warn('avisos:', e); }
+    // Patch 41: capivara mascote no canto (liga/desliga em Meu perfil > Aparencia)
+    try { window.CAPIVARA?.iniciar?.(); } catch (e) { console.warn('capivara:', e); }
     // instalacao no celular / notificacoes push: continua pedindo uma vez, sozinho
     agendarPop(() => window.PWA && PWA.instalado() ? PWA.pedirNotificacoes() : null, 2200);
   }

@@ -109,10 +109,12 @@ async function iniciarApp() {
 
   await carregarPermissoes(profile.perfil);
   await carregarDataPendencias();
+  // Patch 39: especialidade de cada profissional (sem o SQL rodado, tudo segue como ABA)
+  if (window.ESPEC) await ESPEC.carregar().catch(() => null);
 
   document.getElementById('usuario-nome').textContent = profile.nome;
   document.getElementById('usuario-perfil').innerHTML =
-    (ROTULOS_PERFIL[profile.perfil] || profile.perfil) +
+    (window.ESPEC ? ESPEC.rotuloPerfil(profile.perfil, profile.id || sessao.user.id) : (ROTULOS_PERFIL[profile.perfil] || profile.perfil)) +
     (profile.perfil_real === 'suporte' && profile.perfil !== 'suporte' && !window.CORTEX_VER_USUARIO
       ? ' <span class="ver-como-selo">ver como</span>' : '');
   document.getElementById('avatar').textContent = iniciais(profile.nome);
@@ -398,6 +400,7 @@ async function aplicarHoje() {
   sess = sess || [];
   if (ehEquipe()) { const meus = await meusPacientesIds(); sess = sess.filter(s => s.aplicador_id === eu || meus.has(s.paciente_id)); }
   const ST = { agendada: ['selo-neutro', 'agendada'], checkin: ['selo-info', 'chegou'], em_atendimento: ['selo-warn', 'em atendimento'], concluida: ['selo-ok', 'concluida'], falta: ['selo-bad', 'falta'] };
+  const comEsp = !!window.ESPEC && Object.keys(ESPEC._mapa).length > 0;   // patch 39: selo da terapia
   pagina.innerHTML = '<div class="pagina-cabecalho"><div><h2>Aplicar hoje</h2><p class="sub">' + d.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' }) + ' &middot; ' + sess.length + ' sessao(oes)</p></div></div>' +
     (sess.length ? sess.map(s => {
       const st = ST[s.status] || ['selo-neutro', s.status];
@@ -405,7 +408,7 @@ async function aplicarHoje() {
       const deOutra = s.aplicador_id && s.aplicador_id !== eu ? (s.profissional ? s.profissional.nome.split(' ').slice(0, 2).join(' ') : 'outra aplicadora') : '';
       return '<div class="cartao cel-sessao' + (deOutra ? ' de-outra' : '') + '" onclick="' + (s.status === 'concluida' ? 'MODULOS.programas.docEvolucaoDiaria(\'' + s.id + '\')' : 'MODULOS.programas.abrirFichaDaSessao(\'' + s.id + '\')') + '">' +
         '<div class="avatar-paciente ' + corAvatar(s.pacientes.nome) + '">' + s.pacientes.nome.split(' ').slice(0, 2).map(x => x[0]).join('').toUpperCase() + '</div>' +
-        '<div class="cel-sessao-txt"><b>' + escaparHtml(s.pacientes.nome) + '</b><small>' + String(s.hora_inicio).slice(0, 5) + (deOutra ? ' &middot; horario de ' + escaparHtml(deOutra) : '') + (s.status === 'concluida' ? ' &middot; encerrada &middot; toque para ver o relatorio' : ' &middot; toque para abrir a ficha') + '</small></div>' +
+        '<div class="cel-sessao-txt"><b>' + escaparHtml(s.pacientes.nome) + '</b><small>' + (comEsp ? ESPEC.seloDe(s.aplicador_id) : '') + String(s.hora_inicio).slice(0, 5) + (deOutra ? ' &middot; horario de ' + escaparHtml(deOutra) : '') + (s.status === 'concluida' ? ' &middot; encerrada &middot; toque para ver o relatorio' : comEsp && !ESPEC.ehAba(s.aplicador_id) ? ' &middot; toque para lancar a evolucao' : ' &middot; toque para abrir a ficha') + '</small></div>' +
         '<span class="selo ' + st[0] + '">' + st[1] + '</span></div>';
     }).join('') : '<div class="cartao"><div class="vazio"><strong>Nenhuma sessao hoje</strong>Quando houver, ela aparece aqui e um toque abre a ficha.</div></div>');
 }

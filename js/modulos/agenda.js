@@ -106,11 +106,39 @@ window.MODULOS.agenda = {
       '    <button class="botao-icone tema" onclick="MODULOS.agenda.navegar(1)">&rsaquo;</button>' +
       '  </div>' +
       '</div>' +
+      '<div id="ag-terapia"></div>' +
       '<div id="ag-corpo"></div>';
 
+    this.desenharFiltroTerapia();
     this.desenhar();
     this.verificarInativos();
   },
+
+  // ───────────── Terapias (patch 39): selo da especialidade de quem atende + filtro ─────────────
+  // Opcao B: cada profissional tem UMA especialidade e a sessao herda a dela. Com a equipe toda ABA,
+  // nada aparece (nem selo nem filtro).
+  temEsp() { return !!window.ESPEC && ESPEC.variasNa(this.equipe); },
+  mostraFiltroTerapia() { return this.temEsp() && !ehEquipe(); },
+  filtroTerapia() {
+    if (!this.mostraFiltroTerapia()) return '';
+    const f = ESPEC.filtro();
+    if (f && !ESPEC.usadas(this.equipe).includes(f)) { ESPEC.definirFiltro(''); return ''; }
+    return f;
+  },
+  desenharFiltroTerapia() {
+    const el = document.getElementById('ag-terapia'); if (!el) return;
+    if (!this.mostraFiltroTerapia()) { el.innerHTML = ''; return; }
+    const f = this.filtroTerapia();
+    el.innerHTML = '<div class="esp-filtro"><span class="lbl">Terapia</span><div class="segmento">' +
+      [''].concat(ESPEC.usadas(this.equipe)).map(k => '<button type="button" class="seg' + (f === k ? ' ativo' : '') + '"' +
+        (k ? ' title="' + ESPEC.info(k).nome + '"' : '') + ' onclick="MODULOS.agenda.mudarTerapia(\'' + k + '\')">' + (k ? ESPEC.info(k).sigla : 'Todas') + '</button>').join('') +
+      '</div></div>';
+  },
+  mudarTerapia(k) { ESPEC.definirFiltro(k); this.desenharFiltroTerapia(); this.desenhar(); },
+  porTerapia(lista) { const f = this.filtroTerapia(); return f ? (lista || []).filter(s => ESPEC.de(s.aplicador_id) === f) : lista; },
+  profPorTerapia(lista) { const f = this.filtroTerapia(); return f ? (lista || []).filter(p => ESPEC.de(p.id) === f) : lista; },
+  seloT(profId) { return this.temEsp() ? ESPEC.seloDe(profId) : ''; },
+  cabT(profId) { return this.temEsp() && profId && profId !== 'sem' ? '<span class="esp-cab">' + ESPEC.info(ESPEC.de(profId)).nome + '</span>' : ''; },
 
   // ───────────── Profissionais inativos que ainda estao na agenda (patch 31) ─────────────
   // Inativar o acesso nao mexe na grade fixa nem nas sessoes futuras; aqui a gestao transfere tudo
@@ -282,17 +310,20 @@ window.MODULOS.agenda = {
     const profs = {};
     grade.concat(sessoes).forEach(x => { if (x.aplicador_id) profs[x.aplicador_id] = nomeP(x); });
     const listaProfs = Object.values(profs).sort();
+    // patch 39: terapias que a crianca faz (pela especialidade de quem atende)
+    const terapias = this.temEsp() ? ESPEC.usadas(Object.keys(profs)) : [];
 
     // ── grade fixa por dia
     const dias = [1, 2, 3, 4, 5].concat(grade.some(g => g.dia_semana === 6) ? [6] : []);
     const htmlGrade = '<div class="cartao"><div class="pa-cab"><div><h3>Grade fixa</h3><p class="sub">' +
-      (grade.length ? grade.length + ' hor\u00e1rio' + (grade.length === 1 ? '' : 's') + ' por semana' + (listaProfs.length ? ' &middot; ' + listaProfs.map(n => escaparHtml(n)).join(', ') : '') : 'Nenhum hor\u00e1rio fixo cadastrado.') + '</p></div>' +
+      (grade.length ? grade.length + ' hor\u00e1rio' + (grade.length === 1 ? '' : 's') + ' por semana' + (listaProfs.length ? ' &middot; ' + listaProfs.map(n => escaparHtml(n)).join(', ') : '') : 'Nenhum hor\u00e1rio fixo cadastrado.') + '</p>' +
+      (terapias.length ? '<p class="sub" style="margin-top:4px">Terapias: <span class="pac-terapias">' + terapias.map(k => ESPEC.selo(k)).join('') + '</span></p>' : '') + '</div>' +
       (this.gere() ? '<button class="btn-chip" onclick="MODULOS.agenda.abrirGradeDaCrianca(\'' + pac.id + '\')">Abrir na Grade fixa</button>' : '') + '</div>' +
       (grade.length ? '<div class="pa-semana' + (dias.length > 5 ? ' seis' : '') + '">' + dias.map(d => {
         const do_ = grade.filter(g => g.dia_semana === d);
         return '<div class="pa-dia' + (do_.length ? '' : ' vazio') + '"><div class="pa-dia-t">' + this.DIAS[d] + '</div>' +
           (do_.length ? do_.map(g => '<div class="pa-slot"' + (this.gere() ? ' onclick="MODULOS.agenda.abrirGradeDaCrianca(\'' + pac.id + '\', \'' + g.id + '\')" title="Abrir este horario na grade fixa"' : '') + '>' +
-            '<b>' + this.hm(g.hora_inicio) + '</b><span>' + av(nomeP(g)) + escaparHtml(nomeP(g)) + '</span>' + (g.salas ? '<small>' + escaparHtml(g.salas.nome) + '</small>' : '') + '</div>').join('')
+            '<b>' + this.hm(g.hora_inicio) + '</b><span>' + this.seloT(g.aplicador_id) + av(nomeP(g)) + escaparHtml(nomeP(g)) + '</span>' + (g.salas ? '<small>' + escaparHtml(g.salas.nome) + '</small>' : '') + '</div>').join('')
             : '<div class="pa-livre">&mdash;</div>') + '</div>';
       }).join('') + '</div>' : '') + '</div>';
 
@@ -312,7 +343,7 @@ window.MODULOS.agenda = {
         return '<div class="pa-data' + (data === hoje ? ' hoje' : '') + '"><div class="pa-data-t">' + dt.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '') + ' <b>' + dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) + '</b>' + (data === hoje ? ' <span class="selo selo-ok">hoje</span>' : '') + '</div>' +
           porDia[data].map(s => '<div class="pa-sessao" onclick="MODULOS.agenda.abrirSessao(\'' + s.id + '\')">' +
             '<b class="pa-h">' + this.hm(s.hora_inicio) + '</b><span class="pa-fim">' + this.somaMin(this.hm(s.hora_inicio), dur(s)) + '</span>' +
-            av(nomeP(s)) + '<span class="pa-quem">' + escaparHtml(nomeP(s)) + (s.salas ? ' <small>&middot; ' + escaparHtml(s.salas.nome) + '</small>' : '') + (!s.grade_id ? ' <span class="selo selo-neutro">encaixe</span>' : '') + '</span>' +
+            av(nomeP(s)) + '<span class="pa-quem">' + this.seloT(s.aplicador_id) + escaparHtml(nomeP(s)) + (s.salas ? ' <small>&middot; ' + escaparHtml(s.salas.nome) + '</small>' : '') + (!s.grade_id ? ' <span class="selo selo-neutro">encaixe</span>' : '') + '</span>' +
             '<span class="pa-selos">' + this.selosSessao(s) + '</span></div>').join('') + '</div>';
       }).join('') : '<p class="sub" style="padding:14px 0 4px">Nenhuma sess\u00e3o neste m\u00eas.</p>') + '</div>';
 
@@ -480,7 +511,7 @@ window.MODULOS.agenda = {
         lista.slice().sort((a, b) => ini(a) - ini(b)).map(s => '<tr class="clicavel" onclick="MODULOS.agenda.abrirSessao(\'' + s.id + '\')">' +
           '<td><b>' + this.hm(s.hora_inicio) + '</b> &ndash; ' + this.somaMin(this.hm(s.hora_inicio), dur(s)) + '</td>' +
           '<td><b>' + escaparHtml(s.pacientes ? s.pacientes.nome : '?') + '</b>' + (!s.grade_id ? ' <span class="selo selo-neutro">encaixe</span>' : '') + '</td>' +
-          '<td>' + escaparHtml(nomeProf(s)) + '</td><td>' + escaparHtml(s.salas ? s.salas.nome : '-') + '</td><td>' + this.selosSessao(s) + '</td></tr>').join('') + '</tbody></table>';
+          '<td>' + this.seloT(s.aplicador_id) + escaparHtml(nomeProf(s)) + '</td><td>' + escaparHtml(s.salas ? s.salas.nome : '-') + '</td><td>' + this.selosSessao(s) + '</td></tr>').join('') + '</tbody></table>';
     } else {
       const linhas = []; for (let m = h0; m < h1; m += 15) linhas.push(m);
       const barras = this.rcColunas(lista).map(s => {
@@ -490,6 +521,7 @@ window.MODULOS.agenda = {
         return '<div class="rc-barra' + (s.status === 'cancelada' ? ' cancelada' : '') + '" style="top:' + top + 'px; height:' + h + 'px; left:calc(' + esq + '% + 2px); width:calc(' + larg + '% - 4px); background:' + cor + '" ' +
           'title="' + escaparHtml((s.pacientes ? s.pacientes.nome : '') + ' \u00b7 ' + nomeProf(s) + ' \u00b7 ' + (this.RC_COR[s.status] || [0, s.status])[1]) + '" onclick="MODULOS.agenda.abrirSessao(\'' + s.id + '\')">' +
           '<span class="rc-h">' + this.hm(s.hora_inicio) + ' - ' + this.somaMin(this.hm(s.hora_inicio), dur(s)) + '</span> - <b>' + escaparHtml(s.pacientes ? s.pacientes.nome : '?') + '</b>' +
+          (this.temEsp() ? ' ' + this.seloT(s.aplicador_id) : '') +
           ' <span class="rc-d">- ' + escaparHtml(nomeProf(s)) + ' - ' + (s.grade_id ? 'Sess\u00e3o' : 'Encaixe') + (s.salas ? ' \u00b7 ' + escaparHtml(s.salas.nome) : '') + '</span></div>';
       }).join('');
       corpo = '<div class="rc-grade" style="height:' + alt + 'px">' +
@@ -556,8 +588,8 @@ window.MODULOS.agenda = {
 
     // colunas: aplicadores com jornada no dia (ou com sessao/reserva no dia)
     const jorDia = this.jornadas.filter(j => j.dia_semana === dow);
-    const cols = this.equipe.filter(p => jorDia.some(j => j.profissional_id === p.id) ||
-      sess.some(s => s.aplicador_id === p.id) || res.some(r => r.aplicador_id === p.id));
+    const cols = this.profPorTerapia(this.equipe.filter(p => jorDia.some(j => j.profissional_id === p.id) ||
+      sess.some(s => s.aplicador_id === p.id) || res.some(r => r.aplicador_id === p.id)));
     if (!cols.length) {
       corpo.innerHTML = '<div class="cartao"><div class="vazio"><div class="simbolo-vazio">&#128197;</div><strong>Ninguem com jornada neste dia</strong>' +
         'Cadastre as jornadas em Horarios para a grade aparecer.</div></div>';
@@ -585,7 +617,7 @@ window.MODULOS.agenda = {
     const ST = { agendada: 'ag-eq-agendada', checkin: 'ag-eq-checkin', em_atendimento: 'ag-eq-atend', concluida: 'ag-eq-concluida', falta: 'ag-eq-falta' };
 
     let html = '<div class="cartao ag-eq-wrap"><table class="ag-eq"><thead><tr><th class="ag-eq-h"></th>' +
-      cols.map(p => '<th><b>' + escaparHtml(p.nome.split(' ').slice(0, 2).join(' ')) + '</b><small>' +
+      cols.map(p => '<th><b>' + escaparHtml(p.nome.split(' ').slice(0, 2).join(' ')) + '</b>' + this.cabT(p.id) + '<small>' +
         jorDia.filter(j => j.profissional_id === p.id).map(j => this.hm(j.hora_inicio) + '-' + this.hm(j.hora_fim)).join(' / ') + '</small></th>').join('') +
       '</tr></thead><tbody>';
     linhas.forEach(h => {
@@ -595,7 +627,7 @@ window.MODULOS.agenda = {
           if (s) {
             if (this.hm(s.hora_inicio) !== h) return '<td class="ag-eq-cont"></td>';
             return '<td class="ag-eq-cel ' + (ST[s.status] || '') + '" onclick="MODULOS.agenda.abrirSessao(\'' + s.id + '\')" title="Abrir sessao">' +
-              '<b>' + escaparHtml((s.pacientes ? s.pacientes.nome : '').split(' ').slice(0, 2).join(' ')) + '</b><small>' + this.selosSessao(s).replace(/<[^>]+>/g, ' ').trim() + '</small></td>';
+              this.seloT(s.aplicador_id) + '<b>' + escaparHtml((s.pacientes ? s.pacientes.nome : '').split(' ').slice(0, 2).join(' ')) + '</b><small>' + this.selosSessao(s).replace(/<[^>]+>/g, ' ').trim() + '</small></td>';
           }
           const r = res.find(x => x.aplicador_id === p.id && this.hm(x.hora_inicio) === h);
           if (r) return '<td class="ag-eq-cel ag-eq-reserva" onclick="MODULOS.agenda.modalReserva(\'' + r.id + '\')" title="Reservado por ' + escaparHtml(r.quem ? r.quem.nome : '') + '">' +
@@ -819,6 +851,7 @@ window.MODULOS.agenda = {
     if (this.gere()) {
       if (ESCOPO.ativo()) { const eq = await ESCOPO.carregar(); const d = eq.aplicadoresDiretos || eq.aplicadores; const eu = window.CORTEX_SESSAO.user.id; this._equipeDia = (this.equipe || []).filter(p => p.id === eu || d.has(p.id)); }
       else this._equipeDia = this.equipe || [];
+      this._equipeDia = this.profPorTerapia(this._equipeDia);
     }
 
     const comEvo = new Set();
@@ -874,7 +907,7 @@ window.MODULOS.agenda = {
       s.status === 'em_atendimento' ? '<button type="button" class="btn-chip cheio" onclick="event.stopPropagation(); MODULOS.agenda.abrirSessao(\'' + s.id + '\')">Concluir</button>' : '';
     return '<div class="agd-card' + (passada ? ' passada' : '') + ' ck-st-' + s.status + (this.ehFeriado(s) ? ' feriado' : '') + '" onclick="MODULOS.agenda.abrirSessao(\'' + s.id + '\')">' +
       '<span class="evo-av ' + (typeof corAvatar === 'function' ? corAvatar(prof) : 'av-1') + '">' + escaparHtml(this.iniciaisDe(prof)) + '</span>' +
-      '<span class="agd-n"><b>' + escaparHtml(s.pacientes ? s.pacientes.nome : '?') + '</b><small>' + escaparHtml(prof) + (s.salas ? ' &middot; ' + escaparHtml(s.salas.nome) : '') + '</small></span>' +
+      '<span class="agd-n"><b>' + escaparHtml(s.pacientes ? s.pacientes.nome : '?') + '</b><small>' + this.seloT(s.aplicador_id) + escaparHtml(prof) + (s.salas ? ' &middot; ' + escaparHtml(s.salas.nome) : '') + '</small></span>' +
       '<span class="agd-selos">' + this.selosSessao(s) + (semEvo ? '<span class="selo selo-sem-evo" title="Sessao encerrada sem evolucao">&#9998; sem evolucao</span>' : '') + '</span>' +
       chip + '</div>';
   },
@@ -917,10 +950,10 @@ window.MODULOS.agenda = {
       const arr = podeMover && l.length === 1 && ['agendada', 'checkin'].includes(l[0].status) && c.id !== 'sem'
         ? ' draggable="true" data-sid="' + l[0].id + '"' : '';
       return '<td class="ag-eq-cel ' + (this.ehFeriado(l[0]) ? 'ag-eq-feriado' : ST[l[0].status] || '') + '"' + pos + arr + ' onclick="MODULOS.agenda.abrirSessao(\'' + l[0].id + '\')" title="' + (arr ? 'Abrir sessao - arraste para outro aplicador ou horario' : 'Abrir sessao') + '">' +
-        l.map(s => '<b>' + escaparHtml((s.pacientes ? s.pacientes.nome : '?').split(' ').slice(0, 2).join(' ')) + '</b><small>' + (s.salas ? escaparHtml(s.salas.nome) + ' &middot; ' : '') + this.selosSessao(s).replace(/<[^>]+>/g, ' ').trim() + '</small>').join('<hr style="border:none; border-top:1px dashed var(--line); margin:3px 0">') + '</td>';
+        l.map(s => this.seloT(s.aplicador_id) + '<b>' + escaparHtml((s.pacientes ? s.pacientes.nome : '?').split(' ').slice(0, 2).join(' ')) + '</b><small>' + (s.salas ? escaparHtml(s.salas.nome) + ' &middot; ' : '') + this.selosSessao(s).replace(/<[^>]+>/g, ' ').trim() + '</small>').join('<hr style="border:none; border-top:1px dashed var(--line); margin:3px 0">') + '</td>';
     };
     const grade = '<div class="cartao ag-eq-wrap"><table class="ag-eq" id="ag-dia-grade"><thead><tr><th class="ag-eq-h"></th>' +
-      cols.map(c => '<th' + (c.vazio ? ' class="ag-eq-sem"' : '') + '><span class="evo-av ' + (typeof corAvatar === 'function' ? corAvatar(c.nome) : 'av-1') + '" style="margin-right:6px; vertical-align:middle">' + escaparHtml(this.iniciaisDe(c.nome)) + '</span><b>' + escaparHtml(c.nome.split(' ').slice(0, 2).join(' ')) + '</b>' + (c.vazio ? '<small>sem sessoes</small>' : '') + '</th>').join('') + '</tr></thead><tbody>' +
+      cols.map(c => '<th' + (c.vazio ? ' class="ag-eq-sem"' : '') + '><span class="evo-av ' + (typeof corAvatar === 'function' ? corAvatar(c.nome) : 'av-1') + '" style="margin-right:6px; vertical-align:middle">' + escaparHtml(this.iniciaisDe(c.nome)) + '</span><b>' + escaparHtml(c.nome.split(' ').slice(0, 2).join(' ')) + '</b>' + this.cabT(c.id) + (c.vazio ? '<small>sem sessoes</small>' : '') + '</th>').join('') + '</tr></thead><tbody>' +
       horas.map(h => '<tr><td class="ag-eq-h">' + h + '</td>' + cols.map(c => cel(c, h)).join('') + '</tr>').join('') + '</tbody></table></div>' +
       '<div class="agd-legenda">' + [['ag-eq-agendada', 'Aguardando'], ['ag-eq-checkin', 'Chegou'], ['ag-eq-atend', 'Em atendimento'], ['ag-eq-concluida', 'Concluida'], ['ag-eq-falta', 'Falta']].concat(sessoes.some(s => this.ehFeriado(s)) ? [['ag-eq-feriado', 'Feriado']] : []).map(x => '<span><i class="' + x[0] + '"></i>' + x[1] + '</span>').join('') +
       '<span style="margin-left:auto">' + (podeMover ? '&#10021; Arraste a sessao para outro aplicador ou horario &middot; ' : '') + 'Toque na sessao para abrir</span></div>';
@@ -1085,7 +1118,7 @@ window.MODULOS.agenda = {
           '<b>' + s.hora_inicio.slice(0, 5) + '</b> ' +
           '<span class="chip-nome">' + escaparHtml(s.pacientes ?
             s.pacientes.nome.split(' ')[0] + ' ' + (s.pacientes.nome.split(' ')[1] || '') : '?') + '</span>' +
-          '<small class="chip-prof">&#128100; ' + escaparHtml(s.profissional ? s.profissional.nome.split(' ')[0] : '-') +
+          '<small class="chip-prof">' + (this.temEsp() ? this.seloT(s.aplicador_id) : '&#128100; ') + escaparHtml(s.profissional ? s.profissional.nome.split(' ')[0] : '-') +
           (s.salas ? ' &middot; ' + escaparHtml(s.salas.nome) : '') + '</small>' +
           '</div>';
       });
@@ -1257,9 +1290,9 @@ window.MODULOS.agenda = {
         '      <div><b>' + dExt.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) + '</b>' +
         '      <p class="sub">' + s.hora_inicio.slice(0, 5) + ' &ndash; ' + fim + ' (' + (s.duracao_min || 40) + ' min)</p></div></div>' +
         '    <div class="grade-visao" style="grid-template-columns:1fr 1fr">' +
-        '      <div class="caixa-info"><small>Procedimento</small><b>Psicoterapia ABA &middot; Sess&atilde;o</b></div>' +
+        '      <div class="caixa-info"><small>Procedimento</small><b>' + (window.ESPEC ? ESPEC.info(ESPEC.de(s.aplicador_id)).doc : 'Psicoterapia ABA') + ' &middot; Sess&atilde;o</b></div>' +
         '      <div class="caixa-info"><small>Convenio</small><b>' + escaparHtml(pac.convenio || 'Particular') + (pac.carteirinha ? '<br><small class="sub">' + escaparHtml(pac.carteirinha) + '</small>' : '') + '</b></div>' +
-        '      <div class="caixa-info"><small>Aplicador</small><b>' + escaparHtml(s.profissional ? s.profissional.nome : '-') + '</b></div>' +
+        '      <div class="caixa-info"><small>' + (window.ESPEC && !ESPEC.ehAba(s.aplicador_id) ? 'Profissional' : 'Aplicador') + '</small><b>' + this.seloT(s.aplicador_id) + escaparHtml(s.profissional ? s.profissional.nome : '-') + '</b></div>' +
         '      <div class="caixa-info"><small>Sala</small><b>' + escaparHtml(s.salas ? s.salas.nome : '-') + '</b></div>' +
         '    </div>' +
         '    <div class="caixa-info" style="margin-top:8px"><small>Guia</small>' + guiaTxt + '</div>' +
@@ -1269,7 +1302,10 @@ window.MODULOS.agenda = {
           ? '<div style="font-size:12.5px; line-height:1.55; white-space:pre-wrap; max-height:180px; overflow:auto">' + escaparHtml(evo.texto || '') + '</div>' +
             (evo.destinacao ? '<small class="sub">Destina&ccedil;&atilde;o: ' + escaparHtml(evo.destinacao) + '</small>' : '') +
             '<div style="margin-top:6px"><button class="btn-chip" onclick="fecharModal(); MODULOS.programas.docEvolucaoDiaria(\'' + id + '\')">&#128196; Evolu&ccedil;&atilde;o di&aacute;ria</button></div>'
-          : '<span class="sub">' + (s.status === 'concluida' ? '<b style="color:var(--st-warn)">Sess&atilde;o conclu&iacute;da sem evolu&ccedil;&atilde;o</b>' : 'ainda n&atilde;o escrita') + '</span>') +
+          : '<span class="sub">' + (s.status === 'concluida' ? '<b style="color:var(--st-warn)">Sess&atilde;o conclu&iacute;da sem evolu&ccedil;&atilde;o</b>' : 'ainda n&atilde;o escrita') + '</span>' +
+            // patch 39: fono, TO, psicologia, pedagogia e psicomotricidade lancam a evolucao direto (sem ficha de programas ABA)
+            (window.ESPEC && !ESPEC.ehAba(s.aplicador_id) && (ehMinha || podeOperar) && s.data <= hojeLocal() && !['cancelada'].includes(s.status)
+              ? '<div style="margin-top:6px"><button class="btn-chip cheio" onclick="fecharModal(); MODULOS.programas.evolucaoSessao(\'' + id + '\')">&#9998; Lan&ccedil;ar evolu&ccedil;&atilde;o</button></div>' : '')) +
         '</div>' +
         '    <div class="caixa-info" style="margin-top:8px"><small>Observacoes ' + (podeOperar ? '<button class="btn-chip" style="margin-left:6px" onclick="MODULOS.agenda.editarObs(\'' + id + '\')">&#9998;</button>' : '') + '</small>' +
         '      <div id="sess-obs" style="font-size:13px; line-height:1.5">' + (s.observacoes ? escaparHtml(s.observacoes).replace(/\n/g, '<br>') : '<span class="sub">&mdash;</span>') + '</div></div>' +
@@ -1424,7 +1460,8 @@ window.MODULOS.agenda = {
   },
 
   // Aplicador/terapeuta ve na agenda so as sessoes dele e das criancas da carteira dele
-  async soMinhas(sessoes) {
+  async soMinhas(sessoes) { return this.porTerapia(await this.soMinhasBase(sessoes)); },
+  async soMinhasBase(sessoes) {
     if (ESCOPO.ativo()) {
       const eq = await ESCOPO.carregar();
       const eu = window.CORTEX_SESSAO.user.id;
@@ -1543,6 +1580,8 @@ window.MODULOS.agenda = {
       '    <option value="">Todas as criancas</option>' +
       (this.pacientes || []).map(p => '<option value="' + p.id + '">' + escaparHtml(p.nome) + '</option>').join('') +
       '  </select>' +
+      (this.temEsp() ? '  <select id="ag-f-esp" onchange="MODULOS.agenda.desenharGrade()"><option value="">Todas as terapias</option>' +
+        ESPEC.usadas(this.equipe).map(k => '<option value="' + k + '">' + ESPEC.info(k).nome + '</option>').join('') + '</select>' : '') +
       '  <select id="ag-f-sala" onchange="MODULOS.agenda.desenharGrade()">' +
       '    <option value="">Todas as salas</option>' +
       this.salas.filter(s => s.ativo).map(s => '<option value="' + s.id + '">' + escaparHtml(s.nome) + '</option>').join('') +
@@ -1557,8 +1596,9 @@ window.MODULOS.agenda = {
     const fp = document.getElementById('ag-f-prof')?.value || '';
     const fpac = document.getElementById('ag-f-pac')?.value || '';
     const fs = document.getElementById('ag-f-sala')?.value || '';
+    const fe = document.getElementById('ag-f-esp')?.value || '';
     const itens = this.grade.filter(h =>
-      (!fp || h.aplicador_id === fp) && (!fpac || h.paciente_id === fpac) && (!fs || h.sala_id === fs));
+      (!fp || h.aplicador_id === fp) && (!fpac || h.paciente_id === fpac) && (!fs || h.sala_id === fs) && (!fe || ESPEC.de(h.aplicador_id) === fe));
     const gere = this.gere();
 
     // resumo da crianca escolhida: quantos horarios e com quem
@@ -1591,7 +1631,7 @@ window.MODULOS.agenda = {
           '<span class="chip-nome">' + (h.pacientes
             ? escaparHtml(h.pacientes.nome.split(' ')[0] + ' ' + (h.pacientes.nome.split(' ')[1] || ''))
             : '<i>' + escaparHtml(h.rotulo || 'Reserva') + '</i>') + '</span>' +
-          '<small>' + escaparHtml(h.profissional ? h.profissional.nome.split(' ')[0] : '-') +
+          '<small>' + (h.paciente_id ? this.seloT(h.aplicador_id) : '') + escaparHtml(h.profissional ? h.profissional.nome.split(' ')[0] : '-') +
           (h.salas ? ' &middot; ' + escaparHtml(h.salas.nome) : '') + '</small>' +
           '</div>';
       });
@@ -1667,12 +1707,12 @@ window.MODULOS.agenda = {
       '    <input type="time" id="h-hora" value="' + (h ? h.hora_inicio.slice(0, 5) : '08:00') + '" step="300"></div>' +
       '  <div class="campo"><label>Duracao (min) *</label>' +
       '    <input type="number" id="h-dur" min="20" max="180" step="5" value="' + (h ? h.duracao_min : this._durGlobal) + '"></div>' +
-      '  <div class="campo c2"><label>Aplicador *</label>' +
-      '    <select id="h-prof">' +
+      '  <div class="campo c2"><label>' + (this.temEsp() ? 'Profissional' : 'Aplicador') + ' *</label>' +
+      '    <select id="h-prof" onchange="MODULOS.agenda.terapiaHorario()">' +
       '      <option value="">Selecione</option>' +
       this.equipe.map(m =>
         '<option value="' + m.id + '"' + (h && h.aplicador_id === m.id ? ' selected' : '') + '>' +
-        escaparHtml(m.nome) + '</option>').join('') +
+        escaparHtml(m.nome) + (this.temEsp() ? ' (' + ESPEC.info(ESPEC.de(m.id)).nome + ')' : '') + '</option>').join('') +
       '    </select></div>' +
       '  <div class="campo"><label>Sala</label>' +
       '    <select id="h-sala">' +
@@ -1681,6 +1721,7 @@ window.MODULOS.agenda = {
         '<option value="' + s.id + '"' + (h && h.sala_id === s.id ? ' selected' : '') + '>' +
         escaparHtml(s.nome) + '</option>').join('') +
       '    </select></div>' +
+      (this.temEsp() ? '  <div class="campo c3" id="h-terapia"></div>' : '') +
       '</div>' +
       '<div class="mensagem-erro" id="h-erro"></div>' +
       '<div class="barra-acoes">' +
@@ -1690,15 +1731,26 @@ window.MODULOS.agenda = {
       '  <button type="button" class="btn btn-primario" id="h-salvar" ' +
       '    onclick="MODULOS.agenda.salvarHorario(' + (h ? '\'' + h.id + '\'' : 'null') + ')">Salvar</button>' +
       '</div>', true);
+    this.terapiaHorario();
 
     if (!h) {
       document.getElementById('h-paciente').addEventListener('change', ev => {
         const p = this.pacientes.find(x => x.id === ev.target.value);
         if (p && p.aplicador_id) document.getElementById('h-prof').value = p.aplicador_id;
+        this.terapiaHorario();
       });
       const fpac = document.getElementById('ag-f-pac')?.value;
       if (fpac) { const sel = document.getElementById('h-paciente'); sel.value = fpac; sel.dispatchEvent(new Event('change')); }
     }
+  },
+
+  // patch 39 (opcao B): a terapia do horario vem da profissional; para mudar, troca a profissional
+  terapiaHorario() {
+    const el = document.getElementById('h-terapia'); if (!el) return;
+    const pid = (document.getElementById('h-prof') || {}).value;
+    el.innerHTML = '<label>Terapia</label><div class="caixa-info" style="margin:0"><small>Vem da profissional</small><b>' +
+      (pid ? ESPEC.selo(ESPEC.de(pid)) + ESPEC.info(ESPEC.de(pid)).nome : '<span class="sub">escolha a profissional</span>') + '</b></div>' +
+      '<span class="esp-dica">Para mudar a terapia deste horario, troque a profissional.</span>';
   },
 
   tipoHorario(botao, reserva) {

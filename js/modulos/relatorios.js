@@ -80,12 +80,14 @@ window.MODULOS.relatorios = {
     const { inicio, fim } = this.intervaloMes(mes);
     const [{ data: sessoes }, rFer] = await Promise.all([
       sb.from('sessoes')
-        .select('id, data, hora_inicio, status, motivo_cancelamento').eq('paciente_id', pacienteId)
+        .select('id, data, hora_inicio, status, motivo_cancelamento, aplicador_id').eq('paciente_id', pacienteId)
         .gte('data', inicio).lte('data', fim).order('data').order('hora_inicio'),
       // patch 36: feriados marcados na agenda (sem o SQL rodado, a consulta falha e o mes sai sem feriados)
       sb.from('feriados').select('data, nome').gte('data', inicio).lte('data', fim)
     ]);
-    const lista = sessoes || [];
+    // patch 39: o relatorio mensal e da ABA - sessoes de fono, TO, psicologia, pedagogia e psicomotricidade
+    // nao entram na frequencia nem nos programas
+    const lista = (sessoes || []).filter(s => !window.ESPEC || ESPEC.ehAba(s.aplicador_id));
     const feriados = {};
     if (!rFer.error) (rFer.data || []).forEach(f => { feriados[f.data] = f.nome; });
     const ids = lista.map(s => s.id);

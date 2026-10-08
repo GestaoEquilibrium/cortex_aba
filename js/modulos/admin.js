@@ -91,6 +91,7 @@ window.MODULOS.admin = {
       '<small>' + escaparHtml(p.email || 'e-mail nao registrado') + '</small></div></div>' +
       '<div class="pac-selos">' +
       '<span class="selo selo-roxo">' + (ROTULOS_PERFIL[p.perfil] || p.perfil) + '</span>' +
+      (p.atende_pacientes && window.ESPEC ? ESPEC.seloDe(p.id, 'gr') : '') +
       (p.atende_pacientes ? '<span class="selo selo-ok">Atende</span>' : '') +
       (p.responsavel_tecnico ? '<span class="selo selo-roxo">Assina</span>' : '') +
       [...new Set([p.coordenador_id].concat(this._equipesDe[p.id] || []).filter(Boolean))].map(c => this.nomeCoord(c))
@@ -133,6 +134,7 @@ window.MODULOS.admin = {
       this.perfisPermitidos().map(p =>
         '<option value="' + p + '">' + (ROTULOS_PERFIL[p] || p) + '</option>').join('') +
       '  </select></div>' +
+      this.htmlCamposEsp('nv', 'aba', '', '') +
       '  <div class="campo c3"><label>E-mail (login) *</label>' +
       '    <input type="email" id="nv-email" placeholder="nome@equilibrium.com.br"></div>' +
       '  <div class="campo c3"><label class="check">' +
@@ -197,6 +199,39 @@ window.MODULOS.admin = {
     return s;
   },
 
+  // ── Especialidade (patch 39): uma por profissional; a sessao herda a de quem atende ──
+  htmlCamposEsp(pref, esp, reg, nome) {
+    return '  <div class="campo c2"><label>Especialidade *</label><select id="' + pref + '-esp" onchange="MODULOS.admin.dicaEsp(\'' + pref + '\')">' + ESPEC.opcoes(esp) + '</select></div>' +
+      '  <div class="campo"><label>Registro de classe</label><input id="' + pref + '-reg" placeholder="' + ESPEC.info(esp).exemplo + '" value="' + escaparHtml(reg || '') + '"></div>' +
+      '  <div class="campo c3" style="margin-top:-6px"><span class="esp-dica" id="' + pref + '-esp-dica">' + ESPEC.dicaCadastro(esp, nome) + '</span></div>';
+  },
+  dicaEsp(pref) {
+    const k = document.getElementById(pref + '-esp').value;
+    const nomeEl = document.getElementById(pref === 'nv' ? 'nv-nome' : 'ger-nome');
+    const nome = nomeEl ? (nomeEl.value || nomeEl.textContent) : '';
+    const d = document.getElementById(pref + '-esp-dica'); if (d) d.innerHTML = ESPEC.dicaCadastro(k, nome);
+    const r = document.getElementById(pref + '-reg'); if (r) r.placeholder = ESPEC.info(k).exemplo;
+  },
+  async gravarEsp(id, pref) {
+    const sel = document.getElementById(pref + '-esp'); if (!sel) return true;
+    const k = sel.value || 'aba';
+    const reg = (document.getElementById(pref + '-reg') || {}).value;
+    const dados = {};
+    // sem o SQL do patch 39 so o registro vai; ABA (padrao) nao precisa da coluna
+    if (ESPEC.colunaOk) dados.especialidade = k === 'aba' ? null : k;
+    else if (k !== 'aba') { popAviso('A especialidade ainda nao pode ser gravada: rode o SQL do patch 39 no Supabase.'); return false; }
+    if (reg !== undefined) dados.registro_classe = reg.trim() || null;
+    if (!Object.keys(dados).length) return true;
+    const { error } = await sb.from('profiles').update(dados).eq('id', id);
+    if (error) {
+      popAviso(/especialidade/.test(error.message) ? 'A especialidade ainda nao pode ser gravada: rode o SQL do patch 39 no Supabase.' : 'Nao foi possivel gravar a especialidade: ' + error.message);
+      return false;
+    }
+    ESPEC.definir(id, k);
+    if (dados.registro_classe) ESPEC._registro[id] = dados.registro_classe; else delete ESPEC._registro[id];
+    return true;
+  },
+
   perfilAtendePadrao(perfil) {
     return perfil === 'aplicador' || perfil === 'terapeuta';
   },
@@ -236,6 +271,7 @@ window.MODULOS.admin = {
       if (atende && corpo.usuario_id) {
         { const { error: _e } = await sb.from('profiles').update({ atende_pacientes: true }).eq('id', corpo.usuario_id); if (_e) popAviso('Nao foi possivel gravar (profiles): ' + _e.message); }
       }
+      if (corpo.usuario_id) await this.gravarEsp(corpo.usuario_id, 'nv');
 
       this._cred = { nome: nome, email: email, senha: senha, perfil: perfil };
       abrirModal('&#127881; Acesso criado',
@@ -279,6 +315,10 @@ window.MODULOS.admin = {
             (ROTULOS_PERFIL[x] || x) + '</option>').join('') +
           '</select></div>'
         : '') +
+      (!ehFamilia
+        ? '<span id="ger-nome" style="display:none">' + escaparHtml(p.nome) + '</span><div class="grade-form" style="margin-bottom:4px">' +
+          this.htmlCamposEsp('ger', ESPEC.de(p.id), ESPEC.registro(p.id), p.nome) + '</div>'
+        : '') +
       (!ehFamilia && !eu
         ? '<div class="campo"><label class="check">' +
           '<input type="checkbox" id="ger-atende"' + (p.atende_pacientes ? ' checked' : '') + '> Atende pacientes ' +
@@ -313,7 +353,7 @@ window.MODULOS.admin = {
         : '') +
       (!ehFamilia && !eu
         ? '<button class="btn btn-primario" onclick="MODULOS.admin.salvarPerfil(\'' + p.id + '\')">Salvar perfil</button>'
-        : '') +
+        : !ehFamilia ? '<button class="btn btn-primario" onclick="MODULOS.admin.salvarSoEsp(\'' + p.id + '\')">Salvar especialidade</button>' : '') +
       '</div>');
   },
 
@@ -352,6 +392,7 @@ window.MODULOS.admin = {
       erro.classList.add('visivel');
       return;
     }
+    await this.gravarEsp(id, 'ger');   // sem o SQL do patch 39 avisa, mas o resto do perfil segue gravado
     // todas as equipes em equipe_membros (varias coordenadoras por aplicador)
     const { error: eDel } = await sb.from('equipe_membros').delete().eq('aplicador_id', id);
     if (!eDel && equipes.length) {
@@ -360,6 +401,13 @@ window.MODULOS.admin = {
     fecharModal();
     await this.carregar();
     await this.assinarFotos();
+    this.desenhar();
+  },
+
+  // a propria pessoa (gestao) ajusta so a especialidade e o registro dela
+  async salvarSoEsp(id) {
+    if (!await this.gravarEsp(id, 'ger')) return;
+    fecharModal();
     this.desenhar();
   },
 

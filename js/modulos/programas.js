@@ -645,8 +645,10 @@ window.MODULOS.programas = {
   // sem ninguem aplicar nada - assim a falta ja fica gravada por programa para relatorios e graficos.
   async registrarFalta(sessaoId) {
     try {
-      const { data: s } = await sb.from('sessoes').select('id, paciente_id, status').eq('id', sessaoId).single();
+      const { data: s } = await sb.from('sessoes').select('id, paciente_id, status, aplicador_id').eq('id', sessaoId).single();
       if (!s || s.status !== 'falta') return 0;
+      // patch 39: falta numa sessao de fono, TO, psicologia, pedagogia ou psicomotricidade nao entra nos programas ABA
+      if (window.ESPEC && !ESPEC.ehAba(s.aplicador_id)) return 0;
       const { data: ja } = await sb.from('programa_sessao_registros').select('id').eq('sessao_id', sessaoId).limit(1);
       if (ja && ja.length) return 0;   // ja tem registros (idempotente)
       const { data: pps } = await sb.from('paciente_programas').select('id, tentativas, programas(tentativas_padrao)')
@@ -695,7 +697,11 @@ window.MODULOS.programas = {
       .eq('paciente_id', pacienteId).gte('data', f(de)).lte('data', f(ate))
       .not('status', 'in', '("cancelada")').order('data', { ascending: false }).order('hora_inicio');
     if (eS) { popAviso('Nao consegui consultar a agenda: ' + eS.message); return; }
-    const sess = lista || [];
+    // patch 39: cada profissional ve as sessoes da propria terapia (gestao ve todas); ficha ABA so em sessao ABA
+    const temEsp = !!window.ESPEC && ESPEC.colunaOk && Object.keys(ESPEC._mapa).length > 0;
+    const minhaEsp = window.ESPEC ? ESPEC.minha() : 'aba';
+    const sess = (lista || []).filter(x => !temEsp || this.ehGestao() || ESPEC.de(x.aplicador_id) === minhaEsp);
+    const soEvolucao = temEsp && minhaEsp !== 'aba' && !this.ehGestao();
     this._sessEscolha = sess;
     const ST = { agendada: ['selo-neutro', 'agendada'], checkin: ['selo-info', 'chegou'], em_atendimento: ['selo-warn', 'em atendimento'], concluida: ['selo-ok', 'concluida'], falta: ['selo-bad', 'falta'] };
     const fmt = d => d === hoje ? 'Hoje' : new Date(d + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
@@ -705,30 +711,32 @@ window.MODULOS.programas = {
       const deOutra = !!x.aplicador_id && !minha;
       return '<div class="linha-doc sess-escolha' + (x.data === hoje ? ' hoje' : '') + (deOutra ? ' de-outra' : '') + '">' +
         '<div><b>' + fmt(x.data) + ' as ' + String(x.hora_inicio).slice(0, 5) + '</b><small>' +
-        escaparHtml(x.profissional ? x.profissional.nome.split(' ').slice(0, 2).join(' ') : 'sem aplicador') + (minha ? ' (voce)' : deOutra ? ' &middot; horario dela' : '') + '</small></div>' +
+        (temEsp ? ESPEC.seloDe(x.aplicador_id) : '') + escaparHtml(x.profissional ? x.profissional.nome.split(' ').slice(0, 2).join(' ') : 'sem aplicador') + (minha ? ' (voce)' : deOutra ? ' &middot; horario dela' : '') + '</small></div>' +
         '<div class="pac-selos"><span class="selo ' + st[0] + '">' + st[1] + '</span>' +
         (x.status === 'concluida' ? '<button class="btn-chip" onclick="fecharModal(); MODULOS.programas.docEvolucaoDiaria(\'' + x.id + '\', true)">Relatorio</button>' : '') +
         (x.status === 'falta' ? '' : x.data > hoje ? '<span class="selo selo-neutro" title="Programas so podem ser lancados no dia da sessao ou depois">futura</span>' :
+          temEsp && !ESPEC.ehAba(x.aplicador_id) ? '<button class="btn-chip cheio" onclick="MODULOS.programas.lancarNesta(\'' + x.id + '\')">&#9998; Evolucao</button>' :
           '<label class="check" title="Marque para lancar os mesmos programas e a evolucao em mais de uma sessao"><input type="checkbox" class="sess-multi" value="' + x.id + '"> junto</label>' +
           '<button class="btn-chip cheio" onclick="MODULOS.programas.lancarNesta(\'' + x.id + '\')">Lancar nesta</button>') +
         '</div></div>';
     };
     const deHoje = sess.filter(x => x.data === hoje), outras = sess.filter(x => x.data !== hoje);
-    abrirModal('Em qual sessao vai lancar?',
+    abrirModal(soEvolucao ? 'Em qual sessao vai lancar a evolucao?' : 'Em qual sessao vai lancar?',
       (deHoje.length ? '<h4 style="margin:0 0 4px">Hoje</h4>' + deHoje.map(linha).join('') : '<p class="sub">Nenhuma sessao agendada hoje para esta crianca.</p>') +
       (outras.length ? '<h4 style="margin:12px 0 4px">Outras sessoes <small class="sub">(14 dias atras ate 7 dias a frente)</small></h4>' + outras.map(linha).join('') : '') +
       '<div class="mensagem-erro" id="enc-erro"></div>' +
-      '<p class="sub" style="margin-top:8px">Marcou mais de uma como <b>junto</b>? <b>Lancar nas selecionadas</b> aplica uma vez e grava os mesmos programas e a mesma evolucao em todas.</p>' +
+      (soEvolucao ? '' : '<p class="sub" style="margin-top:8px">Marcou mais de uma como <b>junto</b>? <b>Lancar nas selecionadas</b> aplica uma vez e grava os mesmos programas e a mesma evolucao em todas.</p>') +
       '<div class="barra-acoes" style="justify-content:space-between">' +
       '  <button class="btn btn-fantasma" id="enc-criar" onclick="MODULOS.programas.criarEncaixe(\'' + pacienteId + '\')">+ Encaixe agora (' + new Date().toTimeString().slice(0, 5) + ')</button>' +
       '  <div style="display:flex; gap:8px"><button class="btn btn-fantasma" onclick="fecharModal()">Fechar</button>' +
-      '  <button class="btn btn-primario" onclick="MODULOS.programas.lancarSelecionadas()">Lancar nas selecionadas</button></div></div>', true, 'agenda');
+      (soEvolucao ? '' : '  <button class="btn btn-primario" onclick="MODULOS.programas.lancarSelecionadas()">Lancar nas selecionadas</button>') + '</div></div>', true, 'agenda');
   },
 
   // Patch 37: lancar numa sessao. Horario de OUTRA aplicadora e o atendimento dela: so entra com confirmacao
   // (Maria Julia, 07/10: a segunda aplicadora caia no horario da primeira e o lancamento dela apagava o da outra).
   async lancarNesta(id) {
     const x = (this._sessEscolha || []).find(s => s.id === id);
+    if (x && window.ESPEC && !ESPEC.ehAba(x.aplicador_id)) { fecharModal(); this.evolucaoSessao(id); return; }
     if (x && !await this.confirmarHorarioDeOutra([x])) return;
     fecharModal();
     this._sessoesExtras = [];
@@ -751,6 +759,7 @@ window.MODULOS.programas = {
   // abrir a ficha direto por uma sessao (celular "Aplicar hoje"): mesma confirmacao para horario de outra aplicadora
   async abrirFichaDaSessao(id) {
     const { data: s } = await sb.from('sessoes').select('id, data, hora_inicio, aplicador_id, profissional:profiles!sessoes_aplicador_id_fkey(nome)').eq('id', id).maybeSingle();
+    if (s && window.ESPEC && !ESPEC.ehAba(s.aplicador_id)) { this.evolucaoSessao(id); return; }
     if (s && !await this.confirmarHorarioDeOutra([s])) return;
     this._sessoesExtras = [];
     this.abrirFolha(id, true);
@@ -799,7 +808,28 @@ window.MODULOS.programas = {
       return;
     }
     fecharModal();
+    if (window.ESPEC && ESPEC.minha() !== 'aba') { this.evolucaoSessao(nova.id); return; }
     this.abrirFolha(nova.id, true);
+  },
+
+  // ── Patch 39: atendimento de fono, TO, psicologia, pedagogia e psicomotricidade ──
+  // Sem ficha de programas ABA: a profissional escreve a evolucao da sessao (e conclui).
+  // Quem pode: a profissional do horario ou a gestao. Ja tem evolucao? Abre o documento.
+  async evolucaoSessao(id) {
+    const { data: s, error } = await sb.from('sessoes')
+      .select('id, data, hora_inicio, status, paciente_id, aplicador_id, pacientes(nome), profissional:profiles!sessoes_aplicador_id_fkey(nome)')
+      .eq('id', id).maybeSingle();
+    if (error || !s) { popAviso('Nao encontrei a sessao' + (error ? ': ' + error.message : '.')); return; }
+    const eu = window.CORTEX_SESSAO.user.id;
+    if (s.aplicador_id && s.aplicador_id !== eu && !this.ehGestao()) {
+      popAviso('Este horario e de ' + escaparHtml(s.profissional ? s.profissional.nome.split(' ').slice(0, 2).join(' ') : 'outra profissional') + '. Cada profissional lanca a evolucao no proprio horario.');
+      return;
+    }
+    if (s.data > this.hojeLocal()) { popAviso('Essa sessao ainda nao aconteceu: a evolucao so pode ser lancada no dia da sessao ou depois.'); return; }
+    const { data: ja } = await sb.from('evolucoes').select('id').eq('sessao_id', id).limit(1);
+    if (ja && ja.length) { this.docEvolucaoDiaria(id); return; }
+    this._evoRapidaOrigem = 'sessao';
+    this.evolucaoRapida(s.id, s.paciente_id, (s.pacientes ? s.pacientes.nome : '').split(' ')[0], s.data, ESPEC.de(s.aplicador_id));
   },
 
   async abrirFolha(sessaoId, emJanela) {
@@ -2139,7 +2169,7 @@ window.MODULOS.programas = {
     document.body.appendChild(ov);
 
     const [rS, rE] = await Promise.all([
-      sb.from('sessoes').select('id, data, hora_inicio, duracao_min, status, paciente_id, pacientes(nome, data_nascimento), profissional:profiles!sessoes_aplicador_id_fkey(nome)')
+      sb.from('sessoes').select('id, data, hora_inicio, duracao_min, status, paciente_id, aplicador_id, pacientes(nome, data_nascimento), profissional:profiles!sessoes_aplicador_id_fkey(nome)')
         .in('id', ids).order('data').order('hora_inicio'),
       sb.from('evolucoes').select('sessao_id, texto, destinacao, aplicador:profiles!evolucoes_aplicador_id_fkey(nome)').in('sessao_id', ids)
     ]);
@@ -2154,6 +2184,10 @@ window.MODULOS.programas = {
     const eu = (window.CORTEX_SESSAO && window.CORTEX_SESSAO.profile) || {};
     const papel = { direcao: 'Dire&ccedil;&atilde;o', coordenador: 'Coordena&ccedil;&atilde;o', terapeuta: 'Terapeuta', aplicador: 'Aplicador(a)' }[eu.perfil] || 'Equipe ABA';
     const nFaltas = sessoes.filter(x => x.status === 'falta').length;
+    // patch 39: o relatorio sai com as terapias das sessoes escolhidas (ABA, Fono, TO...)
+    const esps = window.ESPEC ? ESPEC.usadas(sessoes.map(x => x.aplicador_id)) : ['aba'];
+    const varias = esps.length > 1, soAba = esps.length === 1 && esps[0] === 'aba';
+    const docEsp = esps.map(k => ESPEC.info(k).doc).join(' &middot; ') || 'Psicoterapia ABA';
 
     const blocos = sessoes.map(x => {
       const ev = evPor[x.id] || {};
@@ -2164,7 +2198,7 @@ window.MODULOS.programas = {
           '<div class="deq-caixa deq-texto" style="min-height:0; color:var(--eq-rosa); font-weight:700">Falta</div>';
       }
       return '<h2><span class="ponto deq-amarelo"></span>' + fmt(x.data) + ' <small>&middot; ' + dow + ' &middot; ' + String(x.hora_inicio).slice(0, 5) +
-        (quem ? ' &middot; ' + escaparHtml(curto(quem)) : '') + (x.status === 'falta' ? ' &middot; <span style="color:var(--eq-rosa)">falta</span>' : '') + '</small></h2>' +
+        (quem ? ' &middot; ' + escaparHtml(curto(quem)) : '') + (varias ? ' &middot; ' + ESPEC.info(ESPEC.de(x.aplicador_id)).doc : '') + (x.status === 'falta' ? ' &middot; <span style="color:var(--eq-rosa)">falta</span>' : '') + '</small></h2>' +
         '<div class="deq-caixa deq-texto" style="min-height:0">' + escaparHtml(ev.texto || '') + '</div>';
     }).join('');
 
@@ -2182,14 +2216,14 @@ window.MODULOS.programas = {
       '<div class="deq-cab">' +
       '  <img src="icones/equilibrium.png" alt="Equilibrium">' +
       '  <div class="deq-cab-t"><h1>Relat&oacute;rio de Sess&otilde;es</h1>' +
-      '  <p>Equilibrium Terapia Infantil &middot; Psicoterapia ABA &middot; evolu&ccedil;&otilde;es das sess&otilde;es</p></div>' +
+      '  <p>Equilibrium Terapia Infantil &middot; ' + docEsp + ' &middot; evolu&ccedil;&otilde;es das sess&otilde;es</p></div>' +
       '  <span class="deq-pilula">' + (sessoes.length === 1 ? 'SESS&Atilde;O ' + fmt(sessoes[0].data) : fmt(sessoes[0].data) + ' A ' + fmt(sessoes[sessoes.length - 1].data)) + '</span>' +
       '</div>' +
       '<div class="deq-caixa deq-dados" style="grid-template-columns:2fr 1fr 1fr 1.6fr; margin-top:4px">' +
       '  <div style="border-bottom:none"><small>Paciente</small><b>' + escaparHtml(pac.nome || '') + '</b></div>' +
       '  <div style="border-bottom:none"><small>Idade</small><b>' + (pac.data_nascimento ? calcularIdade(pac.data_nascimento) : '&mdash;') + '</b></div>' +
       '  <div style="border-bottom:none"><small>Sess&otilde;es</small><b>' + sessoes.length + (nFaltas ? ' <span style="color:var(--eq-rosa); font-size:11px">(' + nFaltas + ' falta' + (nFaltas > 1 ? 's' : '') + ')</span>' : '') + '</b></div>' +
-      '  <div style="border-bottom:none"><small>Aplicador(a)' + (apls.length > 1 ? 's' : '') + '</small><b>' + escaparHtml(apls.map(curto).join(', ') || '&mdash;') + '</b></div>' +
+      '  <div style="border-bottom:none"><small>' + (soAba ? 'Aplicador(a)' + (apls.length > 1 ? 's' : '') : 'Profissional' + (apls.length > 1 ? 'is' : '')) + '</small><b>' + escaparHtml(apls.map(curto).join(', ') || '&mdash;') + '</b></div>' +
       '</div>' +
       '<div id="rr-intro" style="display:none"><h2><span class="ponto deq-teal"></span>&Agrave; fam&iacute;lia</h2><div class="deq-caixa deq-texto" style="min-height:0" id="rr-intro-txt"></div></div>' +
       blocos +
@@ -2345,7 +2379,7 @@ window.MODULOS.programas = {
 
     const [rS, rFotos, rEvo, rComp, rTent] = await Promise.all([
       sb.from('sessoes')
-        .select('id, data, hora_inicio, duracao_min, paciente_id, pacientes(nome, data_nascimento, nivel), ' +
+        .select('id, data, hora_inicio, duracao_min, paciente_id, aplicador_id, pacientes(nome, data_nascimento, nivel), ' +
                 'profissional:profiles!sessoes_aplicador_id_fkey(nome)')
         .eq('id', sessaoId).single(),
       this.lerRegistrosSessao(sessaoId, 'paciente_programa_id, corretos, tentativas, tentativas_sessao, tentativas_previstas, pct_corretos, acertos, pct_acertos, nao_aplicado, motivo_nao_aplicado, paciente_programas(programas(nome, area, tentativas_padrao, niveis))'),
@@ -2360,6 +2394,9 @@ window.MODULOS.programas = {
     ]);
     const s = rS.data;
     if (!s) { ov.remove(); return; }
+    // patch 39: a evolucao sai na especialidade de quem atendeu (ABA, Fonoaudiologia, TO...)
+    const espK = window.ESPEC ? ESPEC.de(s.aplicador_id) : 'aba';
+    const espI = window.ESPEC ? ESPEC.info(espK) : { doc: 'Psicoterapia ABA', nome: 'ABA', titulo: 'Aplicador(a) / N&ordm; do Registro de Classe' };
     const fotos = rFotos.data || [];
     const evo = (rEvo.data && rEvo.data[0]) || {};
     const comps = rComp.data || [];
@@ -2476,7 +2513,7 @@ window.MODULOS.programas = {
       '<div class="deq-cab">' +
       '  <img src="icones/equilibrium.png" alt="Equilibrium">' +
       '  <div class="deq-cab-t"><h1>Evolu&ccedil;&atilde;o Di&aacute;ria</h1>' +
-      '  <p>Equilibrium Terapia Infantil &middot; Psicoterapia ABA' + (comProgramas ? ' &middot; com programas da sess&atilde;o' : '') + '</p></div>' +
+      '  <p>Equilibrium Terapia Infantil &middot; ' + espI.doc + (comProgramas ? ' &middot; com programas da sess&atilde;o' : '') + '</p></div>' +
       '  <span class="deq-pilula">SESS&Atilde;O ' + s.data.split('-').reverse().join('/') + '</span>' +
       '</div>' +
 
@@ -2485,7 +2522,7 @@ window.MODULOS.programas = {
       '  <div style="border-bottom:none"><small>Idade</small><b>' + calcularIdade(s.pacientes.data_nascimento) + '</b></div>' +
       '  <div style="border-bottom:none"><small>Hor&aacute;rio</small><b>' + s.hora_inicio.slice(0, 5) +
            ' &middot; ' + s.duracao_min + ' min</b></div>' +
-      '  <div style="border-bottom:none"><small>Aplicador(a)</small><b>' +
+      '  <div style="border-bottom:none"><small>' + (espK === 'aba' ? 'Aplicador(a)' : 'Profissional') + '</small><b>' +
            escaparHtml(s.profissional ? s.profissional.nome : '&mdash;') + '</b></div>' +
       '</div>' +
 
@@ -2508,7 +2545,7 @@ window.MODULOS.programas = {
 
       '<div class="deq-assinatura">' +
       escaparHtml((evo.aplicador && evo.aplicador.nome) || (s.profissional && s.profissional.nome) || '') +
-      '<br>Aplicador(a) / N&ordm; do Registro de Classe</div>' +
+      '<br>' + (espK === 'aba' ? espI.titulo : espI.titulo + (ESPEC.registro(s.aplicador_id) ? ' &middot; ' + escaparHtml(ESPEC.registro(s.aplicador_id)) : '')) + '</div>' +
 
       '<div class="deq-rodape">' +
       '  <span>Equilibrium Terapia Infantil &middot; Uberl&acirc;ndia/MG</span>' +
@@ -2622,7 +2659,7 @@ window.MODULOS.programas = {
     const pend = passadas.map(s => {
       const faltas = [];
       if (!comEvo.has(s.id)) faltas.push('sem evolucao');
-      if (!comFicha.has(s.id)) faltas.push('sem ficha de programas');
+      if (!comFicha.has(s.id) && (!window.ESPEC || ESPEC.ehAba(s.aplicador_id))) faltas.push('sem ficha de programas');
       if (s.status !== 'concluida') faltas.push('nao encerrada');
       return { s, faltas };
     }).filter(x => x.faltas.length);
@@ -2659,8 +2696,9 @@ window.MODULOS.programas = {
     return { html, total: pend.length };
   },
 
-  evolucaoRapida(sessaoId, pacienteId, nome, data) {
-    abrirModal('Evolucao \u00b7 ' + nome + ' \u00b7 ' + data.split('-').reverse().join('/'),
+  evolucaoRapida(sessaoId, pacienteId, nome, data, esp) {
+    const daSessao = this._evoRapidaOrigem === 'sessao';
+    abrirModal('Evolucao \u00b7 ' + nome + ' \u00b7 ' + data.split('-').reverse().join('/') + (esp && esp !== 'aba' && window.ESPEC ? ' \u00b7 ' + ESPEC.info(esp).nome : ''),
       '<div class="campo"><label>Evolucao da sessao *</label>' +
       '<textarea id="er-texto" rows="4" placeholder="Como foi a sessao..."></textarea></div>' +
       '<div class="campo"><label>Destinacao da crianca</label>' +
@@ -2669,7 +2707,8 @@ window.MODULOS.programas = {
       'Marcar a sessao como concluida</label>' +
       '<div class="mensagem-erro" id="er-erro"></div>' +
       '<div class="barra-acoes">' +
-      '  <button class="btn btn-fantasma" onclick="MODULOS.programas.popupEvolucoesPendentes()">Voltar</button>' +
+      (daSessao ? '  <button class="btn btn-fantasma" onclick="MODULOS.programas._evoRapidaOrigem = null; fecharModal()">Cancelar</button>'
+        : '  <button class="btn btn-fantasma" onclick="MODULOS.programas.popupEvolucoesPendentes()">Voltar</button>') +
       '  <button class="btn btn-primario" id="er-salvar" onclick="MODULOS.programas.salvarEvolucaoRapida(\'' +
       sessaoId + '\', \'' + pacienteId + '\')">Lancar</button>' +
       '</div>', false, 'evolucao');
@@ -2693,6 +2732,13 @@ window.MODULOS.programas = {
         { const { error: _e } = await sb.from('sessoes').update({ status: 'concluida' }).eq('id', sessaoId); if (_e) popAviso('Nao foi possivel gravar (sessoes): ' + _e.message); }
       }
       fecharModal();
+      if (this._evoRapidaOrigem === 'sessao') {
+        this._evoRapidaOrigem = null;
+        popAviso('Evolucao lancada.');
+        if (MODULOS.agenda && document.getElementById('ag-corpo')) MODULOS.agenda.desenhar();
+        else if (this._evo && document.getElementById('evo-corpo')) this.evoRecarregar();
+        return;
+      }
       if (this._evo && document.getElementById('evo-corpo')) this.evoRecarregar(); else this.popupEvolucoesPendentes();
     } catch (e) {
       erro.textContent = e.message; erro.classList.add('visivel');

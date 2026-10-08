@@ -5,7 +5,7 @@
 const ROTULOS_PERFIL = {
   direcao: 'Direcao',
   coordenador: 'Coordenador ABA',
-  terapeuta: 'Terapeuta ABA',
+  terapeuta: 'Terapeuta',
   aplicador: 'Aplicador ABA',
   callcenter: 'Call Center',
   recepcao: 'Recepcao',

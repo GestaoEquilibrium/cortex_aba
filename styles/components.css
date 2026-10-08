@@ -3157,3 +3157,26 @@ body.travado .app-shell { filter: blur(2px); pointer-events: none; user-select: 
 /* ══════════════ Horario de outra aplicadora (patch 37) ══════════════ */
 .sess-escolha.de-outra small { color: var(--st-warn); font-weight: 700; }
 .cel-sessao.de-outra { opacity: .8; border-style: dashed; }
+
+/* ══════════════ Especialidade de cada profissional (patch 39) ══════════════ */
+/* selo da terapia: ABA, FONO, TO, PSICO, PED, PSICOMOT - cores fixas, iguais em qualquer cor de sistema */
+.esp { display: inline-flex; align-items: center; justify-content: center; font-size: 9.5px; font-weight: 800; line-height: 1; letter-spacing: .05em;
+  padding: 3px 6px; border-radius: 999px; white-space: nowrap; vertical-align: 1px; margin-right: 5px; color: var(--c);
+  background: color-mix(in srgb, var(--c) 12%, transparent); border: 1px solid color-mix(in srgb, var(--c) 36%, transparent); }
+.esp[data-t="aba"] { --c: #B45309; } .esp[data-t="fono"] { --c: #1D4ED8; } .esp[data-t="to"] { --c: #047857; }
+.esp[data-t="psico"] { --c: #7C3AED; } .esp[data-t="pedago"] { --c: #BE185D; } .esp[data-t="psicomot"] { --c: #0E7490; }
+[data-modo="escuro"] .esp[data-t="aba"] { --c: #FBBF24; } [data-modo="escuro"] .esp[data-t="fono"] { --c: #93C5FD; } [data-modo="escuro"] .esp[data-t="to"] { --c: #6EE7B7; }
+[data-modo="escuro"] .esp[data-t="psico"] { --c: #C4B5FD; } [data-modo="escuro"] .esp[data-t="pedago"] { --c: #F9A8D4; } [data-modo="escuro"] .esp[data-t="psicomot"] { --c: #67E8F9; }
+.esp.gr { font-size: 10.5px; padding: 5px 10px; margin-right: 0; }
+.esp-cab { display: block; font-size: 10.5px; font-weight: 600; color: var(--ink-muted); margin-top: 2px; letter-spacing: 0; text-transform: none; }
+.ag-eq-cel .esp { margin: 0 0 3px; }
+.chip-sessao small .esp, .agd-n small .esp, .pa-quem .esp, .rc-lista .esp { margin-right: 4px; }
+.rc-barra .esp { background: rgba(255,255,255,.9); margin: 0 2px; padding: 2px 5px; font-size: 9px; }
+/* filtro "Terapia" da agenda */
+.esp-filtro { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: -4px 0 12px; }
+.esp-filtro .lbl { font-size: 12px; font-weight: 700; color: var(--ink-muted); margin-right: 2px; }
+.esp-filtro .seg { padding: 6px 12px; font-size: 12px; }
+/* terapias da crianca no prontuario */
+.pac-terapias { display: inline-flex; gap: 4px; flex-wrap: wrap; vertical-align: middle; }
+.pac-terapias .esp { margin: 0; }
+.esp-dica { display: block; font-size: 12px; color: var(--ink-muted); margin-top: 4px; font-weight: 500; }

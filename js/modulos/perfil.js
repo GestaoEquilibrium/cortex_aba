@@ -52,7 +52,8 @@ window.MODULOS.perfil = {
       '  <div>' +
       '    <b style="font-size:15px">' + escaparHtml(p.nome) + '</b><br>' +
       '    <span class="sub">' + escaparHtml(p.email || '') + ' &middot; ' +
-           (ROTULOS_PERFIL[p.perfil] || p.perfil) + '</span><br>' +
+           (ROTULOS_PERFIL[p.perfil] || p.perfil) + '</span>' +
+      (window.ESPEC && ['terapeuta', 'aplicador', 'coordenador'].includes(p.perfil) ? ' ' + ESPEC.seloDe(p.id) + '<small class="sub">' + ESPEC.info(ESPEC.de(p.id)).nome + ' &middot; definida pela coordenacao</small>' : '') + '<br>' +
       '    <button class="btn-chip" style="margin-top:8px" onclick="document.getElementById(\'mp-arquivo\').click()">Trocar foto</button>' +
       '    <input type="file" id="mp-arquivo" accept="image/*" style="display:none" ' +
       '      onchange="MODULOS.perfil.trocarFoto(this)">' +
@@ -76,7 +77,7 @@ window.MODULOS.perfil = {
       '  <div class="campo"><label>Telefone</label>' +
       '    <input id="mp-tel" placeholder="(34) 9...." value="' + escaparHtml(p.telefone || '') + '"></div>' +
       '  <div class="campo"><label>Registro de classe</label>' +
-      '    <input id="mp-reg" placeholder="Ex.: CRP 04/12345" value="' + escaparHtml(p.registro_classe || '') + '"></div>' +
+      '    <input id="mp-reg" placeholder="' + (window.ESPEC ? ESPEC.info(ESPEC.de(p.id)).exemplo : 'Ex.: CRP 04/12345') + '" value="' + escaparHtml(p.registro_classe || '') + '"></div>' +
       '  <div class="campo"><label>Formacao</label>' +
       '    <input id="mp-form" placeholder="Ex.: Psicologia" value="' + escaparHtml(p.formacao || '') + '"></div>' +
       '  <div class="campo c3"><label>Endereco</label>' +

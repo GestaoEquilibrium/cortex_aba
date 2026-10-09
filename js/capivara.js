@@ -81,7 +81,7 @@ window.CAPIVARA = (function () {
   }
 
   function conferirTela() {
-    const tampa = !!document.querySelector('.folha-overlay');
+    const tampa = !!document.querySelector('.folha-overlay, .ata-painel');   // patch 43: some tambem com o painel da ATA
     if (tampa !== escondida) { escondida = tampa; if (el) el.classList.toggle('fora', tampa); }
   }
 

@@ -102,7 +102,9 @@ window.MODULOS.inicio = {
     const itens = MODULOS.avisos.itens.filter(i => i.grupo !== 'Notificacoes do sistema');
     const notifs = MODULOS.avisos.itens.length - itens.length;
     alvo.innerHTML = '<h3>Minhas pendencias ' + (itens.length ? '<span class="selo selo-neutro">' + itens.length + '</span>' : '') +
-      '<button class="btn-chip" style="margin-left:auto" onclick="MODULOS.avisos.abrir()">Ver tudo' + (notifs ? ' &middot; ' + notifs + ' notificacao(oes)' : '') + '</button></h3>' +
+      // patch 43: + Nova ATA tambem no Inicio
+      (MODULOS.eventos && MODULOS.eventos.podeLavrar && MODULOS.eventos.podeLavrar() ? '<button class="btn-chip" style="margin-left:auto" onclick="MODULOS.eventos.novaAta()">+ Nova ATA</button>' : '') +
+      '<button class="btn-chip"' + (MODULOS.eventos && MODULOS.eventos.podeLavrar && MODULOS.eventos.podeLavrar() ? '' : ' style="margin-left:auto"') + ' onclick="MODULOS.avisos.abrir()">Ver tudo' + (notifs ? ' &middot; ' + notifs + ' notificacao(oes)' : '') + '</button></h3>' +
       (itens.length ? itens.slice(0, 5).map(i => '<div class="av-item ini-av"><span class="ic ic-' + i.cor + '">' + (ICONES[i.icone] || ICONES.inicio) + '</span>' +
         '<span class="tx"><b>' + escaparHtml(i.titulo) + '</b><small>' + escaparHtml(i.sub || '') + '</small></span>' +
         '<button type="button" class="btn-chip" onclick="MODULOS.avisos.acao(this)" data-acao="' + escaparHtml(i.acao).replace(/"/g, '&quot;') + '">' + escaparHtml(i.botao || 'Abrir') + '</button></div>').join('') +

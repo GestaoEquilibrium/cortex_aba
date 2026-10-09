@@ -105,6 +105,14 @@ window.MODULOS.avisos = {
             e.travada ? "abrirModulo('eventos')" : "abrirModulo('eventos'); setTimeout(function(){ MODULOS.eventos.modalPre('', '" + e.id + "'); }, 600)",
             e.travada ? 'Abrir' : 'Preencher');
         });
+        // patch 43: ATA a preencher (quem preenche) e ATAs atrasadas da equipe (gestao)
+        (d.ataMinhas || []).forEach(e => add('Pendencias', e.atrasada ? 'rosa' : 'ambar', 'eventos',
+          e.atrasada ? 'ATA atrasada' : 'ATA da ' + (e.tipo === 'supervisao' ? 'supervisao' : 'reuniao') + ' a preencher',
+          e.titulo + ' - ' + (e.atrasada ? fmt(e.data) : 'hoje') + (e.hora ? ' as ' + e.hora.slice(0, 5) : '') + (e.rasc ? ' - rascunho salvo' : ''),
+          "MODULOS.eventos.abrirAta('" + e.id + "')", 'Preencher'));
+        if ((d.ataEquipe || []).length) add('Pendencias', 'rosa', 'eventos', d.ataEquipe.length + ' ATA(s) atrasada(s) na equipe',
+          d.ataEquipe.slice(0, 3).map(e => e.titulo + ' (' + fmt(e.data).slice(0, 5) + ')').join(' - ') + (d.ataEquipe.length > 3 ? ' ...' : ''),
+          "abrirModulo('eventos'); setTimeout(function(){ MODULOS.eventos.irAba('atas', 'pend'); }, 700)", 'Ver');
         (d.meus || []).forEach(e => add('Avisos', 'teal', 'eventos',
           (e.tipo === 'supervisao' ? 'Supervisao' : e.tipo === 'reuniao_pais' ? 'Reuniao com pais' : 'Reuniao') + ' ' + (e.data === d.hoje ? 'HOJE' : 'amanha') + (e.hora ? ' as ' + e.hora.slice(0, 5) : ''),
           e.titulo, "abrirModulo('eventos')", 'Abrir'));

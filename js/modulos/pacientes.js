@@ -473,7 +473,8 @@ window.MODULOS.pacientes = {
       return;
     }
     if (id === 'documentos') {
-      alvo.innerHTML = this.htmlDocumentos(p) + '<div id="pac-anexos"></div><div id="pac-assinados"></div><div id="pac-portal"><div class="cartao"><p class="sub">Carregando portal...</p></div></div>';
+      alvo.innerHTML = this.htmlDocumentos(p) + '<div id="pac-atas"></div><div id="pac-anexos"></div><div id="pac-assinados"></div><div id="pac-portal"><div class="cartao"><p class="sub">Carregando portal...</p></div></div>';
+      if (MODULOS.eventos && MODULOS.eventos.blocoAtasPaciente) MODULOS.eventos.blocoAtasPaciente(p.id);   // patch 43: ATAs da crianca
       this.listarAssinados(p.id);
       this.listarAnexos(p.id);
       this.blocoPortal(p.id);

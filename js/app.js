@@ -62,7 +62,7 @@ const NAVEGACAO = [
       { id: 'chat',       rotulo: 'Chat',               chave: 'chat' },
       { id: 'admin',      rotulo: 'Usuarios e Acessos', perfis: ['direcao','coordenador','suporte'] },
       { id: 'permissoes', rotulo: 'Permissoes',         perfis: ['suporte'] },
-      { id: 'eventos',    rotulo: 'Supervisao', chave: 'eventos' },
+      { id: 'eventos',    rotulo: 'Supervisao e ATAs', chave: 'eventos' },
       { id: 'guias',      rotulo: 'Guias',      chave: 'guias' },
       { id: 'gerencial',  rotulo: 'Relatorios G.', chave: 'gerencial' },
       { id: 'auditoria',  rotulo: 'Auditoria',          chave: 'auditoria' },
@@ -198,6 +198,8 @@ async function iniciarApp() {
     try { MODULOS.avisos?.iniciar?.(); } catch (e) { console.warn('avisos:', e); }
     // Patch 41: capivara mascote no canto (liga/desliga em Meu perfil > Aparencia)
     try { window.CAPIVARA?.iniciar?.(); } catch (e) { console.warn('capivara:', e); }
+    // Patch 43: na hora da supervisao a ATA abre sozinha para quem preenche (unica janela que abre sozinha)
+    try { MODULOS.eventos?.iniciarVigia?.(); } catch (e) { console.warn('ata:', e); }
     // instalacao no celular / notificacoes push: continua pedindo uma vez, sozinho
     agendarPop(() => window.PWA && PWA.instalado() ? PWA.pedirNotificacoes() : null, 2200);
   }

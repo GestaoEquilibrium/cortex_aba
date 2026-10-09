@@ -138,6 +138,10 @@
     text-align: center; padding-top: 5px;
     font-size: 11px; color: var(--eq-cinza); font-weight: 700;
 }
+/* patch 43: ATA com duas assinaturas lado a lado (coordenacao | quem lavrou), no mesmo traco da .deq-assinatura */
+.deq-assinaturas { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; break-inside: avoid; page-break-inside: avoid; }
+.deq-ass { text-align: center; font-size: 11px; color: var(--eq-cinza); font-weight: 700; line-height: 1.4; padding-top: 22px; }
+.deq-ass > span { display: block; border-top: 1.5px solid var(--eq-tinta); margin-bottom: 5px; }
 .deq-rodape {
     display: flex; justify-content: space-between; align-items: center;
     margin-top: 14px; padding-top: 8px;

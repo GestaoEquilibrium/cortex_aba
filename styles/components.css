@@ -3300,3 +3300,15 @@ body.travado .app-shell { filter: blur(2px); pointer-events: none; user-select: 
     .ata-pe .sub { width: 100%; }
 }
 @media print { .ata-painel, .ata-fundo { display: none !important; } }
+
+/* ══════════════ Patch 44: PEI - criar area nova (opcao A) ══════════════ */
+.pei-area-tit { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pei-area-acoes { margin-left: auto; display: flex; gap: 6px; }
+.selo-nova { background: var(--acao-soft); color: var(--acao); }
+.pei-area-nova { border: 2px dashed var(--line-strong, var(--line)); background: transparent; box-shadow: none; }
+.pei-area-linha { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.pei-area-linha input { flex: 1; min-width: 220px; max-width: 440px; }
+.pei-area-linha select { max-width: 280px; }
+.pei-sug { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 10px; font-size: 12px; color: var(--ink-muted); }
+.pei-sug:empty { display: none; }
+@media (max-width: 720px) { .pei-area-acoes { margin-left: 0; width: 100%; } .pei-area-linha input { min-width: 0; width: 100%; max-width: none; } }

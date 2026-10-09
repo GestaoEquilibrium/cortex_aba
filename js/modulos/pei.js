@@ -144,19 +144,7 @@ window.MODULOS.pei = {
     const porArea = {};
     listaAreas.forEach(a => { porArea[a] = candidatas.filter(c => c.area === a); });
 
-    let blocos = '';
-    Object.entries(porArea).forEach(([area, itens]) => {
-      blocos += '<div class="cartao"><h3>' + area +
-        ' <span class="selo selo-warn">' + itens.length + ' candidata(s)</span></h3>' +
-        '<div class="campo" style="margin-bottom:8px"><label>Recursos da area <small class="sub">(materiais; vale para todas as metas de ' + escaparHtml(area) + ')</small></label>' +
-        '<input class="pm-recurso-area" data-area="' + escaparHtml(area) + '" placeholder="Ex.: cartoes de objetos, espelho, bonecos, livros, rotina visual"></div>' +
-        '<div id="pei-area-' + this.slug(area) + '">' +
-        itens.map(c => this.htmlMetaLinha(area, c)).join('') +
-        '</div>' +
-        '<button type="button" class="btn-chip" style="margin-top:8px" ' +
-        'onclick="MODULOS.pei.addMetaManual(\'' + area + '\')">+ Meta manual</button>' +
-        '</div>';
-    });
+    const blocos = Object.entries(porArea).map(([area, itens]) => this.htmlAreaConstrutor(area, itens, false)).join('');
 
     el.innerHTML =
       '<div class="pagina-cabecalho">' +
@@ -185,19 +173,142 @@ window.MODULOS.pei = {
       '</div></div>' +
 
       blocos +
+      this.htmlCriarArea() +
 
       '<div class="mensagem-erro" id="pei-erro"></div>' +
       '<div class="barra-acoes">' +
       '  <button class="btn btn-fantasma" onclick="MODULOS.pacientes.telaDetalhe(\'' + pac.id + '\', \'pei\')">Cancelar</button>' +
       '  <button class="btn btn-primario" onclick="MODULOS.pei.salvarPei()">Salvar PEI</button>' +
       '</div>';
+    // finalidade: enquanto ninguem mexer no texto, ele acompanha as areas criadas/renomeadas
+    this._construtor.finalidadeAuto = document.getElementById('pei-finalidade').value;
+    this.desenharSugestoes();
+  },
+
+  // ─────────────── Areas do PEI (patch 44: criar area nova, opcao A de Wess, 09/10/2026) ───────────────
+  // Cartao "Criar area nova" no fim da lista (Novo PEI e Editar PEI). A area nova vira um cartao como os
+  // outros (recursos + metas), com Renomear e Tirar area. Areas criadas em outros PEIs aparecem como atalho.
+  attr(t) { return escaparHtml(String(t == null ? '' : t)).replace(/"/g, '&quot;'); },
+  normArea(t) { return String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim(); },
+  mesmaArea(a, b) { return this.normArea(a) === this.normArea(b); },
+  areasPadrao() {
+    const A = MODULOS.avaliacoes || {};
+    return [...new Set([].concat(A.AREAS || [], A.SS_AREAS || [], A.P_AREAS || []))];
+  },
+  limparNomeArea(t) {
+    let n = String(t || '').replace(/["<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 60);
+    if (!n) return '';
+    const padrao = this.areasPadrao().find(p => this.mesmaArea(p, n));   // "cognicao" vira "Cognição"
+    return padrao || n.charAt(0).toUpperCase() + n.slice(1);
+  },
+  cardsArea() { return Array.from(document.querySelectorAll('.pei-area-card, .pei-ed-area')); },
+  htmlAcoesArea(nova) {
+    return '<span class="pei-area-acoes"><button type="button" class="btn-chip" onclick="MODULOS.pei.renomearArea(this)">&#9998; Renomear</button>' +
+      (nova ? '<button type="button" class="btn-chip" onclick="MODULOS.pei.tirarArea(this)">&#10005; Tirar area</button>' : '') + '</span>';
+  },
+  htmlAreaConstrutor(area, itens, nova) {
+    return '<div class="cartao pei-area-card" data-area="' + this.attr(area) + '"><h3 class="pei-area-tit"><span class="pei-area-nome">' + escaparHtml(area) + '</span>' +
+      (nova ? '<span class="selo selo-nova">area nova</span>' + this.htmlAcoesArea(true) : '<span class="selo selo-warn">' + itens.length + ' candidata(s)</span>') + '</h3>' +
+      '<div class="campo" style="margin-bottom:8px"><label>Recursos da area <small class="sub">(materiais; vale para todas as metas de <span class="pei-area-nome">' + escaparHtml(area) + '</span>)</small></label>' +
+      '<input class="pm-recurso-area" data-area="' + this.attr(area) + '" placeholder="Ex.: cartoes de objetos, espelho, bonecos, livros, rotina visual"></div>' +
+      '<div class="pei-area-metas">' + itens.map(c => this.htmlMetaLinha(area, c)).join('') + '</div>' +
+      '<button type="button" class="btn-chip pei-add-meta" style="margin-top:8px" onclick="MODULOS.pei.addMetaManual(this)">+ Meta manual</button>' +
+      '</div>';
+  },
+  htmlCriarArea() {
+    return '<div class="cartao pei-area-nova" id="pei-area-nova"><h3>+ Criar area nova</h3>' +
+      '<p class="sub" style="margin:-4px 0 10px">Para metas que nao cabem nas areas da avaliacao. A area entra no PEI e no documento como as outras.</p>' +
+      '<div id="pei-ed-incluir"></div>' +
+      '<div class="pei-area-linha"><input id="pei-area-nome" maxlength="60" placeholder="Nome da area (ex.: Alimentacao, Comportamento adaptativo)" ' +
+      'onkeydown="if (event.key === \'Enter\') { event.preventDefault(); MODULOS.pei.criarArea(); }">' +
+      '<button type="button" class="btn-chip cheio" onclick="MODULOS.pei.criarArea()">+ Criar area</button></div>' +
+      '<div class="pei-sug" id="pei-area-sug"></div></div>';
+  },
+  // areas que ja apareceram em PEIs (fora as das avaliacoes), para virar atalho
+  async areasUsadas() {
+    if (this._areasUsadas) return this._areasUsadas;
+    const { data } = await sb.from('pei_metas').select('area').limit(10000);
+    const padrao = this.areasPadrao().map(a => this.normArea(a));
+    const mapa = new Map();
+    (data || []).forEach(r => {
+      const a = String(r.area || '').replace(/["<>]/g, '').trim(); const k = this.normArea(a);
+      if (a && !padrao.includes(k) && !mapa.has(k)) mapa.set(k, a);
+    });
+    return (this._areasUsadas = [...mapa.values()].sort((x, y) => x.localeCompare(y, 'pt-BR')));
+  },
+  async desenharSugestoes() {
+    const alvo = document.getElementById('pei-area-sug'); if (!alvo) return;
+    const usadas = await this.areasUsadas();
+    const ja = this.cardsArea().map(c => c.dataset.area);
+    const l = usadas.filter(a => !ja.some(x => this.mesmaArea(x, a))).slice(0, 12);
+    alvo.innerHTML = l.length ? '<span>Ja usadas em outros PEIs:</span>' + l.map(a => '<button type="button" class="btn-chip" data-area="' + this.attr(a) + '" onclick="MODULOS.pei.criarArea(this.dataset.area)">' + escaparHtml(a) + '</button>').join('') : '';
+  },
+  async criarArea(nomeForcado) {
+    const inp = document.getElementById('pei-area-nome');
+    const nome = this.limparNomeArea(nomeForcado || (inp ? inp.value : ''));
+    if (!nome) { if (inp) inp.focus(); popAviso('Escreva o nome da area.'); return; }
+    const existente = this.cardsArea().find(c => this.mesmaArea(c.dataset.area, nome));
+    if (existente) { existente.scrollIntoView({ behavior: 'smooth', block: 'center' }); popAviso('A area "' + existente.dataset.area + '" ja esta neste PEI.'); return; }
+    const d = document.createElement('div');
+    let card;
+    if (document.getElementById('pei-ed-areas')) {
+      d.innerHTML = this.htmlAreaEdicao(nome, [], true); card = d.firstChild;
+      document.getElementById('pei-ed-areas').appendChild(card);
+      const sel = document.getElementById('pei-ed-area-sel');
+      if (sel) { Array.from(sel.options).forEach(o => { if (this.mesmaArea(o.value, nome)) o.remove(); }); if (!sel.options.length) document.getElementById('pei-ed-incluir').innerHTML = ''; }
+      this.addMetaEdicao(card.querySelector('.pei-ed-add'));
+    } else {
+      d.innerHTML = this.htmlAreaConstrutor(nome, [], true); card = d.firstChild;
+      document.getElementById('pei-area-nova').before(card);
+      this.addMetaManual(card.querySelector('.pei-add-meta'));
+    }
+    if (inp) inp.value = '';
+    this.desenharSugestoes(); this.atualizarFinalidade();
+    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setTimeout(() => card.querySelector('.pm-meta')?.focus(), 350);
+  },
+  renomearArea(botao) {
+    const card = botao.closest('.pei-area-card, .pei-ed-area'); if (!card) return;
+    this._renomeando = card;
+    abrirModal('Renomear area',
+      '<div class="campo"><label>Nome da area *</label><input id="pei-ren-nome" maxlength="60" value="' + this.attr(card.dataset.area) + '" ' +
+      'onkeydown="if (event.key === \'Enter\') { event.preventDefault(); MODULOS.pei.confirmarRenomear(); }"></div>' +
+      '<p class="sub" style="margin:-6px 0 10px">As metas desta area passam para o nome novo.</p>' +
+      '<div class="mensagem-erro" id="pei-ren-erro"></div>' +
+      '<div class="barra-acoes"><button class="btn btn-fantasma" onclick="fecharModal()">Cancelar</button>' +
+      '<button class="btn btn-primario" onclick="MODULOS.pei.confirmarRenomear()">Renomear</button></div>');
+    setTimeout(() => document.getElementById('pei-ren-nome')?.select(), 60);
+  },
+  confirmarRenomear() {
+    const card = this._renomeando; if (!card) return;
+    const erro = document.getElementById('pei-ren-erro');
+    const nome = this.limparNomeArea(document.getElementById('pei-ren-nome').value);
+    if (!nome) { erro.textContent = 'Escreva o nome da area.'; erro.classList.add('visivel'); return; }
+    if (this.cardsArea().some(c => c !== card && this.mesmaArea(c.dataset.area, nome))) { erro.textContent = 'Ja existe uma area com esse nome neste PEI.'; erro.classList.add('visivel'); return; }
+    card.dataset.area = nome;
+    card.querySelectorAll('.pei-area-nome').forEach(s => { s.textContent = nome; });
+    card.querySelectorAll('[data-area]').forEach(x => { x.dataset.area = nome; });   // metas e recursos da area
+    fecharModal(); this._renomeando = null;
+    this.desenharSugestoes(); this.atualizarFinalidade();
+  },
+  async tirarArea(botao) {
+    const card = botao.closest('.pei-area-card, .pei-ed-area'); if (!card) return;
+    const temTexto = Array.from(card.querySelectorAll('.pm-meta')).some(i => i.value.trim());
+    if (temTexto && !await popConfirmar('Tirar a area "' + card.dataset.area + '" e as metas dela deste PEI?', { titulo: 'Tirar area', ok: 'Tirar area' })) return;
+    card.remove();
+    this.desenharSugestoes(); this.atualizarFinalidade();
+  },
+  atualizarFinalidade() {
+    const c = this._construtor, ta = document.getElementById('pei-finalidade');
+    if (!c || !ta || document.getElementById('pei-ed-areas') || ta.value !== c.finalidadeAuto) return;   // a pessoa ja mexeu no texto
+    c.finalidadeAuto = ta.value = this.finalidadePadrao(c.paciente.nome.split(' ')[0], c.protocolo, c.freq, this.cardsArea().map(x => x.dataset.area));
   },
 
   slug(t) { return t.toLowerCase().replace(/[^a-z]/g, ''); },
 
   htmlMetaLinha(area, c) {
     const n = ++this._construtor.seq;
-    return '<div class="pei-meta" data-area="' + escaparHtml(area) + '" data-questao="' + (c.questao_id || '') + '" ' +
+    return '<div class="pei-meta" data-area="' + this.attr(area) + '" data-questao="' + (c.questao_id || '') + '" ' +
       'data-ss="' + (c.ss_id || '') + '">' +
       '<label class="check pei-check"><input type="checkbox"' + (c.marcada === false ? '' : ' checked') + '></label>' +
       '<div class="pei-campos">' +
@@ -210,11 +321,14 @@ window.MODULOS.pei = {
       '</div></div>';
   },
 
-  addMetaManual(area) {
-    const alvo = document.getElementById('pei-area-' + this.slug(area));
+  addMetaManual(x) {
+    const card = typeof x === 'string' ? this.cardsArea().find(c => c.dataset.area === x) : x && x.closest('.pei-area-card');
+    if (!card) return;
     const div = document.createElement('div');
-    div.innerHTML = this.htmlMetaLinha(area, { meta: '' });
-    alvo.appendChild(div.firstChild);
+    div.innerHTML = this.htmlMetaLinha(card.dataset.area, { meta: '' });
+    const nova = div.firstChild;
+    card.querySelector('.pei-area-metas').appendChild(nova);
+    nova.querySelector('.pm-meta').focus();
   },
 
   async salvarPei() {
@@ -226,9 +340,10 @@ window.MODULOS.pei = {
       if (!m.querySelector('input[type="checkbox"]').checked) return;
       const texto = m.querySelector('.pm-meta').value.trim();
       if (!texto) return;
-      const recArea = document.querySelector('.pm-recurso-area[data-area="' + m.dataset.area.replace(/"/g, '&quot;') + '"]');
+      const card = m.closest('.pei-area-card');
+      const recArea = card ? card.querySelector('.pm-recurso-area') : null;
       metas.push({
-        area: m.dataset.area,
+        area: card ? card.dataset.area : m.dataset.area,
         meta: texto,
         recurso: recArea && recArea.value.trim() ? recArea.value.trim() : null,
         prazo: m.querySelector('.pm-prazo').value || null,
@@ -423,26 +538,33 @@ window.MODULOS.pei = {
       '  </select></div>' +
       '</div></div>' +
       '<div id="pei-ed-areas">' + areas.map(a => this.htmlAreaEdicao(a, metas.filter(m => m.area === a))).join('') + '</div>' +
-      '<div class="cartao" id="pei-ed-nova-area"' + (todas.some(a => !areas.includes(a)) ? '' : ' hidden') + '><h3>Metas em outra area</h3>' +
-      '<div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center"><select id="pei-ed-area-sel">' +
-      todas.filter(a => !areas.includes(a)).map(a => '<option value="' + escaparHtml(a) + '">' + escaparHtml(a) + '</option>').join('') +
-      '</select><button type="button" class="btn-chip" onclick="MODULOS.pei.addAreaEdicao()">+ Incluir area</button></div></div>' +
+      // patch 44: criar area nova (e incluir uma area da avaliacao que ainda nao esta no PEI)
+      this.htmlCriarArea() +
       '<div class="mensagem-erro" id="pei-ed-erro"></div>' +
       '<div class="barra-acoes">' +
       '  <button class="btn btn-fantasma" onclick="MODULOS.pei.abrirVisual(\'' + pei.id + '\')">Cancelar</button>' +
       '  <button class="btn btn-primario" id="pei-ed-salvar2" onclick="MODULOS.pei.salvarEdicao()">Salvar alteracoes</button>' +
       '</div>';
+    const faltam = todas.filter(a => !areas.includes(a));
+    if (faltam.length) document.getElementById('pei-ed-incluir').innerHTML =
+      '<div class="pei-area-linha" style="margin-bottom:10px"><span class="sub">Area da avaliacao:</span><select id="pei-ed-area-sel">' +
+      faltam.map(a => '<option value="' + this.attr(a) + '">' + escaparHtml(a) + '</option>').join('') +
+      '</select><button type="button" class="btn-chip" onclick="MODULOS.pei.addAreaEdicao()">+ Incluir area</button><span class="sub">ou crie uma:</span></div>';
+    this.desenharSugestoes();
   },
 
-  htmlAreaEdicao(area, lista) {
+  htmlAreaEdicao(area, lista, nova) {
     const rec = (lista.find(m => m.recurso) || {}).recurso || '';
     const k = ++this._edicao.seq;
-    return '<div class="cartao pei-ed-area" data-area="' + escaparHtml(area) + '"><h3>' + escaparHtml(area) +
-      ' <span class="selo selo-neutro pei-ed-conta">' + lista.length + ' meta(s)</span></h3>' +
-      '<div class="campo" style="margin-bottom:8px"><label>Recursos da area <small class="sub">(vale para todas as metas de ' + escaparHtml(area) + ')</small></label>' +
-      '<input class="pm-recurso-area" id="pei-ed-rec-' + k + '" value="' + escaparHtml(rec) + '" placeholder="Ex.: cartoes de objetos, espelho, bonecos, livros, rotina visual"></div>' +
+    // area criada agora: Renomear e Tirar area; area propria ja salva (fora das avaliacoes): so Renomear
+    const propria = !this.areasPadrao().some(p => this.mesmaArea(p, area));
+    return '<div class="cartao pei-ed-area" data-area="' + this.attr(area) + '"><h3 class="pei-area-tit"><span class="pei-area-nome">' + escaparHtml(area) + '</span>' +
+      ' <span class="selo selo-neutro pei-ed-conta">' + lista.length + ' meta(s)</span>' + (nova ? '<span class="selo selo-nova">area nova</span>' : '') +
+      (nova || propria ? this.htmlAcoesArea(!!nova) : '') + '</h3>' +
+      '<div class="campo" style="margin-bottom:8px"><label>Recursos da area <small class="sub">(vale para todas as metas de <span class="pei-area-nome">' + escaparHtml(area) + '</span>)</small></label>' +
+      '<input class="pm-recurso-area" id="pei-ed-rec-' + k + '" value="' + this.attr(rec) + '" placeholder="Ex.: cartoes de objetos, espelho, bonecos, livros, rotina visual"></div>' +
       '<div class="pei-ed-lista">' + lista.map(m => this.htmlMetaEdicao(m)).join('') + '</div>' +
-      '<button type="button" class="btn-chip" style="margin-top:8px" onclick="MODULOS.pei.addMetaEdicao(this)">+ Meta</button></div>';
+      '<button type="button" class="btn-chip pei-ed-add" style="margin-top:8px" onclick="MODULOS.pei.addMetaEdicao(this)">+ Meta</button></div>';
   },
 
   htmlMetaEdicao(m) {
@@ -486,9 +608,10 @@ window.MODULOS.pei = {
     const area = sel.value;
     const div = document.createElement('div'); div.innerHTML = this.htmlAreaEdicao(area, []);
     const card = div.firstChild; document.getElementById('pei-ed-areas').appendChild(card);
-    sel.querySelector('option[value="' + CSS.escape(area) + '"]')?.remove();
-    if (!sel.options.length) document.getElementById('pei-ed-nova-area').hidden = true;
-    this.addMetaEdicao(card.querySelector('.btn-chip'));
+    Array.from(sel.options).forEach(o => { if (o.value === area) o.remove(); });
+    if (!sel.options.length) document.getElementById('pei-ed-incluir').innerHTML = '';
+    this.addMetaEdicao(card.querySelector('.pei-ed-add'));
+    this.desenharSugestoes();
   },
 
   async salvarEdicao() {

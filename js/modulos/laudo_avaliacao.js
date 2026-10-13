@@ -731,13 +731,13 @@ window.MODULOS.laudo_avaliacao = {
     const travado = rel.status !== 'rascunho';
     const editavel = this.podeGerir() && !travado;
     window._docPortal = { paciente_id: d.pac.id, tipo: 'relatorio_avaliacao', titulo: 'Relatorio de Avaliacao' + (d.completo ? ' completo' : '') };
-    const campo = (id, rot, valor, linhas) => editavel
-      ? '<div class="campo" style="margin-bottom:10px"><label>' + rot + '</label><textarea id="la-' + id + '" rows="' + (linhas || 4) + '" style="resize:vertical" oninput="MODULOS.laudo_avaliacao.salvarAuto()">' + escaparHtml(valor || '') + '</textarea></div>'
-      : '<div style="margin-bottom:10px"><b style="font-size:11.5px; text-transform:uppercase; letter-spacing:.04em">' + rot + '</b><p style="font-size:13px; line-height:1.7; white-space:pre-wrap; margin-top:3px">' + escaparHtml(valor || '') + '</p></div>';
+    // patch 49 (coordenacao, 13/10: "tirar qualquer secao ou alterar o texto, data, tudo"): opcao B escolhida pelo Wess -
+    // a folha e o editor. Toca em qualquer texto e edita no lugar; cada secao tem Texto padrao e Tirar do relatorio.
+    this._rasc = null; this._semAjustes = false; this._avisouAjustes = false;
     const faltas = [];
     if (!d.pac.cid) faltas.push('CID-11');
-    if (!d.medico) faltas.push('m\u00e9dico requisitante (encaminhamento)');
-    if (!d.freq) faltas.push('frequ\u00eancia semanal (Plano)');
+    if (!d.medico) faltas.push('médico requisitante (encaminhamento)');
+    if (!d.freq) faltas.push('frequência semanal (Plano)');
 
     el.innerHTML =
       '<div class="pagina-cabecalho nao-imprime">' +
@@ -751,32 +751,195 @@ window.MODULOS.laudo_avaliacao = {
       (travado && typeof podeReabrirRelatorio === 'function' && podeReabrirRelatorio() ? '<button class="btn btn-fantasma" title="Coordenacao/direcao: libera o relatorio travado para editar de novo" onclick="MODULOS.laudo_avaliacao.reabrir()">&#128275; Liberar para editar</button>' : '') +
       '  <button class="btn btn-fantasma" onclick="MODULOS.laudo_avaliacao.doc()">&#128196; ' + (travado ? 'Documento' : 'Folha / Imprimir') + '</button>' +
       (travado ? pdfAssinadoBtn() : '') + '</div></div>' +
-      '<div class="rm-split"><div class="rm-form">' +
-      '  <div class="cartao faixa-azul"><h3>Vem do sistema</h3><div class="grade-visao">' +
+      '<div class="la-split"><div class="la-lado">' +
+      '  <div class="cartao faixa-azul"><h3>Vem do sistema</h3>' +
       d.protocolos.map(pr =>
-      '    <div class="caixa-info"><small>' + escaparHtml(this.NOME_PROT[pr.av.protocolo] || pr.av.protocolo) + '</small><b>' + (pr.atual.total === null ? '-' : pr.atual.total + '%') +
-      ' <small class="sub">' + new Date(pr.av.concluido_em).toLocaleDateString('pt-BR') + ' &middot; ' + pr.nSessoes + ' sess.' + ((pr.historico || []).length >= 2 ? ' &middot; anteriores ' + pr.historico.map(h => (h.perfil.total === null ? '-' : h.perfil.total + '%')).join(' &rarr; ') : (pr.anterior ? ' &middot; ant. ' + pr.anterior.total + '%' : '')) + '</small></b></div>').join('') + '</div>' +
-      '  <label class="check" style="display:flex; gap:6px; align-items:center; font-size:12.5px; margin-top:8px"><input type="checkbox" id="la-anexos"' + (rel.incluir_anexos ? ' checked' : '') + (editavel ? '' : ' disabled') + ' onchange="MODULOS.laudo_avaliacao.salvarAuto()"> Incluir anexos consolidados (tabelas e graficos de cada protocolo)</label>' +
-      '  <label class="check" style="display:flex; gap:6px; align-items:center; font-size:12.5px; margin-top:6px"><input type="checkbox" id="la-freq"' + (rel.mostrar_frequencia ? ' checked' : '') + (editavel ? '' : ' disabled') + ' onchange="MODULOS.laudo_avaliacao.salvarAuto()"> Mostrar a frequ&ecirc;ncia semanal na identifica&ccedil;&atilde;o' + (d.freq ? ' (' + escaparHtml(String(d.freq)) + ' sess&otilde;es/semana)' : ' <small class="sub">(sem frequ&ecirc;ncia cadastrada no Plano)</small>') + '</label>' +
+      '    <div class="caixa-info" style="margin-bottom:6px"><small>' + escaparHtml(this.NOME_PROT[pr.av.protocolo] || pr.av.protocolo) + '</small><b>' + (pr.atual.total === null ? '-' : pr.atual.total + '%') +
+      ' <small class="sub">' + new Date(pr.av.concluido_em).toLocaleDateString('pt-BR') + ' &middot; ' + pr.nSessoes + ' sess.' + ((pr.historico || []).length >= 2 ? ' &middot; anteriores ' + pr.historico.map(h => (h.perfil.total === null ? '-' : h.perfil.total + '%')).join(' &rarr; ') : (pr.anterior ? ' &middot; ant. ' + pr.anterior.total + '%' : '')) + '</small></b></div>').join('') +
+      '  <label class="check" style="display:flex; gap:6px; align-items:center; font-size:12.5px; margin-top:6px"><input type="checkbox" id="la-freq"' + (rel.mostrar_frequencia ? ' checked' : '') + (editavel ? '' : ' disabled') + ' onchange="MODULOS.laudo_avaliacao.mudouOpcao()"> Mostrar a frequ&ecirc;ncia na identifica&ccedil;&atilde;o' + (d.freq ? '' : ' <small class="sub">(sem frequ&ecirc;ncia no Plano)</small>') + '</label>' +
       (faltas.length ? '<div class="mensagem-erro visivel" style="margin-top:8px">Faltam no cadastro: ' + faltas.join(', ') + '. O relatorio sai sem esses dados ate preencher em Editar dados / Plano.</div>' : '') +
-      '  <div class="campo" style="margin-top:8px"><label>Assinatura</label><select id="la-ass"' + (editavel ? '' : ' disabled') + ' onchange="MODULOS.laudo_avaliacao.salvarAuto()">' +
-      this._assinaturas.map(a => '<option value="' + escaparHtml(a.nome) + '"' + (a.nome === rel.assinatura_nome ? ' selected' : '') + '>' + escaparHtml(a.nome) + ' \u2014 ' + escaparHtml(a.titulo) + '</option>').join('') + '</select></div></div>' +
-      '  <div class="cartao">' +
-      campo('demanda', 'II. Descricao da demanda', rel.demanda, 3) +
-      (editavel
-        ? '<div class="campo" style="margin-bottom:10px"><label>III. Procedimento <small class="sub">(texto padrao da clinica; altere se precisar)</small> ' +
-          '<button type="button" class="btn-chip" style="margin-left:6px" onclick="MODULOS.laudo_avaliacao.restaurarProcedimento()">&#8634; Texto padrao</button></label>' +
-          '<textarea id="la-procedimento" rows="5" style="resize:vertical" oninput="MODULOS.laudo_avaliacao.salvarAuto()">' + escaparHtml((rel.procedimento || '').trim() || this.procedimentoPadrao(d)) + '</textarea></div>'
-        : (rel.procedimento ? '<div style="margin-bottom:10px"><b style="font-size:11.5px; text-transform:uppercase; letter-spacing:.04em">III. Procedimento (alterado)</b><p style="font-size:13px; line-height:1.7; white-space:pre-wrap; margin-top:3px">' + escaparHtml(rel.procedimento) + '</p></div>' : '')) +
-      campo('analise', 'IV. Analise clinica (vinculo, engajamento, pares, comportamentos)', rel.analise, 7) +
-      (d.protocolos.some(pr => pr.anterior) ? campo('comparativo', 'Analise comparativa das avaliacoes', rel.comparativo, 5) : '') +
-      d.protocolos.map(pr => (d.completo ? '<h4 style="margin:12px 0 6px; color:var(--acao)">' + escaparHtml(this.NOME_PROT[pr.av.protocolo] || pr.av.protocolo) + '</h4>' : '') +
-        pr.atual.areas.map(a => campo('area-' + this.chaveArea(pr, a.area).replace(/[^a-z0-9]/gi, '_'), a.area + (a.pct === null ? '' : ' \u2013 ' + a.pct + '%') + ' <small class="sub">(o paragrafo descritivo da area entra sozinho)</small>', (rel.areas || {})[this.chaveArea(pr, a.area)], 3)).join('')).join('') +
-      campo('conclusao', 'V. Conclusao <small class="sub">(os dois paragrafos finais entram sozinhos)</small>', rel.conclusao, 4) +
-      '  </div></div>' +
-      '<div class="rm-previa"><div class="folha-mini" id="la-previa"></div></div></div>';
-    this.atualizarPrevia();
+      '  <div class="campo" style="margin-top:8px; margin-bottom:0"><label>Assinatura</label><select id="la-ass"' + (editavel ? '' : ' disabled') + ' onchange="MODULOS.laudo_avaliacao.mudouOpcao()">' +
+      this._assinaturas.map(a => '<option value="' + escaparHtml(a.nome) + '"' + (a.nome === rel.assinatura_nome ? ' selected' : '') + '>' + escaparHtml(a.nome) + ' — ' + escaparHtml(a.titulo) + '</option>').join('') + '</select></div></div>' +
+      '  <div class="cartao la-lista" id="la-lista"></div>' +
+      '</div><div class="la-folha" id="la-folha"></div></div>';
+    this.desenharLista();
+    this.desenharFolha();
+    this.ligarFolha();
   },
+
+  // ── patch 49: folha editavel ──
+  editavel() { return !!this._rel && this._rel.status === 'rascunho' && this.podeGerir(); },
+  TIT_PADRAO: { ident: 'Identificação', demanda: 'Descrição da demanda', procedimento: 'Procedimento', analise: 'Análise', conclusao: 'Conclusão', comparativo: 'Análise comparativa das avaliações:' },
+  ROT_PADRAO: { nome: 'Nome', nasc: 'Data de nascimento', resp: 'Psicólogo responsável', esp: 'Especialidade', freq: 'Frequência' },
+  ajustesDe(rel) {
+    if (!rel.ajustes || typeof rel.ajustes !== 'object' || Array.isArray(rel.ajustes)) rel.ajustes = {};
+    if (!Array.isArray(rel.ajustes.ocultas)) rel.ajustes.ocultas = [];
+    if (!rel.ajustes.textos || typeof rel.ajustes.textos !== 'object') rel.ajustes.textos = {};
+    return rel.ajustes;
+  },
+  // texto padrao de cada pedaco editavel da folha (o que volta no "Texto padrao")
+  padraoTexto(k, rel, d) {
+    const fmt = x => x ? new Date(x).toLocaleDateString('pt-BR') : '-';
+    if (k === 'titulo') return 'RELATÓRIO · AVALIAÇÃO DO DESENVOLVIMENTO E COMPORTAMENTO INFANTIL';
+    if (k === 'subtitulo') return 'Equilibrium Terapia Infantil · Psicoterapia ABA';
+    if (k === 'selo') return (d.protocolos.some(pr => pr.anterior) ? 'REAVALIAÇÃO' : 'AVALIAÇÃO') + (d.completo ? ' COMPLETA' : '');
+    if (k.indexOf('tit:') === 0) return this.TIT_PADRAO[k.slice(4)] || '';
+    if (k.indexOf('rot:') === 0) return this.ROT_PADRAO[k.slice(4)] || '';
+    if (k === 'id:nome') return d.pac.nome || '';
+    if (k === 'id:nasc') return fmt(d.pac.data_nascimento + 'T12:00:00') + ' (' + this.idadeTxt(d.pac.data_nascimento, d.av.concluido_em) + ')';
+    if (k === 'id:resp') return rel.assinatura_nome || this.ASSINATURA_PADRAO.nome;
+    if (k === 'id:esp') return 'Psicoterapia ABA';
+    if (k === 'id:freq') return d.freq ? String(d.freq) + ' sessões semanais' : '—';
+    if (k.indexOf('anome:') === 0) return this.nomeAreaDoc(k.slice(6).split('|').slice(1).join('|'));
+    if (k.indexOf('atx:') === 0) return this.AREA_TEXTO[k.slice(4).split('|').slice(1).join('|')] || '';
+    if (k === 'cfix') return this.CONCLUSAO_FIXA;
+    if (k === 'local') {
+      const dataAss = rel.gerado_em ? new Date(rel.gerado_em) : new Date(d.av.concluido_em);
+      return 'Uberlândia, ' + dataAss.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' }) + '.';
+    }
+    if (k === 'procedimento') return this.procedimentoPadrao(d);
+    // textos escritos pelo sistema a partir dos dados
+    const r = this._rasc || (this._rasc = this.rascunhos(d));
+    if (k.indexOf('par:') === 0) return (r.areas || {})[k.slice(4)] || '';
+    return r[k] || '';
+  },
+  // valor atual de um pedaco editavel
+  valorTexto(k, rel, d) {
+    if (['demanda', 'analise', 'comparativo', 'conclusao'].includes(k)) return rel[k] || '';
+    if (k === 'procedimento') return (rel.procedimento || '').trim() || this.procedimentoPadrao(d);
+    if (k.indexOf('par:') === 0) return (rel.areas || {})[k.slice(4)] || '';
+    const T = (rel.ajustes && rel.ajustes.textos) || {};
+    return T[k] !== undefined && T[k] !== null ? T[k] : this.padraoTexto(k, rel, d);
+  },
+  setTexto(k, v) {
+    const rel = this._rel, d = this._d;
+    if (['demanda', 'analise', 'comparativo', 'conclusao'].includes(k)) { rel[k] = v || null; return; }
+    if (k === 'procedimento') { rel.procedimento = !v || v.trim() === this.procedimentoPadrao(d).trim() ? null : v; return; }
+    if (k.indexOf('par:') === 0) { rel.areas = Object.assign({}, rel.areas || {}); rel.areas[k.slice(4)] = v; return; }
+    const aj = this.ajustesDe(rel);
+    if (v === this.padraoTexto(k, rel, d)) delete aj.textos[k]; else aj.textos[k] = v;
+  },
+  // secoes que podem sair do relatorio (ordem da folha)
+  listaSecoes(d) {
+    const L = [['ident', 'I. Identificação'], ['demanda', 'Descrição da demanda'], ['procedimento', 'Procedimento'], ['analise', 'Análise']];
+    if (d.protocolos.some(pr => pr.anterior)) L.push(['comparativo', 'Análise comparativa']);
+    d.protocolos.forEach(pr => {
+      L.push(['graf:' + pr.av.protocolo, 'Gráfico' + (d.completo ? ' · ' + (this.NOME_PROT[pr.av.protocolo] || pr.av.protocolo) : '')]);
+      pr.atual.areas.forEach(a => L.push(['area:' + this.chaveArea(pr, a.area), this.nomeAreaDoc(a.area), true]));
+    });
+    L.push(['conclusao', 'Conclusão']);
+    L.push(['anexos', 'Anexos consolidados']);
+    return L;
+  },
+  secaoVisivel(k) { return k === 'anexos' ? !!this._rel.incluir_anexos : !((this._rel.ajustes || {}).ocultas || []).includes(k); },
+  desenharLista() {
+    const alvo = document.getElementById('la-lista'); if (!alvo || !this._d) return;
+    const L = this.listaSecoes(this._d);
+    const n = L.filter(x => this.secaoVisivel(x[0])).length;
+    const ed = this.editavel();
+    alvo.innerHTML = '<h3 style="font-size:13.5px">No relat&oacute;rio <small class="sub">' + n + ' de ' + L.length + '</small></h3>' +
+      L.map(x => { const on = this.secaoVisivel(x[0]);
+        return '<div class="la-item' + (on ? '' : ' fora') + (x[2] ? ' sub' : '') + '">' +
+          '<button type="button" class="la-sw' + (on ? ' on' : '') + '" title="' + (on ? 'Tirar do relatorio' : 'Voltar para o relatorio') + '"' + (ed ? '' : ' disabled') + ' data-sec="' + this.attrSec(x[0]) + '" onclick="MODULOS.laudo_avaliacao.alternar(this.dataset.sec)"></button>' +
+          '<a href="#" data-sec="' + this.attrSec(x[0]) + '" onclick="MODULOS.laudo_avaliacao.irPara(this.dataset.sec); return false;">' + escaparHtml(x[1]) + '</a></div>'; }).join('') +
+      (ed ? '<p class="sub" style="font-size:11.5px; margin-top:8px">Toque em qualquer texto da folha para editar: titulos, datas, textos padrao, tudo.</p>' : '<p class="sub" style="font-size:11.5px; margin-top:8px">Relatorio travado: libere para editar.</p>');
+  },
+  attrSec(k) { return String(k).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); },
+  desenharFolha() {
+    const f = document.getElementById('la-folha'); if (!f) return;
+    const ed = this.editavel();
+    f.innerHTML = this.html(this._rel, this._d, ed);
+    if (ed) f.querySelectorAll('.la-ed').forEach(x => {
+      try { x.contentEditable = 'plaintext-only'; } catch (e) { /* navegador sem plaintext-only */ }
+      if (x.contentEditable !== 'plaintext-only') x.contentEditable = 'true';
+      x.spellcheck = true;
+    });
+  },
+  ligarFolha() {
+    const f = document.getElementById('la-folha'); if (!f || f._ligada) return; f._ligada = true;
+    // botoes da barra nao tiram o foco do texto que esta sendo editado
+    f.addEventListener('mousedown', e => { if (e.target.closest('.la-barra button')) e.preventDefault(); });
+    f.addEventListener('click', e => {
+      const b = e.target.closest('[data-acao]');
+      if (b) { e.preventDefault(); this.acaoBarra(b.dataset.acao, b.closest('[data-sec]') ? b.closest('[data-sec]').dataset.sec : ''); return; }
+      const sec = e.target.closest('.la-sec');
+      if (sec && this.editavel()) this.selecionar(sec);
+    });
+    f.addEventListener('focusin', e => { const x = e.target.closest('.la-ed'); if (x) { this._k = x.dataset.k; this.selecionar(x.closest('.la-sec')); } });
+    f.addEventListener('input', e => { const x = e.target.closest('.la-ed'); if (x) { this.setTexto(x.dataset.k, this.lerEd(x)); this.salvarAuto(); } });
+    f.addEventListener('keydown', e => {
+      const x = e.target.closest('.la-ed'); if (!x) return;
+      if (e.key === 'Escape' || (e.key === 'Enter' && x.classList.contains('la-linha'))) { e.preventDefault(); x.blur(); }
+    });
+    f.addEventListener('paste', e => {
+      const x = e.target.closest('.la-ed'); if (!x || x.contentEditable === 'plaintext-only') return;
+      e.preventDefault();
+      const t = ((e.clipboardData || window.clipboardData).getData('text/plain') || '');
+      document.execCommand('insertText', false, x.classList.contains('la-linha') ? t.replace(/\s*\n\s*/g, ' ') : t);
+    });
+  },
+  lerEd(x) {
+    // linha (titulos, rotulos, datas): textContent - o innerText devolve CAIXA ALTA quando o CSS usa uppercase
+    let t = (x.classList.contains('la-linha') ? x.textContent : x.innerText) || '';
+    t = t.replace(/\u00a0/g, ' ').replace(/\r/g, '');
+    if (x.classList.contains('la-linha')) t = t.replace(/\s*\n\s*/g, ' ');
+    return t.replace(/\n{3,}/g, '\n\n').trim();
+  },
+  selecionar(sec) {
+    const f = document.getElementById('la-folha'); if (!f) return;
+    f.querySelectorAll('.la-sec.la-sel').forEach(s => { if (s !== sec) { s.classList.remove('la-sel'); s.querySelector(':scope > .la-barra')?.remove(); } });
+    if (!sec || sec.classList.contains('la-sel')) return;
+    sec.classList.add('la-sel');
+    const k = sec.dataset.sec;
+    const podeTirar = this.listaSecoes(this._d).some(x => x[0] === k);
+    sec.insertAdjacentHTML('afterbegin', '<div class="la-barra nao-imprime">' +
+      '<button type="button" class="lar" data-acao="editar">&#9998; Editar texto</button>' +
+      '<button type="button" data-acao="padrao">&#8634; Texto padr&atilde;o</button>' +
+      (podeTirar ? '<button type="button" data-acao="tirar">Tirar do relat&oacute;rio</button>' : '') +
+      '<button type="button" data-acao="fechar" title="Fechar">&times;</button></div>');
+  },
+  async acaoBarra(acao, k) {
+    const f = document.getElementById('la-folha'); if (!f) return;
+    const sec = f.querySelector('.la-sec[data-sec="' + this.attrSec(k) + '"]');
+    if (acao === 'voltar') { this.alternar(k); return; }
+    if (acao === 'fechar') { if (sec) { sec.classList.remove('la-sel'); sec.querySelector(':scope > .la-barra')?.remove(); } document.activeElement && document.activeElement.blur && document.activeElement.blur(); return; }
+    if (acao === 'tirar') { this.alternar(k); return; }
+    if (!sec) return;
+    const eds = Array.from(sec.querySelectorAll('.la-ed'));
+    if (acao === 'editar') {
+      const alvo = eds.find(x => !x.classList.contains('la-linha')) || eds[0];
+      if (alvo) { alvo.focus(); const r = document.createRange(); r.selectNodeContents(alvo); r.collapse(false); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+      return;
+    }
+    if (acao === 'padrao') {
+      // o texto que estava sendo editado nesta secao; sem foco, todos os textos dela
+      const focado = eds.find(x => x.dataset.k === this._k);
+      const alvos = focado ? [focado] : eds;
+      const mudam = alvos.filter(x => this.valorTexto(x.dataset.k, this._rel, this._d) !== this.padraoTexto(x.dataset.k, this._rel, this._d));
+      if (!mudam.length) { popAviso('Esta parte ja esta com o texto padrao.'); return; }
+      if (!await popConfirmar('Voltar ' + (mudam.length > 1 ? 'estes ' + mudam.length + ' textos' : 'este texto') + ' ao texto padrao?\n\nO que foi escrito ' + (mudam.length > 1 ? 'neles' : 'nele') + ' se perde.', { titulo: 'Texto padrao', ok: 'Voltar ao padrao' })) return;
+      mudam.forEach(x => this.setTexto(x.dataset.k, this.padraoTexto(x.dataset.k, this._rel, this._d)));
+      this.salvarAuto(); this.desenharFolha();
+    }
+  },
+  alternar(k) {
+    if (!this.editavel()) return;
+    const rel = this._rel;
+    if (k === 'anexos') rel.incluir_anexos = !rel.incluir_anexos;
+    else {
+      const aj = this.ajustesDe(rel);
+      aj.ocultas = aj.ocultas.includes(k) ? aj.ocultas.filter(x => x !== k) : aj.ocultas.concat([k]);
+    }
+    this.desenharLista(); this.desenharFolha(); this.salvarAuto();
+  },
+  irPara(k) {
+    const f = document.getElementById('la-folha'); if (!f) return;
+    const alvo = f.querySelector('[data-sec="' + this.attrSec(k) + '"]') || (k === 'anexos' ? f.querySelector('.la-anexos') : null);
+    if (!alvo) return;
+    alvo.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (alvo.classList.contains('la-sec')) this.selecionar(alvo);
+  },
+  mudouOpcao() { this.colher(); this.desenharFolha(); this.salvarAuto(); },
 
   _timer: null,
   procedimentoPadrao(d) {
@@ -786,32 +949,40 @@ window.MODULOS.laudo_avaliacao = {
     const el = document.getElementById('la-procedimento'); if (!el) return;
     el.value = this.procedimentoPadrao(this._d); this.salvarAuto();
   },
+  // patch 49: o que esta na folha vive em this._rel (os textos editados na folha ja foram guardados nele);
+  // daqui sai o que vai para o banco. Assinatura e frequencia vem do painel ao lado.
   colher() {
-    const rel = this._rel, d = this._d;
-    const v = id => document.getElementById('la-' + id)?.value.trim() || null;
-    const areas = {};
-    d.protocolos.forEach(pr => pr.atual.areas.forEach(a => { const k = this.chaveArea(pr, a.area); areas[k] = v('area-' + k.replace(/[^a-z0-9]/gi, '_')) || (rel.areas || {})[k] || ''; }));
+    const rel = this._rel;
     const ass = document.getElementById('la-ass');
-    const a = ass ? this._assinaturas.find(x => x.nome === ass.value) : null;
-    const anx = document.getElementById('la-anexos');
-    const procEl = document.getElementById('la-procedimento');
-    const procedimento = procEl ? (procEl.value.trim() === this.procedimentoPadrao(d).trim() ? null : procEl.value.trim() || null) : rel.procedimento;
-    return { demanda: v('demanda') ?? rel.demanda, procedimento, analise: v('analise') ?? rel.analise, comparativo: v('comparativo') ?? rel.comparativo,
-      areas, conclusao: v('conclusao') ?? rel.conclusao, incluir_anexos: anx ? anx.checked : rel.incluir_anexos,
-      mostrar_frequencia: document.getElementById('la-freq') ? document.getElementById('la-freq').checked : rel.mostrar_frequencia,
-      assinatura_nome: a ? a.nome : rel.assinatura_nome, assinatura_titulo: a ? a.titulo : rel.assinatura_titulo };
+    const a = ass && this._assinaturas ? this._assinaturas.find(x => x.nome === ass.value) : null;
+    if (a) { rel.assinatura_nome = a.nome; rel.assinatura_titulo = a.titulo; }
+    const fq = document.getElementById('la-freq'); if (fq) rel.mostrar_frequencia = fq.checked;
+    const c = { demanda: rel.demanda || null, procedimento: rel.procedimento || null, analise: rel.analise || null, comparativo: rel.comparativo || null,
+      areas: rel.areas || {}, conclusao: rel.conclusao || null, incluir_anexos: !!rel.incluir_anexos, mostrar_frequencia: !!rel.mostrar_frequencia,
+      assinatura_nome: rel.assinatura_nome, assinatura_titulo: rel.assinatura_titulo };
+    if (!this._semAjustes) c.ajustes = rel.ajustes && typeof rel.ajustes === 'object' ? rel.ajustes : {};
+    return c;
+  },
+  // grava; sem a coluna ajustes (SQL do patch 49 nao rodado) grava o resto e avisa uma vez
+  async gravarRel(extra) {
+    const c = Object.assign(this.colher(), extra || {});
+    let { error } = await sb.from('relatorios_avaliacao').update(c).eq('id', this._rel.id);
+    if (error && /ajustes/i.test(error.message)) {
+      this._semAjustes = true; delete c.ajustes;
+      ({ error } = await sb.from('relatorios_avaliacao').update(c).eq('id', this._rel.id));
+      if (!this._avisouAjustes) { this._avisouAjustes = true; popAviso('Falta rodar o SQL do patch 49 no banco: os textos escritos ficam salvos, mas secao tirada e titulo/texto padrao mudado ainda nao ficam guardados.'); }
+    }
+    return error;
   },
   salvarAuto() {
     clearTimeout(this._timer);
     this._timer = setTimeout(async () => {
-      const c = this.colher(); Object.assign(this._rel, c); this.atualizarPrevia();
-      if (this._rel.status === 'rascunho') await sb.from('relatorios_avaliacao').update(c).eq('id', this._rel.id);
-    }, 500);
+      if (!this._rel || this._rel.status !== 'rascunho') return;
+      const error = await this.gravarRel();
+      if (error) popAviso('Nao foi possivel salvar o rascunho: ' + error.message);
+    }, 600);
   },
-  atualizarPrevia() {
-    const alvo = document.getElementById('la-previa');
-    if (alvo) alvo.innerHTML = this.html(this._rel, this._d);
-  },
+  atualizarPrevia() { this.desenharFolha(); },
   async reabrir() {
     if (!podeReabrirRelatorio()) return;
     if (!await popConfirmar('Liberar este relatorio de avaliacao para edicao?\n\nEle volta a rascunho. O que ja foi enviado ao portal ou assinado continua como estava; depois de corrigir, gere e trave de novo (e reenvie/reassine se precisar).', { titulo: 'Liberar para editar', ok: 'Liberar' })) return;
@@ -822,7 +993,7 @@ window.MODULOS.laudo_avaliacao = {
   // Regerar os textos automaticos deste relatorio (rascunho): o que a equipe escreveu nesses campos e substituido
   async regerarTextos() {
     const rel = this._rel, d = this._d; if (!rel || !d || rel.status !== 'rascunho') return;
-    const ok = await popConfirmar('Regerar os textos automaticos deste relatorio?\n\nDemanda, analise, comparativo, areas e conclusao voltam a ser escritos pelo sistema a partir dos dados atuais. O que foi digitado nesses campos se perde; procedimento, assinatura e opcoes continuam.', { titulo: 'Regerar textos', ok: 'Regerar' });
+    const ok = await popConfirmar('Regerar os textos automaticos deste relatorio?\n\nDemanda, analise, comparativo, areas e conclusao voltam a ser escritos pelo sistema a partir dos dados atuais. O que foi digitado nesses campos se perde; procedimento, assinatura, opcoes, secoes tiradas e titulos/textos padrao mudados continuam.', { titulo: 'Regerar textos', ok: 'Regerar' });
     if (!ok) return;
     clearTimeout(this._timer);
     const auto = this.rascunhos(d);
@@ -881,72 +1052,93 @@ window.MODULOS.laudo_avaliacao = {
   async gerarTravar() {
     clearTimeout(this._timer);
     const c = this.colher();
-    if (!c.analise || !c.conclusao) { popAviso('Preencha a Analise e a Conclusao antes de gerar.'); return; }
+    const oc = new Set(((this._rel.ajustes || {}).ocultas) || []);
+    if ((!oc.has('analise') && !c.analise) || (!oc.has('conclusao') && !c.conclusao)) { popAviso('Escreva a Analise e a Conclusao (ou tire a secao do relatorio) antes de gerar.'); return; }
     if (!await popConfirmar('Gerar o relatorio de avaliacao?\n\nDepois de gerado ele fica travado: so impressao e envio ao portal.', { titulo: 'Gerar e travar', ok: 'Gerar e travar' })) return;
-    Object.assign(this._rel, c);
-    const html = this.html(this._rel, this._d);
-    const { error } = await sb.from('relatorios_avaliacao').update(Object.assign({}, c, { html_snapshot: html, status: 'gerado', gerado_em: new Date().toISOString(), gerado_por: window.CORTEX_SESSAO.user.id })).eq('id', this._rel.id);
+    const agora = new Date().toISOString();
+    const html = this.html(Object.assign({}, this._rel, { gerado_em: agora }), this._d);
+    const error = await this.gravarRel({ html_snapshot: html, status: 'gerado', gerado_em: agora, gerado_por: window.CORTEX_SESSAO.user.id });
     if (error) { popAviso('Nao consegui gerar: ' + error.message); return; }
     this.abrirEditor(this._rel.avaliacoes_ids && this._rel.avaliacoes_ids.length ? this._rel.avaliacoes_ids : this._rel.avaliacao_id);
   },
 
   // \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 FOLHA \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-  html(rel, d) {
+  html(rel, d, ed) {
     const A = MODULOS.avaliacoes;
     const fmt = x => x ? new Date(x).toLocaleDateString('pt-BR') : '-';
     const txt = v => escaparHtml(v || '').replace(/\n/g, '<br>');
     const dataAss = rel.gerado_em ? new Date(rel.gerado_em) : new Date(d.av.concluido_em);
-    const extenso = dataAss.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' });
-    const proc = (rel.procedimento || '').trim() || this.procedimentoPadrao(d);
+    // patch 49: secoes tiradas e textos mudados pela coordenacao (rel.ajustes); ed = folha editavel do editor
+    const ocultas = new Set(((rel.ajustes || {}).ocultas) || []);
+    const val = k => this.valorTexto(k, rel, d);
+    const at = v => String(v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const E = (k, html, linha) => ed ? '<span class="la-ed' + (linha ? ' la-linha' : ' la-bloco') + '" data-k="' + at(k) + '" data-ph="' + (linha ? 'toque para escrever' : 'Toque para escrever (ou tire a seção do relatório)') + '">' + html + '</span>' : html;
+    const S = (k, nome, corpo) => {
+      if (ocultas.has(k)) return ed ? '<div class="la-tirada nao-imprime" data-sec="' + at(k) + '"><span>' + escaparHtml(nome) + ' &middot; tirada do relat&oacute;rio</span><button type="button" class="btn-chip" data-acao="voltar">Voltar</button></div>' : '';
+      const c = corpo();
+      return ed && c ? '<div class="la-sec" data-sec="' + at(k) + '">' + c + '</div>' : c;
+    };
+    const ROM = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
+    let nSec = 0;
+    const H = k => '<h2><span class="ponto deq-azul"></span>' + ROM[++nSec] + '. ' + E('tit:' + k, escaparHtml(val('tit:' + k)), true) + '</h2>';
     const blocoProt = pr => {
       const cats = pr.atual.areas.map(a => a.area);
       const series = [];
-      const val = p => cats.map(c => { const x = p.areas.find(a => a.area === c); return x ? x.pct : null; });
+      const vp = p => cats.map(c => { const x = p.areas.find(a => a.area === c); return x ? x.pct : null; });
       const hist = pr.historico || (pr.anterior ? [{ av: pr.anteriorAv, perfil: pr.anterior }] : []);
       if (hist.length >= 2) {
         // patch 46 (pedido da coordenacao, 13/10): terceira aplicacao em diante = todas as pontuacoes juntas no grafico
         const base = (pr.nAnteriores || hist.length) - hist.length;   // aplicacoes mais antigas que nao cabem no grafico
         const CORES_ANT = ['#56C4CF', '#F3B63D', '#7C6FD0', '#3E9C6E'];
         hist.forEach((h, i) => series.push({ nome: 'AV' + (h.n || base + i + 1) + ' (' + fmt(h.av.concluido_em) + ')',
-          cor: i === hist.length - 1 ? '#1468B2' : CORES_ANT[i % CORES_ANT.length], valores: val(h.perfil) }));
-        series.push({ nome: 'AV' + ((pr.nAnteriores || hist.length) + 1) + ' \u00b7 atual (' + fmt(pr.av.concluido_em) + ')', cor: '#E07A2F', valores: pr.atual.areas.map(a => a.pct) });
+          cor: i === hist.length - 1 ? '#1468B2' : CORES_ANT[i % CORES_ANT.length], valores: vp(h.perfil) }));
+        series.push({ nome: 'AV' + ((pr.nAnteriores || hist.length) + 1) + ' · atual (' + fmt(pr.av.concluido_em) + ')', cor: '#E07A2F', valores: pr.atual.areas.map(a => a.pct) });
       } else {
         const ant = hist[0];
-        if (ant) series.push({ nome: 'AV anterior (' + fmt(ant.av.concluido_em) + ')', cor: '#1468B2', valores: val(ant.perfil) });
+        if (ant) series.push({ nome: 'AV anterior (' + fmt(ant.av.concluido_em) + ')', cor: '#1468B2', valores: vp(ant.perfil) });
         series.push({ nome: (ant ? 'AV atual (' : 'AV' + ((pr.nAnteriores || 0) + 1) + ' (') + fmt(pr.av.concluido_em) + ')', cor: ant ? '#E07A2F' : '#1468B2', valores: pr.atual.areas.map(a => a.pct) });
       }
-      const grafico = A && A.gBarras ? A.gBarras(cats, series, { legenda: true }) : '';
-      return (d.completo ? '<h2 style="margin-top:10px"><span class="ponto deq-teal"></span>' + escaparHtml(this.NOME_PROT[pr.av.protocolo] || pr.av.protocolo) + ' <small>&middot; ' + fmt(pr.av.concluido_em) + '</small></h2>' : '') +
-        '<div class="deq-caixa" style="margin-top:6px">' + grafico + '</div>' +
-        pr.atual.areas.map(a =>
-          '<div class="deq-caixa deq-texto" style="margin-top:6px"><b>' + escaparHtml(this.nomeAreaDoc(a.area)) + (a.pct === null ? '' : ' &ndash; ' + a.pct + '%') + '</b><br>' +
-          '<span style="color:var(--eq-cinza)">' + escaparHtml(this.AREA_TEXTO[a.area] || '') + '</span><br>' + txt((rel.areas || {})[this.chaveArea(pr, a.area)]) + '</div>').join('');
+      const p = pr.av.protocolo;
+      const nomeP = this.NOME_PROT[p] || p;
+      return (d.completo ? '<h2 style="margin-top:10px"><span class="ponto deq-teal"></span>' + escaparHtml(nomeP) + ' <small>&middot; ' + fmt(pr.av.concluido_em) + '</small></h2>' : '') +
+        S('graf:' + p, 'Gráfico' + (d.completo ? ' · ' + nomeP : ''), () => '<div class="deq-caixa" style="margin-top:6px">' + (A && A.gBarras ? A.gBarras(cats, series, { legenda: true }) : '') + '</div>') +
+        pr.atual.areas.map(a => {
+          const ch = this.chaveArea(pr, a.area);
+          return S('area:' + ch, this.nomeAreaDoc(a.area), () => {
+            const fixo = val('atx:' + ch), par = val('par:' + ch);
+            return '<div class="deq-caixa deq-texto" style="margin-top:6px"><b>' + E('anome:' + ch, escaparHtml(val('anome:' + ch)), true) + (a.pct === null ? '' : ' &ndash; ' + a.pct + '%') + '</b><br>' +
+              (fixo || ed ? '<span style="color:var(--eq-cinza)">' + E('atx:' + ch, escaparHtml(fixo)) + '</span><br>' : '') + E('par:' + ch, txt(par)) + '</div>';
+          });
+        }).join('');
     };
     const anexos = rel.incluir_anexos && this._anexos ? d.protocolos.map(pr => this._anexos[pr.av.protocolo] || '').filter(Boolean) : [];
-    const sec = (n, t) => '<h2><span class="ponto deq-azul"></span>' + n + ' ' + t + '</h2>';
+    const idCampo = (k, rot) => '<div style="border-bottom:none"><small>' + E('rot:' + rot, escaparHtml(val('rot:' + rot)), true) + '</small><b>' + E(k, escaparHtml(val(k)), true) + '</b></div>';
+    const conclusao = () => {
+      const a = val('conclusao'), b = val('cfix');
+      return H('conclusao') + '<div class="deq-caixa deq-texto">' + (ed ? E('conclusao', txt(a)) + '<br>' + E('cfix', txt(b)) : [a, b].filter(x => x && x.trim()).map(txt).join('<br><br>')) + '</div>';
+    };
     return '<div class="doc-eq">' +
       '<div class="deq-cab"><img src="icones/equilibrium.png" alt="Equilibrium">' +
-      '  <div class="deq-cab-t"><h1>RELAT&Oacute;RIO &middot; AVALIA&Ccedil;&Atilde;O DO DESENVOLVIMENTO E COMPORTAMENTO INFANTIL</h1><p>Equilibrium Terapia Infantil &middot; Psicoterapia ABA</p></div>' +
-      '  <span class="deq-pilula">' + (d.protocolos.some(pr => pr.anterior) ? 'REAVALIA&Ccedil;&Atilde;O' : 'AVALIA&Ccedil;&Atilde;O') + (d.completo ? ' COMPLETA' : '') + '</span></div>' +
-      sec('I.', 'Identifica&ccedil;&atilde;o') +
-      '<div class="deq-caixa deq-dados" style="grid-template-columns:2fr 1.2fr 1.6fr 1fr' + (rel.mostrar_frequencia ? ' 1fr' : '') + '">' +
-      '  <div style="border-bottom:none"><small>Nome</small><b>' + escaparHtml(d.pac.nome) + '</b></div>' +
-      '  <div style="border-bottom:none"><small>Data de nascimento</small><b>' + fmt(d.pac.data_nascimento + 'T12:00:00') + ' (' + this.idadeTxt(d.pac.data_nascimento, d.av.concluido_em) + ')</b></div>' +
-      '  <div style="border-bottom:none"><small>Psic&oacute;logo respons&aacute;vel</small><b>' + escaparHtml(rel.assinatura_nome || this.ASSINATURA_PADRAO.nome) + '</b></div>' +
-      '  <div style="border-bottom:none"><small>Especialidade</small><b>Psicoterapia ABA</b></div>' +
-      (rel.mostrar_frequencia ? '  <div style="border-bottom:none"><small>Frequ&ecirc;ncia</small><b>' + (d.freq ? escaparHtml(String(d.freq)) + ' sess&otilde;es semanais' : '&mdash;') + '</b></div>' : '') + '</div>' +
-      sec('II.', 'Descri&ccedil;&atilde;o da demanda') + '<div class="deq-caixa deq-texto">' + txt(rel.demanda) + '</div>' +
-      sec('III.', 'Procedimento') + '<div class="deq-caixa deq-texto">' + txt(proc) + '</div>' +
-      sec('IV.', 'An&aacute;lise') + '<div class="deq-caixa deq-texto">' + txt(rel.analise) + '</div>' +
-      (rel.comparativo ? '<div class="deq-caixa deq-texto" style="margin-top:6px"><b>An&aacute;lise comparativa das avalia&ccedil;&otilde;es:</b><br>' + txt(rel.comparativo) + '</div>' : '') +
+      '  <div class="deq-cab-t"><h1>' + E('titulo', escaparHtml(val('titulo')), true) + '</h1><p>' + E('subtitulo', escaparHtml(val('subtitulo')), true) + '</p></div>' +
+      (val('selo') || ed ? '  <span class="deq-pilula">' + E('selo', escaparHtml(val('selo')), true) + '</span>' : '') + '</div>' +
+      S('ident', 'Identificação', () => H('ident') +
+        '<div class="deq-caixa deq-dados" style="grid-template-columns:2fr 1.2fr 1.6fr 1fr' + (rel.mostrar_frequencia ? ' 1fr' : '') + '">' +
+        idCampo('id:nome', 'nome') + idCampo('id:nasc', 'nasc') + idCampo('id:resp', 'resp') + idCampo('id:esp', 'esp') +
+        (rel.mostrar_frequencia ? idCampo('id:freq', 'freq') : '') + '</div>') +
+      S('demanda', 'Descrição da demanda', () => H('demanda') + '<div class="deq-caixa deq-texto">' + E('demanda', txt(val('demanda'))) + '</div>') +
+      S('procedimento', 'Procedimento', () => H('procedimento') + '<div class="deq-caixa deq-texto">' + E('procedimento', txt(val('procedimento'))) + '</div>') +
+      S('analise', 'Análise', () => H('analise') + '<div class="deq-caixa deq-texto">' + E('analise', txt(val('analise'))) + '</div>') +
+      (d.protocolos.some(pr => pr.anterior) ? S('comparativo', 'Análise comparativa', () => (val('comparativo') || ed)
+        ? '<div class="deq-caixa deq-texto" style="margin-top:6px"><b>' + E('tit:comparativo', escaparHtml(val('tit:comparativo')), true) + '</b><br>' + E('comparativo', txt(val('comparativo'))) + '</div>' : '') : '') +
       d.protocolos.map(blocoProt).join('') +
-      sec('V.', 'Conclus&atilde;o') + '<div class="deq-caixa deq-texto">' + txt(rel.conclusao) + '<br><br>' + txt(this.CONCLUSAO_FIXA) + '</div>' +
-      '<div class="deq-local">Uberl&acirc;ndia, ' + extenso + '.</div>' +
+      S('conclusao', 'Conclusão', conclusao) +
+      (val('local') || ed ? '<div class="deq-local">' + E('local', escaparHtml(val('local')), true) + '</div>' : '') +
       blocoAssinatura(rel.assinatura_nome || this.ASSINATURA_PADRAO.nome, escaparHtml(rel.assinatura_titulo || this.ASSINATURA_PADRAO.titulo)) +
       '<div class="deq-rodape"><span>Equilibrium Terapia Infantil &middot; Uberl&acirc;ndia/MG</span>' +
       '<span class="pontos"><i style="background:var(--eq-teal)"></i><i style="background:var(--eq-amarelo)"></i><i style="background:var(--eq-rosa)"></i><i style="background:var(--eq-azul)"></i></span>' +
       '<span>Documento gerado pelo CORTEX aba &middot; ' + fmt(dataAss) + '</span></div></div>' +
-      anexos.map((h, i) => '<div class="deq-quebra"></div><p class="sub" style="text-align:center; font-size:10px; margin:4px 0">ANEXO ' + (i + 1) + ' &middot; documento consolidado do protocolo</p>' + h).join('');
+      (ed && !rel.incluir_anexos ? '<div class="la-tirada la-anexos nao-imprime" data-sec="anexos"><span>Anexos consolidados &middot; fora do relat&oacute;rio</span><button type="button" class="btn-chip" data-acao="voltar">Voltar</button></div>' : '') +
+      anexos.map((h, i) => '<div class="deq-quebra' + (i === 0 && ed ? ' la-anexos' : '') + '"></div><p class="sub" style="text-align:center; font-size:10px; margin:4px 0">ANEXO ' + (i + 1) + ' &middot; documento consolidado do protocolo</p>' + h).join('');
   },
 
   async doc() {

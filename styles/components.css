@@ -3330,3 +3330,8 @@ html[data-cor] .nav-item.ativa .nav-badge { color: var(--acao-forte); }
 .chat-apagar { margin-left: 4px; }
 .chat-apagar:hover { background: rgba(233, 88, 106, .85) !important; border-color: transparent !important; }
 .folha-mais .nav-item.ativa .nav-badge { background: #E9586A; color: #fff; }
+
+/* ══════════════ Patch 46: Iniciar atendimento - atrasadas e outra data ══════════════ */
+.sess-outra-data { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 12px; padding-top: 10px;
+    border-top: 1px dashed var(--line); font-size: 13px; color: var(--ink-muted); }
+.sess-outra-data input { width: 170px; }

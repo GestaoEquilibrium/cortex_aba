@@ -100,6 +100,8 @@ window.MODULOS.laudo_avaliacao = {
     return { areas, total: tEsp ? Math.round(tAdq * 100 / tEsp) : null, faixas };
   },
 
+  MAX_ANT_GRAFICO: 4,   // patch 46: no grafico, ate 4 aplicacoes anteriores + a atual
+
   // \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 DADOS (um ou varios protocolos) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
   // ids = lista de avaliacoes concluidas; a mais recente e a "principal" (datas, demanda, evolucoes)
   async dados(ids) {
@@ -136,12 +138,18 @@ window.MODULOS.laudo_avaliacao = {
     } catch (e) { queixas = []; }
     const protocolos = [];
     for (const a of avs) {
+      // patch 46: todas as aplicacoes anteriores do mesmo protocolo (o grafico mostra as pontuacoes juntas);
+      // o texto comparativo continua usando so a anterior (a mais recente antes desta)
       const { data: rAnt } = await sb.from('avaliacoes').select('id, protocolo, concluido_em, areas_excluidas').eq('paciente_id', pac.id).eq('protocolo', a.protocolo)
-        .eq('status', 'concluida').lt('concluido_em', a.concluido_em).order('concluido_em', { ascending: false }).limit(1);
-      const anteriorAv = rAnt && rAnt[0];
+        .eq('status', 'concluida').lt('concluido_em', a.concluido_em).order('concluido_em', { ascending: false }).limit(12);
+      const ants = (rAnt || []).slice().reverse();   // da mais antiga para a mais recente
+      const anteriorAv = ants[ants.length - 1];
       const { data: rS } = await sb.from('sessoes').select('data').eq('paciente_id', pac.id).eq('status', 'concluida')
         .gte('data', String(a.iniciado_em || a.concluido_em).slice(0, 10)).lte('data', String(a.concluido_em).slice(0, 10));
-      protocolos.push({ av: a, atual: await this.perfil(a), anteriorAv, anterior: anteriorAv ? await this.perfil(anteriorAv) : null,
+      const anterior = anteriorAv ? await this.perfil(anteriorAv) : null;
+      const historico = [];
+      for (const h of ants.slice(-this.MAX_ANT_GRAFICO)) historico.push({ av: h, perfil: h === anteriorAv ? anterior : await this.perfil(h) });
+      protocolos.push({ av: a, atual: await this.perfil(a), anteriorAv, anterior, historico, nAnteriores: ants.length,
         nSessoes: [...new Set((rS || []).map(x => x.data))].length || 1 });
     }
     const p0 = protocolos[0];
@@ -743,7 +751,7 @@ window.MODULOS.laudo_avaliacao = {
       '  <div class="cartao faixa-azul"><h3>Vem do sistema</h3><div class="grade-visao">' +
       d.protocolos.map(pr =>
       '    <div class="caixa-info"><small>' + escaparHtml(this.NOME_PROT[pr.av.protocolo] || pr.av.protocolo) + '</small><b>' + (pr.atual.total === null ? '-' : pr.atual.total + '%') +
-      ' <small class="sub">' + new Date(pr.av.concluido_em).toLocaleDateString('pt-BR') + ' &middot; ' + pr.nSessoes + ' sess.' + (pr.anterior ? ' &middot; ant. ' + pr.anterior.total + '%' : '') + '</small></b></div>').join('') + '</div>' +
+      ' <small class="sub">' + new Date(pr.av.concluido_em).toLocaleDateString('pt-BR') + ' &middot; ' + pr.nSessoes + ' sess.' + ((pr.historico || []).length >= 2 ? ' &middot; anteriores ' + pr.historico.map(h => (h.perfil.total === null ? '-' : h.perfil.total + '%')).join(' &rarr; ') : (pr.anterior ? ' &middot; ant. ' + pr.anterior.total + '%' : '')) + '</small></b></div>').join('') + '</div>' +
       '  <label class="check" style="display:flex; gap:6px; align-items:center; font-size:12.5px; margin-top:8px"><input type="checkbox" id="la-anexos"' + (rel.incluir_anexos ? ' checked' : '') + (editavel ? '' : ' disabled') + ' onchange="MODULOS.laudo_avaliacao.salvarAuto()"> Incluir anexos consolidados (tabelas e graficos de cada protocolo)</label>' +
       '  <label class="check" style="display:flex; gap:6px; align-items:center; font-size:12.5px; margin-top:6px"><input type="checkbox" id="la-freq"' + (rel.mostrar_frequencia ? ' checked' : '') + (editavel ? '' : ' disabled') + ' onchange="MODULOS.laudo_avaliacao.salvarAuto()"> Mostrar a frequ&ecirc;ncia semanal na identifica&ccedil;&atilde;o' + (d.freq ? ' (' + escaparHtml(String(d.freq)) + ' sess&otilde;es/semana)' : ' <small class="sub">(sem frequ&ecirc;ncia cadastrada no Plano)</small>') + '</label>' +
       (faltas.length ? '<div class="mensagem-erro visivel" style="margin-top:8px">Faltam no cadastro: ' + faltas.join(', ') + '. O relatorio sai sem esses dados ate preencher em Editar dados / Plano.</div>' : '') +
@@ -889,8 +897,19 @@ window.MODULOS.laudo_avaliacao = {
     const blocoProt = pr => {
       const cats = pr.atual.areas.map(a => a.area);
       const series = [];
-      if (pr.anterior) series.push({ nome: 'AV anterior (' + fmt(pr.anteriorAv.concluido_em) + ')', cor: '#1468B2', valores: cats.map(c => { const x = pr.anterior.areas.find(a => a.area === c); return x ? x.pct : null; }) });
-      series.push({ nome: (pr.anterior ? 'AV atual (' : 'AV1 (') + fmt(pr.av.concluido_em) + ')', cor: pr.anterior ? '#E07A2F' : '#1468B2', valores: pr.atual.areas.map(a => a.pct) });
+      const val = p => cats.map(c => { const x = p.areas.find(a => a.area === c); return x ? x.pct : null; });
+      const hist = pr.historico || (pr.anterior ? [{ av: pr.anteriorAv, perfil: pr.anterior }] : []);
+      if (hist.length >= 2) {
+        // patch 46 (pedido da coordenacao, 13/10): terceira aplicacao em diante = todas as pontuacoes juntas no grafico
+        const base = (pr.nAnteriores || hist.length) - hist.length;   // aplicacoes mais antigas que nao cabem no grafico
+        const CORES_ANT = ['#56C4CF', '#F3B63D', '#7C6FD0', '#3E9C6E'];
+        hist.forEach((h, i) => series.push({ nome: 'AV' + (base + i + 1) + ' (' + fmt(h.av.concluido_em) + ')',
+          cor: i === hist.length - 1 ? '#1468B2' : CORES_ANT[i % CORES_ANT.length], valores: val(h.perfil) }));
+        series.push({ nome: 'AV' + (base + hist.length + 1) + ' \u00b7 atual (' + fmt(pr.av.concluido_em) + ')', cor: '#E07A2F', valores: pr.atual.areas.map(a => a.pct) });
+      } else {
+        if (pr.anterior) series.push({ nome: 'AV anterior (' + fmt(pr.anteriorAv.concluido_em) + ')', cor: '#1468B2', valores: val(pr.anterior) });
+        series.push({ nome: (pr.anterior ? 'AV atual (' : 'AV1 (') + fmt(pr.av.concluido_em) + ')', cor: pr.anterior ? '#E07A2F' : '#1468B2', valores: pr.atual.areas.map(a => a.pct) });
+      }
       const grafico = A && A.gBarras ? A.gBarras(cats, series, { legenda: true }) : '';
       return (d.completo ? '<h2 style="margin-top:10px"><span class="ponto deq-teal"></span>' + escaparHtml(this.NOME_PROT[pr.av.protocolo] || pr.av.protocolo) + ' <small>&middot; ' + fmt(pr.av.concluido_em) + '</small></h2>' : '') +
         '<div class="deq-caixa" style="margin-top:6px">' + grafico + '</div>' +

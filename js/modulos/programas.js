@@ -686,33 +686,52 @@ window.MODULOS.programas = {
 
   // Iniciar atendimento: mostra as sessoes da crianca (hoje em destaque, ultimos 14 dias e proximos 7)
   // e o aplicador escolhe em qual sessao vai lancar. Sem sessao? Pode criar um encaixe agora (ninguem fica travado).
+  // patch 46: + as sessoes atrasadas (mais de 14 dias, ate 60) ainda sem lancamento, e "Outra data" para qualquer dia
+  // (Fernanda, 13/10: relatorios atrasados desde 16/09 e as sessoes dela nao apareciam mais aqui).
+  SEL_SESS: 'id, data, status, hora_inicio, aplicador_id, profissional:profiles!sessoes_aplicador_id_fkey(nome)',
   async abrirFolhaProntuario(pacienteId) {
     const hoje = this.hojeLocal();
     const de = new Date(); de.setDate(de.getDate() - 14);
     const ate = new Date(); ate.setDate(ate.getDate() + 7);
+    const de60 = new Date(); de60.setDate(de60.getDate() - 60);
     const f = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
     const eu = window.CORTEX_SESSAO.user.id;
-    const { data: lista, error: eS } = await sb.from('sessoes')
-      .select('id, data, status, hora_inicio, aplicador_id, profissional:profiles!sessoes_aplicador_id_fkey(nome)')
-      .eq('paciente_id', pacienteId).gte('data', f(de)).lte('data', f(ate))
-      .not('status', 'in', '("cancelada")').order('data', { ascending: false }).order('hora_inicio');
+    const [{ data: lista, error: eS }, { data: velhas }] = await Promise.all([
+      sb.from('sessoes').select(this.SEL_SESS)
+        .eq('paciente_id', pacienteId).gte('data', f(de)).lte('data', f(ate))
+        .not('status', 'in', '("cancelada")').order('data', { ascending: false }).order('hora_inicio'),
+      sb.from('sessoes').select(this.SEL_SESS)
+        .eq('paciente_id', pacienteId).gte('data', f(de60)).lt('data', f(de))
+        .not('status', 'in', '("cancelada","falta")').order('data', { ascending: false }).order('hora_inicio').limit(120)
+    ]);
     if (eS) { popAviso('Nao consegui consultar a agenda: ' + eS.message); return; }
     // patch 39: cada profissional ve as sessoes da propria terapia (gestao ve todas); ficha ABA so em sessao ABA
     const temEsp = !!window.ESPEC && ESPEC.colunaOk && Object.keys(ESPEC._mapa).length > 0;
     const minhaEsp = window.ESPEC ? ESPEC.minha() : 'aba';
-    const sess = (lista || []).filter(x => !temEsp || this.ehGestao() || ESPEC.de(x.aplicador_id) === minhaEsp);
+    const daMinhaTerapia = x => !temEsp || this.ehGestao() || ESPEC.de(x.aplicador_id) === minhaEsp;
+    const sess = (lista || []).filter(daMinhaTerapia);
     const soEvolucao = temEsp && minhaEsp !== 'aba' && !this.ehGestao();
-    this._sessEscolha = sess;
+    // atrasadas: as minhas (gestao: todas) que ainda nao foram concluidas, sem evolucao, ou com copia de outro horario
+    const velhasMinhas = (velhas || []).filter(daMinhaTerapia).filter(x => this.ehGestao() || x.aplicador_id === eu || !x.aplicador_id);
+    const evs = await this.evolucoesDe(sess.concat(velhasMinhas).map(x => x.id));
+    const atrasadas = velhasMinhas.filter(x => x.status !== 'concluida' || !evs[x.id] || this.ehCopiaAlheia(x, evs[x.id]));
+    this._sessEscolha = sess.concat(atrasadas);
+    this._evsEscolha = evs;
+    this._pacEscolha = pacienteId;
     const ST = { agendada: ['selo-neutro', 'agendada'], checkin: ['selo-info', 'chegou'], em_atendimento: ['selo-warn', 'em atendimento'], concluida: ['selo-ok', 'concluida'], falta: ['selo-bad', 'falta'] };
     const fmt = d => d === hoje ? 'Hoje' : new Date(d + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
     const linha = x => {
       const st = ST[x.status] || ['selo-neutro', x.status];
       const minha = x.aplicador_id === eu;
       const deOutra = !!x.aplicador_id && !minha;
+      const ev = (this._evsEscolha || {})[x.id];
+      const copia = ev && this.ehCopiaAlheia(x, ev);
       return '<div class="linha-doc sess-escolha' + (x.data === hoje ? ' hoje' : '') + (deOutra ? ' de-outra' : '') + '">' +
         '<div><b>' + fmt(x.data) + ' as ' + String(x.hora_inicio).slice(0, 5) + '</b><small>' +
         (temEsp ? ESPEC.seloDe(x.aplicador_id) : '') + escaparHtml(x.profissional ? x.profissional.nome.split(' ').slice(0, 2).join(' ') : 'sem aplicador') + (minha ? ' (voce)' : deOutra ? ' &middot; horario dela' : '') + '</small></div>' +
-        '<div class="pac-selos"><span class="selo ' + st[0] + '">' + st[1] + '</span>' +
+        '<div class="pac-selos">' +
+        (copia ? '<span class="selo selo-warn" title="Este horario recebeu a copia do atendimento de ' + escaparHtml(this.nome2(ev.aplicador)) + ' (outro horario do dia). Ao lancar, o sistema oferece tirar a copia.">copia de ' + escaparHtml(this.nome2(ev.aplicador)) + '</span>' : '') +
+        '<span class="selo ' + st[0] + '">' + st[1] + '</span>' +
         (x.status === 'concluida' ? '<button class="btn-chip" onclick="fecharModal(); MODULOS.programas.docEvolucaoDiaria(\'' + x.id + '\', true)">Relatorio</button>' : '') +
         (x.status === 'falta' ? '' : x.data > hoje ? '<span class="selo selo-neutro" title="Programas so podem ser lancados no dia da sessao ou depois">futura</span>' :
           temEsp && !ESPEC.ehAba(x.aplicador_id) ? '<button class="btn-chip cheio" onclick="MODULOS.programas.lancarNesta(\'' + x.id + '\')">&#9998; Evolucao</button>' :
@@ -720,10 +739,14 @@ window.MODULOS.programas = {
           '<button class="btn-chip cheio" onclick="MODULOS.programas.lancarNesta(\'' + x.id + '\')">Lancar nesta</button>') +
         '</div></div>';
     };
+    this._linhaEscolha = linha;
     const deHoje = sess.filter(x => x.data === hoje), outras = sess.filter(x => x.data !== hoje);
     abrirModal(soEvolucao ? 'Em qual sessao vai lancar a evolucao?' : 'Em qual sessao vai lancar?',
       (deHoje.length ? '<h4 style="margin:0 0 4px">Hoje</h4>' + deHoje.map(linha).join('') : '<p class="sub">Nenhuma sessao agendada hoje para esta crianca.</p>') +
       (outras.length ? '<h4 style="margin:12px 0 4px">Outras sessoes <small class="sub">(14 dias atras ate 7 dias a frente)</small></h4>' + outras.map(linha).join('') : '') +
+      (atrasadas.length ? '<h4 style="margin:12px 0 4px">Atrasadas <small class="sub">(mais de 14 dias, ainda sem lancamento' + (this.ehGestao() ? '' : ' seu') + ')</small></h4>' + atrasadas.map(linha).join('') : '') +
+      '<div class="sess-outra-data"><span>Procurar <b>outra data</b>:</span><input type="date" id="sess-outra-data" max="' + hoje + '" onchange="MODULOS.programas.sessoesOutraData(this.value)"></div>' +
+      '<div id="sess-outra-lista"></div>' +
       '<div class="mensagem-erro" id="enc-erro"></div>' +
       (soEvolucao ? '' : '<p class="sub" style="margin-top:8px">Marcou mais de uma como <b>junto</b>? <b>Lancar nas selecionadas</b> aplica uma vez e grava os mesmos programas e a mesma evolucao em todas.</p>') +
       '<div class="barra-acoes" style="justify-content:space-between">' +
@@ -790,6 +813,64 @@ window.MODULOS.programas = {
       { titulo: 'Horario de outra aplicadora', ok: 'Lancar mesmo assim', cancelar: 'Voltar' });
   },
 
+  // ── Patch 46: sessoes de outra data e copia de outro horario ──
+  nome2(p) { return p && p.nome ? p.nome.split(' ').slice(0, 2).join(' ') : 'outra aplicadora'; },
+  // copia de outro horario: evolucao espelho (lancada como atendimento continuado) de OUTRA pessoa num horario que tem dona
+  ehCopiaAlheia(s, ev) { return !!(ev && ev.espelho_de && ev.aplicador_id && s && s.aplicador_id && ev.aplicador_id !== s.aplicador_id); },
+  async evolucoesDe(ids) {
+    const mapa = {};
+    if (!ids.length) return mapa;
+    let r = await sb.from('evolucoes').select('sessao_id, espelho_de, aplicador_id, aplicador:profiles!evolucoes_aplicador_id_fkey(nome)').in('sessao_id', ids);
+    if (r.error) r = await sb.from('evolucoes').select('sessao_id, espelho_de, aplicador_id').in('sessao_id', ids);
+    (r.data || []).forEach(e => { mapa[e.sessao_id] = e; });
+    return mapa;
+  },
+  async sessoesOutraData(data) {
+    const alvo = document.getElementById('sess-outra-lista');
+    if (!alvo) return;
+    if (!data) { alvo.innerHTML = ''; return; }
+    const fmt = data.split('-').reverse().join('/');
+    if (data > this.hojeLocal()) { alvo.innerHTML = '<p class="sub">' + fmt + ' ainda nao chegou: programas so podem ser lancados no dia da sessao ou depois.</p>'; return; }
+    alvo.innerHTML = '<p class="sub">Buscando...</p>';
+    const { data: lista, error } = await sb.from('sessoes').select(this.SEL_SESS)
+      .eq('paciente_id', this._pacEscolha).eq('data', data).not('status', 'in', '("cancelada")').order('hora_inicio');
+    if (error) { alvo.innerHTML = '<p class="sub">Nao consegui consultar a agenda: ' + escaparHtml(error.message) + '</p>'; return; }
+    const temEsp = !!window.ESPEC && ESPEC.colunaOk && Object.keys(ESPEC._mapa).length > 0;
+    const doDia = (lista || []).filter(x => !temEsp || this.ehGestao() || ESPEC.de(x.aplicador_id) === ESPEC.minha());
+    Object.assign(this._evsEscolha = this._evsEscolha || {}, await this.evolucoesDe(doDia.map(x => x.id)));
+    this._sessEscolha = this._sessEscolha || [];
+    doDia.forEach(x => { if (!this._sessEscolha.some(s => s.id === x.id)) this._sessEscolha.push(x); });
+    alvo.innerHTML = doDia.length
+      ? '<h4 style="margin:10px 0 4px">' + fmt + '</h4>' + doDia.map(this._linhaEscolha).join('')
+      : '<p class="sub" style="margin-top:8px">Nenhuma sessao desta crianca em ' + fmt + '. Se o atendimento aconteceu e nao esta na agenda, peca a coordenacao para incluir o horario.</p>';
+  },
+  // Antes de 06/10, quem concluia uma sessao copiava a evolucao e os programas para o outro horario da crianca no dia.
+  // Quando o outro horario era de OUTRA aplicadora, a dona dele nao conseguia mais lancar o proprio atendimento
+  // (Fernanda, 13/10: "nao da para lancar porque altera o lancamento anterior"). Aqui ela tira a copia do horario dela
+  // (o original continua no horario de quem lancou) e lanca o dela. Devolve true se tirou.
+  async oferecerTirarCopia(s) {
+    const eu = window.CORTEX_SESSAO.user.id;
+    if (!s || (s.aplicador_id !== eu && !this.ehGestao())) return false;
+    const ev = (await this.evolucoesDe([s.id]))[s.id];
+    if (!this.ehCopiaAlheia(s, ev)) return false;
+    const { data: orig } = await sb.from('sessoes').select('data, hora_inicio').eq('id', ev.espelho_de).maybeSingle();
+    const fmt = d => d.split('-').reverse().join('/').slice(0, 5);
+    const quem = this.nome2(ev.aplicador);
+    const deOnde = orig ? ' (horario das ' + String(orig.hora_inicio).slice(0, 5) + (orig.data !== s.data ? ' de ' + fmt(orig.data) : '') + ')' : '';
+    const ok = await popConfirmar('Este horario (' + fmt(s.data) + ' as ' + String(s.hora_inicio).slice(0, 5) + ') esta com uma COPIA do atendimento de ' + quem + deOnde +
+      ': os dois horarios foram lancados juntos, como se fossem um atendimento so.\n\n' +
+      'Para lancar ' + (s.aplicador_id === eu ? 'o seu atendimento' : 'o atendimento deste horario') + ', tire a copia daqui. O lancamento de ' + quem + ' continua no horario dela, sem nenhuma mudanca.',
+      { titulo: 'Copia de outro horario', ok: 'Tirar a copia e lancar', cancelar: 'Agora nao' });
+    if (!ok) return false;
+    const { error } = await sb.rpc('fn_tirar_copia_sessao', { p_sessao: s.id });
+    if (error) {
+      popAviso('Nao consegui tirar a copia: ' + (/fn_tirar_copia_sessao|schema cache|could not find/i.test(error.message) ? 'falta rodar o SQL do patch 46 no banco.' : error.message));
+      return false;
+    }
+    if (this._evsEscolha) delete this._evsEscolha[s.id];
+    return true;
+  },
+
   async criarEncaixe(pacienteId) {
     const botao = document.getElementById('enc-criar');
     const erro = document.getElementById('enc-erro');
@@ -827,7 +908,7 @@ window.MODULOS.programas = {
     }
     if (s.data > this.hojeLocal()) { popAviso('Essa sessao ainda nao aconteceu: a evolucao so pode ser lancada no dia da sessao ou depois.'); return; }
     const { data: ja } = await sb.from('evolucoes').select('id').eq('sessao_id', id).limit(1);
-    if (ja && ja.length) { this.docEvolucaoDiaria(id); return; }
+    if (ja && ja.length && !await this.oferecerTirarCopia(s)) { this.docEvolucaoDiaria(id); return; }
     this._evoRapidaOrigem = 'sessao';
     this.evolucaoRapida(s.id, s.paciente_id, (s.pacientes ? s.pacientes.nome : '').split(' ')[0], s.data, ESPEC.de(s.aplicador_id));
   },
@@ -847,6 +928,8 @@ window.MODULOS.programas = {
       .select('id, data, hora_inicio, status, paciente_id, aplicador_id, pacientes(nome), profissional:profiles!sessoes_aplicador_id_fkey(nome)')
       .eq('id', sessaoId).single();
     if (!s) { this._overlay ? this.fecharFolha(false) : abrirModulo('agenda'); return; }
+    // patch 46: horario com copia do atendimento de outra aplicadora? a dona tira a copia e a ficha abre limpa
+    const tirouCopia = await this.oferecerTirarCopia(s);
 
     const [rPps, rRegs, rEst, rRef, rCfg] = await Promise.all([
       sb.from('paciente_programas')
@@ -862,7 +945,7 @@ window.MODULOS.programas = {
     ]);
 
     // Sessao ja concluida: pode lancar programas mesmo assim (regra de 24/09) - os registros existentes sao atualizados
-    if (s.status === 'concluida') this._avisoConcluida = true; else this._avisoConcluida = false;
+    this._avisoConcluida = s.status === 'concluida' && !tirouCopia;
     const pps = rPps.data || [];
     const cfg = {}, selecionados = {};
     (rCfg.data || []).forEach(c => { cfg[c.paciente_programa_id] = c.tentativas; selecionados[c.paciente_programa_id] = c.selecionado !== false; });
@@ -2779,14 +2862,16 @@ window.MODULOS.programas = {
     if (!data) { alvo.innerHTML = ''; return; }
     alvo.innerHTML = '<p class="sub">Buscando...</p>';
 
-    const [rS, rE] = await Promise.all([
-      sb.from('sessoes')
-        .select('id, hora_inicio, status, profissional:profiles!sessoes_aplicador_id_fkey(nome)')
-        .eq('paciente_id', this._retroPac).eq('data', data).order('hora_inicio'),
-      sb.from('evolucoes').select('sessao_id').eq('paciente_id', this._retroPac)
-    ]);
-    const comEvo = new Set((rE.data || []).map(e => e.sessao_id));
+    const rS = await sb.from('sessoes')
+      .select('id, data, hora_inicio, status, aplicador_id, profissional:profiles!sessoes_aplicador_id_fkey(nome)')
+      .eq('paciente_id', this._retroPac).eq('data', data).order('hora_inicio');
     const sessoes = rS.data || [];
+    // patch 46: evolucao que e copia do horario de outra aplicadora: a dona do horario pode tirar a copia aqui
+    const evs = await this.evolucoesDe(sessoes.map(s => s.id));
+    const comEvo = new Set(Object.keys(evs));
+    const eu = window.CORTEX_SESSAO.user.id;
+    const copia = s => this.ehCopiaAlheia(s, evs[s.id]) && (s.aplicador_id === eu || this.ehGestao());
+    this._retroSess = sessoes;
 
     const rot = { agendada: 'Agendada', checkin: 'Check-in', em_atendimento: 'Em atendimento',
                   concluida: 'Concluida', falta: 'Falta', cancelada: 'Cancelada' };
@@ -2800,13 +2885,20 @@ window.MODULOS.programas = {
             '<b>' + s.hora_inicio.slice(0, 5) + '</b> &middot; ' +
             escaparHtml(s.profissional ? s.profissional.nome : '-') +
             ' &middot; ' + (rot[s.status] || s.status) + '</span>' +
-            (comEvo.has(s.id) ? '<span class="selo selo-ok">Ja tem evolucao</span>' : '') +
+            (copia(s) ? '<span class="pac-selos"><span class="selo selo-warn">copia de ' + escaparHtml(this.nome2(evs[s.id].aplicador)) + '</span>' +
+              '<button type="button" class="btn-chip" onclick="event.preventDefault(); MODULOS.programas.tirarCopiaRetro(\'' + s.id + '\')">Tirar a copia</button></span>'
+              : comEvo.has(s.id) ? '<span class="selo selo-ok">Ja tem evolucao</span>' : '') +
             '</label>').join('')
         : '<p class="sub">Nenhuma sessao nesta data.</p>') +
       '<label class="linha-doc" style="cursor:pointer"><span>' +
       '<input type="checkbox" class="re-sessao" value="nova" onchange="MODULOS.programas.formEvolucaoRetro()"> ' +
       '<b>Criar sessao retroativa</b> nesta data &middot; hora: </span>' +
       '<input type="time" id="re-hora" value="08:00" step="300" style="width:110px"></label>';
+  },
+
+  async tirarCopiaRetro(id) {
+    const s = (this._retroSess || []).find(x => x.id === id);
+    if (s && await this.oferecerTirarCopia(s)) this.buscarSessoesDoDia();
   },
 
   formEvolucaoRetro() {

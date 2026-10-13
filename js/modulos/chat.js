@@ -32,7 +32,8 @@ window.MODULOS.chat = {
     enviar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>',
     busca: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
     voltar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>',
-    mais: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>'
+    mais: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>',
+    lixo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>'
   },
 
   eu() { return window.CORTEX_SESSAO.user.id; },
@@ -40,6 +41,8 @@ window.MODULOS.chat = {
     const p = window.CORTEX_SESSAO.profile;
     return ['direcao', 'coordenador', 'suporte'].includes(p.perfil_real || p.perfil);
   },
+  // patch 45: so o suporte tecnico apaga conversa do banco (para todos os participantes)
+  ehSuporte() { const p = window.CORTEX_SESSAO.profile; return (p.perfil_real || p.perfil) === 'suporte'; },
 
   // ─────────────── RENDER ───────────────
 
@@ -114,7 +117,11 @@ window.MODULOS.chat = {
       return;
     }
     this.lista = data || [];
+    this._listaEm = Date.now();
     await this.assinarFotos(this.lista.map(c => c.outro_foto));
+    // conversa aberta que sumiu (apagada pelo suporte ou saiu do grupo em outro aparelho)
+    if (this.aberta && !this.lista.some(c => c.id === this.aberta.id) && document.getElementById('chat-thread')) { this.voltarLista(); return; }
+    if (this.aberta) { const a = this.lista.find(c => c.id === this.aberta.id); if (a) this.aberta = a; }
     this.desenharLista();
     this.atualizarBadge();
   },
@@ -249,6 +256,7 @@ window.MODULOS.chat = {
       (grupo
         ? '<span class="chat-tag">GRUPO</span><button class="btn-redondo claro" title="Participantes" onclick="event.stopPropagation(); MODULOS.chat.abrirParticipantes()">' + this.ICO.grupo + '</button>'
         : '<span class="chat-tag neutra">' + escaparHtml((ROTULOS_PERFIL[c.outro_perfil] || c.outro_perfil || 'EQUIPE').toUpperCase()) + '</span>') +
+      (this.ehSuporte() ? '<button class="btn-redondo claro chat-apagar" title="Apagar conversa do banco (so suporte)" onclick="event.stopPropagation(); MODULOS.chat.apagarConversa()">' + this.ICO.lixo + '</button>' : '') +
       '</header>';
   },
 
@@ -317,22 +325,69 @@ window.MODULOS.chat = {
     if (window.CORTEX_VER_USUARIO) return;
     this.assinar();
     this.atualizarBadge();
+    // patch 45: alem do tempo real, confere a cada 20 s (e ao voltar para a aba), para o numero aparecer
+    // mesmo quando o tempo real do Supabase nao entrega a mensagem
+    clearInterval(this._timerBadge);
+    this._timerBadge = setInterval(() => { if (!document.hidden) this.conferir(); }, 20000);
+    if (!this._visOuvida) { this._visOuvida = true; document.addEventListener('visibilitychange', () => { if (!document.hidden) this.conferir(); }); }
+  },
+  async conferir() {
+    const antes = this._naoLidas;
+    await this.atualizarBadge();
+    // com o chat aberto: chegou mensagem (ou alguma conversa sumiu) -> atualiza a lista e a conversa aberta
+    if (document.getElementById('chat-app')) {
+      if (this._naoLidas !== antes) await this.carregarLista();
+      else if (Date.now() - (this._listaEm || 0) > 60000) await this.carregarLista();
+      if (this.aberta && this._naoLidas > (antes || 0)) this.carregarThread(this.aberta.id, true);
+    }
   },
 
+  // numero de mensagens nao lidas: botao com o numero no item Chat da sidebar (igual ao do Inicio),
+  // bolinha no icone com o menu recolhido, contador no "Mais" do celular e "(n)" no titulo da aba
   async atualizarBadge() {
     let n = 0;
     try {
       const { data, error } = await sb.rpc('fn_chat_nao_lidas');
       if (error) return;
-      n = data || 0;
+      n = parseInt(data, 10) || 0;
     } catch (e) { return; }
-    const item = document.querySelector('.nav-item[data-modulo="chat"]');
-    if (item) {
+    this._naoLidas = n;
+    const txt = n > 99 ? '99+' : String(n);
+    const tit = n + ' mensage' + (n === 1 ? 'm nao lida' : 'ns nao lidas') + ' no chat';
+    document.querySelectorAll('.nav-item[data-modulo="chat"]').forEach(item => {
       let selo = item.querySelector('.nav-badge');
       if (!selo) { selo = document.createElement('span'); selo.className = 'nav-badge'; item.appendChild(selo); }
-      selo.textContent = n > 9 ? '9+' : n;
-      selo.hidden = n === 0;
+      selo.textContent = txt; selo.title = tit; selo.hidden = n === 0;
+    });
+    const mais = document.querySelector('.barra-celular button[data-cel="mais"]');
+    if (mais) {
+      let c = mais.querySelector('.cel-conta-chat');
+      if (!c) { c = document.createElement('span'); c.className = 'cel-conta cel-conta-chat'; mais.appendChild(c); }
+      c.textContent = txt; c.title = tit; c.hidden = n === 0;
     }
+    if (!this._tituloBase) this._tituloBase = document.title.replace(/^\(\d+\+?\)\s*/, '');
+    document.title = (n ? '(' + txt + ') ' : '') + this._tituloBase;
+  },
+
+  // ─────────────── APAGAR CONVERSA (so suporte, patch 45) ───────────────
+  // Some para todos os participantes: mensagens, participantes e a conversa saem do banco (fn_chat_apagar_conversa).
+  async apagarConversa() {
+    const c = this.aberta; if (!c || !this.ehSuporte()) return;
+    const grupo = c.tipo === 'grupo';
+    const n = (this._msgs || []).length;
+    const ok = await popConfirmar('Apagar ' + (grupo ? 'o grupo "' + (c.nome || '') + '"' : 'a conversa com ' + (c.nome || '')) + ' para ' + (grupo ? 'todos os participantes' : 'as duas pessoas') + '?\n\n' +
+      (n ? n + ' mensage' + (n === 1 ? 'm sai' : 'ns saem') : 'A conversa sai') + ' do banco de dados. Nao da para desfazer.',
+      { titulo: 'Apagar conversa', ok: 'Apagar do banco', cancelar: 'Cancelar', tipo: 'aviso' });
+    if (!ok) return;
+    const { data, error } = await sb.rpc('fn_chat_apagar_conversa', { p_conversa: c.id });
+    if (error) {
+      popAviso(/fn_chat_apagar_conversa|Could not find the function|PGRST202/i.test(error.message + ' ' + (error.code || ''))
+        ? 'Falta rodar o SQL do patch 45 no Supabase (funcao fn_chat_apagar_conversa).' : 'Nao foi possivel apagar: ' + error.message);
+      return;
+    }
+    this.voltarLista();
+    await this.carregarLista();
+    popAviso('Conversa apagada do banco' + (typeof data === 'number' ? ' (' + data + ' mensage' + (data === 1 ? 'm' : 'ns') + ')' : '') + '.', 'Apagada');
   },
 
   // ─────────────── EQUIPE (pessoas) ───────────────

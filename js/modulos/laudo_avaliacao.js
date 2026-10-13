@@ -140,15 +140,19 @@ window.MODULOS.laudo_avaliacao = {
     for (const a of avs) {
       // patch 46: todas as aplicacoes anteriores do mesmo protocolo (o grafico mostra as pontuacoes juntas);
       // o texto comparativo continua usando so a anterior (a mais recente antes desta)
-      const { data: rAnt } = await sb.from('avaliacoes').select('id, protocolo, concluido_em, areas_excluidas').eq('paciente_id', pac.id).eq('protocolo', a.protocolo)
+      const qAnt = cols => sb.from('avaliacoes').select(cols).eq('paciente_id', pac.id).eq('protocolo', a.protocolo)
         .eq('status', 'concluida').lt('concluido_em', a.concluido_em).order('concluido_em', { ascending: false }).limit(12);
+      let { data: rAnt, error: eAnt } = await qAnt('id, protocolo, concluido_em, areas_excluidas, origem');
+      if (eAnt) ({ data: rAnt } = await qAnt('id, protocolo, concluido_em, areas_excluidas'));
       const ants = (rAnt || []).slice().reverse();   // da mais antiga para a mais recente
       const anteriorAv = ants[ants.length - 1];
       const { data: rS } = await sb.from('sessoes').select('data').eq('paciente_id', pac.id).eq('status', 'concluida')
         .gte('data', String(a.iniciado_em || a.concluido_em).slice(0, 10)).lte('data', String(a.concluido_em).slice(0, 10));
       const anterior = anteriorAv ? await this.perfil(anteriorAv) : null;
+      // patch 48: aplicacao registrada fora do sistema (importada) nao tem pontuacao: fica fora do grafico, mas conta na numeracao (AV1, AV2...)
       const historico = [];
-      for (const h of ants.slice(-this.MAX_ANT_GRAFICO)) historico.push({ av: h, perfil: h === anteriorAv ? anterior : await this.perfil(h) });
+      const comItens = ants.map((h, i) => ({ h, n: i + 1 })).filter(x => x.h.origem !== 'importado');
+      for (const x of comItens.slice(-this.MAX_ANT_GRAFICO)) historico.push({ av: x.h, n: x.n, perfil: x.h === anteriorAv ? anterior : await this.perfil(x.h) });
       protocolos.push({ av: a, atual: await this.perfil(a), anteriorAv, anterior, historico, nAnteriores: ants.length,
         nSessoes: [...new Set((rS || []).map(x => x.data))].length || 1 });
     }
@@ -903,12 +907,13 @@ window.MODULOS.laudo_avaliacao = {
         // patch 46 (pedido da coordenacao, 13/10): terceira aplicacao em diante = todas as pontuacoes juntas no grafico
         const base = (pr.nAnteriores || hist.length) - hist.length;   // aplicacoes mais antigas que nao cabem no grafico
         const CORES_ANT = ['#56C4CF', '#F3B63D', '#7C6FD0', '#3E9C6E'];
-        hist.forEach((h, i) => series.push({ nome: 'AV' + (base + i + 1) + ' (' + fmt(h.av.concluido_em) + ')',
+        hist.forEach((h, i) => series.push({ nome: 'AV' + (h.n || base + i + 1) + ' (' + fmt(h.av.concluido_em) + ')',
           cor: i === hist.length - 1 ? '#1468B2' : CORES_ANT[i % CORES_ANT.length], valores: val(h.perfil) }));
-        series.push({ nome: 'AV' + (base + hist.length + 1) + ' \u00b7 atual (' + fmt(pr.av.concluido_em) + ')', cor: '#E07A2F', valores: pr.atual.areas.map(a => a.pct) });
+        series.push({ nome: 'AV' + ((pr.nAnteriores || hist.length) + 1) + ' \u00b7 atual (' + fmt(pr.av.concluido_em) + ')', cor: '#E07A2F', valores: pr.atual.areas.map(a => a.pct) });
       } else {
-        if (pr.anterior) series.push({ nome: 'AV anterior (' + fmt(pr.anteriorAv.concluido_em) + ')', cor: '#1468B2', valores: val(pr.anterior) });
-        series.push({ nome: (pr.anterior ? 'AV atual (' : 'AV1 (') + fmt(pr.av.concluido_em) + ')', cor: pr.anterior ? '#E07A2F' : '#1468B2', valores: pr.atual.areas.map(a => a.pct) });
+        const ant = hist[0];
+        if (ant) series.push({ nome: 'AV anterior (' + fmt(ant.av.concluido_em) + ')', cor: '#1468B2', valores: val(ant.perfil) });
+        series.push({ nome: (ant ? 'AV atual (' : 'AV' + ((pr.nAnteriores || 0) + 1) + ' (') + fmt(pr.av.concluido_em) + ')', cor: ant ? '#E07A2F' : '#1468B2', valores: pr.atual.areas.map(a => a.pct) });
       }
       const grafico = A && A.gBarras ? A.gBarras(cats, series, { legenda: true }) : '';
       return (d.completo ? '<h2 style="margin-top:10px"><span class="ponto deq-teal"></span>' + escaparHtml(this.NOME_PROT[pr.av.protocolo] || pr.av.protocolo) + ' <small>&middot; ' + fmt(pr.av.concluido_em) + '</small></h2>' : '') +

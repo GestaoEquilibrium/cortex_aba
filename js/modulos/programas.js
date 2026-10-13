@@ -713,10 +713,14 @@ window.MODULOS.programas = {
     const soEvolucao = temEsp && minhaEsp !== 'aba' && !this.ehGestao();
     // atrasadas: as minhas (gestao: todas) que ainda nao foram concluidas, sem evolucao, ou com copia de outro horario
     const velhasMinhas = (velhas || []).filter(daMinhaTerapia).filter(x => this.ehGestao() || x.aplicador_id === eu || !x.aplicador_id);
-    const evs = await this.evolucoesDe(sess.concat(velhasMinhas).map(x => x.id));
-    const atrasadas = velhasMinhas.filter(x => x.status !== 'concluida' || !evs[x.id] || this.ehCopiaAlheia(x, evs[x.id]));
+    const idsTodas = sess.concat(velhasMinhas).map(x => x.id);
+    const [evs, comFicha] = await Promise.all([this.evolucoesDe(idsTodas), this.fichasDe(idsTodas)]);
+    // patch 47: tambem conta como atrasada a sessao ABA sem a ficha de programas (mesma regra das pendencias)
+    const ehAba = x => !window.ESPEC || !ESPEC.ehAba || ESPEC.ehAba(x.aplicador_id);
+    const atrasadas = velhasMinhas.filter(x => x.status !== 'concluida' || !evs[x.id] || (ehAba(x) && !comFicha.has(x.id)) || this.ehCopiaAlheia(x, evs[x.id]));
     this._sessEscolha = sess.concat(atrasadas);
     this._evsEscolha = evs;
+    this._fichasEscolha = comFicha;
     this._pacEscolha = pacienteId;
     const ST = { agendada: ['selo-neutro', 'agendada'], checkin: ['selo-info', 'chegou'], em_atendimento: ['selo-warn', 'em atendimento'], concluida: ['selo-ok', 'concluida'], falta: ['selo-bad', 'falta'] };
     const fmt = d => d === hoje ? 'Hoje' : new Date(d + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
@@ -726,10 +730,16 @@ window.MODULOS.programas = {
       const deOutra = !!x.aplicador_id && !minha;
       const ev = (this._evsEscolha || {})[x.id];
       const copia = ev && this.ehCopiaAlheia(x, ev);
+      // patch 47: sessao que ja passou mostra o que falta (sem evolucao / sem programas)
+      const passou = x.data < hoje && x.status !== 'falta';
+      const semEvo = passou && !ev;
+      const semProg = passou && (!window.ESPEC || !ESPEC.ehAba || ESPEC.ehAba(x.aplicador_id)) && this._fichasEscolha && !this._fichasEscolha.has(x.id);
       return '<div class="linha-doc sess-escolha' + (x.data === hoje ? ' hoje' : '') + (deOutra ? ' de-outra' : '') + '">' +
         '<div><b>' + fmt(x.data) + ' as ' + String(x.hora_inicio).slice(0, 5) + '</b><small>' +
         (temEsp ? ESPEC.seloDe(x.aplicador_id) : '') + escaparHtml(x.profissional ? x.profissional.nome.split(' ').slice(0, 2).join(' ') : 'sem aplicador') + (minha ? ' (voce)' : deOutra ? ' &middot; horario dela' : '') + '</small></div>' +
         '<div class="pac-selos">' +
+        (semEvo ? '<span class="selo selo-bad">sem evolucao</span>' : '') +
+        (semProg ? '<span class="selo selo-warn" title="A ficha de programas desta sessao ainda nao foi lancada">sem programas</span>' : '') +
         (copia ? '<span class="selo selo-warn" title="Este horario recebeu a copia do atendimento de ' + escaparHtml(this.nome2(ev.aplicador)) + ' (outro horario do dia). Ao lancar, o sistema oferece tirar a copia.">copia de ' + escaparHtml(this.nome2(ev.aplicador)) + '</span>' : '') +
         '<span class="selo ' + st[0] + '">' + st[1] + '</span>' +
         (x.status === 'concluida' ? '<button class="btn-chip" onclick="fecharModal(); MODULOS.programas.docEvolucaoDiaria(\'' + x.id + '\', true)">Relatorio</button>' : '') +
@@ -744,7 +754,7 @@ window.MODULOS.programas = {
     abrirModal(soEvolucao ? 'Em qual sessao vai lancar a evolucao?' : 'Em qual sessao vai lancar?',
       (deHoje.length ? '<h4 style="margin:0 0 4px">Hoje</h4>' + deHoje.map(linha).join('') : '<p class="sub">Nenhuma sessao agendada hoje para esta crianca.</p>') +
       (outras.length ? '<h4 style="margin:12px 0 4px">Outras sessoes <small class="sub">(14 dias atras ate 7 dias a frente)</small></h4>' + outras.map(linha).join('') : '') +
-      (atrasadas.length ? '<h4 style="margin:12px 0 4px">Atrasadas <small class="sub">(mais de 14 dias, ainda sem lancamento' + (this.ehGestao() ? '' : ' seu') + ')</small></h4>' + atrasadas.map(linha).join('') : '') +
+      (atrasadas.length ? '<h4 style="margin:12px 0 4px">Atrasadas <small class="sub">(mais de 14 dias, com evolucao ou programas faltando)</small></h4>' + atrasadas.map(linha).join('') : '') +
       '<div class="sess-outra-data"><span>Procurar <b>outra data</b>:</span><input type="date" id="sess-outra-data" max="' + hoje + '" onchange="MODULOS.programas.sessoesOutraData(this.value)"></div>' +
       '<div id="sess-outra-lista"></div>' +
       '<div class="mensagem-erro" id="enc-erro"></div>' +
@@ -825,6 +835,11 @@ window.MODULOS.programas = {
     (r.data || []).forEach(e => { mapa[e.sessao_id] = e; });
     return mapa;
   },
+  async fichasDe(ids) {
+    if (!ids.length) return new Set();
+    const { data } = await sb.from('programa_sessao_registros').select('sessao_id').in('sessao_id', ids);
+    return new Set((data || []).map(r => r.sessao_id));
+  },
   async sessoesOutraData(data) {
     const alvo = document.getElementById('sess-outra-lista');
     if (!alvo) return;
@@ -838,6 +853,9 @@ window.MODULOS.programas = {
     const temEsp = !!window.ESPEC && ESPEC.colunaOk && Object.keys(ESPEC._mapa).length > 0;
     const doDia = (lista || []).filter(x => !temEsp || this.ehGestao() || ESPEC.de(x.aplicador_id) === ESPEC.minha());
     Object.assign(this._evsEscolha = this._evsEscolha || {}, await this.evolucoesDe(doDia.map(x => x.id)));
+    const fichas = await this.fichasDe(doDia.map(x => x.id));
+    this._fichasEscolha = this._fichasEscolha || new Set();
+    fichas.forEach(id => this._fichasEscolha.add(id));
     this._sessEscolha = this._sessEscolha || [];
     doDia.forEach(x => { if (!this._sessEscolha.some(s => s.id === x.id)) this._sessEscolha.push(x); });
     alvo.innerHTML = doDia.length
@@ -1046,7 +1064,8 @@ window.MODULOS.programas = {
     if (f.etapa === 'selecionar' && f.programas.length) { this.desenharSelecao(); return; }
     if (this.celular() && f.programas.length) { this.desenharFolhaCelular(); return; }
 
-    let corpo = (this._avisoConcluida ? '<div class="mensagem-erro visivel" style="background:var(--st-warn-bg); color:#92400E; border-color:#FDE68A; margin-bottom:10px">Esta sessao ja estava concluida. O que voce lancar aqui atualiza os registros dela.</div>' : '') +
+    // patch 47 (Fernanda, 13/10): o aviso antigo ("atualiza os registros") parecia que ia apagar o que ja foi lancado
+    let corpo = (this._avisoConcluida ? '<div class="mensagem-erro visivel aviso-calmo" style="margin-bottom:10px">Esta sessao ja estava concluida. Pode lancar os programas normalmente: a evolucao que ja foi escrita nao se perde (no Concluir ela volta para o campo, para voce conferir).</div>' : '') +
       (f.bloqueioAlheio ? '<div class="mensagem-erro visivel" style="margin-bottom:10px">Esta sessao ja tem programas lancados por outra pessoa. Para nao misturar os lancamentos, voce nao consegue gravar aqui: lance no seu proprio horario ou peca a coordenacao para corrigir.</div>'
         : f.donaOutra ? '<div class="mensagem-erro visivel" style="margin-bottom:10px">Este horario e de <b>' + escaparHtml(f.donaOutra) + '</b>. O que voce lancar aqui fica no horario dela; o seu atendimento deve ser lancado no seu proprio horario.</div>' : '') +
       (f.faixaComp || '');
@@ -1248,11 +1267,12 @@ window.MODULOS.programas = {
       (this.celular()
         ? '<div class="cel-crianca"><div class="avatar-paciente ' + corAvatar(s.pacientes.nome) + '">' + escaparHtml(s.pacientes.nome.split(' ').slice(0, 2).map(x => x[0]).join('').toUpperCase()) + '</div>' +
           '<div><h2 style="margin:0">' + escaparHtml(s.pacientes.nome) + '</h2><small class="sub">' + (s.pacientes.data_nascimento ? calcularIdade(s.pacientes.data_nascimento) + ' &middot; ' : '') + 'toque em Aplicar no programa, ou marque varios e Comecar</small></div></div>'
-        : '<h2>O que vamos aplicar hoje &middot; ' + escaparHtml(s.pacientes.nome) + '</h2>') +
+        : '<h2>' + (s.data < this.hojeLocal() ? 'Programas da sessao' : 'O que vamos aplicar hoje') + ' &middot; ' + escaparHtml(s.pacientes.nome) + '</h2>') +
       '<p class="sub">' + new Date(s.data + 'T12:00:00').toLocaleDateString('pt-BR') + ' as ' + s.hora_inicio.slice(0, 5) +
       (f.podeConfig ? ' &middot; Marque os programas desta sessao. Depois eles aparecem um de cada vez.' : ' &middot; Programas configurados pela coordenacao. Toque em Aplicar no que vai comecar.') + '</p></div></div>' +
       (f.bloqueioAlheio ? '<div class="mensagem-erro visivel" style="margin-bottom:10px">Esta sessao ja tem programas lancados por outra pessoa. Para nao misturar os lancamentos, voce nao consegue gravar aqui: lance no seu proprio horario ou peca a coordenacao para corrigir.</div>'
-        : f.donaOutra ? '<div class="mensagem-erro visivel" style="margin-bottom:10px">Este horario e de <b>' + escaparHtml(f.donaOutra) + '</b>. O que voce lancar aqui fica no horario dela; o seu atendimento deve ser lancado no seu proprio horario.</div>' : '') +
+        : f.donaOutra ? '<div class="mensagem-erro visivel" style="margin-bottom:10px">Este horario e de <b>' + escaparHtml(f.donaOutra) + '</b>. O que voce lancar aqui fica no horario dela; o seu atendimento deve ser lancado no seu proprio horario.</div>'
+        : this._avisoConcluida ? '<div class="mensagem-erro visivel aviso-calmo" style="margin-bottom:10px">Esta sessao ja estava concluida. Pode lancar os programas normalmente: a evolucao que ja foi escrita nao se perde (no Concluir ela volta para o campo, para voce conferir).</div>' : '') +
       (f.faixaComp || '') +
       '<div class="cartao"><div class="sel-lista">' +
       f.programas.map(pp => {
@@ -1593,7 +1613,7 @@ window.MODULOS.programas = {
     })();
     // sessao que ja tem evolucao (encerrada antes e reaberta): traz o texto anterior para nao se perder
     (async () => {
-      const { data: ant } = await sb.from('evolucoes').select('texto, destinacao, aplicador:profiles!evolucoes_aplicador_id_fkey(nome)').eq('sessao_id', f.sessao.id).maybeSingle();
+      const { data: ant } = await sb.from('evolucoes').select('texto, destinacao, aplicador_id, aplicador:profiles!evolucoes_aplicador_id_fkey(nome)').eq('sessao_id', f.sessao.id).maybeSingle();
       const ta = document.getElementById('fe-evolucao');
       if (!ant || !ta) return;
       const marca = 'Comportamento e observacoes:';
@@ -1603,8 +1623,14 @@ window.MODULOS.programas = {
       if (!antigo.includes(marca) && /^(Programas aplicados:|Nenhum programa aplicado)/.test(corpoAntigo)) corpoAntigo = '';
       if (corpoAntigo && !ta.value.includes(corpoAntigo)) ta.value = ta.value.replace(/Comportamento e observacoes:\s*$/, 'Comportamento e observacoes: ' + corpoAntigo);
       const dest = document.getElementById('fe-destinacao'); if (dest && !dest.value && ant.destinacao) dest.value = ant.destinacao;
-      ta.insertAdjacentHTML('beforebegin', '<div class="mensagem-erro visivel" style="background:var(--st-warn-bg); color:#92400E; border-color:#FDE68A">Esta sessao ja tinha uma evolucao' +
-        (ant.aplicador ? ' (' + escaparHtml(ant.aplicador.nome.split(' ')[0]) + ')' : '') + '. O texto dela foi trazido para o campo; ao concluir, esta versao substitui a anterior.</div>');
+      // patch 47: evolucao da propria pessoa nao e "substituida" - o texto dela continua, so o resumo dos programas e refeito
+      const minha = !ant.aplicador_id || ant.aplicador_id === window.CORTEX_SESSAO.user.id;
+      ta.insertAdjacentHTML('beforebegin', minha
+        ? '<div class="mensagem-erro visivel aviso-calmo">' + (corpoAntigo
+            ? 'A evolucao que voce ja escreveu nesta sessao esta no campo abaixo e continua valendo. Ao concluir, ela e gravada junto com o resumo dos programas lancados agora: nada do que voce escreveu se perde.'
+            : 'Esta sessao ja tinha o resumo dos programas. Ao concluir, ele e refeito com o que voce lancou agora.') + '</div>'
+        : '<div class="mensagem-erro visivel" style="background:var(--st-warn-bg); color:#92400E; border-color:#FDE68A">Esta sessao ja tinha uma evolucao de ' +
+          escaparHtml(this.nome2(ant.aplicador)) + '. O texto dela foi trazido para o campo; ao concluir, esta versao substitui a dela.</div>');
     })();
     // outras sessoes desta crianca no mesmo dia: a evolucao pode valer para todas (marcadas por padrao)
     (async () => {

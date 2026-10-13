@@ -3335,3 +3335,5 @@ html[data-cor] .nav-item.ativa .nav-badge { color: var(--acao-forte); }
 .sess-outra-data { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 12px; padding-top: 10px;
     border-top: 1px dashed var(--line); font-size: 13px; color: var(--ink-muted); }
 .sess-outra-data input { width: 170px; }
+/* Patch 47: aviso que so informa (nao e erro nem alerta) */
+.mensagem-erro.aviso-calmo { background: var(--acao-soft); color: var(--ink); border-color: transparent; }

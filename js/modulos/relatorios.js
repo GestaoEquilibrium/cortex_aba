@@ -91,16 +91,18 @@ window.MODULOS.relatorios = {
     const feriados = {};
     if (!rFer.error) (rFer.data || []).forEach(f => { feriados[f.data] = f.nome; });
     const ids = lista.map(s => s.id);
-    let fotos = [], evolucoes = [], compRegs = [];
+    let fotos = [], evolucoes = [], compRegs = [], tents = [];
     if (ids.length) {
-      const [rF, rE, rC] = await Promise.all([
+      const [rF, rE, rC, rT] = await Promise.all([
         sb.from('programa_sessao_registros')
           .select('sessao_id, paciente_programa_id, pct_corretos, corretos, tentativas, tentativas_sessao, nao_aplicado, motivo_nao_aplicado, paciente_programas(programas(id, nome, area, objetivo, procedimento))')
           .in('sessao_id', ids),
         sb.from('evolucoes').select('sessao_id, texto').in('sessao_id', ids),
-        sb.from('comportamento_registros').select('sessao_id, data, descricao, comportamentos(nome)').in('sessao_id', ids)
+        sb.from('comportamento_registros').select('sessao_id, data, descricao, comportamentos(nome)').in('sessao_id', ids),
+        // patch 52: estimulos do mes (dao os exemplos do texto: "como vergonha e inveja")
+        sb.from('registros_tentativas').select('paciente_programa_id, resposta, estimulo_id, estimulos(nome)').in('sessao_id', ids)
       ]);
-      fotos = rF.data || []; evolucoes = rE.data || []; compRegs = rC.data || [];
+      fotos = rF.data || []; evolucoes = rE.data || []; compRegs = rC.data || []; tents = (rT && !rT.error && rT.data) || [];
     }
     const dataDe = {}; lista.forEach(s => { dataDe[s.id] = s.data; });
     // por programa: serie de % por sessao (ordem cronologica)
@@ -111,6 +113,16 @@ window.MODULOS.relatorios = {
       e.serie.push({ data: dataDe[f.sessao_id], pct: f.pct_corretos, corretos: f.corretos, n: f.tentativas_sessao || f.tentativas });
     });
     Object.values(porProg).forEach(e => e.serie.sort((a, b) => a.data.localeCompare(b.data)));
+    const progDoPp = {};
+    fotos.forEach(f => { if (f.paciente_programas && f.paciente_programas.programas) progDoPp[f.paciente_programa_id] = f.paciente_programas.programas.id; });
+    tents.forEach(t => {
+      const e = porProg[progDoPp[t.paciente_programa_id]], nome = t.estimulos && t.estimulos.nome;
+      if (!e || !nome) return;
+      e.estimulos = e.estimulos || {};
+      const ch = t.estimulo_id || nome;
+      const x = e.estimulos[ch] = e.estimulos[ch] || { nome, n: 0, c: 0 };
+      x.n++; if (t.resposta === 'C' || t.resposta === 'I') x.c++;
+    });
     const naoAplicados = fotos.filter(f => f.nao_aplicado && f.motivo_nao_aplicado !== 'Falta da crianca').map(f => ({
       nome: f.paciente_programas?.programas?.nome || 'programa', motivo: f.motivo_nao_aplicado, data: dataDe[f.sessao_id] }));
     return {
@@ -126,55 +138,255 @@ window.MODULOS.relatorios = {
   },
 
   // ─────────────── RASCUNHOS AUTOMATICOS (a equipe edita) ───────────────
+  // patch 52 (coordenacao, 14/10: "o progresso esta muito voltado para os programas e nao para a evolucao geral"):
+  // os textos seguem o modelo de relatorio da clinica (Wess mandou um relatorio real de julho/2026 como referencia).
+  // Nada de nome de programa nem percentual no Progresso, Desafios e Conclusao: cada programa vira uma
+  // HABILIDADE (pelo nome, depois pelo objetivo, depois pela area); programas da mesma habilidade se juntam.
+  //  - evolucao: melhorou 8 pontos ou mais entre o comeco e o fim do mes, ou terminou o mes com 80% ou mais
+  //  - dificuldade: terminou abaixo de 50% sem melhorar
+  //  - em consolidacao: o resto
+  // As evolucoes diarias entram como apoio (frases que citam a habilidade com sinal de melhora ou de dificuldade,
+  // em 2 sessoes ou mais) e os estimulos (patch 51) dao os exemplos ("como vergonha e inveja").
   fmtBR(d) { return d ? d.split('-').reverse().join('/') : ''; },
   primeiraFrase(t) { const m = String(t || '').replace(/Programas aplicados:[^\n]*\n?/i, '').replace(/Motivo dos nao aplicados:[^\n]*/i, '').trim().match(/^[^.!?\n]{15,220}[.!?]?/); return m ? m[0].trim() : ''; },
+  norm(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); },
+
+  // {o} = a/o conforme o sexo da crianca (sem sexo: o(a))
+  HABILIDADES: [
+    { k: 'regulacao', re: /regula|calma|acalm/, hab: 'autorregulação emocional', curto: 'autorregulação',
+      dem: 'recorrendo com mais frequência às estratégias de regulação diante de situações de frustração',
+      apr: 'passou a utilizar com mais frequência as estratégias de regulação apresentadas, reconhecendo melhor os momentos em que precisa se acalmar',
+      dif: 'no uso espontâneo das estratégias de regulação emocional', plano: 'favorecer o uso autônomo das estratégias de regulação em diferentes situações' },
+    { k: 'espera', re: /esper|aguard|demora|sua vez|troca de turno|revezamento|controle inibit/, reTxt: /esperar|espera\b|esperou|aguard|sua vez|troca de turno/, hab: 'esperar sua vez durante as atividades', curto: 'espera',
+      dem: 'demonstrando maior compreensão e tolerância nos momentos de espera',
+      apr: 'passou a aguardar sua vez com maior tolerância e menor necessidade de ajuda',
+      dif: 'na tolerância à espera', plano: 'ampliar a tolerância à espera em diferentes contextos e atividades' },
+    { k: 'sentar', re: /sentar|sentad|permanencia|permanecer/, reTxt: /sentar|sentad|cadeira|mesa de atividade/, hab: 'permanecer sentad{o} e engajad{o} nas atividades propostas', curto: 'permanecer sentad{o}',
+      dem: 'com aumento do tempo de permanência e de engajamento nas atividades',
+      apr: 'conseguiu permanecer por mais tempo sentad{o} e engajad{o} nas atividades propostas',
+      dif: 'em permanecer sentad{o} até o final das atividades', plano: 'aumentar gradualmente o tempo de permanência e de engajamento nas atividades' },
+    { k: 'atencao', re: /atenc|foco|concentr|distra/, hab: 'atenção e foco', curto: 'atenção e foco',
+      dem: 'demonstrando maior capacidade de permanecer concentrad{o} em uma única atividade',
+      apr: 'apresentou maior capacidade de permanecer concentrad{o} em uma única atividade, reduzindo a ocorrência de distrações diante de estímulos externos',
+      dif: 'na manutenção da atenção sustentada, especialmente diante de estímulos externos', plano: 'ampliar o tempo de atenção sustentada em atividades dirigidas' },
+    { k: 'emocoes', re: /emoc|sentiment|expressoes facia/, hab: 'reconhecimento de emoções', curto: 'reconhecimento de emoções',
+      dem: 'identificando com mais facilidade as emoções trabalhadas',
+      apr: 'passou a identificar com mais facilidade as emoções trabalhadas, em figuras e em situações do dia a dia',
+      dif: 'no reconhecimento e na diferenciação de algumas emoções', plano: 'ampliar a compreensão, a identificação e a diferenciação das emoções, tanto em si mesm{o} quanto nas outras pessoas' },
+    { k: 'flexibilidade', re: /flexib|rigidez|mudanca|variac|tolerar erro/, hab: 'flexibilidade cognitiva', curto: 'flexibilidade',
+      dem: 'aceitando melhor variações nas tarefas e tolerando erros e correções com menos frustração',
+      apr: 'passou a aceitar melhor variações nas tarefas, tolerando erros e correções com menos frustração',
+      dif: 'em aceitar mudanças e variações nas atividades', plano: 'favorecer a aceitação de mudanças e a tolerância a erros e correções' },
+    { k: 'historias', re: /historia|contacao|leitura compartilhada|livro|narrativ/, hab: 'atenção e compreensão durante a contação de histórias', curto: 'participação na contação de histórias',
+      dem: 'acompanhando as histórias com maior engajamento',
+      apr: 'acompanhou as histórias com maior engajamento, respondendo às perguntas sobre a narrativa',
+      dif: 'em acompanhar a narrativa até o final', plano: 'ampliar o engajamento e a compreensão durante a leitura compartilhada' },
+    { k: 'brincar_social', re: /(brinc|jogo|ludic).*(social|pares|par |grupo|cooperat|compartilh)|(social|pares|grupo|cooperat|compartilh).*(brinc|jogo|ludic)/, hab: 'brincar social', curto: 'participação em atividades compartilhadas',
+      dem: 'participando das brincadeiras com outras crianças de forma mais cooperativa e apropriada',
+      apr: 'participou de jogos e brincadeiras com outras crianças, acompanhando a dinâmica das atividades e respeitando as regras combinadas',
+      dif: 'em concluir jogos e brincadeiras estruturadas com pares de forma cooperativa', plano: 'ampliar a participação cooperativa em jogos e brincadeiras com pares' },
+    { k: 'socializacao', re: /social|intera|pares|amig|convivio/, hab: 'socialização', curto: 'socialização',
+      dem: 'favorecendo o desenvolvimento das interações sociais com outras pessoas',
+      apr: 'participou de atividades com outras crianças e adultos, acompanhando melhor a dinâmica das atividades em grupo e ampliando suas interações sociais',
+      dif: 'na iniciativa de interação com outras pessoas', plano: 'ampliar as oportunidades de interação com pares e adultos' },
+    { k: 'brincar', re: /brinc|jogo|ludic|faz de conta|simbolic/, hab: 'brincar', curto: 'brincar',
+      dem: 'ampliando o repertório e o tempo de engajamento nas brincadeiras',
+      apr: 'ampliou o repertório de brincadeiras, permanecendo por mais tempo engajad{o} nas atividades lúdicas',
+      dif: 'em manter o engajamento nas brincadeiras de forma funcional', plano: 'ampliar o repertório de brincadeiras funcionais e simbólicas' },
+    { k: 'comunicacao', re: /comunic|frase|mando|solicit|pedir|pedido|expressar|vocabul/, hab: 'comunicação funcional', curto: 'comunicação',
+      dem: 'expressando suas necessidades de forma mais funcional e adequada',
+      apr: 'passou a se expressar de forma mais funcional, utilizando palavras e frases para pedir o que deseja',
+      dif: 'em se expressar de forma funcional, principalmente nos momentos de frustração', plano: 'ampliar o uso de frases completas e de formas adequadas de comunicação' },
+    { k: 'imitacao', re: /imita/, hab: 'imitação', curto: 'imitação',
+      dem: 'reproduzindo com mais precisão os modelos apresentados',
+      apr: 'passou a reproduzir com mais precisão os modelos apresentados pelo terapeuta',
+      dif: 'na imitação de sequências com mais etapas', plano: 'ampliar o repertório de imitação, com sequências progressivamente mais complexas' },
+    { k: 'instrucoes', re: /instruc|ouvinte|seguir|comando|ordens/, reTxt: /instruc|comando|ordens simples/, hab: 'seguimento de instruções', curto: 'seguimento de instruções',
+      dem: 'respondendo às instruções com maior independência',
+      apr: 'passou a responder às instruções com maior independência e menor necessidade de dicas',
+      dif: 'no seguimento de instruções sem apoio', plano: 'favorecer o seguimento de instruções com independência em diferentes ambientes' },
+    { k: 'nomeacao', re: /nomea|nomear|\btato\b|identificacao de (objetos|figuras)/, hab: 'nomeação', curto: 'nomeação',
+      dem: 'nomeando com mais independência os itens trabalhados',
+      apr: 'passou a nomear com mais independência os itens trabalhados',
+      dif: 'na nomeação de alguns itens', plano: 'ampliar o vocabulário e a nomeação com independência' },
+    { k: 'fala', re: /ecoic|vocal|\bfala\b|articul|fonema|silaba/, hab: 'imitação vocal e fala', curto: 'fala',
+      dem: 'emitindo os sons e as palavras trabalhadas com mais clareza',
+      apr: 'passou a emitir os sons e as palavras trabalhadas com mais clareza',
+      dif: 'na emissão de alguns sons e palavras', plano: 'ampliar a imitação vocal e a clareza da fala' },
+    { k: 'avd', re: /\bavd\b|higien|vestir|aliment|banheiro|desfralde|escovar|calcar|vida diaria/, hab: 'autonomia nas atividades de vida diária', curto: 'autonomia nas atividades de vida diária',
+      dem: 'realizando as etapas das rotinas com menos ajuda',
+      apr: 'passou a realizar as etapas das rotinas de autocuidado com menos ajuda',
+      dif: 'na realização independente de algumas etapas das rotinas de autocuidado', plano: 'ampliar a independência nas rotinas de autocuidado' },
+    { k: 'motor', re: /motor|coordena|grafo|recort|encaix|pinca|tracad/, hab: 'coordenação motora', curto: 'coordenação motora',
+      dem: 'executando os movimentos com mais precisão e controle',
+      apr: 'passou a executar os movimentos trabalhados com mais precisão e controle',
+      dif: 'na precisão de alguns movimentos', plano: 'aprimorar a coordenação motora e o controle dos movimentos' },
+    { k: 'academico', re: /academ|letra|numer|cores|formas|parea|categor|alfabet|contagem|pre.?aprendiz|raciocinio/, hab: 'pré-aprendizagem', curto: 'pré-aprendizagem',
+      dem: 'respondendo com mais independência às atividades de raciocínio propostas',
+      apr: 'passou a responder com mais independência às atividades de raciocínio propostas',
+      dif: 'em algumas atividades de raciocínio e pré-aprendizagem', plano: 'consolidar as habilidades de pré-aprendizagem' },
+    { k: 'contato', re: /contato visual|olhar/, hab: 'contato visual', curto: 'contato visual',
+      dem: 'sustentando o contato visual por mais tempo durante as interações',
+      apr: 'passou a sustentar o contato visual por mais tempo durante as interações',
+      dif: 'na manutenção do contato visual', plano: 'ampliar o contato visual funcional durante as interações' }
+  ],
+  AREA_HAB: { mando: 'comunicacao', tato: 'nomeacao', ecoico: 'fala', imitacao: 'imitacao', ouvinte: 'instrucoes', brincar: 'brincar',
+              'habilidades sociais': 'socializacao', avd: 'avd', 'coordenacao motora': 'motor', academico: 'academico' },
+  NOMES_COMPOSTOS: { primeiro: ['maria', 'ana', 'anna', 'joao', 'jose', 'pedro', 'luiz', 'luis', 'enzo', 'joao'],
+    segundo: ['alice', 'beatriz', 'cecilia', 'clara', 'eduarda', 'fernanda', 'flor', 'gabriela', 'helena', 'heloisa', 'isabel', 'isabela', 'isabella', 'julia', 'laura', 'livia', 'luiza', 'luisa', 'sofia', 'sophia', 'valentina', 'vitoria', 'antonio', 'arthur', 'bernardo', 'davi', 'eduardo', 'emanuel', 'felipe', 'gabriel', 'guilherme', 'gustavo', 'henrique', 'lucas', 'luca', 'lucca', 'miguel', 'otavio', 'paulo', 'pedro', 'rafael', 'theo', 'vitor', 'victor', 'gael'] },
+  nomeCurto(nome) {
+    const p = String(nome || '').trim().split(/\s+/);
+    if (p.length > 1 && this.NOMES_COMPOSTOS.primeiro.includes(this.norm(p[0])) && this.NOMES_COMPOSTOS.segundo.includes(this.norm(p[1]))) return p[0] + ' ' + p[1];
+    return p[0] || '';
+  },
+  junta(l) { return l.length <= 1 ? (l[0] || '') : l.slice(0, -1).join(', ') + ' e ' + l[l.length - 1]; },
+  estimuloTxt(n) { n = String(n || '').trim(); return /^[A-ZÀ-Ú][a-zà-ú]/.test(n) ? n.charAt(0).toLowerCase() + n.slice(1) : n; },
+
+  habilidadeDe(p) {
+    const H = this.HABILIDADES, nome = this.norm(p.nome), obj = this.norm(p.objetivo), area = this.norm(p.area);
+    const h = H.find(x => x.re.test(nome)) || H.find(x => x.re.test(obj)) || H.find(x => x.k === this.AREA_HAB[area]);
+    if (h) return h;
+    const limpo = String(p.nome || '').replace(/\s*[-–—]\s*(n[ií]vel\s*\d+|\d+\s*sp|n\d+)\s*$/i, '').replace(/^(programa|treino|habilidades?)\s+(de|do|da)\s+/i, '').trim();
+    const t = limpo.charAt(0).toLowerCase() + limpo.slice(1);
+    return { k: 'p:' + p.nome, hab: t, curto: t, dem: 'realizando as atividades com maior independência', apr: 'realizou as atividades de ' + t + ' com maior independência',
+      dif: 'em ' + t, plano: 'favorecer a realização dessas atividades com maior independência' };
+  },
+
+  // junta programas, estimulos, evolucoes diarias e comportamentos em habilidades com situacao
+  analiseMes(d, pac) {
+    const sexo = pac && pac.sexo;
+    const g = s => String(s || '').replace(/\{o\}/g, sexo === 'F' ? 'a' : sexo === 'M' ? 'o' : 'o(a)');
+    const grupos = {};
+    const grupo = h => grupos[h.k] = grupos[h.k] || { h, progs: [], est: {}, pos: new Set(), neg: new Set() };
+    Object.entries(d.porProg).forEach(([pid, p]) => {
+      if (!p.serie.length) return;
+      const G = grupo(this.habilidadeDe(p));
+      G.progs.push(p);
+      Object.values(p.estimulos || {}).forEach(e => { const x = G.est[e.nome] = G.est[e.nome] || { nome: e.nome, n: 0, c: 0 }; x.n += e.n; x.c += e.c; });
+    });
+    // evolucoes diarias: frase que cita a habilidade + sinal de melhora ou de dificuldade (conta sessoes diferentes)
+    const POS = /consegu|evolu|melhor|maior|avanc|independ|aument|ampli|reduz|diminu|engaj|colabor|aceitou|toler|espontane|sem ajuda|sem dica|com facilidade|progress/;
+    const NEG = /nao consegu|nao aceit|nao realiz|nao permanec|nao quis|nao particip|dificuldade|resist|recus|chor|birra|agita|dispers|fuga|frustr|agress|pouco engaj|pouca toler|desregul|crise/;
+    (d.evolucoes || []).forEach((e, i) => {
+      String(e.texto || '').replace(/Programas aplicados:[^\n]*/gi, '').replace(/Motivo dos nao aplicados:[^\n]*/gi, '')
+        .split(/[.!?\n;]+/).map(f => this.norm(f)).filter(f => f.length > 12).forEach(f => {
+          const sinal = NEG.test(f) ? 'neg' : POS.test(f) ? 'pos' : '';
+          if (!sinal) return;
+          this.HABILIDADES.forEach(h => { if ((h.reTxt || h.re).test(f)) grupo(h)[sinal].add(e.data || i); });
+        });
+    });
+    // o que veio so das evolucoes vai para a habilidade irma que tem programa (brincar -> brincar social)
+    [['brincar', 'brincar_social'], ['brincar_social', 'brincar'], ['atencao', 'sentar'], ['socializacao', 'brincar_social']].forEach(([de, para]) => {
+      const a = grupos[de], b = grupos[para];
+      if (a && b && !a.progs.length && b.progs.length) { a.pos.forEach(x => b.pos.add(x)); a.neg.forEach(x => b.neg.add(x)); delete grupos[de]; }
+    });
+    const lista = Object.values(grupos).map(G => {
+      let sit = '', forca = 0;
+      if (G.progs.length) {
+        const datas = [...new Set(G.progs.flatMap(p => p.serie.map(x => x.data)))].sort();
+        const media = l => l.length ? l.reduce((s, x) => s + x, 0) / l.length : null;
+        const meio = datas[Math.floor(datas.length / 2)];
+        const ini = media(G.progs.flatMap(p => p.serie.filter(x => datas.length < 2 || x.data < meio).map(x => x.pct || 0)));
+        const fim = media(G.progs.flatMap(p => p.serie.filter(x => datas.length < 2 || x.data >= meio).map(x => x.pct || 0)));
+        const ganho = datas.length >= 2 ? fim - ini : 0;
+        forca = ganho + fim / 10;
+        sit = (ganho >= 8 || fim >= 80) ? 'evolucao' : (fim < 50 && ganho < 8) ? 'dificuldade' : 'consolidacao';
+        // a evolucao diaria desempata quando os numeros ficaram no meio
+        if (sit === 'consolidacao' && G.pos.size >= 2 && G.pos.size > G.neg.size) sit = 'evolucao';
+      } else if (G.pos.size >= 2 && G.pos.size > G.neg.size) { sit = 'evolucao'; forca = G.pos.size; }
+      else if (G.neg.size >= 2 && G.neg.size > G.pos.size) { sit = 'dificuldade'; forca = G.neg.size; }
+      if (!sit) return null;
+      const est = Object.values(G.est).filter(e => e.n >= 2).map(e => Object.assign({ pct: Math.round(e.c * 100 / e.n) }, e));
+      return {
+        k: G.h.k, sit, forca, hab: g(G.h.hab), curto: g(G.h.curto), dem: g(G.h.dem), apr: g(G.h.apr), dif: g(G.h.dif), plano: g(G.h.plano),
+        fortes: est.filter(e => e.pct >= 80).sort((a, b) => b.pct - a.pct).slice(0, 3).map(e => this.estimuloTxt(e.nome)),
+        fracos: est.filter(e => e.pct < 50).sort((a, b) => a.pct - b.pct).slice(0, 3).map(e => this.estimuloTxt(e.nome)),
+        melhor: est.length >= 2 ? est.slice().sort((a, b) => b.pct - a.pct)[0] : null
+      };
+    }).filter(Boolean);
+    // comportamentos: menos na segunda metade do mes = evolucao; continuaram = desafio
+    const comps = d.comportamentos || [];
+    const nomesComp = [...new Set(comps.map(c => c.comportamentos && c.comportamentos.nome).filter(Boolean))].map(n => this.estimuloTxt(n));
+    const mesIni = (d.sessoes[0] && d.sessoes[0].data) || '';
+    const metade = mesIni ? mesIni.slice(0, 8) + '16' : '';
+    const c1 = comps.filter(c => (c.data || '') < metade).length, c2 = comps.length - c1;
+    return {
+      sexo, nome: this.nomeCurto(pac && pac.nome), pac: sexo === 'F' ? 'a paciente' : sexo === 'M' ? 'o paciente' : 'a criança',
+      evol: lista.filter(x => x.sit === 'evolucao').sort((a, b) => b.forca - a.forca),
+      cons: lista.filter(x => x.sit === 'consolidacao'),
+      dif: lista.filter(x => x.sit === 'dificuldade').sort((a, b) => a.forca - b.forca),
+      compMenos: comps.length >= 3 && c1 >= 2 && c2 <= c1 / 2, compNomes: nomesComp, nComp: comps.length
+    };
+  },
 
   rascunhoObjetivos(d) {
     const progs = Object.values(d.porProg);
     if (!progs.length) return '';
-    return progs.map(p => '\u2022 ' + p.nome + ': ' + (p.objetivo ? p.objetivo.replace(/\s+/g, ' ').trim().replace(/\.?$/, '.') : '(descrever o objetivo)')).join('\n');
+    // como no modelo: "Nome do programa: o que ele trabalha." (um paragrafo por programa)
+    return progs.map(p => p.nome.trim() + ': ' + (p.objetivo ? p.objetivo.replace(/\s+/g, ' ').trim().replace(/\.?$/, '.') : '(descrever o objetivo).')).join('\n\n');
   },
 
-  rascunhoProgresso(d, nome) {
-    const progs = Object.values(d.porProg);
-    if (!progs.length) return '';
-    const primeiro = nome.split(' ')[0];
-    const ganhos = [], estaveis = [];
-    progs.forEach(p => {
-      const a = p.serie[0], z = p.serie[p.serie.length - 1];
-      if (p.serie.length >= 2 && z.pct > a.pct) ganhos.push(p.nome + ' (' + a.pct + '% \u2192 ' + z.pct + '% de independ\u00eancia em ' + p.serie.length + ' sess\u00f5es)');
-      else estaveis.push(p.nome + ' (' + z.pct + '% na \u00faltima sess\u00e3o)');
-    });
-    let t = '';
-    if (ganhos.length) t += 'Ao longo do m\u00eas, ' + primeiro + ' apresentou evolu\u00e7\u00e3o em ' + ganhos.join('; ') + '. ';
-    if (estaveis.length) t += 'Mantiveram-se em treino ' + estaveis.join('; ') + '. ';
-    const frases = d.evolucoes.map(e => this.primeiraFrase(e.texto)).filter(Boolean).slice(-3);
-    if (frases.length) t += 'Registros da equipe no per\u00edodo: ' + frases.map(f => '\u201c' + f + '\u201d').join('; ') + '.';
-    return t.trim();
+  rascunhoProgresso(d, pac) {
+    const A = this.analiseMes(d, typeof pac === 'string' ? { nome: pac } : pac);
+    const N = A.nome, esp = x => x.fortes.length ? ', especialmente com ' + this.junta(x.fortes) : '';
+    const p1 = [], p2 = [];
+    if (A.evol.length) {
+      const [a, b, ...resto] = A.evol;
+      p1.push('Durante o mês, ' + A.pac + ' apresentou evolução nas habilidades de ' + a.hab + esp(a) + ', ' + a.dem + '.');
+      if (b) p1.push('Também foi observada evolução nas habilidades de ' + b.hab + esp(b) + ': ' + N + ' ' + b.apr + '.');
+      if (resto.length) p2.push('Além disso, foram observados avanços nas habilidades de ' + resto[0].hab + esp(resto[0]) + ', ' + resto[0].dem + '.');
+      if (resto.length > 1) p2.push('Houve avanços também nas habilidades de ' + this.junta(resto.slice(1).map(x => x.hab)) + '.');
+      if (A.cons.length) p2.push((A.cons.length > 1 ? 'As habilidades de ' : 'A habilidade de ') + this.junta(A.cons.map(x => x.curto)) + (A.cons.length > 1 ? ' seguem' : ' segue') +
+        ' em consolidação, com participação consistente de ' + N + ' nas atividades propostas.');
+    } else if (A.cons.length || A.dif.length) {
+      const l = A.cons.length ? A.cons : A.dif;
+      p1.push('Durante o mês, ' + A.pac + ' manteve participação nas atividades propostas, com desempenho em consolidação nas habilidades de ' + this.junta(l.map(x => x.hab)) + '.');
+    } else return '';
+    if (A.compMenos) (p2.length ? p2 : p1).push('Observou-se ainda redução na frequência de comportamentos interferentes' + (A.compNomes.length ? ' (' + this.junta(A.compNomes) + ')' : '') + ' ao longo do mês.');
+    return [p1.join(' '), p2.join(' ')].filter(Boolean).join('\n\n');
   },
 
-  rascunhoDesafios(d, nome) {
-    const primeiro = nome.split(' ')[0];
+  rascunhoDesafios(d, pac) {
+    const A = this.analiseMes(d, typeof pac === 'string' ? { nome: pac } : pac);
     const partes = [];
-    const baixos = Object.values(d.porProg).filter(p => p.serie[p.serie.length - 1].pct < 50);
-    if (baixos.length) partes.push('Permanecem com alta necessidade de ajuda os programas ' + baixos.map(p => p.nome + ' (' + p.serie[p.serie.length - 1].pct + '%)').join(', ') + ', que seguir\u00e3o com retirada gradual de prompts.');
-    if (d.comportamentos.length) {
-      const nomes = [...new Set(d.comportamentos.map(c => c.comportamentos?.nome).filter(Boolean))];
-      partes.push('Foram registrados ' + d.comportamentos.length + ' epis\u00f3dio(s) de comportamento interferente' + (nomes.length ? ' (' + nomes.join(', ') + ')' : '') + ', manejados com as estrat\u00e9gias previstas no plano.');
+    if (A.dif.length) {
+      const l = A.dif.slice(0, 2);
+      const como = l[0].fracos.length ? ', como ' + this.junta(l[0].fracos) : '';
+      partes.push('Observa-se que ' + A.pac + ' ainda apresenta dificuldades ' + this.junta(l.map(x => x.dif)) + como + '.');
+      const m = l[0].melhor && l[0].melhor.pct > 0 && !l[0].fracos.includes(this.estimuloTxt(l[0].melhor.nome)) ? l[0].melhor : null;
+      partes.push((l.length > 1 ? 'As habilidades vêm sendo trabalhadas' : 'A habilidade vem sendo trabalhada') + ' ao longo das sessões' +
+        (m ? ', apresentando melhores resultados em ' + this.estimuloTxt(m.nome) : '') + '.');
+      partes.push('Como plano de intervenção, será dada continuidade ao ensino de ' + this.junta(l.map(x => x.curto)) +
+        ', com ajuste dos recursos utilizados e retirada gradual das ajudas, com o objetivo de ' + l[0].plano + '.');
+    } else if (A.cons.length) {
+      const l = A.cons.slice(0, 3);
+      const v = l.length > 1;
+      partes.push('Observa-se que ' + (v ? 'as habilidades de ' : 'a habilidade de ') + this.junta(l.map(x => x.curto)) + (v ? ' ainda estão' : ' ainda está') + ' em consolidação e ' +
+        (v ? 'necessitam' : 'necessita') + ' de apoio para ser' + (v ? 'em' : '') + ' realizada' + (v ? 's' : '') + ' com independência.');
+      partes.push('Como plano de intervenção, será dada continuidade ao ensino ' + (v ? 'dessas habilidades' : 'dessa habilidade') + ', com retirada gradual das ajudas, com o objetivo de ' + l[0].plano + '.');
+    } else {
+      partes.push('Como plano de intervenção, será dada continuidade aos objetivos em andamento, com foco na manutenção e na generalização das habilidades adquiridas para outros ambientes e pessoas.');
     }
-    if (d.naoAplicados.length) partes.push('Programas n\u00e3o aplicados em algumas sess\u00f5es: ' + [...new Set(d.naoAplicados.map(x => x.nome + (x.motivo ? ' (' + x.motivo + ')' : '')))].join('; ') + '.');
-    if (d.faltas) partes.push('Houve ' + d.faltas + ' falta(s) no m\u00eas, o que reduziu as oportunidades de treino.');
-    partes.push('Para o pr\u00f3ximo per\u00edodo, ser\u00e1 dada continuidade aos programas em andamento, com ajuste dos n\u00edveis de ajuda conforme o desempenho de ' + primeiro + '.');
+    if (A.nComp && !A.compMenos) partes.push('Foram observados também episódios de comportamentos interferentes' + (A.compNomes.length ? ' (' + this.junta(A.compNomes) + ')' : '') +
+      ', manejados com as estratégias previstas no plano, que seguirão sendo acompanhados.');
+    if (d.faltas >= 2) partes.push('Houve ' + d.faltas + ' faltas no mês, o que reduziu as oportunidades de treino.');
     return partes.join(' ');
   },
 
-  rascunhoConclusao(d, nome) {
-    const primeiro = nome.split(' ')[0];
-    const progs = Object.values(d.porProg);
-    const ganhos = progs.filter(p => p.serie.length >= 2 && p.serie[p.serie.length - 1].pct > p.serie[0].pct);
-    return 'De modo geral, ' + primeiro + ' apresentou ' + (ganhos.length ? 'evolu\u00e7\u00e3o positiva' : 'participa\u00e7\u00e3o consistente') + ' durante o m\u00eas, com ' + d.concluidas + ' sess\u00f5es realizadas' +
-      (ganhos.length ? ' e avan\u00e7os em ' + ganhos.map(p => p.nome).join(', ') : '') + '. ' +
-      'O planejamento para o pr\u00f3ximo per\u00edodo mant\u00e9m os objetivos em andamento, priorizando a generaliza\u00e7\u00e3o das habilidades adquiridas e a amplia\u00e7\u00e3o da autonomia.';
+  rascunhoConclusao(d, pac) {
+    const A = this.analiseMes(d, typeof pac === 'string' ? { nome: pac } : pac);
+    const quem = A.pac + ' ' + A.nome;
+    const pend = A.dif.length ? A.dif : [];
+    if (A.evol.length) {
+      return 'Conclui-se que, de modo geral, ' + quem + ' apresenta evolução gradual nas habilidades trabalhadas ao longo do mês, com avanços nas habilidades de ' + this.junta(A.evol.slice(0, 5).map(x => x.curto)) + '.' +
+        (pend.length ? ' Apesar dos progressos, ainda apresenta dificuldades ' + this.junta(pend.slice(0, 2).map(x => x.dif)) + ', que continuarão sendo trabalhadas por meio de estratégias específicas.'
+          : A.cons.length ? (A.cons.length > 1 ? ' As habilidades de ' + this.junta(A.cons.map(x => x.curto)) + ' seguem em consolidação e continuarão sendo trabalhadas'
+              : ' A habilidade de ' + A.cons[0].curto + ' segue em consolidação e continuará sendo trabalhada') + ' por meio de estratégias específicas.'
+          : ' Seguirá em acompanhamento, com foco na manutenção e na generalização das habilidades adquiridas.');
+    }
+    return 'Conclui-se que, de modo geral, ' + quem + ' manteve participação nas atividades ao longo do mês' +
+      (pend.length ? ', ainda apresentando dificuldades ' + this.junta(pend.slice(0, 2).map(x => x.dif)) + ', que continuarão sendo trabalhadas por meio de estratégias específicas.'
+        : '. As habilidades em treino continuarão sendo trabalhadas por meio de estratégias específicas.');
   },
 
   // ─────────────── EDITOR (form a esquerda, folha a direita) ───────────────
@@ -183,7 +395,7 @@ window.MODULOS.relatorios = {
     el.innerHTML = '<div class="cartao"><p class="sub">Preparando o relatorio...</p></div>';
 
     const [{ data: pac }, dados, rResp, rAss] = await Promise.all([
-      sb.from('pacientes').select('id, nome, data_nascimento').eq('id', pacienteId).single(),
+      sb.from('pacientes').select('id, nome, data_nascimento, sexo').eq('id', pacienteId).single(),
       this.dadosDoMes(pacienteId, mes),
       sb.from('responsaveis').select('nome, principal').eq('paciente_id', pacienteId).order('principal', { ascending: false }).limit(1),
       sb.from('profiles').select('id, nome, perfil').in('perfil', ['direcao', 'coordenador']).eq('ativo', true).order('nome')
@@ -203,9 +415,9 @@ window.MODULOS.relatorios = {
     // rascunhos automaticos onde estiver vazio
     const auto = {};
     if (!rel.objetivos) auto.objetivos = this.rascunhoObjetivos(dados);
-    if (!rel.progresso) auto.progresso = this.rascunhoProgresso(dados, pac.nome);
-    if (!rel.desafios) auto.desafios = this.rascunhoDesafios(dados, pac.nome);
-    if (!rel.conclusao) auto.conclusao = this.rascunhoConclusao(dados, pac.nome);
+    if (!rel.progresso) auto.progresso = this.rascunhoProgresso(dados, pac);
+    if (!rel.desafios) auto.desafios = this.rascunhoDesafios(dados, pac);
+    if (!rel.conclusao) auto.conclusao = this.rascunhoConclusao(dados, pac);
     if (rel.status === 'rascunho' && Object.keys(auto).length) {
       { const { error: _e } = await sb.from('relatorios_mensais').update(auto).eq('id', rel.id); if (_e) popAviso('Nao foi possivel gravar (relatorios_mensais): ' + _e.message); }
       Object.assign(rel, auto);
@@ -256,8 +468,10 @@ window.MODULOS.relatorios = {
       this._assinaturas.map(a => '<option value="' + escaparHtml(a.nome) + '"' + (a.nome === rel.assinatura_nome ? ' selected' : '') + '>' + escaparHtml(a.nome) + ' \u2014 ' + escaparHtml(a.titulo) + '</option>').join('') +
       '  </select></div></div>' +
       '  <div class="cartao">' +
+      (editavel ? '<div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:8px"><small class="sub">Os textos saem prontos com os dados do mes; ajuste o que quiser.</small>' +
+        '<button type="button" class="btn-chip" title="Escreve de novo os 4 textos com os dados do mes (no modelo novo)" onclick="MODULOS.relatorios.refazerTodos()">&#8635; Refazer todos os textos</button></div>' : '') +
       (editavel
-        ? this.campoRel('objetivos', 'Objetivos de ensino <small class="sub">(programas do mes; uma linha por programa)</small>', rel.objetivos, 'Um programa por linha', 5) +
+        ? this.campoRel('objetivos', 'Objetivos de ensino <small class="sub">(programas do mes; um paragrafo por programa)</small>', rel.objetivos, 'Um programa por linha', 5) +
           this.campoRel('progresso', 'Progresso *', rel.progresso, 'Progresso da crianca nos objetivos', 6) +
           this.campoRel('desafios', 'Desafios e plano de intervencao', rel.desafios, 'Dificuldades, manejo e proximo periodo', 5) +
           this.campoRel('conclusao', 'Conclusao *', rel.conclusao, 'Sintese do mes', 4)
@@ -270,7 +484,8 @@ window.MODULOS.relatorios = {
   },
 
   campoRel(id, rotulo, valor, dica, linhas) {
-    return '<div class="campo" style="margin-bottom:10px"><label>' + rotulo + '</label>' +
+    return '<div class="campo" style="margin-bottom:10px"><div style="display:flex; justify-content:space-between; align-items:flex-end; gap:8px"><label for="rm-' + id + '">' + rotulo + '</label>' +
+      '<button type="button" class="btn-chip" title="Escreve de novo so este texto com os dados do mes" onclick="MODULOS.relatorios.refazerTexto(\'' + id + '\')">&#8635; Texto automatico</button></div>' +
       '<textarea id="rm-' + id + '" rows="' + linhas + '" oninput="MODULOS.relatorios.salvarAuto()" ' +
       'style="resize:vertical" placeholder="' + dica + '...">' + escaparHtml(valor || '') + '</textarea></div>';
   },
@@ -282,6 +497,25 @@ window.MODULOS.relatorios = {
     return bloco('Objetivos de ensino', rel.objetivos) + bloco('Progresso', rel.progresso) +
       bloco('Desafios e plano de intervencao', rel.desafios) + bloco('Conclusao', rel.conclusao) +
       (rel.texto && !rel.progresso ? '<p style="white-space:pre-wrap">' + escaparHtml(rel.texto) + '</p>' : '');
+  },
+
+  // patch 52: refazer o texto automatico (os rascunhos antigos ficaram gravados no estilo anterior)
+  RASCUNHO_DE: { objetivos: 'rascunhoObjetivos', progresso: 'rascunhoProgresso', desafios: 'rascunhoDesafios', conclusao: 'rascunhoConclusao' },
+  async refazerTexto(id) {
+    const ta = document.getElementById('rm-' + id);
+    if (!ta || !this._dados) return;
+    const novo = this[this.RASCUNHO_DE[id]](this._dados, this._pac) || '';
+    if (!novo) { popAviso('Sem dados no mes para escrever esse texto.'); return; }
+    if (ta.value.trim() && ta.value.trim() !== novo.trim() &&
+        !await popConfirmar('Trocar o texto deste campo pelo texto automatico?\n\nO que esta escrito agora sera substituido.', { titulo: 'Texto automatico', ok: 'Trocar' })) return;
+    ta.value = novo;
+    this.salvarAuto();
+  },
+  async refazerTodos() {
+    if (!this._dados) return;
+    if (!await popConfirmar('Escrever de novo os 4 textos (objetivos, progresso, desafios e conclusao) com os dados do mes?\n\nO que esta escrito agora sera substituido.', { titulo: 'Refazer os textos', ok: 'Refazer' })) return;
+    Object.entries(this.RASCUNHO_DE).forEach(([id, f]) => { const ta = document.getElementById('rm-' + id); if (ta) ta.value = this[f](this._dados, this._pac) || ''; });
+    this.salvarAuto();
   },
 
   _timer: null,

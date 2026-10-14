@@ -3476,3 +3476,15 @@ html[data-cor] .nav-item.ativa .nav-badge { color: var(--acao-forte); }
 [data-modo="escuro"] .aniv-t > b, [data-modo="escuro"] .ini-aniv-hoje b, [data-modo="escuro"] .ini-aniv-hoje em, [data-modo="escuro"] .agenda-aniv span, [data-modo="escuro"] .mes-aniv { color: #F9A8D4; }
 [data-modo="escuro"] .aniv-nome { background: var(--surface); color: #F9A8D4; border-color: rgba(236, 72, 153, .35); }
 @media (max-width: 560px) { .ini-aniv-hoje button { flex: 1 1 100%; } .ini-aniv-l { grid-template-columns: 64px max-content 1fr; } }
+
+/* ── Patch 56: chave "no relatorio" ao lado de cada campo do relatorio de avaliacao (um protocolo) ── */
+.la-campo-topo { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
+.la-campo-topo label { margin: 0; }
+.la-chave-rel { display: inline-flex; align-items: center; gap: 7px; flex: none; }
+.la-chave-rel small { font-size: 11px; font-weight: 700; color: var(--ink-muted); white-space: nowrap; }
+.la-campo.fora .la-chave-rel small { color: var(--st-bad); }
+.la-campo.fora textarea, .la-campo.fora > p { opacity: .45; }
+.la-campo.fora .la-campo-topo label, .la-campo.fora .la-campo-topo b { color: var(--ink-muted); text-decoration: line-through; }
+.la-campo-so { padding: 8px 10px; margin-bottom: 10px; border: 1px dashed var(--line-strong); border-radius: 10px; background: var(--surface-alt); }
+.la-campo-so .la-campo-topo { margin: 0; }
+.la-campo-so label { font-weight: 700; font-size: 12.5px; }

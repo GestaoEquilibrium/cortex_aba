@@ -715,6 +715,7 @@ window.MODULOS.laudo_avaliacao = {
     if (rel.incluir_anexos === null || rel.incluir_anexos === undefined) rel.incluir_anexos = d.completo;
     if (rel.mostrar_frequencia === null || rel.mostrar_frequencia === undefined) rel.mostrar_frequencia = !!d.freq;
     this._rel = rel; this._d = d;
+    this._ocultas = new Set(((rel.ajustes || {}).ocultas) || []);
     // anexos consolidados (tabelas/graficos de cada protocolo), capturados uma vez
     this._anexos = {};
     if (rel.status === 'rascunho') {
@@ -727,9 +728,16 @@ window.MODULOS.laudo_avaliacao = {
     const travado = rel.status !== 'rascunho';
     const editavel = this.podeGerir() && !travado;
     window._docPortal = { paciente_id: d.pac.id, tipo: 'relatorio_avaliacao', titulo: 'Relatorio de Avaliacao' + (d.completo ? ' completo' : '') };
-    const campo = (id, rot, valor, linhas) => editavel
-      ? '<div class="campo" style="margin-bottom:10px"><label>' + rot + '</label><textarea id="la-' + id + '" rows="' + (linhas || 4) + '" style="resize:vertical" oninput="MODULOS.laudo_avaliacao.salvarAuto()">' + escaparHtml(valor || '') + '</textarea></div>'
-      : '<div style="margin-bottom:10px"><b style="font-size:11.5px; text-transform:uppercase; letter-spacing:.04em">' + rot + '</b><p style="font-size:13px; line-height:1.7; white-space:pre-wrap; margin-top:3px">' + escaparHtml(valor || '') + '</p></div>';
+    // patch 56: cada parte do relatorio tem a chave "no relatorio" ao lado do campo (desligada = sai da folha)
+    const oc = this._ocultas;
+    const chave = k => '<span class="la-chave-rel"><small>' + (oc.has(k) ? 'fora do relatorio' : 'no relatorio') + '</small><button type="button" class="la-sw' + (oc.has(k) ? '' : ' on') + '"' +
+      (editavel ? '' : ' disabled') + ' title="Mostrar ou tirar esta parte do relatorio" data-sec="' + escaparHtml(k) + '" onclick="MODULOS.laudo_avaliacao.alternarSecao(this)"></button></span>';
+    const topo = (rot, k) => '<div class="la-campo-topo"><label>' + rot + '</label>' + chave(k) + '</div>';
+    const campo = (id, rot, valor, linhas, k) => editavel
+      ? '<div class="campo la-campo' + (oc.has(k) ? ' fora' : '') + '" data-campo="' + escaparHtml(k) + '" style="margin-bottom:10px">' + topo(rot, k) + '<textarea id="la-' + id + '" rows="' + (linhas || 4) + '" style="resize:vertical" oninput="MODULOS.laudo_avaliacao.salvarAuto()">' + escaparHtml(valor || '') + '</textarea></div>'
+      : '<div class="la-campo' + (oc.has(k) ? ' fora' : '') + '" style="margin-bottom:10px"><div class="la-campo-topo"><b style="font-size:11.5px; text-transform:uppercase; letter-spacing:.04em">' + rot + '</b>' + chave(k) + '</div><p style="font-size:13px; line-height:1.7; white-space:pre-wrap; margin-top:3px">' + escaparHtml(valor || '') + '</p></div>';
+    // parte sem texto para escrever (identificacao, grafico): so a chave
+    const linhaSec = (rot, k) => '<div class="la-campo la-campo-so' + (oc.has(k) ? ' fora' : '') + '" data-campo="' + escaparHtml(k) + '">' + topo(rot, k) + '</div>';
     const faltas = [];
     if (!d.pac.cid) faltas.push('CID-11');
     if (!d.medico) faltas.push('m\u00e9dico requisitante (encaminhamento)');
@@ -758,21 +766,39 @@ window.MODULOS.laudo_avaliacao = {
       '  <div class="campo" style="margin-top:8px"><label>Assinatura</label><select id="la-ass"' + (editavel ? '' : ' disabled') + ' onchange="MODULOS.laudo_avaliacao.salvarAuto()">' +
       this._assinaturas.map(a => '<option value="' + escaparHtml(a.nome) + '"' + (a.nome === rel.assinatura_nome ? ' selected' : '') + '>' + escaparHtml(a.nome) + ' \u2014 ' + escaparHtml(a.titulo) + '</option>').join('') + '</select></div></div>' +
       '  <div class="cartao">' +
-      campo('demanda', 'II. Descricao da demanda', rel.demanda, 3) +
+      linhaSec('I. Identificacao <small class="sub">(dados do cadastro)</small>', 'ident') +
+      campo('demanda', 'II. Descricao da demanda', rel.demanda, 3, 'demanda') +
       (editavel
-        ? '<div class="campo" style="margin-bottom:10px"><label>III. Procedimento <small class="sub">(texto padrao da clinica; altere se precisar)</small> ' +
-          '<button type="button" class="btn-chip" style="margin-left:6px" onclick="MODULOS.laudo_avaliacao.restaurarProcedimento()">&#8634; Texto padrao</button></label>' +
+        ? '<div class="campo la-campo' + (oc.has('procedimento') ? ' fora' : '') + '" data-campo="procedimento" style="margin-bottom:10px"><div class="la-campo-topo"><label>III. Procedimento <small class="sub">(texto padrao da clinica; altere se precisar)</small> ' +
+          '<button type="button" class="btn-chip" style="margin-left:6px" onclick="MODULOS.laudo_avaliacao.restaurarProcedimento()">&#8634; Texto padrao</button></label>' + chave('procedimento') + '</div>' +
           '<textarea id="la-procedimento" rows="5" style="resize:vertical" oninput="MODULOS.laudo_avaliacao.salvarAuto()">' + escaparHtml((rel.procedimento || '').trim() || this.procedimentoPadrao(d)) + '</textarea></div>'
-        : (rel.procedimento ? '<div style="margin-bottom:10px"><b style="font-size:11.5px; text-transform:uppercase; letter-spacing:.04em">III. Procedimento (alterado)</b><p style="font-size:13px; line-height:1.7; white-space:pre-wrap; margin-top:3px">' + escaparHtml(rel.procedimento) + '</p></div>' : '')) +
-      campo('analise', 'IV. Analise clinica (vinculo, engajamento, pares, comportamentos)', rel.analise, 7) +
-      (d.protocolos.some(pr => pr.anterior) ? campo('comparativo', 'Analise comparativa das avaliacoes', rel.comparativo, 5) : '') +
+        : (rel.procedimento || oc.has('procedimento') ? '<div class="la-campo' + (oc.has('procedimento') ? ' fora' : '') + '" style="margin-bottom:10px"><div class="la-campo-topo"><b style="font-size:11.5px; text-transform:uppercase; letter-spacing:.04em">III. Procedimento' + (rel.procedimento ? ' (alterado)' : '') + '</b>' + chave('procedimento') + '</div>' + (rel.procedimento ? '<p style="font-size:13px; line-height:1.7; white-space:pre-wrap; margin-top:3px">' + escaparHtml(rel.procedimento) + '</p>' : '') + '</div>' : '')) +
+      campo('analise', 'IV. Analise clinica (vinculo, engajamento, pares, comportamentos)', rel.analise, 7, 'analise') +
+      (d.protocolos.some(pr => pr.anterior) ? campo('comparativo', 'Analise comparativa das avaliacoes', rel.comparativo, 5, 'comparativo') : '') +
       d.protocolos.map(pr => (d.completo ? '<h4 style="margin:12px 0 6px; color:var(--acao)">' + escaparHtml(this.NOME_PROT[pr.av.protocolo] || pr.av.protocolo) + '</h4>' : '') +
-        pr.atual.areas.map(a => campo('area-' + this.chaveArea(pr, a.area).replace(/[^a-z0-9]/gi, '_'), a.area + (a.pct === null ? '' : ' \u2013 ' + a.pct + '%') + ' <small class="sub">(o paragrafo descritivo da area entra sozinho)</small>', (rel.areas || {})[this.chaveArea(pr, a.area)], 3)).join('')).join('') +
-      campo('conclusao', 'V. Conclusao <small class="sub">(os dois paragrafos finais entram sozinhos)</small>', rel.conclusao, 4) +
+        linhaSec('Grafico ' + (pr.anterior ? 'AV anterior x AV atual' : 'da avaliacao'), 'graf:' + pr.av.protocolo) +
+        pr.atual.areas.map(a => campo('area-' + this.chaveArea(pr, a.area).replace(/[^a-z0-9]/gi, '_'), a.area + (a.pct === null ? '' : ' \u2013 ' + a.pct + '%') + ' <small class="sub">(o paragrafo descritivo da area entra sozinho)</small>', (rel.areas || {})[this.chaveArea(pr, a.area)], 3, 'area:' + this.chaveArea(pr, a.area))).join('')).join('') +
+      campo('conclusao', 'V. Conclusao <small class="sub">(os dois paragrafos finais entram sozinhos)</small>', rel.conclusao, 4, 'conclusao') +
       '  </div></div>' +
       '<div class="rm-previa"><div class="folha-mini" id="la-previa"></div></div></div>';
     this.atualizarPrevia();
   },
+
+  // patch 56: liga/desliga uma parte do relatorio (guardado em ajustes.ocultas, a mesma coluna do relatorio completo)
+  async alternarSecao(btn) {
+    const k = btn && btn.dataset.sec; if (!k || !this._rel || this._rel.status !== 'rascunho') return;
+    const oc = this._ocultas = this._ocultas || new Set();
+    if (oc.has(k)) oc.delete(k); else oc.add(k);
+    const fora = oc.has(k);
+    btn.classList.toggle('on', !fora);
+    const caixa = btn.closest('.la-campo'); if (caixa) caixa.classList.toggle('fora', fora);
+    const leg = btn.parentElement && btn.parentElement.querySelector('small'); if (leg) leg.textContent = fora ? 'fora do relatorio' : 'no relatorio';
+    this._rel.ajustes = Object.assign({}, this._rel.ajustes || {}, { ocultas: [...oc] });
+    this.atualizarPrevia();
+    const { error } = await sb.from('relatorios_avaliacao').update({ ajustes: this._rel.ajustes }).eq('id', this._rel.id);
+    if (error && !this._avisouAjustes) { this._avisouAjustes = true; popAviso(/ajustes/i.test(error.message) ? 'Falta rodar o SQL do patch 49 (coluna ajustes): a parte some da folha agora, mas nao fica gravada.' : 'Nao foi possivel gravar: ' + error.message); }
+  },
+  ocultasDe(rel) { return new Set(((rel && rel.ajustes) || {}).ocultas || []); },
 
   _timer: null,
   procedimentoPadrao(d) {
@@ -879,7 +905,8 @@ window.MODULOS.laudo_avaliacao = {
   async gerarTravar() {
     clearTimeout(this._timer);
     const c = this.colher();
-    if (!c.analise || !c.conclusao) { popAviso('Preencha a Analise e a Conclusao antes de gerar.'); return; }
+    const ocG = this.ocultasDe(this._rel);
+    if ((!ocG.has('analise') && !c.analise) || (!ocG.has('conclusao') && !c.conclusao)) { popAviso('Preencha a Analise e a Conclusao antes de gerar (ou tire a parte do relatorio).'); return; }
     if (!await popConfirmar('Gerar o relatorio de avaliacao?\n\nDepois de gerado ele fica travado: so impressao e envio ao portal.', { titulo: 'Gerar e travar', ok: 'Gerar e travar' })) return;
     Object.assign(this._rel, c);
     const html = this.html(this._rel, this._d);
@@ -903,30 +930,35 @@ window.MODULOS.laudo_avaliacao = {
       series.push({ nome: (pr.anterior ? 'AV atual (' : 'AV1 (') + fmt(pr.av.concluido_em) + ')', cor: pr.anterior ? '#E07A2F' : '#1468B2', valores: pr.atual.areas.map(a => a.pct) });
       const grafico = A && A.gBarras ? A.gBarras(cats, series, { legenda: true }) : '';
       return (d.completo ? '<h2 style="margin-top:10px"><span class="ponto deq-teal"></span>' + escaparHtml(this.NOME_PROT[pr.av.protocolo] || pr.av.protocolo) + ' <small>&middot; ' + fmt(pr.av.concluido_em) + '</small></h2>' : '') +
-        '<div class="deq-caixa" style="margin-top:6px">' + grafico + '</div>' +
+        (oc.has('graf:' + pr.av.protocolo) ? '' : '<div class="deq-caixa" style="margin-top:6px">' + grafico + '</div>') +
         pr.atual.areas.map(a =>
+          oc.has('area:' + this.chaveArea(pr, a.area)) ? '' :
           '<div class="deq-caixa deq-texto" style="margin-top:6px"><b>' + escaparHtml(this.nomeAreaDoc(a.area)) + (a.pct === null ? '' : ' &ndash; ' + a.pct + '%') + '</b><br>' +
           '<span style="color:var(--eq-cinza)">' + escaparHtml(this.AREA_TEXTO[a.area] || '') + '</span><br>' + txt((rel.areas || {})[this.chaveArea(pr, a.area)]) + '</div>').join('');
     };
     const anexos = rel.incluir_anexos && this._anexos ? d.protocolos.map(pr => this._anexos[pr.av.protocolo] || '').filter(Boolean) : [];
-    const sec = (n, t) => '<h2><span class="ponto deq-azul"></span>' + n + ' ' + t + '</h2>';
+    // patch 56: partes desligadas no editor nao entram; a numeracao (I, II, III...) segue so as que ficaram
+    const oc = this.ocultasDe(rel), ROM = ['', 'I.', 'II.', 'III.', 'IV.', 'V.', 'VI.'];
+    let nSec = 0;
+    const sec = (n, t) => '<h2><span class="ponto deq-azul"></span>' + ROM[++nSec] + ' ' + t + '</h2>';
+    const se = (k, f) => oc.has(k) ? '' : f();
     return '<div class="doc-eq">' +
       '<div class="deq-cab"><img src="icones/equilibrium.png" alt="Equilibrium">' +
       '  <div class="deq-cab-t"><h1>RELAT&Oacute;RIO &middot; AVALIA&Ccedil;&Atilde;O DO DESENVOLVIMENTO E COMPORTAMENTO INFANTIL</h1><p>Equilibrium Terapia Infantil &middot; Psicoterapia ABA</p></div>' +
       '  <span class="deq-pilula">' + (d.protocolos.some(pr => pr.anterior) ? 'REAVALIA&Ccedil;&Atilde;O' : 'AVALIA&Ccedil;&Atilde;O') + (d.completo ? ' COMPLETA' : '') + '</span></div>' +
-      sec('I.', 'Identifica&ccedil;&atilde;o') +
+      se('ident', () => sec('I.', 'Identifica&ccedil;&atilde;o') +
       '<div class="deq-caixa deq-dados" style="grid-template-columns:2fr 1.2fr 1.6fr 1fr' + (rel.mostrar_frequencia ? ' 1fr' : '') + '">' +
       '  <div style="border-bottom:none"><small>Nome</small><b>' + escaparHtml(d.pac.nome) + '</b></div>' +
       '  <div style="border-bottom:none"><small>Data de nascimento</small><b>' + fmt(d.pac.data_nascimento + 'T12:00:00') + ' (' + this.idadeTxt(d.pac.data_nascimento, d.av.concluido_em) + ')</b></div>' +
       '  <div style="border-bottom:none"><small>Psic&oacute;logo respons&aacute;vel</small><b>' + escaparHtml(rel.assinatura_nome || this.ASSINATURA_PADRAO.nome) + '</b></div>' +
       '  <div style="border-bottom:none"><small>Especialidade</small><b>Psicoterapia ABA</b></div>' +
-      (rel.mostrar_frequencia ? '  <div style="border-bottom:none"><small>Frequ&ecirc;ncia</small><b>' + (d.freq ? escaparHtml(String(d.freq)) + ' sess&otilde;es semanais' : '&mdash;') + '</b></div>' : '') + '</div>' +
-      sec('II.', 'Descri&ccedil;&atilde;o da demanda') + '<div class="deq-caixa deq-texto">' + txt(rel.demanda) + '</div>' +
-      sec('III.', 'Procedimento') + '<div class="deq-caixa deq-texto">' + txt(proc) + '</div>' +
-      sec('IV.', 'An&aacute;lise') + '<div class="deq-caixa deq-texto">' + txt(rel.analise) + '</div>' +
-      (rel.comparativo ? '<div class="deq-caixa deq-texto" style="margin-top:6px"><b>An&aacute;lise comparativa das avalia&ccedil;&otilde;es:</b><br>' + txt(rel.comparativo) + '</div>' : '') +
+      (rel.mostrar_frequencia ? '  <div style="border-bottom:none"><small>Frequ&ecirc;ncia</small><b>' + (d.freq ? escaparHtml(String(d.freq)) + ' sess&otilde;es semanais' : '&mdash;') + '</b></div>' : '') + '</div>') +
+      se('demanda', () => sec('II.', 'Descri&ccedil;&atilde;o da demanda') + '<div class="deq-caixa deq-texto">' + txt(rel.demanda) + '</div>') +
+      se('procedimento', () => sec('III.', 'Procedimento') + '<div class="deq-caixa deq-texto">' + txt(proc) + '</div>') +
+      se('analise', () => sec('IV.', 'An&aacute;lise') + '<div class="deq-caixa deq-texto">' + txt(rel.analise) + '</div>') +
+      (rel.comparativo && !oc.has('comparativo') ? '<div class="deq-caixa deq-texto" style="margin-top:6px"><b>An&aacute;lise comparativa das avalia&ccedil;&otilde;es:</b><br>' + txt(rel.comparativo) + '</div>' : '') +
       d.protocolos.map(blocoProt).join('') +
-      sec('V.', 'Conclus&atilde;o') + '<div class="deq-caixa deq-texto">' + txt(rel.conclusao) + '<br><br>' + txt(this.CONCLUSAO_FIXA) + '</div>' +
+      se('conclusao', () => sec('V.', 'Conclus&atilde;o') + '<div class="deq-caixa deq-texto">' + txt(rel.conclusao) + '<br><br>' + txt(this.CONCLUSAO_FIXA) + '</div>') +
       '<div class="deq-local">Uberl&acirc;ndia, ' + extenso + '.</div>' +
       blocoAssinatura(rel.assinatura_nome || this.ASSINATURA_PADRAO.nome, escaparHtml(rel.assinatura_titulo || this.ASSINATURA_PADRAO.titulo)) +
       '<div class="deq-rodape"><span>Equilibrium Terapia Infantil &middot; Uberl&acirc;ndia/MG</span>' +

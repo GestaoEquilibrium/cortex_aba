@@ -33,8 +33,19 @@ window.MODULOS.chat = {
     busca: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
     voltar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>',
     mais: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>',
-    lixo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>'
+    lixo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>',
+    pdf: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg>',
+    rir: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.5s1.3 1.8 3.5 1.8 3.5-1.8 3.5-1.8"/><line x1="9" y1="9.5" x2="9" y2="9.6"/><line x1="15" y1="9.5" x2="15" y2="9.6"/></svg>'
   },
+  // patch 50: reacoes (uma por pessoa por mensagem) e anexos em cartao (imagem e PDF, opcao B do Wess)
+  EMOJIS: ['\ud83d\udc4d', '\u2764\ufe0f', '\ud83d\ude02', '\ud83d\ude2e', '\ud83d\ude22', '\ud83d\ude4f'],
+  LIMITE_ANEXOS: 6,
+  MAX_MB: 10,
+  _pend: [],            // anexos escolhidos e ainda nao enviados (conversa aberta)
+  _pendCom: [],         // anexos do comunicado
+  _reac: {},            // mensagem_id -> [{emoji, usuario_id, nome}]
+  _anx: {},             // caminho do anexo -> { url, ate }
+  _semAnexos: false,    // banco sem a coluna anexos (SQL do patch 50 nao rodado)
 
   eu() { return window.CORTEX_SESSAO.user.id; },
   ehGestao() {
@@ -195,6 +206,7 @@ window.MODULOS.chat = {
   async abrir(id) {
     const c = this.lista.find(x => x.id === id);
     if (!c) return;
+    if (!this.aberta || this.aberta.id !== id) this._pend = [];
     this.aberta = c;
     document.getElementById('chat-app')?.classList.add('ver-thread');
     this.desenharLista();
@@ -211,29 +223,59 @@ window.MODULOS.chat = {
   async carregarThread(id, soMensagens) {
     const alvo = document.getElementById('chat-thread');
     if (!alvo || !this.aberta || this.aberta.id !== id) return;
-    const [rM, rP] = await Promise.all([
-      sb.from('chat_mensagens').select('id, autor_id, texto, tipo, criado_em, autor:profiles!chat_mensagens_autor_id_fkey(nome, foto_path)')
-        .eq('conversa_id', id).order('criado_em').limit(400),
+    const COLS = 'id, autor_id, texto, tipo, criado_em, autor:profiles!chat_mensagens_autor_id_fkey(nome, foto_path)';
+    const qMsgs = cols => sb.from('chat_mensagens').select(cols).eq('conversa_id', id).order('criado_em').limit(400);
+    const [rM0, rP] = await Promise.all([
+      qMsgs(this._semAnexos ? COLS : COLS + ', anexos'),
       sb.from('chat_participantes').select('usuario_id, ultima_leitura, pessoa:profiles!chat_participantes_usuario_id_fkey(nome, perfil, foto_path, ativo)')
         .eq('conversa_id', id)
     ]);
+    let rM = rM0;
+    if (rM.error && /anexos/i.test(rM.error.message)) { this._semAnexos = true; rM = await qMsgs(COLS); }
     if (!this.aberta || this.aberta.id !== id) return;   // trocou de conversa no meio
     this._msgs = rM.data || [];
     this._parts = rP.data || [];
     await this.assinarFotos(this._parts.map(p => p.pessoa && p.pessoa.foto_path));
 
-    const rascunho = soMensagens ? (document.getElementById('chat-texto')?.value || '') : '';
-    alvo.innerHTML = this.htmlCabecalho() +
-      '<div class="chat-msgs" id="chat-msgs">' + this.htmlMensagens() + '</div>' +
-      '<div class="chat-envio">' +
-      '  <textarea id="chat-texto" rows="1" placeholder="' + (window.matchMedia('(max-width: 720px)').matches ? 'Escreva uma mensagem...' : 'Escreva uma mensagem... (Enter envia, Shift+Enter quebra a linha)') + '" ' +
-      '    onkeydown="MODULOS.chat.tecla(event)" oninput="MODULOS.chat.crescer(this)"></textarea>' +
-      '  <button class="chat-enviar" title="Enviar" onclick="MODULOS.chat.enviar()">' + this.ICO.enviar + '</button>' +
-      '</div>';
-    const ta = document.getElementById('chat-texto');
-    if (rascunho) { ta.value = rascunho; this.crescer(ta); }
-    const rol = document.getElementById('chat-msgs'); rol.scrollTop = rol.scrollHeight;
-    if (!soMensagens && window.matchMedia('(min-width: 721px)').matches) ta.focus();
+    // patch 50: com a conversa ja aberta, so as mensagens sao redesenhadas - o campo de escrever fica como esta
+    // (antes ele era refeito a cada mensagem e perdia o foco: era preciso clicar de novo para escrever)
+    const rolAntes = document.getElementById('chat-msgs');
+    const temCampo = !!document.getElementById('chat-texto');
+    if (soMensagens && rolAntes && temCampo) {
+      const noFim = rolAntes.scrollHeight - rolAntes.scrollTop - rolAntes.clientHeight < 90;
+      const cab = alvo.querySelector('.chat-cab'); if (cab) cab.outerHTML = this.htmlCabecalho();
+      rolAntes.innerHTML = this.htmlMensagens();
+      if (noFim || this._rolarFim) rolAntes.scrollTop = rolAntes.scrollHeight;
+      this._rolarFim = false;
+    } else {
+      alvo.innerHTML = this.htmlCabecalho() +
+        '<div class="chat-msgs" id="chat-msgs">' + this.htmlMensagens() + '</div>' +
+        '<div class="chat-pend" id="chat-pend" hidden></div>' +
+        '<div class="chat-envio">' +
+        '  <div class="chat-mais-caixa">' +
+        '    <button type="button" class="chat-anexar" id="chat-anexar" title="Anexar imagem ou PDF" onmousedown="event.preventDefault()" onclick="MODULOS.chat.menuAnexo(event)">' + this.ICO.mais + '</button>' +
+        '    <div class="chat-menu-anexo" id="chat-menu-anexo" hidden>' +
+        '      <button type="button" onclick="MODULOS.chat.escolherAnexo(\'img\')">&#128444;&#65039; Imagem<small>da galeria ou do computador</small></button>' +
+        '      <button type="button" class="so-toque" onclick="MODULOS.chat.escolherAnexo(\'foto\')">&#128247; Tirar foto<small>camera do celular</small></button>' +
+        '      <button type="button" onclick="MODULOS.chat.escolherAnexo(\'pdf\')">&#128196; PDF</button>' +
+        '    </div>' +
+        '    <input type="file" id="chat-arq-img" accept="image/*" multiple hidden onchange="MODULOS.chat.addArquivos(this.files, this)">' +
+        '    <input type="file" id="chat-arq-foto" accept="image/*" capture="environment" hidden onchange="MODULOS.chat.addArquivos(this.files, this)">' +
+        '    <input type="file" id="chat-arq-pdf" accept="application/pdf" multiple hidden onchange="MODULOS.chat.addArquivos(this.files, this)">' +
+        '  </div>' +
+        '  <textarea id="chat-texto" rows="1" placeholder="' + (window.matchMedia('(max-width: 720px)').matches ? 'Escreva uma mensagem...' : 'Escreva uma mensagem... (Enter envia, Shift+Enter quebra a linha)') + '" ' +
+        '    onkeydown="MODULOS.chat.tecla(event)" oninput="MODULOS.chat.crescer(this)" onpaste="MODULOS.chat.colou(event)"></textarea>' +
+        '  <button class="chat-enviar" id="chat-enviar" title="Enviar" onmousedown="event.preventDefault()" onclick="MODULOS.chat.enviar()">' + this.ICO.enviar + '</button>' +
+        '</div>';
+      const ta = document.getElementById('chat-texto');
+      const rol = document.getElementById('chat-msgs'); rol.scrollTop = rol.scrollHeight;
+      if (window.matchMedia('(min-width: 721px)').matches) ta.focus();
+      this.ligarArrastar(alvo);
+      this.desenharPend();
+    }
+    this.desenharReacoes();
+    this.assinarAnexos();
+    this.carregarReacoes(id);
 
     // li tudo: zera as nao lidas desta conversa
     if (this.aberta.nao_lidas || this._msgs.some(m => m.autor_id !== this.eu())) {
@@ -280,11 +322,19 @@ window.MODULOS.chat = {
       const mostraNome = grupo && !minha && autorAnterior !== m.autor_id;
       autorAnterior = m.autor_id;
       const lida = minha && lidoAte >= new Date(m.criado_em).getTime();
-      return h + '<div class="chat-bolha' + (minha ? ' minha' : '') + (m.tipo === 'comunicado' ? ' comunicado' : '') + (mostraNome ? ' com-nome' : '') + '">' +
-        (mostraNome ? '<small class="chat-autor ' + corAvatar(m.autor ? m.autor.nome : '') + '">' + escaparHtml(nome) + '</small>' : '') +
-        (m.tipo === 'comunicado' ? '<small class="chat-selo-com">&#128227; Comunicado</small>' : '') +
-        '<div class="chat-texto">' + this.formatar(m.texto) + '</div>' +
-        '<small class="chat-hora">' + this.hora(m.criado_em) + (minha ? ' <span class="chat-check' + (lida ? ' lida' : '') + '">' + (lida ? '&#10003;&#10003;' : '&#10003;') + '</span>' : '') + '</small>' +
+      // patch 50: grupo da mensagem = texto + cartoes de anexo + reacoes
+      const anexos = Array.isArray(m.anexos) ? m.anexos.filter(a => a && a.path) : [];
+      const soAnexo = anexos.length && (m.texto || '') === this.rotuloAnexos(anexos);
+      const horaHtml = '<small class="chat-hora">' + this.hora(m.criado_em) + (minha ? ' <span class="chat-check' + (lida ? ' lida' : '') + '">' + (lida ? '&#10003;&#10003;' : '&#10003;') + '</span>' : '') + '</small>';
+      const cabBolha = (mostraNome ? '<small class="chat-autor ' + corAvatar(m.autor ? m.autor.nome : '') + '">' + escaparHtml(nome) + '</small>' : '') +
+        (m.tipo === 'comunicado' ? '<small class="chat-selo-com">&#128227; Comunicado</small>' : '');
+      const classe = 'chat-bolha' + (minha ? ' minha' : '') + (m.tipo === 'comunicado' ? ' comunicado' : '') + (mostraNome ? ' com-nome' : '');
+      const id = this.attr(m.id);
+      return h + '<div class="chat-msg' + (minha ? ' minha' : '') + '" data-id="' + id + '">' +
+        (soAnexo ? '' : '<div class="' + classe + '">' + cabBolha + '<div class="chat-texto">' + this.formatar(m.texto) + '</div>' + (anexos.length ? '' : horaHtml) + '</div>') +
+        anexos.map((a, i) => this.htmlCartaoAnexo(a, (soAnexo && i === 0 ? cabBolha : ''), i === anexos.length - 1 ? horaHtml : '', classe)).join('') +
+        '<div class="chat-reacoes" data-id="' + id + '"></div>' +
+        '<button type="button" class="chat-reagir" title="Reagir" data-id="' + id + '" onclick="MODULOS.chat.pickerReacao(this)">' + this.ICO.rir + '</button>' +
         '</div>';
     }).join('');
   },
@@ -303,16 +353,250 @@ window.MODULOS.chat = {
 
   async enviar() {
     const ta = document.getElementById('chat-texto');
-    if (!ta || !this.aberta) return;
+    if (!ta || !this.aberta || this._enviando) return;
     const texto = ta.value.trim();
-    if (!texto) return;
-    ta.value = ''; this.crescer(ta);
+    const pend = this._pend.slice();
+    if (!texto && !pend.length) { ta.focus(); return; }
+    this._enviando = true;
+    ta.value = ''; this.crescer(ta); ta.focus();   // patch 50: o foco fica no campo para a proxima mensagem
     const conversa = this.aberta.id;
-    const { error } = await sb.from('chat_mensagens').insert({ conversa_id: conversa, autor_id: this.eu(), texto: texto });
-    if (error) { ta.value = texto; popAviso('Nao foi possivel enviar: ' + error.message); return; }
-    if (this.aberta && this.aberta.id === conversa) this.carregarThread(conversa, true);
-    clearTimeout(this._timerLista);
-    this._timerLista = setTimeout(() => this.carregarLista(), 200);
+    const btn = document.getElementById('chat-enviar');
+    try {
+      let anexos = [];
+      if (pend.length) {
+        if (btn) btn.classList.add('enviando');
+        this.desenharPend(true);
+        anexos = await this.subirAnexos(pend);
+      }
+      const linha = { conversa_id: conversa, autor_id: this.eu(), texto: texto || this.rotuloAnexos(anexos) };
+      if (anexos.length) linha.anexos = anexos;
+      const { error } = await sb.from('chat_mensagens').insert(linha);
+      if (error) throw new Error(/anexos/i.test(error.message) ? 'falta rodar o SQL do patch 50 (envio de imagem e PDF).' : error.message);
+      if (pend.length) { this._pend = []; this.desenharPend(); }
+      this._rolarFim = true;
+      if (this.aberta && this.aberta.id === conversa) this.carregarThread(conversa, true);
+      clearTimeout(this._timerLista);
+      this._timerLista = setTimeout(() => this.carregarLista(), 200);
+    } catch (e) {
+      if (!ta.value) { ta.value = texto; this.crescer(ta); }
+      this.desenharPend();
+      popAviso('Nao foi possivel enviar: ' + e.message);
+    } finally {
+      this._enviando = false;
+      if (btn) btn.classList.remove('enviando');
+      if (document.getElementById('chat-texto') === ta && !document.getElementById('pop-fundo')) ta.focus();
+    }
+  },
+
+  // \u2500\u2500\u2500\u2500\u2500\u2500\u2500 ANEXOS (patch 50, opcao B: cartao por anexo) \u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  attr(v) { return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); },
+  tamanhoTxt(b) { b = Number(b) || 0; return b >= 1048576 ? (b / 1048576).toFixed(1).replace('.', ',') + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB'; },
+  ehImagem(t) { return /^image\//.test(t || ''); },
+  rotuloAnexos(an) {
+    if (!an || !an.length) return '';
+    if (an.length === 1) return (this.ehImagem(an[0].tipo) ? '\ud83d\uddbc\ufe0f ' : '\ud83d\udcc4 ') + (an[0].nome || 'anexo');
+    return '\ud83d\udcce ' + an.length + ' anexos';
+  },
+  htmlCartaoAnexo(a, cab, hora, classe) {
+    const img = this.ehImagem(a.tipo);
+    const url = this._anx[a.path] && this._anx[a.path].ate > Date.now() ? this._anx[a.path].url : '';
+    return '<div class="' + classe.replace(' com-nome', '') + ' chat-anexo">' + (cab || '') +
+      '<div class="chat-anexo-linha">' +
+      (img ? '<button type="button" class="chat-anexo-mini" data-path="' + this.attr(a.path) + '" onclick="MODULOS.chat.abrirAnexo(this.dataset.path)">' + (url ? '<img src="' + this.attr(url) + '" alt="">' : '') + '</button>'
+           : '<span class="chat-anexo-mini pdf">' + this.ICO.pdf + '</span>') +
+      '<div class="chat-anexo-info"><b>' + escaparHtml(a.nome || 'anexo') + '</b><small>' + (img ? 'Imagem' : 'PDF') + ' &middot; ' + this.tamanhoTxt(a.tamanho) + '</small></div>' +
+      '<button type="button" class="chat-anexo-abrir" data-path="' + this.attr(a.path) + '" onclick="MODULOS.chat.abrirAnexo(this.dataset.path)">Abrir</button>' +
+      '</div>' + (hora || '') + '</div>';
+  },
+  menuAnexo(ev) {
+    if (ev) ev.stopPropagation();
+    const m = document.getElementById('chat-menu-anexo'); if (!m) return;
+    m.hidden = !m.hidden;
+    if (!m.hidden) setTimeout(() => document.addEventListener('click', this._fecharMenu = () => { m.hidden = true; document.removeEventListener('click', this._fecharMenu); }, { once: true }), 0);
+  },
+  escolherAnexo(qual) {
+    const m = document.getElementById('chat-menu-anexo'); if (m) m.hidden = true;
+    const inp = document.getElementById('chat-arq-' + qual); if (inp) { inp.value = ''; inp.click(); }
+  },
+  // valida e guarda os arquivos escolhidos (ate 6, imagem ou PDF); destino = conversa aberta ou o comunicado
+  addArquivos(files, input, destino) {
+    const lista = destino === 'com' ? this._pendCom : this._pend;
+    const recusados = [];
+    Array.from(files || []).forEach(f => {
+      const tipo = f.type || '';
+      if (!this.ehImagem(tipo) && tipo !== 'application/pdf') { recusados.push(f.name + ' (so imagem ou PDF)'); return; }
+      if (/image\/(heic|heif)/i.test(tipo)) { recusados.push(f.name + ' (formato HEIC: envie como JPG)'); return; }
+      if (tipo === 'application/pdf' && f.size > this.MAX_MB * 1048576) { recusados.push(f.name + ' (maior que ' + this.MAX_MB + ' MB)'); return; }
+      if (this.ehImagem(tipo) && f.size > 40 * 1048576) { recusados.push(f.name + ' (imagem grande demais)'); return; }
+      if (lista.length >= this.LIMITE_ANEXOS) { recusados.push(f.name + ' (ate ' + this.LIMITE_ANEXOS + ' por mensagem)'); return; }
+      lista.push({ file: f, nome: f.name || (this.ehImagem(tipo) ? 'imagem.jpg' : 'arquivo.pdf'), tipo, tamanho: f.size, previa: this.ehImagem(tipo) ? URL.createObjectURL(f) : '' });
+    });
+    if (input) input.value = '';
+    const menu = document.getElementById('chat-menu-anexo'); if (menu) menu.hidden = true;
+    if (destino === 'com') this.desenharPendCom(); else { this.desenharPend(); document.getElementById('chat-texto')?.focus(); }
+    if (recusados.length) popAviso('Nao entrou: ' + recusados.join('; ') + '.');
+  },
+  htmlPend(lista, destino, enviando) {
+    return lista.map((p, i) => '<div class="chat-pend-item">' +
+      (p.previa ? '<img src="' + this.attr(p.previa) + '" alt="">' : '<span class="chat-anexo-mini pdf">' + this.ICO.pdf + '</span>') +
+      '<span><b>' + escaparHtml(p.nome) + '</b><small>' + this.tamanhoTxt(p.tamanho) + '</small></span>' +
+      (enviando ? '<small class="sub">enviando...</small>' : '<button type="button" class="btn-chip" title="Tirar" onclick="MODULOS.chat.tirarPend(' + i + ', \'' + destino + '\')">&times;</button>') + '</div>').join('');
+  },
+  desenharPend(enviando) {
+    const el = document.getElementById('chat-pend'); if (!el) return;
+    el.hidden = !this._pend.length;
+    el.innerHTML = this._pend.length ? this.htmlPend(this._pend, 'msg', enviando) + (enviando ? '' : '<small class="sub chat-pend-dica">O texto do campo vai junto. Enter envia.</small>') : '';
+  },
+  desenharPendCom() {
+    const el = document.getElementById('cm-pend'); if (!el) return;
+    el.innerHTML = this.htmlPend(this._pendCom, 'com');
+  },
+  tirarPend(i, destino) {
+    const lista = destino === 'com' ? this._pendCom : this._pend;
+    const x = lista.splice(i, 1)[0]; if (x && x.previa) URL.revokeObjectURL(x.previa);
+    if (destino === 'com') this.desenharPendCom(); else { this.desenharPend(); document.getElementById('chat-texto')?.focus(); }
+  },
+  colou(e) {
+    const arqs = Array.from((e.clipboardData && e.clipboardData.files) || []).filter(f => this.ehImagem(f.type) || f.type === 'application/pdf');
+    if (!arqs.length) return;
+    e.preventDefault();
+    this.addArquivos(arqs);
+  },
+  ligarArrastar(alvo) {
+    if (!alvo || alvo._arrastar) return; alvo._arrastar = true;
+    const tem = e => Array.from((e.dataTransfer && e.dataTransfer.types) || []).includes('Files');
+    alvo.addEventListener('dragover', e => { if (!tem(e) || !this.aberta) return; e.preventDefault(); alvo.classList.add('soltar'); });
+    alvo.addEventListener('dragleave', e => { if (e.target === alvo || !alvo.contains(e.relatedTarget)) alvo.classList.remove('soltar'); });
+    alvo.addEventListener('drop', e => { if (!tem(e) || !this.aberta) return; e.preventDefault(); alvo.classList.remove('soltar'); this.addArquivos(e.dataTransfer.files); });
+    // celular (sem mouse): tocar na mensagem mostra o botao de reagir dela
+    alvo.addEventListener('click', e => {
+      const msg = e.target.closest('.chat-msg'); if (!msg || e.target.closest('button, a')) return;
+      const ja = msg.classList.contains('toque');
+      alvo.querySelectorAll('.chat-msg.toque').forEach(x => x.classList.remove('toque'));
+      if (!ja) msg.classList.add('toque');
+    });
+  },
+  // foto: diminui (lado maior 1600 px, JPG) para subir rapido; GIF e PDF vao como estao
+  async prepararArquivo(p) {
+    if (!this.ehImagem(p.tipo) || /gif/i.test(p.tipo)) return { blob: p.file, tipo: p.tipo, nome: p.nome };
+    try {
+      const bmp = await new Promise((ok, erro) => { const im = new Image(); im.onload = () => ok(im); im.onerror = erro; im.src = p.previa || URL.createObjectURL(p.file); });
+      const lado = Math.max(bmp.naturalWidth, bmp.naturalHeight);
+      if (lado <= 1600 && p.file.size <= 600 * 1024) return { blob: p.file, tipo: p.tipo, nome: p.nome };
+      const k = Math.min(1, 1600 / lado);
+      const cv = document.createElement('canvas'); cv.width = Math.round(bmp.naturalWidth * k); cv.height = Math.round(bmp.naturalHeight * k);
+      const cx = cv.getContext('2d'); cx.fillStyle = '#fff'; cx.fillRect(0, 0, cv.width, cv.height); cx.drawImage(bmp, 0, 0, cv.width, cv.height);
+      const blob = await new Promise(ok => cv.toBlob(ok, 'image/jpeg', 0.84));
+      if (!blob) return { blob: p.file, tipo: p.tipo, nome: p.nome };
+      return { blob, tipo: 'image/jpeg', nome: p.nome.replace(/\.[^.]+$/, '') + '.jpg' };
+    } catch (e) { return { blob: p.file, tipo: p.tipo, nome: p.nome }; }
+  },
+  async subirAnexos(lista) {
+    const eu = this.eu(); const saida = [];
+    for (const p of lista) {
+      const a = await this.prepararArquivo(p);
+      if (a.blob.size > this.MAX_MB * 1048576) throw new Error(a.nome + ' ficou maior que ' + this.MAX_MB + ' MB.');
+      const limpo = (a.nome || 'anexo').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/-+/g, '-').slice(-60);
+      const caminho = eu + '/' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8) + '-' + limpo;
+      const { error } = await sb.storage.from('chat').upload(caminho, a.blob, { contentType: a.tipo, upsert: false });
+      if (error) throw new Error(/bucket|not found|nao encontrad/i.test(error.message) ? 'falta rodar o SQL do patch 50 (envio de imagem e PDF).' : 'o arquivo ' + a.nome + ' nao subiu (' + error.message + ').');
+      saida.push({ path: caminho, nome: a.nome, tipo: a.tipo, tamanho: a.blob.size });
+    }
+    return saida;
+  },
+  // miniaturas: link assinado (1 h) para os anexos que aparecem na conversa
+  async assinarAnexos() {
+    const rol = document.getElementById('chat-msgs'); if (!rol) return;
+    const botoes = Array.from(rol.querySelectorAll('.chat-anexo-mini[data-path]'));
+    const faltam = [...new Set(botoes.map(b => b.dataset.path).filter(p => !(this._anx[p] && this._anx[p].ate > Date.now())))];
+    if (faltam.length) {
+      try {
+        const { data } = await sb.storage.from('chat').createSignedUrls(faltam, 3600);
+        (data || []).forEach(d => { if (d && d.signedUrl) this._anx[d.path] = { url: d.signedUrl, ate: Date.now() + 3300 * 1000 }; });
+      } catch (e) { /* sem miniatura, o cartao continua com Abrir */ }
+    }
+    botoes.forEach(b => { const x = this._anx[b.dataset.path]; if (x && !b.querySelector('img')) b.innerHTML = '<img src="' + this.attr(x.url) + '" alt="">'; });
+  },
+  async urlAnexo(caminho, baixar) {
+    const { data, error } = await sb.storage.from('chat').createSignedUrl(caminho, 3600, baixar ? { download: baixar } : undefined);
+    if (error || !data) throw new Error(error ? error.message : 'sem link');
+    return data.signedUrl;
+  },
+  anexoPorCaminho(caminho) {
+    for (const m of this._msgs || []) { const a = (m.anexos || []).find(x => x && x.path === caminho); if (a) return a; }
+    return { path: caminho, nome: caminho.split('/').pop(), tipo: /\.pdf$/i.test(caminho) ? 'application/pdf' : 'image/jpeg' };
+  },
+  async abrirAnexo(caminho) {
+    const a = this.anexoPorCaminho(caminho);
+    if (!this.ehImagem(a.tipo)) {
+      const w = window.open('', '_blank');
+      try { const url = await this.urlAnexo(caminho); if (w) w.location.href = url; else window.location.href = url; }
+      catch (e) { if (w) w.close(); popAviso('Nao consegui abrir o arquivo: ' + e.message); }
+      return;
+    }
+    try {
+      const [url, baixar] = await Promise.all([this.urlAnexo(caminho), this.urlAnexo(caminho, a.nome || true)]);
+      abrirModal(escaparHtml(a.nome || 'Imagem'),
+        '<div class="chat-visor"><img src="' + this.attr(url) + '" alt=""></div>' +
+        '<div class="barra-acoes"><a class="btn btn-fantasma" href="' + this.attr(baixar) + '">&#11015; Baixar</a><button class="btn btn-primario" onclick="fecharModal()">Fechar</button></div>', true);
+    } catch (e) { popAviso('Nao consegui abrir a imagem: ' + e.message); }
+  },
+
+  // \u2500\u2500\u2500\u2500\u2500\u2500\u2500 REACOES (patch 50) \u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  async carregarReacoes(conversa) {
+    if (this._semReacoes) return;
+    const { data, error } = await sb.rpc('fn_chat_reacoes', { p_conversa: conversa });
+    if (error) { if (/fn_chat_reacoes|function|schema cache/i.test(error.message)) this._semReacoes = true; return; }
+    if (!this.aberta || this.aberta.id !== conversa) return;
+    const mapa = {};
+    (data || []).forEach(r => { (mapa[r.mensagem_id] = mapa[r.mensagem_id] || []).push({ emoji: r.emoji, usuario_id: r.usuario_id, nome: r.nome }); });
+    this._reac = mapa;
+    this.desenharReacoes();
+  },
+  desenharReacoes() {
+    const eu = this.eu();
+    document.querySelectorAll('#chat-msgs .chat-reacoes').forEach(el => {
+      const lista = this._reac[el.dataset.id] || [];
+      const grupos = {};
+      lista.forEach(r => { (grupos[r.emoji] = grupos[r.emoji] || []).push(r); });
+      el.innerHTML = Object.keys(grupos).map(e => {
+        const g = grupos[e]; const minha = g.some(r => r.usuario_id === eu);
+        const quem = g.map(r => r.usuario_id === eu ? 'voce' : String(r.nome || '').split(' ')[0]).join(', ');
+        return '<button type="button" class="chat-reacao' + (minha ? ' minha' : '') + '" title="' + this.attr(quem) + '" data-emoji="' + this.attr(e) + '" onclick="MODULOS.chat.reagir(this.parentNode.dataset.id, this.dataset.emoji)">' + e + (g.length > 1 ? ' <b>' + g.length + '</b>' : '') + '</button>';
+      }).join('');
+      el.hidden = !lista.length;
+    });
+  },
+  pickerReacao(btn) {
+    document.getElementById('chat-picker')?.remove();
+    if (this._semReacoes) { popAviso('As reacoes ainda nao estao ativas: falta rodar o SQL do patch 50.'); return; }
+    const id = btn.dataset.id;
+    const meu = (this._reac[id] || []).find(r => r.usuario_id === this.eu());
+    const pk = document.createElement('div'); pk.id = 'chat-picker'; pk.className = 'chat-picker';
+    pk.innerHTML = this.EMOJIS.map(e => '<button type="button"' + (meu && meu.emoji === e ? ' class="minha"' : '') + ' data-emoji="' + this.attr(e) + '">' + e + '</button>').join('');
+    pk.addEventListener('mousedown', ev => ev.preventDefault());
+    pk.addEventListener('click', ev => { const b = ev.target.closest('button'); if (!b) return; pk.remove(); this.reagir(id, b.dataset.emoji); });
+    document.body.appendChild(pk);
+    const r = btn.getBoundingClientRect();
+    const larg = pk.offsetWidth, alt = pk.offsetHeight;
+    pk.style.left = Math.max(8, Math.min(window.innerWidth - larg - 8, r.left + r.width / 2 - larg / 2)) + 'px';
+    pk.style.top = Math.max(8, r.top - alt - 8) + 'px';
+    setTimeout(() => document.addEventListener('click', function fora(ev) { if (!pk.contains(ev.target)) { pk.remove(); document.removeEventListener('click', fora); } }), 0);
+  },
+  async reagir(id, emoji) {
+    const eu = this.eu();
+    const antes = (this._reac[id] || []).slice();
+    const meu = antes.find(r => r.usuario_id === eu);
+    // na tela na hora; o banco confirma
+    const depois = antes.filter(r => r.usuario_id !== eu);
+    if (!meu || meu.emoji !== emoji) depois.push({ emoji, usuario_id: eu, nome: window.CORTEX_SESSAO.profile.nome });
+    this._reac[id] = depois; this.desenharReacoes();
+    const { error } = await sb.rpc('fn_chat_reagir', { p_mensagem: id, p_emoji: emoji });
+    if (error) {
+      this._reac[id] = antes; this.desenharReacoes();
+      popAviso(/fn_chat_reagir|function|schema cache/i.test(error.message) ? 'As reacoes ainda nao estao ativas: falta rodar o SQL do patch 50.' : 'Nao foi possivel reagir: ' + error.message);
+    }
+    document.getElementById('chat-texto')?.focus();
   },
 
   // ─────────────── BADGE (bolinha no menu) ───────────────
@@ -339,6 +623,7 @@ window.MODULOS.chat = {
       if (this._naoLidas !== antes) await this.carregarLista();
       else if (Date.now() - (this._listaEm || 0) > 60000) await this.carregarLista();
       if (this.aberta && this._naoLidas > (antes || 0)) this.carregarThread(this.aberta.id, true);
+      else if (this.aberta) this.carregarReacoes(this.aberta.id);
     }
   },
 
@@ -570,7 +855,7 @@ window.MODULOS.chat = {
 
   async modalComunicado() {
     await this.equipe();
-    this._marcados = new Set(); this._excluir = null;
+    this._marcados = new Set(); this._excluir = null; this._pendCom = [];
     const eu = this.eu();
     const temEquipe = this._equipe.some(p => p.coordenador_id === eu);
     const chips = [
@@ -586,6 +871,9 @@ window.MODULOS.chat = {
       '<label class="chat-busca dentro"><span>' + this.ICO.busca + '</span><input id="cp-busca" placeholder="Buscar pelo nome ou funcao..." oninput="MODULOS.chat.filtrarPessoas(this.value, \'marcar\')"></label>' +
       '<div class="chat-pessoas baixa" id="cp-lista">' + this.htmlPessoas(this._equipe, 'marcar', this._marcados) + '</div>' +
       '<div class="campo" style="margin-top:10px"><label>Mensagem</label><textarea id="cm-texto" rows="4" placeholder="Ex.: Lembrete: reuniao de equipe sexta as 18h na sala 2."></textarea></div>' +
+      '<div class="campo"><button type="button" class="btn-chip" onclick="document.getElementById(\'cm-arq\').click()">+ Anexar imagem ou PDF</button>' +
+      '<input type="file" id="cm-arq" accept="image/*,application/pdf" multiple hidden onchange="MODULOS.chat.addArquivos(this.files, this, \'com\')">' +
+      '<div class="chat-pend com" id="cm-pend"></div></div>' +
       '<div class="barra-acoes" style="align-items:center"><span class="sub" id="cp-resumo" style="margin-right:auto">Ninguem selecionado</span>' +
       '<button class="btn btn-fantasma" onclick="fecharModal()">Cancelar</button>' +
       '<button class="btn btn-primario" id="cp-acao" data-rotulo="Enviar" disabled onclick="MODULOS.chat.enviarComunicado()">Enviar</button></div>', true);
@@ -614,11 +902,21 @@ window.MODULOS.chat = {
     const texto = (document.getElementById('cm-texto')?.value || '').trim();
     if (!dest.length) { popAviso('Escolha para quem vai o comunicado.'); return; }
     if (!texto) { popAviso('Escreva a mensagem.'); document.getElementById('cm-texto')?.focus(); return; }
-    const ok = await popConfirmar('Enviar este comunicado para ' + dest.length + ' pessoa' + (dest.length === 1 ? '' : 's') + '? Cada uma recebe no privado.', { ok: 'Enviar' });
+    const pend = this._pendCom.slice();
+    const ok = await popConfirmar('Enviar este comunicado' + (pend.length ? ' com ' + pend.length + ' anexo' + (pend.length === 1 ? '' : 's') : '') + ' para ' + dest.length + ' pessoa' + (dest.length === 1 ? '' : 's') + '? Cada uma recebe no privado.', { ok: 'Enviar' });
     if (!ok) return;
     const b = document.getElementById('cp-acao'); if (b) { b.disabled = true; b.textContent = 'Enviando...'; }
-    const { data, error } = await sb.rpc('fn_chat_comunicado', { p_destinatarios: dest, p_texto: texto });
+    let r;
+    try {
+      if (pend.length) {
+        const anexos = await this.subirAnexos(pend);
+        r = await sb.rpc('fn_chat_comunicado_anexos', { p_destinatarios: dest, p_texto: texto, p_anexos: anexos });
+        if (r.error && /fn_chat_comunicado_anexos|schema cache|function/i.test(r.error.message)) r.error.message = 'falta rodar o SQL do patch 50 (comunicado com anexos).';
+      } else r = await sb.rpc('fn_chat_comunicado', { p_destinatarios: dest, p_texto: texto });
+    } catch (e) { r = { error: { message: e.message } }; }
+    const { data, error } = r;
     if (error) { if (b) { b.disabled = false; b.textContent = 'Enviar'; } popAviso('Nao foi possivel enviar: ' + error.message); return; }
+    this._pendCom = [];
     fecharModal();
     popAviso('Comunicado enviado para ' + (data || 0) + ' pessoa' + (data === 1 ? '' : 's') + '. Cada uma recebeu no privado.', 'Enviado');
     this.carregarLista();

@@ -44,7 +44,10 @@ window.CAPIVARA = (function () {
     if (celular()) return { min: 8, max: window.innerWidth - larg - 8 };
     const side = document.querySelector('.sidebar');
     const esq = side ? side.getBoundingClientRect().right + 16 : 260;
-    return { min: Math.max(esq, window.innerWidth * 0.42), max: window.innerWidth - larg - 84 };   // 84 = espaco do sino
+    // 84 = espaco do sino no canto; sino arrastado para outro lugar (patch 50) libera o canto
+    const sino = document.getElementById('avisos-fab');
+    const reserva = sino && sino.classList.contains('movido') ? 10 : 84;
+    return { min: Math.max(esq, window.innerWidth * 0.42), max: window.innerWidth - larg - reserva };
   }
 
   function montar() {

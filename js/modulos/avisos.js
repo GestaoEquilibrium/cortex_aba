@@ -28,8 +28,9 @@ window.MODULOS.avisos = {
     const fab = document.createElement('button');
     fab.type = 'button'; fab.id = 'avisos-fab'; fab.className = 'avisos-fab'; fab.title = 'Avisos e pendencias';
     fab.innerHTML = this.SINO + '<span class="avisos-badge" id="avisos-badge" hidden>0</span>';
-    fab.onclick = () => this.abrir();
+    fab.onclick = () => { if (fab._arrastou) { fab._arrastou = false; return; } this.abrir(); };
     document.body.appendChild(fab);
+    this.arrastavel(fab);
     // celular: sino no cabecalho, antes do avatar
     const cab = document.getElementById('cab-celular');
     if (cab) {
@@ -45,6 +46,72 @@ window.MODULOS.avisos = {
     this._timer = setInterval(() => { if (!document.hidden) this.carregar(); }, 3 * 60 * 1000);
     document.addEventListener('visibilitychange', () => { if (!document.hidden) this.carregar(); });
   },
+
+  // patch 50: o sino flutuante pode ser arrastado para qualquer canto da tela (fica guardado neste aparelho).
+  // "Sino no canto" (dentro dos avisos) volta para o lugar de sempre. Sem lugar guardado, no chat ele sobe para nao cobrir o Enviar.
+  arrastavel(fab) {
+    const CHAVE = 'cortex_sino_pos';
+    const aplicar = pos => {
+      if (!pos) { fab.classList.remove('movido'); fab.style.left = fab.style.top = fab.style.right = fab.style.bottom = ''; if (this._sinoEncaixar) this._sinoEncaixar(); return; }
+      const w = fab.offsetWidth || 50, h = fab.offsetHeight || 50;
+      const x = Math.max(6, Math.min(window.innerWidth - w - 6, pos.x * window.innerWidth));
+      const y = Math.max(6, Math.min(window.innerHeight - h - 6, pos.y * window.innerHeight));
+      fab.classList.add('movido');
+      fab.style.right = 'auto'; fab.style.bottom = 'auto'; fab.style.left = x + 'px'; fab.style.top = y + 'px';
+    };
+    // sem lugar escolhido: na tela do chat o sino fica no canto de baixo da lista de conversas (longe do Enviar)
+    const encaixar = () => {
+      if (fab.classList.contains('movido') || fab.classList.contains('arrastando')) return;
+      const lado = document.querySelector('#chat-app .chat-lado');
+      const r = lado ? lado.getBoundingClientRect() : null;
+      if (r && r.width > 200 && r.height > 200) {
+        const w = fab.offsetWidth || 50, h = fab.offsetHeight || 50;
+        fab.classList.add('no-chat');
+        fab.style.right = 'auto'; fab.style.bottom = 'auto';
+        fab.style.left = Math.round(r.right - w - 14) + 'px'; fab.style.top = Math.round(Math.min(window.innerHeight - h - 10, r.bottom - h - 14)) + 'px';
+      } else if (fab.classList.contains('no-chat')) {
+        fab.classList.remove('no-chat'); fab.style.left = fab.style.top = fab.style.right = fab.style.bottom = '';
+      }
+    };
+    this._sinoEncaixar = encaixar;
+    let guardado = null;
+    try { guardado = JSON.parse(localStorage.getItem(CHAVE) || 'null'); } catch (e) { guardado = null; }
+    if (guardado && typeof guardado.x === 'number' && typeof guardado.y === 'number') aplicar(guardado);
+    window.addEventListener('resize', () => { if (fab.classList.contains('movido')) { try { aplicar(JSON.parse(localStorage.getItem(CHAVE) || 'null')); } catch (e) {} } else encaixar(); });
+    const pagina = document.getElementById('pagina');
+    if (pagina && window.MutationObserver) new MutationObserver(() => encaixar()).observe(pagina, { childList: true });
+    setTimeout(encaixar, 300);
+    let ini = null;
+    fab.addEventListener('pointerdown', e => {
+      if (e.button !== 0) return;
+      const r = fab.getBoundingClientRect();
+      ini = { x: e.clientX, y: e.clientY, dx: e.clientX - r.left, dy: e.clientY - r.top, moveu: false };
+      fab.setPointerCapture && fab.setPointerCapture(e.pointerId);
+    });
+    fab.addEventListener('pointermove', e => {
+      if (!ini) return;
+      if (!ini.moveu && Math.hypot(e.clientX - ini.x, e.clientY - ini.y) < 6) return;
+      ini.moveu = true; fab.classList.add('arrastando', 'movido'); fab.classList.remove('no-chat');
+      const w = fab.offsetWidth, h = fab.offsetHeight;
+      fab.style.right = 'auto'; fab.style.bottom = 'auto';
+      fab.style.left = Math.max(6, Math.min(window.innerWidth - w - 6, e.clientX - ini.dx)) + 'px';
+      fab.style.top = Math.max(6, Math.min(window.innerHeight - h - 6, e.clientY - ini.dy)) + 'px';
+    });
+    const soltar = () => {
+      if (!ini) return;
+      const moveu = ini.moveu; ini = null;
+      fab.classList.remove('arrastando');
+      if (!moveu) return;
+      fab._arrastou = true; setTimeout(() => { fab._arrastou = false; }, 350);
+      const r = fab.getBoundingClientRect();
+      try { localStorage.setItem(CHAVE, JSON.stringify({ x: r.left / window.innerWidth, y: r.top / window.innerHeight })); } catch (e) {}
+    };
+    fab.addEventListener('pointerup', soltar);
+    fab.addEventListener('pointercancel', soltar);
+    this._sinoVoltar = () => { try { localStorage.removeItem(CHAVE); } catch (er) {} aplicar(null); };
+    fab.title = 'Avisos e pendencias (arraste para mudar de lugar)';
+  },
+  voltarSino() { if (this._sinoVoltar) this._sinoVoltar(); this.fechar(); },
 
   // ─────────────── Coleta ───────────────
   async carregar() {
@@ -186,6 +253,7 @@ window.MODULOS.avisos = {
     const g = document.createElement('aside');
     g.id = 'avisos-gaveta'; g.className = 'avisos-gaveta'; g.setAttribute('role', 'dialog'); g.setAttribute('aria-label', 'Avisos e pendencias');
     g.innerHTML = '<div class="avisos-topo"><h3>' + this.SINO + ' Avisos e pendencias <span class="selo selo-neutro" id="avisos-total">' + this.total + '</span></h3>' +
+      (document.getElementById('avisos-fab')?.classList.contains('movido') ? '<button type="button" class="btn-chip" style="margin-left:auto; margin-right:6px" title="Voltar o sino para o canto de baixo" onclick="MODULOS.avisos.voltarSino()">&#8600; Sino no canto</button>' : '') +
       '<button type="button" class="modal-fechar" onclick="MODULOS.avisos.fechar()" title="Fechar">&times;</button></div>' +
       '<div class="avisos-corpo" id="avisos-corpo"><p class="sub" style="padding:8px 4px">Carregando...</p></div>';
     document.body.appendChild(fundo);

@@ -3372,3 +3372,68 @@ html[data-cor] .nav-item.ativa .nav-badge { color: var(--acao-forte); }
 @media print { .la-barra, .la-tirada { display: none !important; } }
 @media (max-width: 1100px) { .la-split { grid-template-columns: 1fr; } .la-lado { position: static; } }
 @media (max-width: 720px) { .la-folha { padding: 8px; } .la-folha .doc-eq { padding: 6mm 5mm; } .la-barra { position: static; flex-wrap: wrap; margin-bottom: 6px; } }
+
+/* ══════════════ Patch 50: chat - foco, reacoes, anexos em cartao; sino arrastavel ══════════════ */
+.chat-msg { position: relative; display: flex; flex-direction: column; align-items: flex-start; align-self: flex-start; max-width: min(72%, 560px); gap: 3px; }
+.chat-msg.minha { align-items: flex-end; align-self: flex-end; }
+.chat-msg .chat-bolha { max-width: 100%; align-self: auto; }
+.chat-msg .chat-bolha.com-nome { margin-top: 6px; }
+.chat-reagir { position: absolute; top: 4px; right: -36px; width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--ink-muted); display: grid; place-items: center; cursor: pointer; opacity: 0; transition: opacity .15s; padding: 0; }
+.chat-msg.minha .chat-reagir { right: auto; left: -36px; }
+.chat-reagir svg { width: 17px; height: 17px; }
+.chat-msg:hover .chat-reagir, .chat-reagir:focus-visible { opacity: 1; }
+@media (hover: none) { .chat-reagir { opacity: 0; pointer-events: none; } .chat-msg.toque .chat-reagir { opacity: 1; pointer-events: auto; } }
+.chat-reacoes { display: flex; flex-wrap: wrap; gap: 4px; margin-top: -1px; }
+.chat-reacoes:empty, .chat-reacoes[hidden] { display: none; }
+.chat-reacao { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 1px 8px; font-size: 13px; line-height: 1.5; cursor: pointer; box-shadow: var(--shadow-xs); }
+.chat-reacao b { font-size: 11px; color: var(--ink-muted); }
+.chat-reacao.minha { border-color: var(--acao); background: var(--acao-soft); }
+.chat-picker { position: fixed; z-index: 320; display: flex; gap: 2px; padding: 5px; background: var(--surface, #fff); border: 1px solid var(--line); border-radius: 999px; box-shadow: 0 12px 30px rgba(15, 23, 42, .2); }
+.chat-picker button { width: 38px; height: 38px; border: none; border-radius: 50%; background: transparent; font-size: 21px; cursor: pointer; transition: transform .12s; padding: 0; }
+.chat-picker button:hover { transform: scale(1.22); background: var(--surface-alt); }
+.chat-picker button.minha { background: var(--acao-soft); }
+/* anexos em cartao */
+.chat-bolha.chat-anexo { min-width: 260px; padding: 8px 10px 6px; }
+.chat-anexo-linha { display: flex; align-items: center; gap: 10px; }
+.chat-anexo-mini { flex: none; width: 46px; height: 56px; border-radius: 8px; border: none; padding: 0; overflow: hidden; background: rgba(255,255,255,.85); display: grid; place-items: center; cursor: zoom-in; }
+.chat-anexo-mini img { width: 100%; height: 100%; object-fit: cover; object-position: top; display: block; }
+.chat-anexo-mini.pdf { cursor: default; color: #DC2626; background: #FEE2E2; }
+.chat-anexo-mini.pdf svg { width: 24px; height: 24px; }
+.chat-anexo-info { flex: 1; min-width: 0; }
+.chat-anexo-info b { display: block; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chat-anexo-info small { font-size: 11px; opacity: .8; }
+.chat-anexo-abrir { flex: none; border: 1px solid var(--line); background: var(--surface-alt); color: var(--ink); border-radius: 999px; padding: 5px 12px; font: 700 12px Inter, system-ui, sans-serif; cursor: pointer; }
+.chat-bolha.minha .chat-anexo-abrir { border-color: rgba(255,255,255,.6); background: rgba(255,255,255,.18); color: #fff; }
+.chat-visor img { display: block; max-width: 100%; max-height: 72vh; margin: 0 auto; border-radius: 10px; }
+/* compositor */
+.chat-mais-caixa { position: relative; flex: 0 0 auto; }
+.chat-anexar { width: 44px; height: 44px; border-radius: 50%; border: 1.5px solid var(--line); background: var(--surface); color: var(--ink-soft); display: grid; place-items: center; cursor: pointer; padding: 0; }
+.chat-anexar svg { width: 18px; height: 18px; }
+.chat-anexar:hover { border-color: var(--acao); color: var(--acao); }
+.chat-menu-anexo { position: absolute; bottom: 54px; left: 0; z-index: 30; min-width: 240px; padding: 6px; background: var(--surface, #fff); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 14px 34px rgba(15, 23, 42, .18); display: flex; flex-direction: column; }
+.chat-menu-anexo[hidden] { display: none; }
+.chat-menu-anexo button { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; border: none; background: transparent; text-align: left; padding: 9px 12px; border-radius: 10px; font: 600 13.5px Inter, system-ui, sans-serif; color: var(--ink); cursor: pointer; }
+.chat-menu-anexo button:hover { background: var(--acao-soft); }
+.chat-menu-anexo small { font-weight: 500; font-size: 11.5px; color: var(--ink-muted); }
+@media (hover: hover) and (pointer: fine) { .chat-menu-anexo .so-toque { display: none; } }
+.chat-pend { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding: 8px 12px; border-top: 1px solid var(--line); background: var(--surface-alt); }
+.chat-pend[hidden] { display: none; }
+.chat-pend.com { border: none; background: transparent; padding: 8px 0 0; }
+.chat-pend-item { display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 5px 6px 5px 5px; max-width: 280px; }
+.chat-pend-item img, .chat-pend-item .chat-anexo-mini { width: 34px; height: 40px; border-radius: 6px; object-fit: cover; object-position: top; flex: none; }
+.chat-pend-item span { min-width: 0; display: flex; flex-direction: column; }
+.chat-pend-item b { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chat-pend-item small { font-size: 11px; color: var(--ink-muted); }
+.chat-pend-dica { font-size: 11.5px; }
+.chat-enviar.enviando { opacity: .6; pointer-events: none; }
+.chat-thread.soltar::after { content: "Solte aqui para anexar"; position: absolute; inset: 8px; border: 3px dashed var(--acao); border-radius: 16px; background: rgba(255, 255, 255, .78); display: grid; place-items: center; font: 800 16px Inter, system-ui, sans-serif; color: var(--acao); z-index: 40; pointer-events: none; }
+/* sino: arrastavel; no chat (sem lugar escolhido) sobe para nao cobrir o Enviar */
+.avisos-fab { touch-action: none; }
+.avisos-fab.arrastando { transition: none; cursor: grabbing; transform: scale(1.08); }
+/* sem lugar escolhido, no chat o sino vai para o canto da lista de conversas (avisos.js, encaixar) */
+@media (max-width: 720px) {
+    .chat-msg { max-width: 86%; }
+    .chat-reagir { right: -32px; width: 28px; height: 28px; }
+    .chat-msg.minha .chat-reagir { left: -32px; }
+    .chat-bolha.chat-anexo { min-width: 220px; }
+}

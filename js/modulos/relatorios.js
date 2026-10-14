@@ -671,7 +671,7 @@ window.MODULOS.relatorios = {
       '<h2><span class="ponto ' + classe + '"></span>' + titulo + '</h2><div class="deq-caixa deq-texto">' + txt(valor) + '</div>';
     const { fim } = this.intervaloMes(mes);
     const dataAss = rel.gerado_em ? new Date(rel.gerado_em).toLocaleDateString('pt-BR') : fmt(fim);
-    return '<div class="doc-eq">' +
+    return '<div class="doc-eq deq-doc-mensal">' +
       '<div class="deq-cab"><img src="icones/equilibrium.png" alt="Equilibrium">' +
       '  <div class="deq-cab-t"><h1>RELAT&Oacute;RIO DE EVOLU&Ccedil;&Atilde;O MENSAL</h1><p>Equilibrium Terapia Infantil &middot; Psicoterapia ABA</p></div>' +
       '  <span class="deq-pilula">' + this.mesRotulo(mes).toUpperCase() + '</span></div>' +

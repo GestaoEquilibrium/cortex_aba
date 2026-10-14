@@ -741,10 +741,12 @@ function paginarDocumentoPdf(doc, wrap) {
   coletar(doc);
   // caixa de texto -> paragrafos (divisivel); mantem classes/estilo
   // patch 53: caixa de texto de um paragrafo so (Desafios do mensal) tambem divide, por frases - antes ia inteira
-  // para a pagina seguinte e deixava um buraco no fim da pagina
+  // para a pagina seguinte e deixava um buraco no fim da pagina. Patch 55: SO no relatorio mensal
+  // (classe deq-doc-mensal); os relatorios de avaliacao continuam paginando como antes.
+  const umParagrafo = doc.classList.contains('deq-doc-mensal');
   const divisivel = el => el.classList && el.classList.contains('deq-caixa') && !el.querySelector('svg, table, img, .deq-dados') &&
     (el.innerHTML.includes('<br') || el.querySelector(':scope > .deq-par') ||
-     (el.classList.contains('deq-texto') && !el.children.length && el.textContent.trim().length > 200));
+     (umParagrafo && el.classList.contains('deq-texto') && !el.children.length && el.textContent.trim().length > 200));
   const paragrafos = el => {
     if (el.querySelector(':scope > .deq-par')) return [...el.children];
     const partes = el.innerHTML.split(/<br\s*\/?>/i);
@@ -777,7 +779,7 @@ function paginarDocumentoPdf(doc, wrap) {
     if (cabe()) continue;
     // nao coube: tenta dividir caixa de texto por paragrafo
     if (divisivel(u)) {
-      const pars = paragrafos(u), umSo = pars.length === 1;
+      const pars = paragrafos(u), umSo = umParagrafo && pars.length === 1;
       const primeira = u.cloneNode(false); primeira.innerHTML = '';
       pg._cont.replaceChild(primeira, u);
       let n = 0;
@@ -803,7 +805,7 @@ function paginarDocumentoPdf(doc, wrap) {
         if (umSo) { pars.length = 0; pars.push(...paragrafos(u)); }   // desfaz a divisao por frases: o paragrafo volta inteiro
       }
       // continuacao (borda de "continua") so quando um pedaco ficou mesmo na pagina anterior
-      if (pars.length) { const resto = u.cloneNode(false); resto.innerHTML = ''; if (n > 0) resto.classList.add('deq-cont'); pars.forEach(p => resto.appendChild(p)); fila.unshift(resto); }
+      if (pars.length) { const resto = u.cloneNode(false); resto.innerHTML = ''; if (n > 0 || !umParagrafo) resto.classList.add('deq-cont'); pars.forEach(p => resto.appendChild(p)); fila.unshift(resto); }
       // patch 53: nada da caixa coube -> o titulo dela (que ficou sozinho no fim da pagina) vai junto, ANTES da caixa
       if (n === 0) { const ult = pg._cont.lastElementChild; if (ult && /^H[23]$/.test(ult.tagName) && pg._cont.children.length > 1) { pg._cont.removeChild(ult); fila.unshift(ult); } }
       if (n === 0 && vazia()) { /* paragrafo maior que a pagina: deixa e segue */ continue; }

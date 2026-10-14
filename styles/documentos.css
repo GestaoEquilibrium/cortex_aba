@@ -399,3 +399,11 @@ table.deq-pagina .deq-rodape { margin-top: 0; }
     .deq-pei-tab thead { display: table-header-group; }
     .deq-pei-tab tr { break-inside: avoid; page-break-inside: avoid; }
 }
+
+/* patch 51: estimulos nos relatorios de programas (resumo por estimulo embaixo de cada grafico) */
+.deq-est { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin: 3px 2px 4px; font-size: 9.5px; line-height: 1.3; }
+.deq-est-rot { font-size: 8.5px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--eq-cinza); margin-right: 2px; }
+.deq-est-chip { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; padding: 2px 8px; font-weight: 700; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.deq-est-chip b { font-weight: 800; }
+.deq-est-chip small { font-size: 8.5px; font-weight: 700; opacity: .85; }
+.deq-est-chip.sem { background: #F1F5F9; color: #64748B; }

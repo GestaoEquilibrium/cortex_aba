@@ -2445,6 +2445,32 @@ window.MODULOS.programas = {
 
 
 
+  // ─────────── patch 51: estimulos nos relatorios de programas ───────────
+  // Wess escolheu a opcao A (14/10): grafico como antes e, embaixo, cada estimulo com os corretos (C) e a %.
+  // tentativas (com estimulo_id e estimulos{nome}) -> estimulos na ordem em que apareceram, com tentativas e corretos
+  resumoEstimulos(lista) {
+    const por = {}, ordem = [];
+    let sem = 0;
+    (lista || []).forEach(t => {
+      const nome = t.estimulos && t.estimulos.nome;
+      const id = t.estimulo_id || nome || '';
+      if (!id) { sem++; return; }
+      if (!por[id]) { por[id] = { id, nome: nome || 'Estimulo', n: 0, c: 0 }; ordem.push(por[id]); }
+      por[id].n++;
+      if (t.resposta === 'C' || t.resposta === 'I') por[id].c++;
+    });
+    return { lista: ordem, sem };
+  },
+  htmlEstimulos(res) {
+    if (!res || !res.lista.length) return '';
+    const cor = p => p >= 80 ? ['#E8F7EE', '#15803D'] : p >= 50 ? ['#FFF4E0', '#B45309'] : ['#FDEEF0', '#BE123C'];
+    return '<div class="deq-est"><span class="deq-est-rot">Est&iacute;mulos</span>' + res.lista.map(e => {
+      const p = Math.round(e.c * 100 / e.n), c = cor(p);
+      return '<span class="deq-est-chip" style="background:' + c[0] + '; color:' + c[1] + '">' +
+        escaparHtml(e.nome) + ' <b>' + e.c + '/' + e.n + ' C</b>' + (e.n >= 4 ? ' <small>' + p + '%</small>' : '') + '</span>';
+    }).join('') + (res.sem ? '<span class="deq-est-chip sem">sem est&iacute;mulo &middot; ' + res.sem + '</span>' : '') + '</div>';
+  },
+
   // Opcao B: as tentativas se espalham pela largura toda; ate 6 tentativas o item fica em meia coluna
   // (largura 330), acima disso ocupa a linha inteira (680). Altura fixa pelos niveis do programa.
   graficoTentativas(niveisPrograma, tentativas, largo) {
@@ -2505,7 +2531,7 @@ window.MODULOS.programas = {
         .select('quantidade, duracao_seg, antecedente, descricao, consequencia, comportamentos(nome, medida)')
         .eq('sessao_id', sessaoId),
       sb.from('registros_tentativas')
-        .select('paciente_programa_id, ordem, resposta, acertou, estimulos(nome)')
+        .select('paciente_programa_id, ordem, resposta, acertou, estimulo_id, estimulos(nome)')
         .eq('sessao_id', sessaoId).order('ordem')
     ]);
     const s = rS.data;
@@ -2558,10 +2584,12 @@ window.MODULOS.programas = {
       const lista = tentPorPp[fx.paciente_programa_id] || [];
       if (!lista.length) return '';
       const largo = lista.length > 6;
+      // patch 51: estimulos de cada programa, resumidos embaixo do grafico
       return '<div class="deq-graf-item' + (largo ? ' deq-graf-largo' : '') + '">' +
         '<div class="deq-graf-tit">' + escaparHtml(prog ? prog.nome : '') +
         ' <small>' + fx.corretos + '/' + (fx.tentativas_sessao || fx.tentativas) + ' C &middot; ' + fx.pct_corretos + '%</small></div>' +
         this.graficoTentativas(prog ? prog.niveis : null, lista, largo) +
+        this.htmlEstimulos(this.resumoEstimulos(lista)) +
         '</div>';
     }).join('') + '</div>';
 
@@ -3081,7 +3109,7 @@ window.MODULOS.programas = {
 
     const [rTent, rPsr, rPP] = await Promise.all([
       sb.from('registros_tentativas')
-        .select('sessao_id, paciente_programa_id, ordem, resposta').in('sessao_id', ids).order('ordem'),
+        .select('sessao_id, paciente_programa_id, ordem, resposta, estimulo_id, estimulos(nome)').in('sessao_id', ids).order('ordem'),
       sb.from('programa_sessao_registros')
         .select('sessao_id, paciente_programa_id, pct_corretos').in('sessao_id', ids),
       sb.from('paciente_programas').select('id, status, programas(nome, area, niveis)')
@@ -3116,10 +3144,12 @@ window.MODULOS.programas = {
         const tot = blocos.reduce((s, [, b]) => s + b.lista.length, 0);
         const cor = blocos.reduce((s, [, b]) => s + b.lista.filter(t => t.resposta === 'C').length, 0);
         const largo = tot > 12;
+        // patch 51: estimulos do periodo (todas as sessoes juntas)
+        const est = this.resumoEstimulos([].concat(...blocos.map(([, b]) => b.lista)));
         corpo += '<div class="deq-graf-item' + (largo ? ' deq-graf-largo' : '') + '">' +
           '<div class="deq-graf-tit">' + escaparHtml(pp.programas.nome) +
           ' <small>' + blocos.filter(([, b]) => !b.falta).length + ' sess&otilde;es' + (blocos.some(([, b]) => b.falta) ? ' &middot; <span style="color:#E11D48">' + blocos.filter(([, b]) => b.falta).length + ' falta(s)</span>' : '') + ' &middot; ' + cor + '/' + tot + ' C (' + (tot ? Math.round(cor * 100 / tot) : 0) + '%)</small></div>' +
-          this.graficoCompilado(pp.programas.niveis, blocos, largo) + '</div>';
+          this.graficoCompilado(pp.programas.niveis, blocos, largo) + this.htmlEstimulos(est) + '</div>';
       });
       corpo += '</div>';
       // Metas do PEI e andamento
@@ -3166,6 +3196,7 @@ window.MODULOS.programas = {
         const passo = (W - ESQ - 20) / 5;
         const y = pct => BASE - (pct / 100) * (BASE - TOPO);
         const pontos = medias.map((v, i) => v === null ? null : (ESQ + i * passo) + ',' + y(v)).filter(Boolean);
+        const estS = this.resumoEstimulos([].concat(...Object.values(porProg[ppId] || {}).map(b => b.lista)));
         corpo += '<div class="deq-graf-item"><div class="deq-graf-tit">' +
           escaparHtml(pp.programas.nome) + ' <small>&middot; % de corretos por m&ecirc;s</small></div>' +
           '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%; height:auto">' +
@@ -3182,7 +3213,7 @@ window.MODULOS.programas = {
                 '<text x="' + x + '" y="' + (y(v) - 11) + '" text-anchor="middle" font-size="10.5" font-weight="800" fill="' +
                 this.COR_DIA[i] + '">' + v + '%</text>');
           }).join('') +
-          '</svg></div>';
+          '</svg>' + this.htmlEstimulos(estS) + '</div>';
       });
       corpo = '<div class="deq-grade2">' + corpo + '</div>';
     }

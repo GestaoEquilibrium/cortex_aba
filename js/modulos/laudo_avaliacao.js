@@ -1090,13 +1090,14 @@ window.MODULOS.laudo_avaliacao = {
         // patch 46 (pedido da coordenacao, 13/10): terceira aplicacao em diante = todas as pontuacoes juntas no grafico
         const base = (pr.nAnteriores || hist.length) - hist.length;   // aplicacoes mais antigas que nao cabem no grafico
         const CORES_ANT = ['#56C4CF', '#F3B63D', '#7C6FD0', '#3E9C6E'];
-        hist.forEach((h, i) => series.push({ nome: 'AV' + (h.n || base + i + 1) + ' (' + fmt(h.av.concluido_em) + ')',
+        // patch 51 (Wess, 14/10): legenda so com AV1, AV2, AV3 - sem as datas
+        hist.forEach((h, i) => series.push({ nome: 'AV' + (h.n || base + i + 1),
           cor: i === hist.length - 1 ? '#1468B2' : CORES_ANT[i % CORES_ANT.length], valores: vp(h.perfil) }));
-        series.push({ nome: 'AV' + ((pr.nAnteriores || hist.length) + 1) + ' · atual (' + fmt(pr.av.concluido_em) + ')', cor: '#E07A2F', valores: pr.atual.areas.map(a => a.pct) });
+        series.push({ nome: 'AV' + ((pr.nAnteriores || hist.length) + 1) + ' · atual', cor: '#E07A2F', valores: pr.atual.areas.map(a => a.pct) });
       } else {
         const ant = hist[0];
-        if (ant) series.push({ nome: 'AV anterior (' + fmt(ant.av.concluido_em) + ')', cor: '#1468B2', valores: vp(ant.perfil) });
-        series.push({ nome: (ant ? 'AV atual (' : 'AV' + ((pr.nAnteriores || 0) + 1) + ' (') + fmt(pr.av.concluido_em) + ')', cor: ant ? '#E07A2F' : '#1468B2', valores: pr.atual.areas.map(a => a.pct) });
+        if (ant) series.push({ nome: 'AV anterior', cor: '#1468B2', valores: vp(ant.perfil) });
+        series.push({ nome: ant ? 'AV atual' : 'AV' + ((pr.nAnteriores || 0) + 1), cor: ant ? '#E07A2F' : '#1468B2', valores: pr.atual.areas.map(a => a.pct) });
       }
       const p = pr.av.protocolo;
       const nomeP = this.NOME_PROT[p] || p;

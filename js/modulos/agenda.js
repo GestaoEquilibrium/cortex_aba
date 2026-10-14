@@ -774,6 +774,55 @@ window.MODULOS.agenda = {
       [ano + '-11-20', 'Dia da Consci\u00eancia Negra'], [ano + '-12-25', 'Natal']
     ].sort((x, y) => x[0].localeCompare(y[0]));
   },
+  // ─────────────── patch 54: aniversarios dos pacientes ───────────────
+  // Data de nascimento do cadastro (29/02 comemora em 28/02 nos anos sem 29). Mesmo recorte da agenda:
+  // coordenacao com "Minha equipe" ve as criancas da equipe; aplicador, as dele; quem ve tudo, todas as ativas.
+  // Wess escolheu A + B (14/10): faixa e marcas na agenda (dia, semana, mes, mini-calendario) e cartao no Inicio.
+  async nascimentos() {
+    if (this._nasc && Date.now() - this._nascEm < 600000) return this._nasc;
+    const { data } = await sb.from('pacientes').select('id, nome, data_nascimento, status').neq('status', 'encerrado');
+    let lista = (data || []).filter(p => p.data_nascimento);
+    try {
+      if (window.ESCOPO && ESCOPO.ativo()) { const eq = await ESCOPO.carregar(); lista = lista.filter(p => eq.pacientes.has(p.id)); }
+      else if (typeof ehEquipe === 'function' && ehEquipe()) { const meus = await meusPacientesIds(); lista = lista.filter(p => meus.has(p.id)); }
+    } catch (e) { /* sem recorte: mostra o que o banco devolveu */ }
+    this._nasc = lista; this._nascEm = Date.now();
+    return lista;
+  },
+  // { 'AAAA-MM-DD': [{ id, nome, idade }] } de ini a fim (inclusive)
+  async aniversariosEntre(ini, fim) {
+    const lista = await this.nascimentos(), res = {};
+    const d = new Date(ini + 'T12:00:00'), f = new Date(fim + 'T12:00:00');
+    for (let guarda = 0; d <= f && guarda < 400; guarda++, d.setDate(d.getDate() + 1)) {
+      const k = this.fmt(d), mmdd = k.slice(5), bis = new Date(d.getFullYear(), 1, 29).getMonth() === 1;
+      lista.forEach(p => {
+        let n = String(p.data_nascimento).slice(5, 10);
+        if (n === '02-29' && !bis) n = '02-28';
+        const idade = d.getFullYear() - parseInt(String(p.data_nascimento).slice(0, 4), 10);
+        if (n === mmdd && idade >= 1) (res[k] = res[k] || []).push({ id: p.id, nome: p.nome, idade });
+      });
+    }
+    Object.values(res).forEach(l => l.sort((a, b) => a.nome.localeCompare(b.nome)));
+    return res;
+  },
+  nomeCurtoAniv(n) { return String(n || '').split(' ').slice(0, 2).join(' '); },
+  abrirPacienteAniv(id) {
+    if (typeof fecharModal === 'function') try { fecharModal(); } catch (e) {}
+    abrirModulo('pacientes'); setTimeout(() => MODULOS.pacientes.telaDetalhe(id), 450);
+  },
+  // bolo ao lado do nome da crianca no dia do aniversario (sessao do dia)
+  boloDe(s) {
+    const a = (this._anivPor || {})[s.data || this.dataRef] || [];
+    const x = a.find(p => p.id === s.paciente_id);
+    return x ? ' <span class="aniv-bolo" title="Aniversario: faz ' + x.idade + ' anos">&#127874;</span>' : '';
+  },
+  faixaAniversario(dt, lista) {
+    const hoje = dt === hojeLocal();
+    return '<div class="aniv-faixa"><span class="aniv-ic">&#127874;</span><div class="aniv-t"><b>' + (hoje ? 'Aniversario hoje' : 'Aniversario neste dia') + '</b>' +
+      '<div class="aniv-nomes">' + lista.map(p => '<button type="button" class="aniv-nome" onclick="MODULOS.agenda.abrirPacienteAniv(\'' + p.id + '\')" title="Abrir o prontuario">' +
+        escaparHtml(this.nomeCurtoAniv(p.nome)) + ' <small>' + (hoje ? 'faz ' : '') + p.idade + ' anos</small></button>').join('') + '</div></div></div>';
+  },
+
   faixaFeriado(dt, nome) {
     const pode = this.gere();
     return '<div class="fer-faixa"><span class="fer-ic">&#9733;</span><div class="fer-t"><b>Feriado &middot; ' + escaparHtml(nome) + '</b>' +
@@ -845,7 +894,8 @@ window.MODULOS.agenda = {
       .eq('data', this.dataRef).order('hora_inicio');
     sessoes = await this.soMinhas(sessoes);
     // feriados do mes (faixa do dia e mini-calendario)
-    { const m = this.dataRef.slice(0, 7); this._feriadosMes = await this.carregarFeriados(m + '-01', m + '-31'); }
+    { const m = this.dataRef.slice(0, 7); this._feriadosMes = await this.carregarFeriados(m + '-01', m + '-31');
+      try { this._anivPor = await this.aniversariosEntre(m + '-01', this.fmt(new Date(+m.slice(0, 4), +m.slice(5, 7), 0, 12))); } catch (e) { this._anivPor = {}; } }
     // colunas extras da grade (aplicadores com jornada no dia) respeitam o escopo Minha equipe | Geral
     this._equipeDia = [];
     if (this.gere()) {
@@ -871,7 +921,8 @@ window.MODULOS.agenda = {
     const lista = (sessoes || []).filter(s => s.status !== 'cancelada');
     const n = st => lista.filter(s => s.status === st).length;
     const ferNome = (this._feriadosMes || {})[this.dataRef];
-    const topo = (ferNome ? this.faixaFeriado(this.dataRef, ferNome) : '') + '<div class="agd-topo">' +
+    const anivDia = (this._anivPor || {})[this.dataRef] || [];
+    const topo = (ferNome ? this.faixaFeriado(this.dataRef, ferNome) : '') + (anivDia.length ? this.faixaAniversario(this.dataRef, anivDia) : '') + '<div class="agd-topo">' +
       '<div class="agd-tiles">' +
       [['agendada', 'Aguardando', 'var(--st-neutro)'], ['checkin', 'Chegaram', '#2563EB'], ['em_atendimento', 'Em atendimento', '#D97706'], ['concluida', 'Concluidas', 'var(--st-ok)'], ['falta', 'Faltas', 'var(--st-bad)']]
         .map(t => '<div class="agd-tile" style="border-left-color:' + t[2] + '"><small>' + t[1] + '</small><b>' + n(t[0]) + '</b></div>').join('') + '</div>' +
@@ -907,7 +958,7 @@ window.MODULOS.agenda = {
       s.status === 'em_atendimento' ? '<button type="button" class="btn-chip cheio" onclick="event.stopPropagation(); MODULOS.agenda.abrirSessao(\'' + s.id + '\')">Concluir</button>' : '';
     return '<div class="agd-card' + (passada ? ' passada' : '') + ' ck-st-' + s.status + (this.ehFeriado(s) ? ' feriado' : '') + '" onclick="MODULOS.agenda.abrirSessao(\'' + s.id + '\')">' +
       '<span class="evo-av ' + (typeof corAvatar === 'function' ? corAvatar(prof) : 'av-1') + '">' + escaparHtml(this.iniciaisDe(prof)) + '</span>' +
-      '<span class="agd-n"><b>' + escaparHtml(s.pacientes ? s.pacientes.nome : '?') + '</b><small>' + this.seloT(s.aplicador_id) + escaparHtml(prof) + (s.salas ? ' &middot; ' + escaparHtml(s.salas.nome) : '') + '</small></span>' +
+      '<span class="agd-n"><b>' + escaparHtml(s.pacientes ? s.pacientes.nome : '?') + this.boloDe(s) + '</b><small>' + this.seloT(s.aplicador_id) + escaparHtml(prof) + (s.salas ? ' &middot; ' + escaparHtml(s.salas.nome) : '') + '</small></span>' +
       '<span class="agd-selos">' + this.selosSessao(s) + (semEvo ? '<span class="selo selo-sem-evo" title="Sessao encerrada sem evolucao">&#9998; sem evolucao</span>' : '') + '</span>' +
       chip + '</div>';
   },
@@ -950,7 +1001,7 @@ window.MODULOS.agenda = {
       const arr = podeMover && l.length === 1 && ['agendada', 'checkin'].includes(l[0].status) && c.id !== 'sem'
         ? ' draggable="true" data-sid="' + l[0].id + '"' : '';
       return '<td class="ag-eq-cel ' + (this.ehFeriado(l[0]) ? 'ag-eq-feriado' : ST[l[0].status] || '') + '"' + pos + arr + ' onclick="MODULOS.agenda.abrirSessao(\'' + l[0].id + '\')" title="' + (arr ? 'Abrir sessao - arraste para outro aplicador ou horario' : 'Abrir sessao') + '">' +
-        l.map(s => this.seloT(s.aplicador_id) + '<b>' + escaparHtml((s.pacientes ? s.pacientes.nome : '?').split(' ').slice(0, 2).join(' ')) + '</b><small>' + (s.salas ? escaparHtml(s.salas.nome) + ' &middot; ' : '') + this.selosSessao(s).replace(/<[^>]+>/g, ' ').trim() + '</small>').join('<hr style="border:none; border-top:1px dashed var(--line); margin:3px 0">') + '</td>';
+        l.map(s => this.seloT(s.aplicador_id) + '<b>' + escaparHtml((s.pacientes ? s.pacientes.nome : '?').split(' ').slice(0, 2).join(' ')) + this.boloDe(s) + '</b><small>' + (s.salas ? escaparHtml(s.salas.nome) + ' &middot; ' : '') + this.selosSessao(s).replace(/<[^>]+>/g, ' ').trim() + '</small>').join('<hr style="border:none; border-top:1px dashed var(--line); margin:3px 0">') + '</td>';
     };
     const grade = '<div class="cartao ag-eq-wrap"><table class="ag-eq" id="ag-dia-grade"><thead><tr><th class="ag-eq-h"></th>' +
       cols.map(c => '<th' + (c.vazio ? ' class="ag-eq-sem"' : '') + '><span class="evo-av ' + (typeof corAvatar === 'function' ? corAvatar(c.nome) : 'av-1') + '" style="margin-right:6px; vertical-align:middle">' + escaparHtml(this.iniciaisDe(c.nome)) + '</span><b>' + escaparHtml(c.nome.split(' ').slice(0, 2).join(' ')) + '</b>' + this.cabT(c.id) + (c.vazio ? '<small>sem sessoes</small>' : '') + '</th>').join('') + '</tr></thead><tbody>' +
@@ -1069,7 +1120,9 @@ window.MODULOS.agenda = {
       const k = this.dataRef.slice(0, 8) + String(d).padStart(2, '0');
       const dow = new Date(ano, mes - 1, d).getDay();
       const fer = (this._feriadosMes || {})[k];
-      cels += '<span class="' + (k === this.dataRef ? 'sel' : dow === 0 || dow === 6 ? 'fds' : 'd') + (k === hoje ? ' hoje' : '') + (fer ? ' fer' : '') + '"' + (fer ? ' title="Feriado: ' + escaparHtml(fer) + '"' : '') + ' onclick="MODULOS.agenda.dataRef = \'' + k + '\'; MODULOS.agenda.desenhar()">' + d + '</span>';
+      const anv = (this._anivPor || {})[k] || null;
+      const tit = [fer ? 'Feriado: ' + fer : '', anv ? 'Aniversario: ' + anv.map(p => this.nomeCurtoAniv(p.nome)).join(', ') : ''].filter(Boolean).join(' · ');
+      cels += '<span class="' + (k === this.dataRef ? 'sel' : dow === 0 || dow === 6 ? 'fds' : 'd') + (k === hoje ? ' hoje' : '') + (fer ? ' fer' : '') + (anv ? ' aniv' : '') + '"' + (tit ? ' title="' + escaparHtml(tit) + '"' : '') + ' onclick="MODULOS.agenda.dataRef = \'' + k + '\'; MODULOS.agenda.desenhar()">' + d + '</span>';
     }
     const mesAnt = () => { const x = new Date(ano, mes - 2, 1); return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-01'; };
     const mesProx = () => { const x = new Date(ano, mes, 1); return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-01'; };
@@ -1097,6 +1150,7 @@ window.MODULOS.agenda = {
       .gte('data', datas[0]).lte('data', datas[4]).order('hora_inicio');
     sessoes = await this.soMinhas(sessoes);
     const feriados = await this.carregarFeriados(datas[0], datas[4]);
+    try { this._anivPor = await this.aniversariosEntre(datas[0], datas[4]); } catch (e) { this._anivPor = {}; }
 
     const alvo = document.getElementById('ag-corpo');
     if (!alvo) return;
@@ -1110,14 +1164,15 @@ window.MODULOS.agenda = {
         '<div class="agenda-dia-titulo">' + this.DIAS[i + 1] + ' ' +
         dt.slice(8, 10) + '/' + dt.slice(5, 7) +
         (fer ? ' <span class="selo selo-feriado">Feriado</span>' : ' <span class="selo selo-neutro">' + doDia.length + '</span>') + '</div>' +
-        (fer ? '<div class="agenda-fer">&#9733; ' + escaparHtml(fer) + '</div>' : '');
+        (fer ? '<div class="agenda-fer">&#9733; ' + escaparHtml(fer) + '</div>' : '') +
+        ((this._anivPor || {})[dt] ? '<div class="agenda-aniv">' + this._anivPor[dt].map(p => '<span onclick="MODULOS.agenda.abrirPacienteAniv(\'' + p.id + '\')" title="Faz ' + p.idade + ' anos - abrir o prontuario">&#127874; ' + escaparHtml(this.nomeCurtoAniv(p.nome)) + ' <small>' + p.idade + '</small></span>').join('') + '</div>' : '');
       if (doDia.length === 0) html += '<div class="agenda-vazio">&mdash;</div>';
       doDia.forEach(s => {
         html += '<div class="chip-sessao clicavel ck-st-' + s.status + (this.ehFeriado(s) ? ' feriado' : '') + '" ' +
           'onclick="MODULOS.agenda.abrirSessao(\'' + s.id + '\')">' +
           '<b>' + s.hora_inicio.slice(0, 5) + '</b> ' +
           '<span class="chip-nome">' + escaparHtml(s.pacientes ?
-            s.pacientes.nome.split(' ')[0] + ' ' + (s.pacientes.nome.split(' ')[1] || '') : '?') + '</span>' +
+            s.pacientes.nome.split(' ')[0] + ' ' + (s.pacientes.nome.split(' ')[1] || '') : '?') + this.boloDe(s) + '</span>' +
           '<small class="chip-prof">' + (this.temEsp() ? this.seloT(s.aplicador_id) : '&#128100; ') + escaparHtml(s.profissional ? s.profissional.nome.split(' ')[0] : '-') +
           (s.salas ? ' &middot; ' + escaparHtml(s.salas.nome) : '') + '</small>' +
           '</div>';
@@ -1143,6 +1198,8 @@ window.MODULOS.agenda = {
       .gte('data', this.fmt(primeiro)).lte('data', this.fmt(ultimo));
     sessoes = await this.soMinhas(sessoes);
     const feriados = await this.carregarFeriados(this.fmt(primeiro), this.fmt(ultimo));
+    let aniv = {};
+    try { aniv = await this.aniversariosEntre(this.fmt(primeiro), this.fmt(ultimo)); } catch (e) { aniv = {}; }
 
     const porDia = {};
     (sessoes || []).forEach(s => {
@@ -1181,6 +1238,8 @@ window.MODULOS.agenda = {
           : previsto
             ? '<span class="mes-info previsto">' + previsto + ' na grade</span>'
             : '') +
+        (aniv[dt] ? '<span class="mes-aniv" title="Aniversario: ' + escaparHtml(aniv[dt].map(p => this.nomeCurtoAniv(p.nome) + ' (' + p.idade + ')').join(', ')) + '">&#127874; ' +
+          escaparHtml(aniv[dt][0].nome.split(' ')[0]) + (aniv[dt].length > 1 ? ' +' + (aniv[dt].length - 1) : '') + '</span>' : '') +
         '</div>';
     }
     html += '</div></div>';

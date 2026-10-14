@@ -26,6 +26,7 @@ window.MODULOS.inicio = {
       '  <div class="cartao" id="ini-pendencias"><h3>Minhas pendencias</h3><p class="sub">Carregando...</p></div>' +
       '  <div class="cartao" id="ini-equipe"><h3>' + (gestao ? 'Equipe hoje' : 'Minhas sessoes hoje') + '</h3><p class="sub">Carregando...</p></div>' +
       '</div>' +
+      '<div class="cartao ini-aniv" id="ini-aniv" style="display:none"></div>' +
       (perm('painel') === '' ? '' : '<div id="inicio-painel" style="margin-top:14px"></div>') +
       '<div id="inicio-vencimentos"></div>';
 
@@ -33,6 +34,35 @@ window.MODULOS.inicio = {
     this.carregarPendenciasCentral();
     if (perm('painel') !== '') MODULOS.painel.carregar('inicio-painel');
     this.carregarVencimentos();
+    this.carregarAniversarios();
+  },
+
+  // patch 54: aniversariantes - hoje em destaque, os proximos 7 dias e o resto do mes (mesmo recorte da agenda)
+  async carregarAniversarios() {
+    const el = document.getElementById('ini-aniv');
+    const A = MODULOS.agenda;
+    if (!el || !A || !A.aniversariosEntre) return;
+    const hoje = hojeLocal(), d = new Date(hoje + 'T12:00:00');
+    const mais = n => { const x = new Date(d); x.setDate(x.getDate() + n); return A.fmt(x); };
+    const fimMes = A.fmt(new Date(d.getFullYear(), d.getMonth() + 1, 0, 12));
+    const lim7 = mais(7), fim = fimMes > lim7 ? fimMes : lim7;
+    let res;
+    try { res = await A.aniversariosEntre(hoje, fim); } catch (e) { return; }
+    const datas = Object.keys(res).sort();
+    if (!datas.length) return;
+    const DS = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sab'];
+    const rot = k => DS[new Date(k + 'T12:00:00').getDay()] + ' ' + k.slice(8, 10) + '/' + k.slice(5, 7);
+    const linha = (k, p) => '<button type="button" class="ini-aniv-l" onclick="MODULOS.agenda.abrirPacienteAniv(\'' + p.id + '\')">' +
+      '<span class="ini-aniv-d">' + (k === mais(1) ? 'amanha' : rot(k)) + '</span><b>' + escaparHtml(A.nomeCurtoAniv(p.nome)) + '</b><small>' + p.idade + ' anos</small></button>';
+    const hojeL = res[hoje] || [];
+    const prox = datas.filter(k => k > hoje && k <= lim7), resto = datas.filter(k => k > lim7 && k <= fimMes);
+    const nResto = resto.reduce((s, k) => s + res[k].length, 0);
+    el.innerHTML = '<h3>&#127874; Aniversariantes</h3>' +
+      (hojeL.length ? '<div class="ini-aniv-hoje">' + hojeL.map(p => '<button type="button" onclick="MODULOS.agenda.abrirPacienteAniv(\'' + p.id + '\')"><span>&#127881;</span><div><small>Hoje</small><b>' +
+        escaparHtml(A.nomeCurtoAniv(p.nome)) + '</b><em>faz ' + p.idade + ' anos</em></div></button>').join('') + '</div>' : '') +
+      (prox.length ? '<div class="ini-aniv-g"><small class="ini-aniv-sub">Proximos 7 dias</small>' + prox.map(k => res[k].map(p => linha(k, p)).join('')).join('') + '</div>' : '') +
+      (nResto ? '<details class="ini-aniv-mes"><summary>Ainda neste mes &middot; ' + nResto + '</summary>' + resto.map(k => res[k].map(p => linha(k, p)).join('')).join('') + '</details>' : '');
+    el.style.display = '';
   },
 
   // Sessoes de hoje (mesmo recorte da agenda: aplicador ve as dele; coordenadora, a equipe)

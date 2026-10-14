@@ -407,3 +407,13 @@ table.deq-pagina .deq-rodape { margin-top: 0; }
 .deq-est-chip b { font-weight: 800; }
 .deq-est-chip small { font-size: 8.5px; font-weight: 700; opacity: .85; }
 .deq-est-chip.sem { background: #F1F5F9; color: #64748B; }
+
+/* patch 53: frequencia do mensal com uma linha por semana; grade com colunas iguais e celula vazia marcada */
+.deq-freq-sem { width: 100%; table-layout: fixed; margin: 0; }
+.deq-freq-sem th { padding: 6px 4px; }
+.deq-freq-sem td { padding: 6px 4px; vertical-align: middle; border-top: 1px solid var(--eq-linha); border-right: 1px solid var(--eq-linha); }
+.deq-freq-sem td:last-child { border-right: none; }
+.deq-freq-sem td.vazia { background: #FAFCFE; border-top: 1px solid var(--eq-linha); border-right: 1px solid var(--eq-linha); color: #C5D0DB; font-weight: 700; }
+.deq-freq-sem td.vazia:last-child { border-right: none; }
+.deq-freq-sem .deq-fh { white-space: normal; }
+@media print { .deq-freq-sem td.vazia { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }

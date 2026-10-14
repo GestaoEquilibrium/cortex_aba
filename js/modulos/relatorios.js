@@ -185,7 +185,7 @@ window.MODULOS.relatorios = {
       dem: 'participando das brincadeiras com outras crianças de forma mais cooperativa e apropriada',
       apr: 'participou de jogos e brincadeiras com outras crianças, acompanhando a dinâmica das atividades e respeitando as regras combinadas',
       dif: 'em concluir jogos e brincadeiras estruturadas com pares de forma cooperativa', plano: 'ampliar a participação cooperativa em jogos e brincadeiras com pares' },
-    { k: 'socializacao', re: /social|intera|pares|amig|convivio/, hab: 'socialização', curto: 'socialização',
+    { k: 'socializacao', re: /social|intera|pares|amig|convivio|cumpriment|saudac|despedi/, hab: 'socialização', curto: 'socialização',
       dem: 'favorecendo o desenvolvimento das interações sociais com outras pessoas',
       apr: 'participou de atividades com outras crianças e adultos, acompanhando melhor a dinâmica das atividades em grupo e ampliando suas interações sociais',
       dif: 'na iniciativa de interação com outras pessoas', plano: 'ampliar as oportunidades de interação com pares e adultos' },
@@ -616,23 +616,23 @@ window.MODULOS.relatorios = {
     })).filter(d => d.status !== 'cancelada' || mostrarCanceladas).sort((a, b) => a.data.localeCompare(b.data));
   },
 
+  // patch 53: uma LINHA POR SEMANA (antes cada coluna empilhava os seus dias e a linha misturava semanas:
+  // 07/09 na segunda ficava ao lado de 01/09 na terca). Dia da semana sem sessao naquela semana = celula vazia.
   htmlFrequencia(dados, mostrarCanceladas) {
     const dias = this.diasFrequencia(dados, mostrarCanceladas);
-    const porDow = {};
-    dias.forEach(s => {
-      const dow = new Date(s.data + 'T12:00:00').getDay();
-      (porDow[dow] = porDow[dow] || []).push(s);
-    });
-    const cols = Object.keys(porDow).map(Number).sort();
+    const dowDe = d => new Date(d + 'T12:00:00').getDay();
+    const segundaDe = d => { const x = new Date(d + 'T12:00:00'); x.setDate(x.getDate() - (x.getDay() + 6) % 7); return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0'); };
+    const cols = [...new Set(dias.map(s => dowDe(s.data)))].sort((a, b) => (a + 6) % 7 - (b + 6) % 7);   // segunda primeiro
     if (!cols.length) return '<p class="sub" style="text-align:center">Sem sess\u00f5es registradas no m\u00eas.</p>';
-    const maxL = Math.max(...cols.map(c => porDow[c].length));
+    const semanas = {};
+    dias.forEach(s => { (semanas[segundaDe(s.data)] = semanas[segundaDe(s.data)] || {})[dowDe(s.data)] = s; });
     let presencas = 0, faltas = 0, nFeriados = 0;
     dias.forEach(d => { if (d.status === 'concluida') presencas++; if (d.status === 'falta') faltas++; if (d.status === 'feriado') nFeriados++; });
-    let html = '<table class="deq-freq deq-freq-dias"><tr>' + cols.map(c => '<th>' + this.NOMES_DIA[c] + '</th>').join('') + '</tr>';
-    for (let i = 0; i < maxL; i++) {
+    let html = '<table class="deq-freq deq-freq-dias deq-freq-sem"><tr>' + cols.map(c => '<th>' + this.NOMES_DIA[c] + '</th>').join('') + '</tr>';
+    Object.keys(semanas).sort().forEach(k => {
       html += '<tr>' + cols.map(c => {
-        const s = porDow[c][i];
-        if (!s) return '<td class="vazia"></td>';
+        const s = semanas[k][c];
+        if (!s) return '<td class="vazia"><span>&ndash;</span></td>';
         const d = s.data.slice(8, 10) + '/' + s.data.slice(5, 7);
         if (s.status === 'feriado') {
           return '<td class="deq-fferiado"><span class="deq-fdata">' + d + '</span> <span class="deq-ffer">FERIADO</span>' +
@@ -642,7 +642,7 @@ window.MODULOS.relatorios = {
         return '<td title="' + s.horarios.join(', ') + '"><span class="deq-fdata">' + d + '</span> <span class="' + (s.status === 'concluida' ? 'deq-fp' : s.status === 'falta' ? 'deq-ff' : '') + '">' + st + '</span>' +
           (s.horarios.length > 1 ? '<small class="deq-fh">' + s.horarios.length + ' hor&aacute;rios</small>' : '') + '</td>';
       }).join('') + '</tr>';
-    }
+    });
     html += '</table><div class="deq-freq-rodape"><span>P: PRESEN\u00c7A / F: FALTA' + (nFeriados ? ' \u00b7 FERIADO: n\u00e3o conta' : '') + '</span><span>Presen\u00e7as <b>' + presencas + '</b> \u00b7 Faltas <b>' + faltas + '</b>' +
       (nFeriados ? ' \u00b7 Feriados <b>' + nFeriados + '</b>' : '') +
       ((presencas + faltas) ? ' \u00b7 Assiduidade <b>' + Math.round(presencas * 100 / (presencas + faltas)) + '%</b>' : '') + '</span></div>';

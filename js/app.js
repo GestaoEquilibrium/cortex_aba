@@ -740,8 +740,11 @@ function paginarDocumentoPdf(doc, wrap) {
   };
   coletar(doc);
   // caixa de texto -> paragrafos (divisivel); mantem classes/estilo
+  // patch 53: caixa de texto de um paragrafo so (Desafios do mensal) tambem divide, por frases - antes ia inteira
+  // para a pagina seguinte e deixava um buraco no fim da pagina
   const divisivel = el => el.classList && el.classList.contains('deq-caixa') && !el.querySelector('svg, table, img, .deq-dados') &&
-    (el.innerHTML.includes('<br') || el.querySelector(':scope > .deq-par'));
+    (el.innerHTML.includes('<br') || el.querySelector(':scope > .deq-par') ||
+     (el.classList.contains('deq-texto') && !el.children.length && el.textContent.trim().length > 200));
   const paragrafos = el => {
     if (el.querySelector(':scope > .deq-par')) return [...el.children];
     const partes = el.innerHTML.split(/<br\s*\/?>/i);
@@ -774,7 +777,7 @@ function paginarDocumentoPdf(doc, wrap) {
     if (cabe()) continue;
     // nao coube: tenta dividir caixa de texto por paragrafo
     if (divisivel(u)) {
-      const pars = paragrafos(u);
+      const pars = paragrafos(u), umSo = pars.length === 1;
       const primeira = u.cloneNode(false); primeira.innerHTML = '';
       pg._cont.replaceChild(primeira, u);
       let n = 0;
@@ -795,8 +798,14 @@ function paginarDocumentoPdf(doc, wrap) {
         break;
       }
       // pedaco pequeno demais no fim da pagina (so o titulo da area, por exemplo): vai inteiro para a proxima
-      if (n < 2 || primeira.offsetHeight < 110) { while (primeira.lastChild) pars.unshift(primeira.removeChild(primeira.lastChild)); primeira.remove(); n = 0; }
-      if (pars.length) { const resto = u.cloneNode(false); resto.innerHTML = ''; resto.classList.add('deq-cont'); pars.forEach(p => resto.appendChild(p)); fila.unshift(resto); }
+      if ((umSo ? false : n < 2) || primeira.offsetHeight < 110) {
+        while (primeira.lastChild) pars.unshift(primeira.removeChild(primeira.lastChild)); primeira.remove(); n = 0;
+        if (umSo) { pars.length = 0; pars.push(...paragrafos(u)); }   // desfaz a divisao por frases: o paragrafo volta inteiro
+      }
+      // continuacao (borda de "continua") so quando um pedaco ficou mesmo na pagina anterior
+      if (pars.length) { const resto = u.cloneNode(false); resto.innerHTML = ''; if (n > 0) resto.classList.add('deq-cont'); pars.forEach(p => resto.appendChild(p)); fila.unshift(resto); }
+      // patch 53: nada da caixa coube -> o titulo dela (que ficou sozinho no fim da pagina) vai junto, ANTES da caixa
+      if (n === 0) { const ult = pg._cont.lastElementChild; if (ult && /^H[23]$/.test(ult.tagName) && pg._cont.children.length > 1) { pg._cont.removeChild(ult); fila.unshift(ult); } }
       if (n === 0 && vazia()) { /* paragrafo maior que a pagina: deixa e segue */ continue; }
       if (n === 0) { pg = novaPagina(); paginas.push(pg); }
       else { pg = novaPagina(); paginas.push(pg); }
@@ -816,9 +825,10 @@ function paginarDocumentoPdf(doc, wrap) {
         // nenhuma linha coube no fim desta pagina: a tabela vai inteira para a proxima (com o titulo, se ficou orfao)
         pg._cont.removeChild(parte);
         linhas.forEach(l => u.tBodies[0].appendChild(l));
-        const ult = pg._cont.lastElementChild;
-        if (ult && /^H[23]$/.test(ult.tagName)) { pg._cont.removeChild(ult); fila.unshift(ult); }
         fila.unshift(u);
+        // patch 53: o titulo vai na frente da tabela (antes ia depois dela na pagina seguinte)
+        const ult = pg._cont.lastElementChild;
+        if (ult && /^H[23]$/.test(ult.tagName) && pg._cont.children.length > 1) { pg._cont.removeChild(ult); fila.unshift(ult); }
         pg = novaPagina(); paginas.push(pg);
         continue;
       }
@@ -831,12 +841,13 @@ function paginarDocumentoPdf(doc, wrap) {
       }
       continue;
     }
-    if (vazia()) continue;                    // unidade maior que a pagina: fica e transborda (raro)
+    if (pg._cont.children.length === 1) continue;   // unidade maior que a pagina inteira: fica e transborda (raro)
     pg._cont.removeChild(u);
-    // titulo orfao no fim da pagina vai junto para a proxima
-    const ult = pg._cont.lastElementChild;
-    if (ult && /^H[23]$/.test(ult.tagName)) { pg._cont.removeChild(ult); fila.unshift(ult); }
     fila.unshift(u);
+    // titulo orfao no fim da pagina vai junto para a proxima, NA FRENTE da caixa
+    // (patch 53: antes entrava depois dela - no relatorio do mensal o "Desafios" saiu embaixo do proprio texto)
+    const ult = pg._cont.lastElementChild;
+    if (ult && /^H[23]$/.test(ult.tagName) && pg._cont.children.length > 1) { pg._cont.removeChild(ult); fila.unshift(ult); }
     pg = novaPagina(); paginas.push(pg);
   }
   // numeracao no rodape

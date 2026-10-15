@@ -612,7 +612,7 @@ window.MODULOS.pacientes = {
         '<div class="pac-selos">' + (d.portal_doc_id ? '<span class="selo selo-ok">no portal</span>' : '') +
         '<button class="btn-chip" onclick="MODULOS.pacientes.abrirAnexo(\'' + d.arquivo_path + '\', \'' + escaparHtml(d.titulo).replace(/'/g, '') + '\', \'' + (d.mime || '') + '\')">Abrir</button>' +
         (pode && !d.portal_doc_id && podeEnviarPortal() ? '<button class="btn-chip" onclick="MODULOS.pacientes.anexoPortal(\'' + d.id + '\')">&#128228; Portal</button>' : '') +
-        (pode ? '<button class="btn-chip" title="Apagar" onclick="MODULOS.pacientes.apagarAnexo(\'' + d.id + '\', \'' + d.arquivo_path + '\')">&#10005;</button>' : '') +
+        (pode ? this.btnLixeira('MODULOS.pacientes.apagarAnexo(\'' + d.id + '\', \'' + d.arquivo_path + '\')', 'Apagar este arquivo') : '') +
         '</div></div>').join('') : '<p class="sub">Nenhum arquivo anexado.</p>') +
       '</div>';
   },
@@ -666,7 +666,7 @@ window.MODULOS.pacientes = {
     if (!silencioso) { popAviso('Liberado no portal da familia.'); this.listarAnexos(d.paciente_id); }
   },
   async apagarAnexo(id, caminho) {
-    if (!await popConfirmar('Apagar este arquivo? Se estiver no portal, some de la tambem.')) return;
+    if (!await popConfirmar('Apagar este arquivo? Se estiver no portal, some de la tambem.', { titulo: 'Apagar arquivo', ok: 'Apagar' })) return;
     const { data: d } = await sb.from('documentos_externos').select('portal_doc_id, paciente_id').eq('id', id).single();
     if (d && d.portal_doc_id) await sb.from('portal_documentos').delete().eq('id', d.portal_doc_id);
     const { error, count } = await sb.from('documentos_externos').delete({ count: 'exact' }).eq('id', id);
@@ -675,15 +675,43 @@ window.MODULOS.pacientes = {
     this.listarAnexos(d ? d.paciente_id : this.paciente.id);
   },
 
+  // patch 57: lixeira em cada arquivo (anexos e PDFs assinados), para quando alguem coloca errado
+  ICO_LIXO: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>',
+  btnLixeira(acao, titulo) {
+    return '<button type="button" class="btn-chip btn-lixeira" title="' + titulo + '" aria-label="' + titulo + '" onclick="' + acao + '">' + this.ICO_LIXO + '</button>';
+  },
+  podeApagarAssinado() { const p = window.CORTEX_SESSAO.profile; return ['direcao', 'coordenador', 'suporte'].includes(p.perfil_real || p.perfil); },
+
   async listarAssinados(pacienteId) {
     const alvo = document.getElementById('pac-assinados'); if (!alvo) return;
     const { data } = await sb.from('documentos_assinados').select('id, tipo, titulo, arquivo_path, assinante, criado_em')
       .eq('paciente_id', pacienteId).order('criado_em', { ascending: false }).limit(50);
-    if (!data || !data.length) return;
+    this._assinados = data || [];
+    if (!data || !data.length) { alvo.innerHTML = ''; return; }
+    const pode = this.podeApagarAssinado();
     alvo.innerHTML = '<div class="cartao"><h3>PDFs assinados digitalmente <small class="sub">&middot; ICP-Brasil</small></h3>' +
       data.map(d => '<div class="linha-doc"><div><b>' + escaparHtml(d.titulo || d.tipo) + '</b><small>' + escaparHtml(d.assinante || '') + ' &middot; ' +
         new Date(d.criado_em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) + '</small></div>' +
-        '<div class="pac-selos"><span class="selo selo-ok">assinado</span><button class="btn-chip" onclick="MODULOS.pacientes.abrirPdf(\'' + d.arquivo_path + '\')">Abrir PDF</button></div></div>').join('') + '</div>';
+        '<div class="pac-selos"><span class="selo selo-ok">assinado</span><button class="btn-chip" onclick="MODULOS.pacientes.abrirAssinado(\'' + d.id + '\')">Abrir PDF</button>' +
+        (pode ? this.btnLixeira('MODULOS.pacientes.apagarAssinado(\'' + d.id + '\')', 'Apagar este PDF assinado') : '') + '</div></div>').join('') + '</div>';
+  },
+  abrirAssinado(id) {
+    const d = (this._assinados || []).find(x => String(x.id) === String(id)); if (!d) return;
+    this.abrirPdf(d.arquivo_path, d.titulo || 'Documento assinado');
+  },
+  async apagarAssinado(id) {
+    const d = (this._assinados || []).find(x => String(x.id) === String(id)); if (!d) return;
+    const quando = new Date(d.criado_em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    if (!await popConfirmar('Apagar o PDF assinado "' + (d.titulo || d.tipo || 'documento') + '" de ' + quando + '?\n\nO arquivo sai da pasta da crianca de vez. O relatorio continua no sistema: se precisar, gere e assine de novo.',
+      { titulo: 'Apagar PDF assinado', ok: 'Apagar' })) return;
+    const { data: caminho, error } = await sb.rpc('fn_apagar_pdf_assinado', { p_id: String(id) });
+    if (error) {
+      popAviso(/fn_apagar_pdf_assinado|schema cache|function/i.test(error.message) ? 'Falta rodar o SQL do patch 57 no banco.' : 'Nao consegui apagar: ' + error.message);
+      return;
+    }
+    // o arquivo em si (o registro ja saiu; se o storage recusar, fica so o arquivo solto, sem aparecer em lugar nenhum)
+    if (caminho) { try { await sb.storage.from('documentos').remove([caminho]); } catch (e) { /* segue */ } }
+    this.listarAssinados(this.paciente ? this.paciente.id : d.paciente_id);
   },
 
   htmlDocumentos(p) {
@@ -814,12 +842,12 @@ window.MODULOS.pacientes = {
     } catch (e) { erro.textContent = e.message; erro.classList.add('visivel'); botao.disabled = false; botao.textContent = 'Salvar'; }
   },
 
-  async abrirPdf(caminho) {
+  async abrirPdf(caminho, titulo) {
     const { data, error } = await sb.storage
       .from('documentos')
       .createSignedUrl(caminho, 300);
-    if (error || !data) { alert('Nao foi possivel abrir o arquivo.'); return; }
-    abrirModalPdf('Encaminhamento medico', data.signedUrl);
+    if (error || !data) { popAviso('Nao foi possivel abrir o arquivo.'); return; }
+    abrirModalPdf(titulo || 'Encaminhamento medico', data.signedUrl);
   },
 
   // Nomes dos aplicadores da crianca: principal primeiro, depois os demais

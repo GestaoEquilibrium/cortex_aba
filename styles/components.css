@@ -3488,3 +3488,8 @@ html[data-cor] .nav-item.ativa .nav-badge { color: var(--acao-forte); }
 .la-campo-so { padding: 8px 10px; margin-bottom: 10px; border: 1px dashed var(--line-strong); border-radius: 10px; background: var(--surface-alt); }
 .la-campo-so .la-campo-topo { margin: 0; }
 .la-campo-so label { font-weight: 700; font-size: 12.5px; }
+
+/* ── Patch 57: lixeira dos arquivos da pasta da crianca ── */
+.btn-chip.btn-lixeira { padding: 6px 9px; color: var(--ink-muted); }
+.btn-chip.btn-lixeira svg { display: block; }
+.btn-chip.btn-lixeira:hover { color: #fff; background: var(--st-bad, #DC2626); border-color: var(--st-bad, #DC2626); }

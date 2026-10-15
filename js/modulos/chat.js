@@ -35,8 +35,14 @@ window.MODULOS.chat = {
     mais: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>',
     lixo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>',
     pdf: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg>',
-    rir: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.5s1.3 1.8 3.5 1.8 3.5-1.8 3.5-1.8"/><line x1="9" y1="9.5" x2="9" y2="9.6"/><line x1="15" y1="9.5" x2="15" y2="9.6"/></svg>'
+    rir: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.5s1.3 1.8 3.5 1.8 3.5-1.8 3.5-1.8"/><line x1="9" y1="9.5" x2="9" y2="9.6"/><line x1="15" y1="9.5" x2="15" y2="9.6"/></svg>',
+    responder: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>',
+    fechar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>'
   },
+  // patch 58: responder uma mensagem especifica e painel com todos os emojis nas reacoes
+  _resp: null,          // mensagem sendo respondida { id, nome, trecho }
+  _orig: {},            // mensagens citadas que nao estao entre as carregadas (id -> mensagem)
+  _semResp: false,      // banco sem a coluna resposta_a (SQL do patch 58 nao rodado)
   // patch 50: reacoes (uma por pessoa por mensagem) e anexos em cartao (imagem e PDF, opcao B do Wess)
   EMOJIS: ['\ud83d\udc4d', '\u2764\ufe0f', '\ud83d\ude02', '\ud83d\ude2e', '\ud83d\ude22', '\ud83d\ude4f'],
   LIMITE_ANEXOS: 6,
@@ -204,6 +210,7 @@ window.MODULOS.chat = {
   // ─────────────── THREAD ───────────────
 
   async abrir(id) {
+    if (this._resp && this._resp.conversa !== id) this._resp = null;
     const c = this.lista.find(x => x.id === id);
     if (!c) return;
     if (!this.aberta || this.aberta.id !== id) this._pend = [];
@@ -225,13 +232,18 @@ window.MODULOS.chat = {
     if (!alvo || !this.aberta || this.aberta.id !== id) return;
     const COLS = 'id, autor_id, texto, tipo, criado_em, autor:profiles!chat_mensagens_autor_id_fkey(nome, foto_path)';
     const qMsgs = cols => sb.from('chat_mensagens').select(cols).eq('conversa_id', id).order('criado_em').limit(400);
+    const colsAgora = () => COLS + (this._semAnexos ? '' : ', anexos') + (this._semResp ? '' : ', resposta_a');
     const [rM0, rP] = await Promise.all([
-      qMsgs(this._semAnexos ? COLS : COLS + ', anexos'),
+      qMsgs(colsAgora()),
       sb.from('chat_participantes').select('usuario_id, ultima_leitura, pessoa:profiles!chat_participantes_usuario_id_fkey(nome, perfil, foto_path, ativo)')
         .eq('conversa_id', id)
     ]);
     let rM = rM0;
-    if (rM.error && /anexos/i.test(rM.error.message)) { this._semAnexos = true; rM = await qMsgs(COLS); }
+    // sem as colunas novas (SQL do patch 50 ou 58 ainda nao rodado): le sem elas
+    for (let i = 0; i < 2 && rM.error && /anexos|resposta_a/i.test(rM.error.message); i++) {
+      if (/resposta_a/i.test(rM.error.message)) this._semResp = true; else this._semAnexos = true;
+      rM = await qMsgs(colsAgora());
+    }
     if (!this.aberta || this.aberta.id !== id) return;   // trocou de conversa no meio
     this._msgs = rM.data || [];
     this._parts = rP.data || [];
@@ -251,6 +263,7 @@ window.MODULOS.chat = {
       alvo.innerHTML = this.htmlCabecalho() +
         '<div class="chat-msgs" id="chat-msgs">' + this.htmlMensagens() + '</div>' +
         '<div class="chat-pend" id="chat-pend" hidden></div>' +
+        '<div class="chat-resp-barra" id="chat-resp" hidden></div>' +
         '<div class="chat-envio">' +
         '  <div class="chat-mais-caixa">' +
         '    <button type="button" class="chat-anexar" id="chat-anexar" title="Anexar imagem ou PDF" onmousedown="event.preventDefault()" onclick="MODULOS.chat.menuAnexo(event)">' + this.ICO.mais + '</button>' +
@@ -276,6 +289,8 @@ window.MODULOS.chat = {
     this.desenharReacoes();
     this.assinarAnexos();
     this.carregarReacoes(id);
+    this.carregarCitadas();
+    this.desenharResp();
 
     // li tudo: zera as nao lidas desta conversa
     if (this.aberta.nao_lidas || this._msgs.some(m => m.autor_id !== this.eu())) {
@@ -330,12 +345,16 @@ window.MODULOS.chat = {
         (m.tipo === 'comunicado' ? '<small class="chat-selo-com">&#128227; Comunicado</small>' : '');
       const classe = 'chat-bolha' + (minha ? ' minha' : '') + (m.tipo === 'comunicado' ? ' comunicado' : '') + (mostraNome ? ' com-nome' : '');
       const id = this.attr(m.id);
+      // patch 58: mensagem que responde outra mostra a citacao dentro do balao (so anexo: dentro do 1o cartao)
+      const cit = m.resposta_a ? this.htmlCitacao(m.resposta_a) : '';
       return h + '<div class="chat-msg' + (minha ? ' minha' : '') + '" data-id="' + id + '">' +
-        (soAnexo ? '' : '<div class="' + classe + '">' + cabBolha + '<div class="chat-texto">' + this.formatar(m.texto) + '</div>' + (anexos.length ? '' : horaHtml) + '</div>') +
-        anexos.map((a, i) => this.htmlCartaoAnexo(a, (soAnexo && i === 0 ? cabBolha : ''), i === anexos.length - 1 ? horaHtml : '', classe)).join('') +
+        (soAnexo ? '' : '<div class="' + classe + '">' + cabBolha + cit + '<div class="chat-texto">' + this.formatar(m.texto) + '</div>' + (anexos.length ? '' : horaHtml) + '</div>') +
+        anexos.map((a, i) => this.htmlCartaoAnexo(a, (soAnexo && i === 0 ? cabBolha + cit : ''), i === anexos.length - 1 ? horaHtml : '', classe)).join('') +
         '<div class="chat-reacoes" data-id="' + id + '"></div>' +
+        '<div class="chat-acoes">' +
         '<button type="button" class="chat-reagir" title="Reagir" data-id="' + id + '" onclick="MODULOS.chat.pickerReacao(this)">' + this.ICO.rir + '</button>' +
-        '</div>';
+        '<button type="button" class="chat-responder" title="Responder" data-id="' + id + '" onmousedown="event.preventDefault()" onclick="MODULOS.chat.responder(this.dataset.id)">' + this.ICO.responder + '</button>' +
+        '</div></div>';
     }).join('');
   },
 
@@ -345,6 +364,76 @@ window.MODULOS.chat = {
 
   tecla(e) {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.enviar(); }
+    else if (e.key === 'Escape' && this._resp) { e.preventDefault(); this.cancelarResp(); }
+  },
+
+  // ─────── RESPONDER UMA MENSAGEM (patch 58) ───────
+  msgPorId(id) { return this._msgs.find(m => String(m.id) === String(id)) || this._orig[String(id)] || null; },
+  trechoDe(m) {
+    if (!m) return '';
+    const an = Array.isArray(m.anexos) ? m.anexos.filter(a => a && a.path) : [];
+    const t = an.length && (m.texto || '') === this.rotuloAnexos(an) ? this.rotuloAnexos(an) : (m.texto || '');
+    const s = String(t).replace(/\s+/g, ' ').trim();
+    return s.length > 140 ? s.slice(0, 138) + '...' : s;
+  },
+  htmlCitacao(idCitada) {
+    const o = this.msgPorId(idCitada);
+    const nome = o ? (String(o.autor_id) === String(this.eu()) ? 'Voce' : (o.autor ? o.autor.nome.split(' ')[0] : 'Alguem')) : '';
+    const cor = o && o.autor ? corAvatar(o.autor.nome) : '';
+    const an = o && Array.isArray(o.anexos) ? o.anexos.filter(a => a && a.path) : [];
+    const img = an.find(a => this.ehImagem(a.tipo));
+    return '<button type="button" class="chat-cit" data-ir="' + this.attr(idCitada) + '" onclick="MODULOS.chat.irParaMensagem(this.dataset.ir)" title="Ir para a mensagem">' +
+      '<span class="chat-cit-t">' + (o ? '<b class="' + cor + '">' + escaparHtml(nome) + '</b><span>' + escaparHtml(this.trechoDe(o)) + '</span>' : '<span class="chat-cit-sem">Mensagem que nao esta mais aqui</span>') + '</span>' +
+      (img ? '<img class="chat-cit-img" data-path="' + this.attr(img.path) + '" alt="" onerror="this.remove()">' : '') + '</button>';
+  },
+  // mensagens citadas mais antigas que as 400 carregadas: busca e redesenha
+  async carregarCitadas() {
+    if (this._semResp) return;
+    const falta = [...new Set(this._msgs.map(m => m.resposta_a).filter(id => id && !this.msgPorId(id)).map(String))];
+    if (!falta.length) { this.ligarCitImgs(); return; }
+    const conversa = this.aberta && this.aberta.id;
+    const { data } = await sb.from('chat_mensagens').select('id, autor_id, texto, tipo, criado_em, anexos, autor:profiles!chat_mensagens_autor_id_fkey(nome, foto_path)').in('id', falta);
+    (data || []).forEach(m => { this._orig[String(m.id)] = m; });
+    if (!data || !data.length || !this.aberta || this.aberta.id !== conversa) return;
+    const rol = document.getElementById('chat-msgs');
+    if (rol) { const fim = rol.scrollHeight - rol.scrollTop - rol.clientHeight < 90; rol.innerHTML = this.htmlMensagens(); this.desenharReacoes(); if (fim) rol.scrollTop = rol.scrollHeight; }
+    this.ligarCitImgs();
+  },
+  // miniatura da imagem citada (mesmos links assinados dos cartoes de anexo)
+  async ligarCitImgs() {
+    const imgs = document.querySelectorAll('#chat-msgs .chat-cit-img[data-path], #chat-resp .chat-cit-img[data-path]');
+    for (const im of imgs) { try { const u = await this.urlAnexo(im.dataset.path); if (u) im.src = u; else im.remove(); } catch (e) { im.remove(); } }
+  },
+  responder(id) {
+    const m = this.msgPorId(id); if (!m || !this.aberta) return;
+    document.getElementById('chat-picker')?.remove();
+    document.querySelectorAll('#chat-msgs .chat-msg.toque').forEach(x => x.classList.remove('toque'));
+    const minha = String(m.autor_id) === String(this.eu());
+    this._resp = { id: m.id, conversa: this.aberta.id, nome: minha ? 'voce mesmo(a)' : (m.autor ? m.autor.nome.split(' ')[0] : 'Alguem') };
+    this.desenharResp();
+    const ta = document.getElementById('chat-texto'); if (ta) ta.focus();
+  },
+  cancelarResp() { this._resp = null; this.desenharResp(); document.getElementById('chat-texto')?.focus(); },
+  desenharResp() {
+    const el = document.getElementById('chat-resp'); if (!el) return;
+    const r = this._resp && this.aberta && this._resp.conversa === this.aberta.id ? this._resp : null;
+    if (!r) { el.hidden = true; el.innerHTML = ''; return; }
+    const m = this.msgPorId(r.id);
+    const an = m && Array.isArray(m.anexos) ? m.anexos.filter(a => a && a.path) : [];
+    const img = an.find(a => this.ehImagem(a.tipo));
+    el.hidden = false;
+    el.innerHTML = '<span class="chat-resp-ic">' + this.ICO.responder + '</span>' +
+      '<div class="chat-resp-t"><b>Respondendo a ' + escaparHtml(r.nome) + '</b><span>' + escaparHtml(this.trechoDe(m)) + '</span></div>' +
+      (img ? '<img class="chat-cit-img" data-path="' + this.attr(img.path) + '" alt="" onerror="this.remove()">' : '') +
+      '<button type="button" class="chat-resp-x" title="Cancelar a resposta (Esc)" onmousedown="event.preventDefault()" onclick="MODULOS.chat.cancelarResp()">' + this.ICO.fechar + '</button>';
+    if (img) this.ligarCitImgs();
+  },
+  irParaMensagem(id) {
+    const el = document.querySelector('#chat-msgs .chat-msg[data-id="' + CSS.escape(String(id)) + '"]');
+    if (!el) { popAviso('Essa mensagem e mais antiga que as ultimas 400 desta conversa.'); return; }
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.classList.remove('piscar'); void el.offsetWidth; el.classList.add('piscar');
+    setTimeout(() => el.classList.remove('piscar'), 1700);
   },
   crescer(ta) {
     ta.style.height = 'auto';
@@ -370,8 +459,17 @@ window.MODULOS.chat = {
       }
       const linha = { conversa_id: conversa, autor_id: this.eu(), texto: texto || this.rotuloAnexos(anexos) };
       if (anexos.length) linha.anexos = anexos;
-      const { error } = await sb.from('chat_mensagens').insert(linha);
+      const resp = this._resp && this._resp.conversa === conversa ? this._resp : null;
+      if (resp && !this._semResp) linha.resposta_a = resp.id;
+      let { error } = await sb.from('chat_mensagens').insert(linha);
+      if (error && /resposta_a/i.test(error.message)) {
+        // sem o SQL do patch 58: manda a mensagem mesmo assim, sem a ligacao com a citada
+        this._semResp = true; delete linha.resposta_a;
+        ({ error } = await sb.from('chat_mensagens').insert(linha));
+        if (!error) popAviso('Mensagem enviada, mas sem a citacao: falta rodar o SQL do patch 58 (responder mensagem).');
+      }
       if (error) throw new Error(/anexos/i.test(error.message) ? 'falta rodar o SQL do patch 50 (envio de imagem e PDF).' : error.message);
+      if (resp) { this._resp = null; this.desenharResp(); }
       if (pend.length) { this._pend = []; this.desenharPend(); }
       this._rolarFim = true;
       if (this.aberta && this.aberta.id === conversa) this.carregarThread(conversa, true);
@@ -573,17 +671,104 @@ window.MODULOS.chat = {
     const id = btn.dataset.id;
     const meu = (this._reac[id] || []).find(r => r.usuario_id === this.eu());
     const pk = document.createElement('div'); pk.id = 'chat-picker'; pk.className = 'chat-picker';
-    pk.innerHTML = this.EMOJIS.map(e => '<button type="button"' + (meu && meu.emoji === e ? ' class="minha"' : '') + ' data-emoji="' + this.attr(e) + '">' + e + '</button>').join('');
-    pk.addEventListener('mousedown', ev => ev.preventDefault());
-    pk.addEventListener('click', ev => { const b = ev.target.closest('button'); if (!b) return; pk.remove(); this.reagir(id, b.dataset.emoji); });
+    // patch 58: as 6 de sempre (+ a que a pessoa ja usou, se for outra) e o "+" que abre todos os emojis
+    const rapidos = this.EMOJIS.concat(meu && !this.EMOJIS.includes(meu.emoji) ? [meu.emoji] : []);
+    pk.innerHTML = rapidos.map(e => '<button type="button"' + (meu && meu.emoji === e ? ' class="minha"' : '') + ' data-emoji="' + this.attr(e) + '">' + e + '</button>').join('') +
+      '<button type="button" class="chat-picker-mais" title="Todos os emojis" data-mais="1">' + this.ICO.mais + '</button>';
+    pk.addEventListener('mousedown', ev => { if (!ev.target.closest('input')) ev.preventDefault(); });
+    pk.addEventListener('click', ev => {
+      const b = ev.target.closest('button'); if (!b) return;
+      if (b.dataset.mais) { this.abrirPainelEmoji(id, pk); return; }
+      if (!b.dataset.emoji) return;
+      pk.remove(); this.guardarRecente(b.dataset.emoji); this.reagir(id, b.dataset.emoji);
+    });
     document.body.appendChild(pk);
     const r = btn.getBoundingClientRect();
     const larg = pk.offsetWidth, alt = pk.offsetHeight;
     pk.style.left = Math.max(8, Math.min(window.innerWidth - larg - 8, r.left + r.width / 2 - larg / 2)) + 'px';
     pk.style.top = Math.max(8, r.top - alt - 8) + 'px';
-    setTimeout(() => document.addEventListener('click', function fora(ev) { if (!pk.contains(ev.target)) { pk.remove(); document.removeEventListener('click', fora); } }), 0);
+    // patch 58: composedPath (e nao contains): o "+" troca o conteudo da barrinha no meio do clique
+    setTimeout(() => document.addEventListener('click', function fora(ev) {
+      if (!pk.isConnected) { document.removeEventListener('click', fora); return; }
+      if (!ev.composedPath().includes(pk)) { pk.remove(); document.removeEventListener('click', fora); }
+    }), 0);
   },
+  // ─────── TODOS OS EMOJIS (patch 58) ───────
+  // lista em js/emojis.js (nome em portugues para a busca), carregada so na primeira vez que alguem abre o painel
+  carregarEmojis() {
+    if (window.CORTEX_EMOJIS) return Promise.resolve(window.CORTEX_EMOJIS);
+    if (this._carregandoEmojis) return this._carregandoEmojis;
+    this._carregandoEmojis = new Promise((ok, falha) => {
+      const s = document.createElement('script'); s.src = 'js/emojis.js?v=58';
+      s.onload = () => ok(window.CORTEX_EMOJIS || []);
+      s.onerror = () => { this._carregandoEmojis = null; falha(new Error('Nao consegui carregar os emojis.')); };
+      document.head.appendChild(s);
+    });
+    return this._carregandoEmojis;
+  },
+  recentes() { try { return JSON.parse(localStorage.getItem('cortex_emoji_recentes') || '[]'); } catch (e) { return []; } },
+  guardarRecente(e) {
+    try { const l = this.recentes().filter(x => x !== e); l.unshift(e); localStorage.setItem('cortex_emoji_recentes', JSON.stringify(l.slice(0, 24))); } catch (x) { /* sem memoria do navegador */ }
+  },
+  semAcento(s) { return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); },
+  async abrirPainelEmoji(id, pk) {
+    let cats;
+    try { cats = await this.carregarEmojis(); } catch (e) { popAviso(e.message); return; }
+    const meu = ((this._reac[id] || []).find(r => r.usuario_id === this.eu()) || {}).emoji;
+    const rec = this.recentes();
+    // painel grande no meio da tela (no celular sobe de baixo), no lugar da barrinha
+    if (pk) pk.remove();
+    const fundo = document.createElement('div'); fundo.className = 'chat-emo-fundo'; fundo.id = 'chat-emo-fundo';
+    const painel = document.createElement('div'); painel.className = 'chat-emo grande'; painel.id = 'chat-picker';
+    fundo.appendChild(painel); document.body.appendChild(fundo);
+    fundo.addEventListener('click', ev => { if (ev.target === fundo) fechar(); });
+    const fechar = () => { fundo.remove(); document.removeEventListener('keydown', esc); };
+    const esc = ev => { if (ev.key === 'Escape') { ev.preventDefault(); fechar(); } };
+    document.addEventListener('keydown', esc);
+    const lista = (rec.length ? [{ k: 'recentes', n: 'Recentes', i: '\ud83d\udd52', e: rec.map(e => [e, '']) }] : []).concat(cats);
+    const botao = e => '<button type="button" class="chat-emo-e' + (e === meu ? ' minha' : '') + '" data-emoji="' + this.attr(e) + '">' + e + '</button>';
+    painel.innerHTML = '<div class="chat-emo-topo"><input type="search" class="chat-emo-busca" placeholder="Buscar emoji (ex.: riso, coracao, palmas)" autocomplete="off">' +
+      '<button type="button" class="chat-emo-x" title="Fechar (Esc)">' + this.ICO.fechar + '</button></div>' +
+      '<div class="chat-emo-abas">' + lista.map((c, i) => '<button type="button" data-cat="' + c.k + '" title="' + c.n + '"' + (i === 0 ? ' class="ativa"' : '') + '>' + c.i + '</button>').join('') + '</div>' +
+      '<div class="chat-emo-grade"></div>';
+    const grade = painel.querySelector('.chat-emo-grade'), abas = painel.querySelector('.chat-emo-abas'), busca = painel.querySelector('.chat-emo-busca');
+    const marcarAba = k => abas.querySelectorAll('button').forEach(b => b.classList.toggle('ativa', b.dataset.cat === k));
+    // todas as categorias em sequencia, com titulo; as abas pulam para a categoria
+    const irPara = k => { const s = grade.querySelector('[data-sec="' + k + '"]'); if (s) grade.scrollTop = s.offsetTop - grade.offsetTop; marcarAba(k); };
+    const mostrar = k => {
+      grade.innerHTML = lista.map(c => '<div class="chat-emo-sec" data-sec="' + c.k + '"><h5>' + c.n + '</h5><div class="chat-emo-g">' + c.e.map(x => botao(x[0])).join('') + '</div></div>').join('');
+      irPara(k || lista[0].k);
+    };
+    mostrar(lista[0].k);
+    grade.addEventListener('scroll', () => {
+      if (busca.value.trim()) return;
+      let atual = lista[0].k;
+      grade.querySelectorAll('.chat-emo-sec').forEach(s => { if (s.offsetTop - grade.offsetTop <= grade.scrollTop + 30) atual = s.dataset.sec; });
+      marcarAba(atual);
+    });
+    abas.addEventListener('click', ev => {
+      const b = ev.target.closest('button[data-cat]'); if (!b) return;
+      if (busca.value) { busca.value = ''; mostrar(b.dataset.cat); } else irPara(b.dataset.cat);
+    });
+    busca.addEventListener('input', () => {
+      const q = this.semAcento(busca.value.trim());
+      if (!q) { mostrar(lista[0].k); return; }
+      const termos = q.split(/\s+/);
+      const achou = [];
+      cats.forEach(c => c.e.forEach(x => { if (termos.every(t => x[1].includes(t)) && !achou.includes(x[0])) achou.push(x[0]); }));
+      grade.innerHTML = achou.length ? '<h5>' + achou.length + ' encontrado' + (achou.length === 1 ? '' : 's') + '</h5><div class="chat-emo-g">' + achou.slice(0, 160).map(botao).join('') + '</div>' : '<p class="chat-emo-nada">Nenhum emoji com "' + escaparHtml(busca.value.trim()) + '"</p>';
+      abas.querySelectorAll('button').forEach(b => b.classList.remove('ativa'));
+    });
+    painel.addEventListener('click', ev => {
+      if (ev.target.closest('.chat-emo-x')) { fechar(); return; }
+      const b = ev.target.closest('.chat-emo-e'); if (!b) return;
+      fechar(); this.guardarRecente(b.dataset.emoji); this.reagir(id, b.dataset.emoji);
+    });
+    if (window.matchMedia('(min-width: 721px)').matches) busca.focus();
+  },
+
   async reagir(id, emoji) {
+    document.querySelectorAll('#chat-msgs .chat-msg.toque').forEach(x => x.classList.remove('toque'));   // celular: esconde os botoes depois de escolher
     const eu = this.eu();
     const antes = (this._reac[id] || []).slice();
     const meu = antes.find(r => r.usuario_id === eu);

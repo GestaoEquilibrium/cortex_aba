@@ -3493,3 +3493,75 @@ html[data-cor] .nav-item.ativa .nav-badge { color: var(--acao-forte); }
 .btn-chip.btn-lixeira { padding: 6px 9px; color: var(--ink-muted); }
 .btn-chip.btn-lixeira svg { display: block; }
 .btn-chip.btn-lixeira:hover { color: #fff; background: var(--st-bad, #DC2626); border-color: var(--st-bad, #DC2626); }
+
+/* ══════════════ Patch 58: chat - responder mensagem e todos os emojis nas reacoes ══════════════ */
+/* botoes ao lado da mensagem (reagir + responder) */
+.chat-acoes { position: absolute; top: 4px; right: -72px; display: flex; gap: 4px; opacity: 0; transition: opacity .15s; }
+.chat-msg.minha .chat-acoes { right: auto; left: -72px; flex-direction: row-reverse; }
+.chat-acoes .chat-reagir { position: static; opacity: 1; }
+.chat-msg.minha .chat-acoes .chat-reagir { left: auto; }
+.chat-responder { width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--ink-muted); display: grid; place-items: center; cursor: pointer; padding: 0; }
+.chat-responder svg { width: 16px; height: 16px; }
+.chat-responder:hover, .chat-acoes .chat-reagir:hover { color: var(--acao); border-color: var(--acao); }
+.chat-msg:hover .chat-acoes, .chat-acoes:focus-within { opacity: 1; }
+@media (hover: none) { .chat-acoes { opacity: 0; pointer-events: none; } .chat-msg.toque .chat-acoes { opacity: 1; pointer-events: auto; } }
+.chat-msg.piscar > .chat-bolha { animation: chatPiscar 1.6s ease; }
+@keyframes chatPiscar { 0%, 35% { box-shadow: 0 0 0 3px rgba(245, 158, 11, .75); } 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); } }
+
+/* citacao dentro do balao */
+.chat-cit { display: flex; align-items: stretch; gap: 8px; width: 100%; min-width: 180px; margin: 2px 0 6px; padding: 6px 8px; border: none; border-left: 4px solid var(--acao); border-radius: 8px;
+  background: rgba(15, 23, 42, .06); color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.chat-bolha.minha .chat-cit { background: rgba(255, 255, 255, .18); border-left-color: #fff; }
+.chat-cit-t { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.chat-cit-t b { font-size: 11.5px; font-weight: 800; color: var(--acao); background: none !important; -webkit-background-clip: initial; -webkit-text-fill-color: currentColor; }
+.chat-bolha.minha .chat-cit-t b { color: #fff; }
+.chat-cit-t b.av-2 { color: #DB2777; } .chat-cit-t b.av-3 { color: #16A34A; } .chat-cit-t b.av-4 { color: #7C4DFF; } .chat-cit-t b.av-5 { color: #0891B2; } .chat-cit-t b.av-6 { color: #D97706; }
+.chat-bolha.minha .chat-cit-t b[class] { color: #fff; }
+.chat-cit-t span { font-size: 12px; line-height: 1.35; opacity: .85; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word; }
+.chat-cit-sem { font-style: italic; }
+.chat-cit-img { width: 40px; height: 40px; border-radius: 6px; object-fit: cover; flex: none; background: rgba(15, 23, 42, .08); }
+
+/* barra "Respondendo a..." em cima do campo */
+.chat-resp-barra { display: flex; align-items: center; gap: 10px; margin: 0 12px; padding: 8px 10px; border-left: 4px solid var(--acao); border-radius: 10px 10px 0 0; background: var(--surface-alt); }
+.chat-resp-barra[hidden] { display: none; }
+.chat-resp-ic { color: var(--acao); flex: none; } .chat-resp-ic svg { width: 18px; height: 18px; display: block; }
+.chat-resp-t { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.chat-resp-t b { font-size: 12px; color: var(--acao); }
+.chat-resp-t span { font-size: 12.5px; color: var(--ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chat-resp-x { width: 28px; height: 28px; border-radius: 50%; border: none; background: transparent; color: var(--ink-muted); cursor: pointer; display: grid; place-items: center; flex: none; }
+.chat-resp-x:hover { background: var(--line); color: var(--ink); } .chat-resp-x svg { width: 15px; height: 15px; }
+
+/* "+" na barrinha de reacoes */
+.chat-picker .chat-picker-mais { color: var(--ink-muted); display: grid; place-items: center; border: 1.5px dashed var(--line-strong); }
+.chat-picker .chat-picker-mais svg { width: 16px; height: 16px; }
+/* painel com todos os emojis: grande no meio da tela (no celular sobe de baixo) */
+.chat-emo-topo { display: flex; align-items: center; gap: 6px; padding: 8px 8px 6px; }
+.chat-emo-busca { flex: 1; min-width: 0; padding: 7px 11px; border: 1px solid var(--line); border-radius: 999px; font: inherit; font-size: 13px; background: var(--surface-alt); color: var(--ink); }
+.chat-emo-busca:focus { outline: none; border-color: var(--acao); }
+.chat-emo .chat-emo-x { width: 30px; height: 30px; border-radius: 50%; border: none; background: transparent; color: var(--ink-muted); cursor: pointer; display: grid; place-items: center; font-size: 0; }
+.chat-emo .chat-emo-x:hover { background: var(--line); transform: none; } .chat-emo .chat-emo-x svg { width: 15px; height: 15px; }
+.chat-emo-abas { display: flex; gap: 2px; padding: 0 6px 6px; border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
+.chat-emo-abas button { flex: none; width: 34px; height: 32px; border: none; border-radius: 8px; background: transparent; font-size: 18px; cursor: pointer; opacity: .55; filter: grayscale(.4); padding: 0; }
+.chat-emo-abas button:hover { opacity: 1; transform: none; background: var(--surface-alt); }
+.chat-emo-abas button.ativa { opacity: 1; filter: none; background: var(--acao-soft); }
+.chat-emo-grade { flex: 1; overflow-y: auto; padding: 4px 8px 10px; }
+.chat-emo-grade h5 { margin: 6px 4px 4px; font-size: 10.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-muted); }
+.chat-emo-g { display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; }
+.chat-emo .chat-emo-e { width: 100%; aspect-ratio: 1; border: none; border-radius: 8px; background: transparent; font-size: 22px; line-height: 1; cursor: pointer; padding: 0; transition: transform .1s; }
+.chat-emo .chat-emo-e:hover { background: var(--surface-alt); transform: scale(1.18); }
+.chat-emo .chat-emo-e.minha { background: var(--acao-soft); }
+.chat-emo-nada { padding: 24px 8px; text-align: center; color: var(--ink-muted); font-size: 13px; }
+.chat-emo-fundo { position: fixed; inset: 0; z-index: 330; background: rgba(15, 23, 42, .35); display: grid; place-items: center; }
+.chat-emo.grande { display: flex; flex-direction: column; width: 460px; max-width: calc(100vw - 24px); height: 540px; max-height: calc(100vh - 40px); background: var(--surface); border-radius: 18px; box-shadow: 0 24px 60px rgba(15, 23, 42, .3); overflow: hidden; }
+.chat-emo.grande .chat-emo-topo { padding: 12px 12px 8px; }
+.chat-emo.grande .chat-emo-g { grid-template-columns: repeat(9, 1fr); }
+.chat-emo.grande .chat-emo-e { font-size: 27px; }
+.chat-emo.grande .chat-emo-sec h5 { position: sticky; top: -4px; background: var(--surface); padding: 6px 4px 4px; margin: 0; z-index: 1; }
+.chat-emo.grande .chat-emo-abas button { width: 40px; height: 36px; font-size: 20px; }
+@media (max-width: 720px) {
+  .chat-acoes { right: -66px; } .chat-msg.minha .chat-acoes { left: -66px; }
+  .chat-emo-fundo { place-items: end center; }
+  .chat-emo.grande { width: 100%; max-width: 100%; height: 70vh; border-radius: 18px 18px 0 0; }
+  .chat-emo.grande .chat-emo-g { grid-template-columns: repeat(8, 1fr); }
+}
+[data-modo="escuro"] .chat-cit { background: rgba(255, 255, 255, .07); }

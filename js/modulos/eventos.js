@@ -23,6 +23,17 @@ window.MODULOS.eventos = {
     return e.profissional_id === eu || !e.profissional_id;
   },
   podeDemanda() { return perm('eventos.demandas') === 'E'; },
+  // patch 60: apaga a demanda (ou o parabens) quem criou e a gestao (direcao, coordenacao, suporte); o banco confere de novo
+  podeApagarDemanda(d) {
+    const p = window.CORTEX_SESSAO.profile;
+    return !!d && (d.criado_por === window.CORTEX_SESSAO.user.id || ['direcao', 'coordenador', 'suporte'].includes(p.perfil_real || p.perfil));
+  },
+  btnApagarDemanda(d) {
+    if (!this.podeApagarDemanda(d)) return '';
+    const tit = d.tipo === 'parabens' ? 'Apagar este parabens' : 'Apagar esta demanda';
+    return '<button type="button" class="btn-chip btn-lixeira" title="' + tit + '" aria-label="' + tit + '" onclick="MODULOS.eventos.apagarDemanda(\'' + d.id + '\')">' +
+      '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button>';
+  },
 
   // ─────────────── Prazo da estrutura de pre-supervisao (patch 31) ───────────────
   // Regra de Wess: a estrutura tem que ser enviada ate UM DIA ANTES da supervisao.
@@ -1169,6 +1180,7 @@ window.MODULOS.eventos = {
       .select('*, prof:profiles!demandas_profissional_id_fkey(nome), criador:profiles!demandas_criado_por_fkey(nome)')
       .order('criado_em', { ascending: false }).limit(60);
     const lista = data || [];
+    this._demandas = lista;
     const abertas = lista.filter(d => d.tipo === 'demanda' && !d.feita_em);
     const feitas = lista.filter(d => d.tipo === 'demanda' && d.feita_em).slice(0, 10);
     const pbs = lista.filter(d => d.tipo === 'parabens').slice(0, 10);
@@ -1188,7 +1200,7 @@ window.MODULOS.eventos = {
             escaparHtml(d.prof ? d.prof.nome : '-') +
             (d.prazo ? ' &middot; ate ' + d.prazo.split('-').reverse().join('/') : '') +
             (d.detalhe ? ' &middot; ' + escaparHtml(d.detalhe) : '') + '</small></div>' +
-            '<span class="selo selo-warn">Aberta</span></div>').join('')
+            '<div class="pac-selos dem-acoes"><span class="selo selo-warn">Aberta</span>' + this.btnApagarDemanda(d) + '</div></div>').join('')
         : '<p class="sub">Nenhuma demanda aberta.</p>') +
       (feitas.length
         ? '<h3 style="margin-top:12px">Concluidas recentes</h3>' +
@@ -1196,14 +1208,14 @@ window.MODULOS.eventos = {
             '<div class="linha-doc"><div><b>' + escaparHtml(d.titulo) + '</b><small>' +
             escaparHtml(d.prof ? d.prof.nome : '-') + ' &middot; feita em ' +
             new Date(d.feita_em).toLocaleDateString('pt-BR') + '</small></div>' +
-            '<span class="selo selo-ok">Feita</span></div>').join('')
+            '<div class="pac-selos dem-acoes"><span class="selo selo-ok">Feita</span>' + this.btnApagarDemanda(d) + '</div></div>').join('')
         : '') +
       (pbs.length
         ? '<h3 style="margin-top:12px">&#127881; Parabens enviados</h3>' +
           pbs.map(d =>
             '<div class="linha-doc"><div><b>' + escaparHtml(d.titulo) + '</b><small>para ' +
             escaparHtml(d.prof ? d.prof.nome : '-') + (d.feita_em ? ' &middot; visto' : ' &middot; ainda nao visto') +
-            '</small></div></div>').join('')
+            '</small></div>' + this.btnApagarDemanda(d) + '</div>').join('')
         : '') +
       '</div>';
   },
@@ -1245,6 +1257,25 @@ window.MODULOS.eventos = {
     });
     if (error) { erro.textContent = error.message; erro.classList.add('visivel'); return; }
     fecharModal();
+    this.carregarDemandas();
+  },
+
+  // patch 60: lixeira em cada demanda e parabens (some da lista e do aviso de quem recebeu)
+  async apagarDemanda(id) {
+    const d = (this._demandas || []).find(x => String(x.id) === String(id)); if (!d) return;
+    const pb = d.tipo === 'parabens';
+    const quem = d.prof ? d.prof.nome.split(' ')[0] : '';
+    const ok = await popConfirmar((pb ? 'Apagar o parabens "' : 'Apagar a demanda "') + d.titulo + '"' + (quem ? ' para ' + quem : '') + '?\n\n' +
+      (pb ? (d.feita_em ? 'Sai da lista de parabens enviados.' : 'Sai da lista e ' + (quem || 'a pessoa') + ' nao recebe mais o festejo.')
+          : (d.feita_em ? 'Sai da lista de concluidas.' : 'Sai da lista e do aviso de ' + (quem || 'quem recebeu') + '.')) + ' Nao da para desfazer.',
+      { titulo: pb ? 'Apagar parabens' : 'Apagar demanda', ok: 'Apagar' });
+    if (!ok) return;
+    const { error } = await sb.rpc('fn_apagar_demanda', { p_id: String(id) });
+    if (error) {
+      popAviso(/fn_apagar_demanda|Could not find the function|PGRST202/i.test(error.message + ' ' + (error.code || ''))
+        ? 'Falta rodar o SQL do patch 60 no banco (apagar demandas).' : 'Nao consegui apagar: ' + error.message);
+      return;
+    }
     this.carregarDemandas();
   },
 

@@ -3591,3 +3591,6 @@ html[data-cor] .nav-item.ativa .nav-badge { color: var(--acao-forte); }
 .chat-apagar-menu button.perigo b, .chat-apagar-menu button.perigo svg { color: var(--st-bad); }
 .chat-apagar-menu button.perigo:hover { background: var(--st-bad-bg); }
 .chat-apagar-menu button.cancelar { justify-content: center; color: var(--ink-muted); font-size: 13px; font-weight: 600; border-top: 1px solid var(--line); border-radius: 0 0 10px 10px; margin-top: 2px; }
+
+/* ══════════════ Patch 60: lixeira nas demandas e parabens (Supervisao) ══════════════ */
+.linha-doc .dem-acoes { flex: none; flex-wrap: nowrap; align-items: center; }

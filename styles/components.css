@@ -3496,8 +3496,8 @@ html[data-cor] .nav-item.ativa .nav-badge { color: var(--acao-forte); }
 
 /* ══════════════ Patch 58: chat - responder mensagem e todos os emojis nas reacoes ══════════════ */
 /* botoes ao lado da mensagem (reagir + responder) */
-.chat-acoes { position: absolute; top: 4px; right: -72px; display: flex; gap: 4px; opacity: 0; transition: opacity .15s; }
-.chat-msg.minha .chat-acoes { right: auto; left: -72px; flex-direction: row-reverse; }
+.chat-acoes { position: absolute; top: 4px; left: calc(100% + 6px); display: flex; gap: 4px; opacity: 0; transition: opacity .15s; }
+.chat-msg.minha .chat-acoes { left: auto; right: calc(100% + 6px); flex-direction: row-reverse; }
 .chat-acoes .chat-reagir { position: static; opacity: 1; }
 .chat-msg.minha .chat-acoes .chat-reagir { left: auto; }
 .chat-responder { width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--ink-muted); display: grid; place-items: center; cursor: pointer; padding: 0; }
@@ -3559,9 +3559,35 @@ html[data-cor] .nav-item.ativa .nav-badge { color: var(--acao-forte); }
 .chat-emo.grande .chat-emo-sec h5 { position: sticky; top: -4px; background: var(--surface); padding: 6px 4px 4px; margin: 0; z-index: 1; }
 .chat-emo.grande .chat-emo-abas button { width: 40px; height: 36px; font-size: 20px; }
 @media (max-width: 720px) {
-  .chat-acoes { right: -66px; } .chat-msg.minha .chat-acoes { left: -66px; }
   .chat-emo-fundo { place-items: end center; }
   .chat-emo.grande { width: 100%; max-width: 100%; height: 70vh; border-radius: 18px 18px 0 0; }
   .chat-emo.grande .chat-emo-g { grid-template-columns: repeat(8, 1fr); }
 }
 [data-modo="escuro"] .chat-cit { background: rgba(255, 255, 255, .07); }
+
+/* ══════════════ Patch 59: chat - apagar mensagem (para todos ou so para mim) ══════════════ */
+.chat-lixo-msg { width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--ink-muted); display: grid; place-items: center; cursor: pointer; padding: 0; }
+.chat-lixo-msg svg { width: 15px; height: 15px; }
+.chat-lixo-msg:hover { color: var(--st-bad); border-color: var(--st-bad); }
+/* celular: os botoes aparecem embaixo da mensagem tocada (do lado nao cabem tres) */
+@media (hover: none) {
+  .chat-acoes { display: none; }
+  .chat-msg.toque .chat-acoes { display: flex; position: static; opacity: 1; pointer-events: auto; margin-top: 2px; }
+  .chat-acoes button { width: 34px; height: 34px; }
+}
+/* aviso no lugar da mensagem apagada: no balao de sempre, mais apagado */
+.chat-bolha.apagada .chat-texto { font-style: italic; opacity: .8; display: flex; align-items: center; gap: 5px; }
+.chat-apagada-ic { font-style: normal; font-size: 13px; filter: grayscale(1); opacity: .8; }
+.chat-bolha.minha.apagada { background: color-mix(in srgb, var(--acao) 55%, var(--surface)); border-color: transparent; }
+/* menu pequeno junto da mensagem */
+.chat-apagar-menu { position: fixed; z-index: 320; width: 264px; padding: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 14px 34px rgba(15, 23, 42, .22); display: flex; flex-direction: column; gap: 2px; }
+.chat-apagar-tit { padding: 6px 10px 4px; font-size: 12px; font-weight: 800; color: var(--ink-muted); text-transform: uppercase; letter-spacing: .05em; }
+.chat-apagar-menu button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 10px; border: none; border-radius: 10px; background: transparent; color: var(--ink); text-align: left; cursor: pointer; font: inherit; }
+.chat-apagar-menu button:hover { background: var(--surface-alt); }
+.chat-apagar-menu button svg { width: 17px; height: 17px; flex: none; color: var(--ink-muted); }
+.chat-apagar-menu button span { display: flex; flex-direction: column; min-width: 0; }
+.chat-apagar-menu button b { font-size: 13.5px; }
+.chat-apagar-menu button small { font-size: 11.5px; color: var(--ink-muted); font-weight: 500; }
+.chat-apagar-menu button.perigo b, .chat-apagar-menu button.perigo svg { color: var(--st-bad); }
+.chat-apagar-menu button.perigo:hover { background: var(--st-bad-bg); }
+.chat-apagar-menu button.cancelar { justify-content: center; color: var(--ink-muted); font-size: 13px; font-weight: 600; border-top: 1px solid var(--line); border-radius: 0 0 10px 10px; margin-top: 2px; }

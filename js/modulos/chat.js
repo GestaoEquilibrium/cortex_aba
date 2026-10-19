@@ -43,6 +43,8 @@ window.MODULOS.chat = {
   _resp: null,          // mensagem sendo respondida { id, nome, trecho }
   _orig: {},            // mensagens citadas que nao estao entre as carregadas (id -> mensagem)
   _semResp: false,      // banco sem a coluna resposta_a (SQL do patch 58 nao rodado)
+  // patch 59: apagar mensagem para todos (fica o aviso "Mensagem apagada"; sem prazo) ou so para mim (os outros continuam vendo)
+  _semApagar: false,    // banco sem o SQL do patch 59
   // patch 50: reacoes (uma por pessoa por mensagem) e anexos em cartao (imagem e PDF, opcao B do Wess)
   EMOJIS: ['\ud83d\udc4d', '\u2764\ufe0f', '\ud83d\ude02', '\ud83d\ude2e', '\ud83d\ude22', '\ud83d\ude4f'],
   LIMITE_ANEXOS: 6,
@@ -108,6 +110,7 @@ window.MODULOS.chat = {
     try {
       this.canal = sb.channel('chat-equipe')
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_mensagens' }, p => this.aoChegar(p.new))
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chat_mensagens' }, p => this.aoMudar(p.new))
         .subscribe();
     } catch (e) { /* sem realtime, o F5 resolve */ }
   },
@@ -123,10 +126,21 @@ window.MODULOS.chat = {
     this._timerLista = setTimeout(() => this.carregarLista(), 250);
   },
 
+  // patch 59: mensagem apagada para todos em outro aparelho -> redesenha a conversa aberta e a lista
+  aoMudar(m) {
+    if (!m || !document.getElementById('chat-app')) return;
+    if (this.aberta && m.conversa_id === this.aberta.id) this.carregarThread(this.aberta.id, true);
+    clearTimeout(this._timerLista);
+    this._timerLista = setTimeout(() => this.carregarLista(), 250);
+  },
+
   // ─────────────── LISTA ───────────────
 
   async carregarLista() {
-    const { data, error } = await sb.rpc('fn_chat_lista');
+    const [{ data, error }, pv] = await Promise.all([
+      sb.rpc('fn_chat_lista'),
+      this._semApagar ? Promise.resolve({ data: [] }) : sb.rpc('fn_chat_previas_ocultas')
+    ]);
     if (error) {
       const alvo = document.getElementById('chat-conversas');
       if (alvo) alvo.innerHTML = '<p class="sub" style="padding:14px">' + (/fn_chat_lista|function/i.test(error.message)
@@ -135,6 +149,11 @@ window.MODULOS.chat = {
     }
     this.lista = data || [];
     this._listaEm = Date.now();
+    // patch 59: se a ultima mensagem foi apagada so para mim, a previa mostra a anterior
+    (pv && !pv.error && pv.data || []).forEach(p => {
+      const c = this.lista.find(x => String(x.id) === String(p.conversa_id));
+      if (c) Object.assign(c, { ultima_texto: p.texto, ultima_tipo: p.tipo, ultima_autor: p.autor, ultima_em: p.criado_em || null });
+    });
     await this.assinarFotos(this.lista.map(c => c.outro_foto));
     // conversa aberta que sumiu (apagada pelo suporte ou saiu do grupo em outro aparelho)
     if (this.aberta && !this.lista.some(c => c.id === this.aberta.id) && document.getElementById('chat-thread')) { this.voltarLista(); return; }
@@ -232,20 +251,27 @@ window.MODULOS.chat = {
     if (!alvo || !this.aberta || this.aberta.id !== id) return;
     const COLS = 'id, autor_id, texto, tipo, criado_em, autor:profiles!chat_mensagens_autor_id_fkey(nome, foto_path)';
     const qMsgs = cols => sb.from('chat_mensagens').select(cols).eq('conversa_id', id).order('criado_em').limit(400);
-    const colsAgora = () => COLS + (this._semAnexos ? '' : ', anexos') + (this._semResp ? '' : ', resposta_a');
-    const [rM0, rP] = await Promise.all([
+    const colsAgora = () => COLS + (this._semAnexos ? '' : ', anexos') + (this._semResp ? '' : ', resposta_a') + (this._semApagar ? '' : ', apagada_em');
+    const [rM0, rP, rO] = await Promise.all([
       qMsgs(colsAgora()),
       sb.from('chat_participantes').select('usuario_id, ultima_leitura, pessoa:profiles!chat_participantes_usuario_id_fkey(nome, perfil, foto_path, ativo)')
-        .eq('conversa_id', id)
+        .eq('conversa_id', id),
+      this._semApagar ? Promise.resolve({ data: [] }) : sb.from('chat_ocultas').select('mensagem_id').eq('conversa_id', id)
     ]);
     let rM = rM0;
-    // sem as colunas novas (SQL do patch 50 ou 58 ainda nao rodado): le sem elas
-    for (let i = 0; i < 2 && rM.error && /anexos|resposta_a/i.test(rM.error.message); i++) {
-      if (/resposta_a/i.test(rM.error.message)) this._semResp = true; else this._semAnexos = true;
+    // sem as colunas novas (SQL do patch 50, 58 ou 59 ainda nao rodado): le sem elas
+    for (let i = 0; i < 3 && rM.error && /anexos|resposta_a|apagada_em/i.test(rM.error.message); i++) {
+      if (/apagada_em/i.test(rM.error.message)) this._semApagar = true;
+      else if (/resposta_a/i.test(rM.error.message)) this._semResp = true; else this._semAnexos = true;
       rM = await qMsgs(colsAgora());
     }
+    if (rO && rO.error) this._semApagar = true;
     if (!this.aberta || this.aberta.id !== id) return;   // trocou de conversa no meio
-    this._msgs = rM.data || [];
+    // patch 59: as que a pessoa apagou so para ela nao aparecem (mas continuam valendo para citacao)
+    const ocultas = new Set(((rO && !rO.error && rO.data) || []).map(o => String(o.mensagem_id)));
+    const todas = rM.data || [];
+    todas.forEach(m => { if (ocultas.has(String(m.id))) this._orig[String(m.id)] = m; });
+    this._msgs = todas.filter(m => !ocultas.has(String(m.id)));
     this._parts = rP.data || [];
     await this.assinarFotos(this._parts.map(p => p.pessoa && p.pessoa.foto_path));
 
@@ -345,6 +371,15 @@ window.MODULOS.chat = {
         (m.tipo === 'comunicado' ? '<small class="chat-selo-com">&#128227; Comunicado</small>' : '');
       const classe = 'chat-bolha' + (minha ? ' minha' : '') + (m.tipo === 'comunicado' ? ' comunicado' : '') + (mostraNome ? ' com-nome' : '');
       const id = this.attr(m.id);
+      const btnLixo = this._semApagar ? '' : '<button type="button" class="chat-lixo-msg" title="Apagar" data-id="' + id + '" onmousedown="event.preventDefault()" onclick="MODULOS.chat.menuApagar(this)">' + this.ICO.lixo + '</button>';
+      // patch 59: apagada para todos -> so o aviso (e a lixeira para tirar o aviso da propria tela)
+      if (m.apagada_em) {
+        return h + '<div class="chat-msg' + (minha ? ' minha' : '') + ' apagada" data-id="' + id + '">' +
+          '<div class="' + classe.replace(' comunicado', '') + ' apagada">' + cabBolha.replace(/<small class="chat-selo-com">.*?<\/small>/, '') +
+          '<div class="chat-texto"><span class="chat-apagada-ic">&#128683;</span> ' + (minha ? 'Voce apagou esta mensagem' : 'Mensagem apagada') + '</div>' + horaHtml + '</div>' +
+          '<div class="chat-reacoes" data-id="' + id + '"></div>' +
+          '<div class="chat-acoes">' + btnLixo + '</div></div>';
+      }
       // patch 58: mensagem que responde outra mostra a citacao dentro do balao (so anexo: dentro do 1o cartao)
       const cit = m.resposta_a ? this.htmlCitacao(m.resposta_a) : '';
       return h + '<div class="chat-msg' + (minha ? ' minha' : '') + '" data-id="' + id + '">' +
@@ -354,7 +389,7 @@ window.MODULOS.chat = {
         '<div class="chat-acoes">' +
         '<button type="button" class="chat-reagir" title="Reagir" data-id="' + id + '" onclick="MODULOS.chat.pickerReacao(this)">' + this.ICO.rir + '</button>' +
         '<button type="button" class="chat-responder" title="Responder" data-id="' + id + '" onmousedown="event.preventDefault()" onclick="MODULOS.chat.responder(this.dataset.id)">' + this.ICO.responder + '</button>' +
-        '</div></div>';
+        btnLixo + '</div></div>';
     }).join('');
   },
 
@@ -371,6 +406,7 @@ window.MODULOS.chat = {
   msgPorId(id) { return this._msgs.find(m => String(m.id) === String(id)) || this._orig[String(id)] || null; },
   trechoDe(m) {
     if (!m) return '';
+    if (m.apagada_em) return 'Mensagem apagada';
     const an = Array.isArray(m.anexos) ? m.anexos.filter(a => a && a.path) : [];
     const t = an.length && (m.texto || '') === this.rotuloAnexos(an) ? this.rotuloAnexos(an) : (m.texto || '');
     const s = String(t).replace(/\s+/g, ' ').trim();
@@ -782,6 +818,71 @@ window.MODULOS.chat = {
       popAviso(/fn_chat_reagir|function|schema cache/i.test(error.message) ? 'As reacoes ainda nao estao ativas: falta rodar o SQL do patch 50.' : 'Nao foi possivel reagir: ' + error.message);
     }
     document.getElementById('chat-texto')?.focus();
+  },
+
+  // ─────── APAGAR MENSAGEM (patch 59) ───────
+  // Para todos: so quem enviou; no lugar fica "Mensagem apagada" para todo mundo (texto, anexos e reacoes saem do banco).
+  // So para mim: some da minha tela; os outros continuam vendo.
+  podeApagarTodos(m) { return !!m && !m.apagada_em && m.tipo !== 'sistema' && String(m.autor_id) === String(this.eu()); },
+  opcoesApagar(m) {
+    const grupo = this.aberta && this.aberta.tipo === 'grupo';
+    const outro = grupo ? 'todos do grupo' : String((this.aberta && this.aberta.nome) || 'a outra pessoa').split(' ')[0];
+    const lista = [];
+    if (this.podeApagarTodos(m)) lista.push({ q: 'todos', t: 'Apagar para todos', s: 'Fica "Mensagem apagada" para ' + (grupo ? 'todos do grupo' : 'voce e ' + outro) });
+    lista.push({ q: 'mim', t: 'Apagar so para mim', s: m.apagada_em ? 'Tira o aviso da sua tela' : (grupo ? 'O grupo' : outro) + ' continua vendo' });
+    return lista;
+  },
+  menuApagar(btn) {
+    document.getElementById('chat-picker')?.remove();
+    const id = btn.dataset.id; const m = this.msgPorId(id); if (!m) return;
+    if (this._semApagar) { popAviso('Apagar mensagem ainda nao esta ativo: falta rodar o SQL do patch 59.'); return; }
+    const opcoes = this.opcoesApagar(m);
+    // menu pequeno junto da mensagem (opcao A do Wess)
+    const pk = document.createElement('div'); pk.id = 'chat-picker'; pk.className = 'chat-apagar-menu';
+    pk.innerHTML = '<div class="chat-apagar-tit">Apagar mensagem?</div>' +
+      opcoes.map(o => '<button type="button" data-q="' + o.q + '"' + (o.q === 'todos' ? ' class="perigo"' : '') + '>' + this.ICO.lixo + '<span><b>' + o.t + '</b><small>' + escaparHtml(o.s) + '</small></span></button>').join('') +
+      '<button type="button" data-q="nao" class="cancelar">Cancelar</button>';
+    pk.addEventListener('mousedown', ev => ev.preventDefault());
+    const fechar = () => { pk.remove(); document.removeEventListener('keydown', esc); this.semToque(); };
+    const esc = ev => { if (ev.key === 'Escape') { ev.preventDefault(); fechar(); } };
+    document.addEventListener('keydown', esc);
+    pk.addEventListener('click', ev => {
+      const b = ev.target.closest('button[data-q]'); if (!b) return;
+      fechar(); if (b.dataset.q !== 'nao') this.apagar(id, b.dataset.q === 'todos');
+    });
+    document.body.appendChild(pk);
+    const r = btn.getBoundingClientRect();
+    const larg = pk.offsetWidth, alt = pk.offsetHeight;
+    pk.style.left = Math.max(8, Math.min(window.innerWidth - larg - 8, r.left + r.width / 2 - larg / 2)) + 'px';
+    pk.style.top = (r.bottom + 6 + alt < window.innerHeight - 8 ? r.bottom + 6 : Math.max(8, r.top - alt - 6)) + 'px';
+    setTimeout(() => document.addEventListener('click', function fora(ev) {
+      if (!pk.isConnected) { document.removeEventListener('click', fora); return; }
+      if (!ev.composedPath().includes(pk)) { fechar(); document.removeEventListener('click', fora); }
+    }), 0);
+  },
+  // celular: esconde os botoes da mensagem tocada
+  semToque() { document.querySelectorAll('#chat-msgs .chat-msg.toque').forEach(x => x.classList.remove('toque')); },
+  async apagar(id, todos) {
+    if (!this.aberta || this._apagando) return;
+    const conversa = this.aberta.id;
+    this._apagando = true;
+    try {
+      const { data, error } = await sb.rpc('fn_chat_apagar_mensagem', { p_mensagem: String(id), p_para_todos: !!todos });
+      if (error) {
+        if (/fn_chat_apagar_mensagem|Could not find the function|PGRST202/i.test(error.message + ' ' + (error.code || ''))) {
+          this._semApagar = true; popAviso('Apagar mensagem ainda nao esta ativo: falta rodar o SQL do patch 59.');
+        } else popAviso('Nao foi possivel apagar: ' + error.message);
+        return;
+      }
+      if (this._resp && String(this._resp.id) === String(id)) { this._resp = null; this.desenharResp(); }
+      // anexos apagados para todos: os arquivos saem da pasta de quem enviou
+      const caminhos = todos && data && Array.isArray(data.anexos) ? data.anexos.map(a => a && a.path).filter(Boolean) : [];
+      if (caminhos.length) { try { await sb.storage.from('chat').remove(caminhos); } catch (e) { /* sem a mensagem, ninguem mais abre o arquivo */ } }
+      if (todos) delete this._reac[id];
+      if (this.aberta && this.aberta.id === conversa) await this.carregarThread(conversa, true);
+      clearTimeout(this._timerLista);
+      this._timerLista = setTimeout(() => this.carregarLista(), 150);
+    } finally { this._apagando = false; }
   },
 
   // ─────────────── BADGE (bolinha no menu) ───────────────

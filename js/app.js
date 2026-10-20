@@ -21,6 +21,7 @@ const ICONES = {
   pacientes:  '<svg ' + SVG_ATTR + '><path d="M12 20s-7-4.5-9-9c-1.2-2.8.6-6 3.7-6C8.6 5 10.5 6.4 12 8c1.5-1.6 3.4-3 5.3-3 3.1 0 4.9 3.2 3.7 6-2 4.5-9 9-9 9z"/></svg>',
   agenda:     '<svg ' + SVG_ATTR + '><rect x="3.5" y="5" width="17" height="16" rx="2.5"/><line x1="3.5" y1="10" x2="20.5" y2="10"/><line x1="8" y1="3" x2="8" y2="7"/><line x1="16" y1="3" x2="16" y2="7"/></svg>',
   avaliacoes: '<svg ' + SVG_ATTR + '><path d="M4 20l1-4L16.5 4.5a2.1 2.1 0 0 1 3 3L8 19l-4 1z"/></svg>',
+  mensais:    '<svg ' + SVG_ATTR + '><path d="M6 3h9l4 4v14H6z"/><path d="M14.5 3v4.5H19"/><rect x="8.5" y="11" width="7" height="6.5" rx="1"/><line x1="8.5" y1="13.5" x2="15.5" y2="13.5"/></svg>',
   programas:  '<svg ' + SVG_ATTR + '><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5V5.5"/><line x1="9" y1="8" x2="15" y2="8"/></svg>',
   presenca:   '<svg ' + SVG_ATTR + '><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8.5 12.5l2.5 2.5 5-5.5"/></svg>',
   faltas:     '<svg ' + SVG_ATTR + '><path d="M12 4 2.8 19.5h18.4z"/><line x1="12" y1="10" x2="12" y2="14"/><circle cx="12" cy="16.8" r=".4"/></svg>',
@@ -48,7 +49,8 @@ const NAVEGACAO = [
       { id: 'pacientes',  rotulo: 'Pacientes',  chave: 'pacientes' },
       { id: 'agenda',     rotulo: 'Agenda',     chave: 'agenda' },
       { id: 'avaliacoes', rotulo: 'Avaliacoes', chave: 'avaliacoes' },
-      { id: 'programas',  rotulo: 'Programas',  chave: 'programas' }
+      { id: 'programas',  rotulo: 'Programas',  chave: 'programas' },
+      { id: 'mensais',    rotulo: 'Relatorios mensais', chave: 'relatorios' }
     ]
   },
   {

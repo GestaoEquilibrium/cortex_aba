@@ -22,6 +22,7 @@ window.MODULOS.relatorios = {
 
   async htmlDoPacienteBase(pacienteId) {
     this._pacienteId = pacienteId;
+    this._origem = null;   // patch 61: aberto pelo prontuario, o "voltar" volta para ele
     const { data } = await sb.from('relatorios_mensais')
       .select('id, mes, status, liberado_em, elaborado:profiles!relatorios_mensais_elaborado_por_fkey(nome)')
       .eq('paciente_id', pacienteId)
@@ -439,7 +440,9 @@ window.MODULOS.relatorios = {
 
     el.innerHTML =
       '<div class="pagina-cabecalho nao-imprime">' +
-      '  <div><button class="btn-voltar" onclick="MODULOS.pacientes.telaDetalhe(\'' + pacienteId + '\', \'relatorios\')">&larr; Prontuario</button>' +
+      '  <div>' + (this._origem === 'mensais'
+        ? '<button class="btn-voltar" onclick="abrirModulo(\'mensais\')">&larr; Relatorios mensais</button>'
+        : '<button class="btn-voltar" onclick="MODULOS.pacientes.telaDetalhe(\'' + pacienteId + '\', \'relatorios\')">&larr; Prontuario</button>') +
       '    <h2>Relatorio de Evolucao Mensal &middot; ' + this.mesRotulo(mes) + '</h2>' +
       '    <p class="sub">' + escaparHtml(pac.nome) + (editavel ? ' &middot; rascunho salvo automaticamente' : travado ? ' &middot; gerado em ' + (rel.gerado_em ? new Date(rel.gerado_em).toLocaleString('pt-BR') : '-') + ' (travado)' : '') + '</p></div>' +
       '  <div style="display:flex; gap:8px; flex-wrap:wrap">' +

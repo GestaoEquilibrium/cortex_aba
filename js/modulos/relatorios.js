@@ -126,11 +126,15 @@ window.MODULOS.relatorios = {
     });
     const naoAplicados = fotos.filter(f => f.nao_aplicado && f.motivo_nao_aplicado !== 'Falta da crianca').map(f => ({
       nome: f.paciente_programas?.programas?.nome || 'programa', motivo: f.motivo_nao_aplicado, data: dataDe[f.sessao_id] }));
+    // patch 62: contagem por DIA com a mesma regra do quadro de frequencia (desmarcacao conta como falta)
+    const dias = this.diasFrequencia({ sessoes: lista, feriados }, true);
+    const nDias = (...st) => dias.filter(d => st.includes(d.status)).length;
     return {
       sessoes: lista, feriados,
-      concluidas: new Set(lista.filter(s => s.status === 'concluida').map(s => s.data)).size,
-      faltas: new Set(lista.filter(s => s.status === 'falta').map(s => s.data)).size,
-      canceladas: new Set(lista.filter(s => s.status === 'cancelada').map(s => s.data)).size,
+      concluidas: nDias('concluida'),
+      faltas: nDias('falta', 'desmarcada'),
+      desmarcadas: nDias('desmarcada'),
+      canceladas: nDias('cancelada'),
       sessoesRealizadas: lista.filter(s => s.status === 'concluida').length,
       porProg, naoAplicados,
       evolucoes: evolucoes.map(e => ({ data: dataDe[e.sessao_id], texto: e.texto || '' })).sort((a, b) => a.data.localeCompare(b.data)),
@@ -458,12 +462,12 @@ window.MODULOS.relatorios = {
       '  <div class="cartao faixa-azul"><h3>Vem do sistema</h3>' +
       '  <div class="grade-visao">' +
       '    <div class="caixa-info"><small>Dias com presenca</small><b>' + dados.concluidas + '</b><small class="sub">' + dados.sessoesRealizadas + ' sessao(oes)</small></div>' +
-      '    <div class="caixa-info"><small>Dias com falta</small><b>' + dados.faltas + '</b></div>' +
-      '    <div class="caixa-info"><small>Canceladas</small><b>' + dados.canceladas + '</b></div>' +
+      '    <div class="caixa-info"><small>Dias com falta</small><b>' + dados.faltas + '</b>' + (dados.desmarcadas ? '<small class="sub">' + dados.desmarcadas + ' desmarcada(s)</small>' : '') + '</div>' +
+      (dados.canceladas ? '    <div class="caixa-info"><small>Canceladas (nao contam)</small><b>' + dados.canceladas + '</b><small class="sub">encerramento</small></div>' : '') +
       '    <div class="caixa-info"><small>Programas no mes</small><b>' + Object.keys(dados.porProg).length + '</b></div>' +
       '  </div>' +
       '  <div style="display:flex; gap:14px; flex-wrap:wrap; margin-top:10px">' +
-      opc('canc', 'Mostrar canceladas no quadro de frequencia', rel.mostrar_canceladas) +
+      (dados.canceladas ? opc('canc', 'Mostrar no quadro as canceladas por encerramento', rel.mostrar_canceladas) : '') +
       opc('graf', 'Incluir grafico de evolucao do mes', rel.incluir_grafico) +
       '  </div>' +
       '  <div class="campo" style="margin-top:8px"><label>Assinatura</label>' +
@@ -602,19 +606,26 @@ window.MODULOS.relatorios = {
   // ─────────────── HTML DA FOLHA (usado na previa, no documento e no snapshot) ───────────────
   // Frequencia por DIA (nao por horario): crianca com 2 horarios no mesmo dia conta uma unica presenca ou falta.
   // Regra do dia: alguma concluida -> P; senao alguma falta -> F; senao, se o dia e feriado (marcado na agenda
-  // ou sessao cancelada como feriado) -> FERIADO (sempre aparece, nao conta P nem F); senao (so canceladas) -> cancelada.
+  // ou sessao cancelada como feriado) -> FERIADO (sempre aparece, nao conta P nem F); senao, desmarcada -> F
+  // com "desmarcada" embaixo da data (patch 62); senao (so canceladas por encerramento) -> cancelada.
+  // patch 62 (coordenacao, 20/10: "toda falta e desmarcacao deve ir pra porcentagem de falta"; Wess: todo
+  // cancelamento conta, inclusive os da clinica): so feriado nao conta, e o encerramento (sessoes depois da alta).
+  cancContaFalta(s) {
+    const m = s.motivo_cancelamento || '';
+    return m !== 'feriado' && m !== 'encerramento';
+  },
   diasFrequencia(dados, mostrarCanceladas) {
     const porDia = {};
     const feriados = dados.feriados || {};
     dados.sessoes.forEach(s => {
       if (!['concluida', 'falta', 'cancelada'].includes(s.status)) return;
-      const d = porDia[s.data] = porDia[s.data] || { data: s.data, concluida: 0, falta: 0, cancelada: 0, feriado: 0, horarios: [] };
+      const d = porDia[s.data] = porDia[s.data] || { data: s.data, concluida: 0, falta: 0, cancelada: 0, feriado: 0, desmarcada: 0, horarios: [] };
       d[s.status]++; d.horarios.push(String(s.hora_inicio).slice(0, 5));
-      if (s.status === 'cancelada' && s.motivo_cancelamento === 'feriado') d.feriado++;
+      if (s.status === 'cancelada') { if (s.motivo_cancelamento === 'feriado') d.feriado++; else if (this.cancContaFalta(s)) d.desmarcada++; }
     });
     return Object.values(porDia).map(d => ({
       data: d.data, horarios: d.horarios,
-      status: d.concluida ? 'concluida' : d.falta ? 'falta' : (d.feriado || feriados[d.data]) ? 'feriado' : 'cancelada',
+      status: d.concluida ? 'concluida' : d.falta ? 'falta' : (d.feriado || feriados[d.data]) ? 'feriado' : d.desmarcada ? 'desmarcada' : 'cancelada',
       feriado: feriados[d.data] || ''
     })).filter(d => d.status !== 'cancelada' || mostrarCanceladas).sort((a, b) => a.data.localeCompare(b.data));
   },
@@ -630,7 +641,8 @@ window.MODULOS.relatorios = {
     const semanas = {};
     dias.forEach(s => { (semanas[segundaDe(s.data)] = semanas[segundaDe(s.data)] || {})[dowDe(s.data)] = s; });
     let presencas = 0, faltas = 0, nFeriados = 0;
-    dias.forEach(d => { if (d.status === 'concluida') presencas++; if (d.status === 'falta') faltas++; if (d.status === 'feriado') nFeriados++; });
+    let nDesm = 0;
+    dias.forEach(d => { if (d.status === 'concluida') presencas++; if (d.status === 'falta' || d.status === 'desmarcada') faltas++; if (d.status === 'desmarcada') nDesm++; if (d.status === 'feriado') nFeriados++; });
     let html = '<table class="deq-freq deq-freq-dias deq-freq-sem"><tr>' + cols.map(c => '<th>' + this.NOMES_DIA[c] + '</th>').join('') + '</tr>';
     Object.keys(semanas).sort().forEach(k => {
       html += '<tr>' + cols.map(c => {
@@ -641,12 +653,16 @@ window.MODULOS.relatorios = {
           return '<td class="deq-fferiado"><span class="deq-fdata">' + d + '</span> <span class="deq-ffer">FERIADO</span>' +
             (s.feriado ? '<small class="deq-fh">' + escaparHtml(s.feriado) + '</small>' : '') + '</td>';
         }
-        const st = s.status === 'concluida' ? '( X ) P (&nbsp;&nbsp;) F' : s.status === 'falta' ? '(&nbsp;&nbsp;) P ( X ) F' : '<span class="deq-fv">cancelada</span>';
-        return '<td title="' + s.horarios.join(', ') + '"><span class="deq-fdata">' + d + '</span> <span class="' + (s.status === 'concluida' ? 'deq-fp' : s.status === 'falta' ? 'deq-ff' : '') + '">' + st + '</span>' +
-          (s.horarios.length > 1 ? '<small class="deq-fh">' + s.horarios.length + ' hor&aacute;rios</small>' : '') + '</td>';
+        const comoFalta = s.status === 'falta' || s.status === 'desmarcada';
+        const st = s.status === 'concluida' ? '( X ) P (&nbsp;&nbsp;) F' : comoFalta ? '(&nbsp;&nbsp;) P ( X ) F' : '<span class="deq-fv">cancelada</span>';
+        const notas = [];
+        if (s.status === 'desmarcada') notas.push('desmarcada');
+        if (s.horarios.length > 1) notas.push(s.horarios.length + ' hor&aacute;rios');
+        return '<td title="' + s.horarios.join(', ') + (s.status === 'desmarcada' ? ' (desmarcada)' : '') + '"><span class="deq-fdata">' + d + '</span> <span class="' + (s.status === 'concluida' ? 'deq-fp' : comoFalta ? 'deq-ff' : '') + '">' + st + '</span>' +
+          (notas.length ? '<small class="deq-fh">' + notas.join(' &middot; ') + '</small>' : '') + '</td>';
       }).join('') + '</tr>';
     });
-    html += '</table><div class="deq-freq-rodape"><span>P: PRESEN\u00c7A / F: FALTA' + (nFeriados ? ' \u00b7 FERIADO: n\u00e3o conta' : '') + '</span><span>Presen\u00e7as <b>' + presencas + '</b> \u00b7 Faltas <b>' + faltas + '</b>' +
+    html += '</table><div class="deq-freq-rodape"><span>P: PRESEN\u00c7A / F: FALTA' + (nDesm ? ' (inclui desmarca\u00e7\u00f5es)' : '') + (nFeriados ? ' \u00b7 FERIADO: n\u00e3o conta' : '') + '</span><span>Presen\u00e7as <b>' + presencas + '</b> \u00b7 Faltas <b>' + faltas + '</b>' +
       (nFeriados ? ' \u00b7 Feriados <b>' + nFeriados + '</b>' : '') +
       ((presencas + faltas) ? ' \u00b7 Assiduidade <b>' + Math.round(presencas * 100 / (presencas + faltas)) + '%</b>' : '') + '</span></div>';
     return html;
@@ -655,7 +671,8 @@ window.MODULOS.relatorios = {
   htmlGraficoMes(dados) {
     const progs = Object.values(dados.porProg).filter(p => p.serie.length);
     if (!progs.length || !MODULOS.avaliacoes || !MODULOS.avaliacoes.gLinhas) return '';
-    const faltas = [...new Set(dados.sessoes.filter(s => s.status === 'falta').map(s => s.data))];
+    // patch 62: dia desmarcado tambem aparece como F no grafico
+    const faltas = this.diasFrequencia(dados, true).filter(d => d.status === 'falta' || d.status === 'desmarcada').map(d => d.data);
     const datas = [...new Set(progs.flatMap(p => p.serie.map(x => x.data)).concat(faltas))].sort();
     const series = progs.map((p, i) => ({
       nome: p.nome.length > 28 ? p.nome.slice(0, 27) + '\u2026' : p.nome, cor: this.COR_PROG[i % this.COR_PROG.length],

@@ -3327,8 +3327,6 @@ html[data-cor] .nav-item.ativa .nav-badge { color: var(--acao-forte); }
     font-size: 10px; box-shadow: 0 0 0 2px var(--side-bg, #0A1428);
 }
 .cel-conta-chat[hidden] { display: none; }
-.chat-apagar { margin-left: 4px; }
-.chat-apagar:hover { background: rgba(233, 88, 106, .85) !important; border-color: transparent !important; }
 .folha-mais .nav-item.ativa .nav-badge { background: #E9586A; color: #fff; }
 
 /* ══════════════ Patch 46: Iniciar atendimento - atrasadas e outra data ══════════════ */

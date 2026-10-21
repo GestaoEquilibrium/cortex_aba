@@ -335,11 +335,10 @@ window.MODULOS.chat = {
     return '<header class="chat-cab' + (grupo ? ' clicavel' : '') + '"' + (grupo ? ' onclick="MODULOS.chat.abrirParticipantes()"' : '') + '>' +
       '<button class="chat-voltar" title="Voltar" onclick="event.stopPropagation(); MODULOS.chat.voltarLista()">' + this.ICO.voltar + '</button>' +
       this.avatar(c, 'cab') +
-      '<div class="chat-cab-nome"><b>' + escaparHtml(c.nome || '') + '</b><small>' + sub + '</small></div>' +
+      '<div class="chat-cab-nome"' + (this.ehSuporte() ? ' onclick="MODULOS.chat.cliqueNome(event)"' : '') + '><b>' + escaparHtml(c.nome || '') + '</b><small>' + sub + '</small></div>' +
       (grupo
         ? '<span class="chat-tag">GRUPO</span><button class="btn-redondo claro" title="Participantes" onclick="event.stopPropagation(); MODULOS.chat.abrirParticipantes()">' + this.ICO.grupo + '</button>'
         : '<span class="chat-tag neutra">' + escaparHtml((ROTULOS_PERFIL[c.outro_perfil] || c.outro_perfil || 'EQUIPE').toUpperCase()) + '</span>') +
-      (this.ehSuporte() ? '<button class="btn-redondo claro chat-apagar" title="Apagar conversa do banco (so suporte)" onclick="event.stopPropagation(); MODULOS.chat.apagarConversa()">' + this.ICO.lixo + '</button>' : '') +
       '</header>';
   },
 
@@ -938,6 +937,24 @@ window.MODULOS.chat = {
     }
     if (!this._tituloBase) this._tituloBase = document.title.replace(/^\(\d+\+?\)\s*/, '');
     document.title = (n ? '(' + txt + ') ' : '') + this._tituloBase;
+  },
+
+  // patch 63: o botao de apagar conversa saiu do topo (ninguem ve); o suporte da 3 cliques rapidos no nome
+  // da conversa no topo. Em grupo, 1 clique continua abrindo os participantes (espera um pouco para saber se vem mais).
+  cliqueNome(ev) {
+    if (!this.ehSuporte()) return;
+    ev.stopPropagation();
+    const agora = Date.now();
+    this._cliques = agora - (this._cliqueEm || 0) < 450 ? (this._cliques || 0) + 1 : 1;
+    this._cliqueEm = agora;
+    clearTimeout(this._tNome);
+    if (this._cliques >= 3) {
+      this._cliques = 0;
+      try { window.getSelection().removeAllRanges(); } catch (e) { /* sem selecao */ }
+      this.apagarConversa();
+      return;
+    }
+    if (this.aberta && this.aberta.tipo === 'grupo') this._tNome = setTimeout(() => { if (this._cliques && this._cliques < 3) this.abrirParticipantes(); }, 460);
   },
 
   // ─────────────── APAGAR CONVERSA (so suporte, patch 45) ───────────────

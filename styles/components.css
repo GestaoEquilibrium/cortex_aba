@@ -3656,3 +3656,23 @@ html[data-cor] .nav-item.ativa .nav-badge { color: var(--acao-forte); }
   .rmc-mes-s { font-size: 9.5px; }
 }
 [data-modo="escuro"] .rmc-bola.gerado, [data-modo="escuro"] .rmc-mes.gerado { --c: #60A5FA; --cb: rgba(96, 165, 250, .14); }
+
+/* ══════════════ Patch 64: celular travado como aplicativo ══════════════ */
+/* sem zoom (nem de dois dedos, nem toque duplo, nem ao tocar num campo), sem arrastar para os lados
+   e sem o "elastico" da pagina para cima e para baixo */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; -webkit-tap-highlight-color: transparent; }
+@media (max-width: 720px), (hover: none) and (pointer: coarse) {
+  html { overflow-x: hidden; overscroll-behavior: none; touch-action: pan-x pan-y; }
+  body { overscroll-behavior: none; }
+  /* o iPhone da zoom sozinho em campo com letra menor que 16px */
+  input, select, textarea { font-size: 16px !important; }
+}
+@media (max-width: 720px) {
+  .app-main { max-width: 100vw; overflow-x: hidden; }
+  @supports (overflow-x: clip) { .app-main { overflow-x: clip; } }
+  /* agenda: a grade de horarios larga rola dentro do cartao, sem alargar a tela */
+  .agd-grade-wrap { grid-template-columns: minmax(0, 1fr); }
+  .agd-grade-wrap > * { min-width: 0; }
+  /* lista de presenca: a folha (formulario de impressao) rola dentro dela */
+  .lp-folha { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+}

@@ -99,3 +99,14 @@ window.PWA = {
     } catch (e) { console.warn('push:', e.message); }
   }
 };
+
+// ─────────────── Patch 64: celular travado como aplicativo ───────────────
+// A tela nao aumenta nem diminui com dois dedos e nao balanca para os lados. O iPhone ignora o
+// user-scalable=no do viewport, entao os gestos de pinca sao barrados aqui; o toque duplo para
+// aumentar sai pelo touch-action do CSS (sem atrasar nem cancelar cliques).
+(function () {
+  if (!('ontouchstart' in window)) return;
+  const barrar = e => e.preventDefault();
+  ['gesturestart', 'gesturechange', 'gestureend'].forEach(t => document.addEventListener(t, barrar, { passive: false }));
+  document.addEventListener('touchmove', e => { if (e.touches && e.touches.length > 1) e.preventDefault(); }, { passive: false });
+})();

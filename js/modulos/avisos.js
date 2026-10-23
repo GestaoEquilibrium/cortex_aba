@@ -254,6 +254,7 @@ window.MODULOS.avisos = {
     g.id = 'avisos-gaveta'; g.className = 'avisos-gaveta'; g.setAttribute('role', 'dialog'); g.setAttribute('aria-label', 'Avisos e pendencias');
     g.innerHTML = '<div class="avisos-topo"><h3>' + this.SINO + ' Avisos e pendencias <span class="selo selo-neutro" id="avisos-total">' + this.total + '</span></h3>' +
       (document.getElementById('avisos-fab')?.classList.contains('movido') ? '<button type="button" class="btn-chip" style="margin-left:auto; margin-right:6px" title="Voltar o sino para o canto de baixo" onclick="MODULOS.avisos.voltarSino()">&#8600; Sino no canto</button>' : '') +
+      (window.ALERTAS ? '<button type="button" class="btn-chip avisos-som" title="Som e notificacoes" onclick="MODULOS.avisos.fechar(); ALERTAS.abrirConfig()">' + ALERTAS.ICO[ALERTAS.cfg().som ? 'som' : 'mudo'] + '</button>' : '') +
       '<button type="button" class="modal-fechar" onclick="MODULOS.avisos.fechar()" title="Fechar">&times;</button></div>' +
       '<div class="avisos-corpo" id="avisos-corpo"><p class="sub" style="padding:8px 4px">Carregando...</p></div>';
     document.body.appendChild(fundo);

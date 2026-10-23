@@ -198,6 +198,16 @@ async function iniciarApp() {
     // Patch 31: nenhum pop-up de pendencia abre sozinho na entrada. Tudo fica na Central de avisos
     // (sino flutuante com contador; no celular, sino no cabecalho) e abre quando a pessoa quiser.
     try { MODULOS.avisos?.iniciar?.(); } catch (e) { console.warn('avisos:', e); }
+    // patch 65: som e notificacao do navegador (mensagens, demandas, avisos do sistema)
+    try { window.ALERTAS?.iniciar?.(); } catch (e) { console.warn('alertas:', e); }
+    // patch 65: veio de uma notificacao (celular): abre o chat / a conversa
+    try {
+      const q = new URLSearchParams(location.search);
+      if (q.get('abrir') === 'chat' && MODULOS.chat) {
+        history.replaceState(null, '', location.pathname);
+        if (q.get('conversa')) MODULOS.chat.irPara(q.get('conversa')); else abrirModulo('chat');
+      }
+    } catch (e) { /* segue no inicio */ }
     // Patch 41: capivara mascote no canto (liga/desliga em Meu perfil > Aparencia)
     try { window.CAPIVARA?.iniciar?.(); } catch (e) { console.warn('capivara:', e); }
     // Patch 43: na hora da supervisao a ATA abre sozinha para quem preenche (unica janela que abre sozinha)

@@ -92,6 +92,10 @@ window.MODULOS.chat = {
       '  <section class="chat-thread" id="chat-thread">' + this.htmlVazio() + '</section>' +
       '</div>';
     await this.carregarLista();
+    if (this._abrirDepois) {
+      const id = this._abrirDepois; this._abrirDepois = null;
+      if (this.lista.some(c => c.id === id)) { this.abrir(id); return; }
+    }
     if (this.aberta) {
       const ainda = this.lista.find(c => c.id === this.aberta.id);
       if (ainda) this.abrir(ainda.id); else this.aberta = null;
@@ -117,6 +121,7 @@ window.MODULOS.chat = {
 
   aoChegar(m) {
     if (!m) return;
+    this.alertarMensagem(m);   // patch 65: som + aviso/notificacao
     this.atualizarBadge();
     if (!document.getElementById('chat-app')) return;
     if (this.aberta && m.conversa_id === this.aberta.id) {
@@ -124,6 +129,25 @@ window.MODULOS.chat = {
     }
     clearTimeout(this._timerLista);
     this._timerLista = setTimeout(() => this.carregarLista(), 250);
+  },
+
+  // patch 65: mensagem nova de outra pessoa -> som e aviso (cartao com o sistema na frente; notificacao do navegador
+  // com outra aba/programa na frente). Nao avisa a conversa que esta aberta e sendo vista.
+  async alertarMensagem(m) {
+    if (!window.ALERTAS || window.CORTEX_VER_USUARIO) return;
+    if (String(m.autor_id) === String(this.eu()) || m.tipo === 'sistema') return;
+    if (this.aberta && m.conversa_id === this.aberta.id && document.getElementById('chat-app') && ALERTAS.focado()) return;
+    const c = this.lista.find(x => x.id === m.conversa_id);
+    let autor = '';
+    try { autor = ((await this.equipe()).find(p => p.id === m.autor_id) || {}).nome || ''; } catch (e) { /* sem nome */ }
+    if (!autor && c && c.tipo !== 'grupo') autor = c.nome || '';
+    const pri = String(autor || 'Alguem da equipe').split(' ')[0];
+    const titulo = m.tipo === 'comunicado' ? 'Comunicado de ' + pri : c && c.tipo === 'grupo' ? (c.nome || 'Grupo') + ' \u00b7 ' + pri : (autor || 'Nova mensagem');
+    const an = Array.isArray(m.anexos) ? m.anexos.filter(a => a && a.path) : [];
+    const corpo = an.length && (m.texto || '') === this.rotuloAnexos(an) ? this.rotuloAnexos(an) : (m.texto || '');
+    this._ultimoAlerta = Date.now();
+    ALERTAS.avisar({ tipo: 'mensagem', titulo, corpo, tag: 'chat-' + m.conversa_id, iniciais: this.iniciais(autor || '?'),
+      abrir: () => this.irPara(m.conversa_id), url: './app.html?abrir=chat&conversa=' + encodeURIComponent(m.conversa_id) });
   },
 
   // patch 59: mensagem apagada para todos em outro aparelho -> redesenha a conversa aberta e a lista
@@ -306,8 +330,9 @@ window.MODULOS.chat = {
         '    onkeydown="MODULOS.chat.tecla(event)" oninput="MODULOS.chat.crescer(this)" onpaste="MODULOS.chat.colou(event)"></textarea>' +
         '  <button class="chat-enviar" id="chat-enviar" title="Enviar" onmousedown="event.preventDefault()" onclick="MODULOS.chat.enviar()">' + this.ICO.enviar + '</button>' +
         '</div>';
+      if (!document.body.contains(alvo)) return;   // a tela do chat foi refeita no meio (troca de tela)
       const ta = document.getElementById('chat-texto');
-      const rol = document.getElementById('chat-msgs'); rol.scrollTop = rol.scrollHeight;
+      const rol = document.getElementById('chat-msgs'); if (rol) rol.scrollTop = rol.scrollHeight;
       if (window.matchMedia('(min-width: 721px)').matches) ta.focus();
       this.ligarArrastar(alvo);
       this.desenharPend();
@@ -903,6 +928,11 @@ window.MODULOS.chat = {
   async conferir() {
     const antes = this._naoLidas;
     await this.atualizarBadge();
+    // patch 65: chegou mensagem e o tempo real nao trouxe (nem avisou): aviso geral
+    if (antes !== undefined && this._naoLidas > antes && Date.now() - (this._ultimoAlerta || 0) > 30000 && window.ALERTAS && !window.CORTEX_VER_USUARIO) {
+      this._ultimoAlerta = Date.now();
+      ALERTAS.avisar({ tipo: 'mensagem', titulo: 'Nova mensagem no chat', corpo: this._naoLidas + ' mensage' + (this._naoLidas === 1 ? 'm nao lida' : 'ns nao lidas'), tag: 'chat', abrir: () => abrirModulo('chat'), url: './app.html?abrir=chat' });
+    }
     // com o chat aberto: chegou mensagem (ou alguma conversa sumiu) -> atualiza a lista e a conversa aberta
     if (document.getElementById('chat-app')) {
       if (this._naoLidas !== antes) await this.carregarLista();
@@ -1058,10 +1088,9 @@ window.MODULOS.chat = {
   },
 
   async irPara(conversaId) {
-    if (!document.getElementById('chat-app')) {
-      abrirModulo('chat');
-      await new Promise(r => setTimeout(r, 150));
-    }
+    // patch 65: fora do chat, a propria tela do chat abre a conversa quando terminar de montar
+    // (antes esperava 150 ms; com a transicao de tela no celular a conversa abria antes da tela e dava erro)
+    if (!document.getElementById('chat-app')) { this._abrirDepois = conversaId; abrirModulo('chat'); return; }
     await this.carregarLista();
     this.abrir(conversaId);
   },

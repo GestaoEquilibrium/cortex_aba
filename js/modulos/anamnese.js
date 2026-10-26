@@ -48,13 +48,15 @@ window.MODULOS.anamnese = {
   // Abrir a anamnese duas vezes ao mesmo tempo (toque duplo, duas abas) criava duas linhas. Com duas, o
   // maybeSingle() dava erro, a tela entendia "nao existe" e criava mais uma a cada abertura - e o prontuario
   // mostrava "Anamnese ainda nao iniciada". Agora lista todas, escolhe a principal e junta as respostas.
+  // (a tabela anamneses nao tem criado_em: nada de ordenar no banco por data; a data de criacao, se houver, vem de criou())
+  criou(a) { return String(a.criado_em || a.created_at || a.iniciado_em || a.atualizado_em || a.updated_at || ''); },
   async anamnesesDe(pacienteId) {
-    const { data, error } = await sb.from('anamneses').select('*').eq('paciente_id', pacienteId).order('criado_em', { ascending: true });
+    const { data, error } = await sb.from('anamneses').select('*').eq('paciente_id', pacienteId);
     if (error) throw new Error(error.message);
     const todas = data || [];
-    const quando = a => String(a.concluido_em || a.criado_em || '');
+    const quando = a => String(a.concluido_em || this.criou(a));
     const conc = todas.filter(a => a.status === 'concluida').sort((a, b) => quando(b).localeCompare(quando(a)));
-    const resto = todas.filter(a => a.status !== 'concluida').sort((a, b) => (b.secao_atual || 0) - (a.secao_atual || 0) || String(b.criado_em || '').localeCompare(String(a.criado_em || '')));
+    const resto = todas.filter(a => a.status !== 'concluida').sort((a, b) => (b.secao_atual || 0) - (a.secao_atual || 0) || this.criou(b).localeCompare(this.criou(a)));
     return { principal: conc[0] || resto[0] || null, todas };
   },
   // respostas de todas as linhas da crianca: vale a da principal; o que faltar vem da mais recente das outras
@@ -62,7 +64,7 @@ window.MODULOS.anamnese = {
     if (!info.principal) return {};
     const { data } = await sb.from('anamnese_respostas').select('anamnese_id, questao_id, resposta').in('anamnese_id', info.todas.map(a => a.id));
     const ordem = [info.principal.id].concat(info.todas.filter(a => a.id !== info.principal.id)
-      .sort((a, b) => String(b.criado_em || '').localeCompare(String(a.criado_em || ''))).map(a => a.id));
+      .sort((a, b) => (b.secao_atual || 0) - (a.secao_atual || 0) || this.criou(b).localeCompare(this.criou(a))).map(a => a.id));
     const mapa = {};
     ordem.forEach(id => (data || []).forEach(r => {
       if (r.anamnese_id === id && mapa[r.questao_id] === undefined && r.resposta !== null && r.resposta !== '') mapa[r.questao_id] = r.resposta;

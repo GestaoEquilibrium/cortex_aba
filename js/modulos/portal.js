@@ -51,11 +51,9 @@ window.MODULOS.portal = {
       if (!p) continue;
       if (this._pacs.length > 1 && p.id !== this._pacAtual) continue;
 
-      const { data: an } = await sb
-        .from('anamneses')
-        .select('id, status')
-        .eq('paciente_id', p.id)
-        .maybeSingle();
+      // patch 66: com mais de uma anamnese no banco o maybeSingle dava erro e o portal mostrava "Preencher agora"
+      let an = null;
+      try { an = (await MODULOS.anamnese.anamnesesDe(p.id)).principal; } catch (e) { an = null; }
 
       const statusAn = an ? an.status : 'pendente';
       let pendencia;

@@ -44,7 +44,53 @@ window.MODULOS.anamnese = {
       });
   },
 
+  // ─────────────── patch 66: crianca com mais de uma anamnese no banco ───────────────
+  // Abrir a anamnese duas vezes ao mesmo tempo (toque duplo, duas abas) criava duas linhas. Com duas, o
+  // maybeSingle() dava erro, a tela entendia "nao existe" e criava mais uma a cada abertura - e o prontuario
+  // mostrava "Anamnese ainda nao iniciada". Agora lista todas, escolhe a principal e junta as respostas.
+  async anamnesesDe(pacienteId) {
+    const { data, error } = await sb.from('anamneses').select('*').eq('paciente_id', pacienteId).order('criado_em', { ascending: true });
+    if (error) throw new Error(error.message);
+    const todas = data || [];
+    const quando = a => String(a.concluido_em || a.criado_em || '');
+    const conc = todas.filter(a => a.status === 'concluida').sort((a, b) => quando(b).localeCompare(quando(a)));
+    const resto = todas.filter(a => a.status !== 'concluida').sort((a, b) => (b.secao_atual || 0) - (a.secao_atual || 0) || String(b.criado_em || '').localeCompare(String(a.criado_em || '')));
+    return { principal: conc[0] || resto[0] || null, todas };
+  },
+  // respostas de todas as linhas da crianca: vale a da principal; o que faltar vem da mais recente das outras
+  async respostasDe(info) {
+    if (!info.principal) return {};
+    const { data } = await sb.from('anamnese_respostas').select('anamnese_id, questao_id, resposta').in('anamnese_id', info.todas.map(a => a.id));
+    const ordem = [info.principal.id].concat(info.todas.filter(a => a.id !== info.principal.id)
+      .sort((a, b) => String(b.criado_em || '').localeCompare(String(a.criado_em || ''))).map(a => a.id));
+    const mapa = {};
+    ordem.forEach(id => (data || []).forEach(r => {
+      if (r.anamnese_id === id && mapa[r.questao_id] === undefined && r.resposta !== null && r.resposta !== '') mapa[r.questao_id] = r.resposta;
+    }));
+    return mapa;
+  },
+  // o link de cadastro da familia cria a crianca de novo: a anamnese pode estar no OUTRO cadastro com o mesmo nome
+  async outroCadastro(pacienteId) {
+    try {
+      const { data: p } = await sb.from('pacientes').select('nome').eq('id', pacienteId).single();
+      if (!p || !p.nome || p.nome.trim().length < 5) return null;
+      const { data: mesmos } = await sb.from('pacientes').select('id, nome, status').ilike('nome', p.nome.trim().replace(/[%_]/g, '')).neq('id', pacienteId).limit(5);
+      if (!mesmos || !mesmos.length) return null;
+      const { data: ans } = await sb.from('anamneses').select('paciente_id, status').in('paciente_id', mesmos.map(m => m.id));
+      if (!ans || !ans.length) return null;
+      const a = ans.find(x => x.status === 'concluida') || ans[0];
+      return { paciente: mesmos.find(m => m.id === a.paciente_id), status: a.status };
+    } catch (e) { return null; }
+  },
+
   async abrir(pacienteId) {
+    // patch 66: toque duplo no botao abria duas vezes ao mesmo tempo e criava duas anamneses
+    if (this._abrindo) return;
+    this._abrindo = true;
+    try { await this.abrirAgora(pacienteId); } finally { this._abrindo = false; }
+  },
+
+  async abrirAgora(pacienteId) {
     this.pacienteId = pacienteId;
     const el = document.getElementById('pagina');
     el.innerHTML = '<div class="cartao"><p class="sub">Carregando a anamnese...</p></div>';
@@ -64,9 +110,14 @@ window.MODULOS.anamnese = {
     }
     this.questoes = qs;
 
-    // Anamnese do paciente (cria se nao existir)
-    let { data: an } = await sb.from('anamneses')
-      .select('*').eq('paciente_id', pacienteId).maybeSingle();
+    // Anamnese do paciente (cria so se nao existir nenhuma; com mais de uma, segue na principal)
+    let info;
+    try { info = await this.anamnesesDe(pacienteId); }
+    catch (e) {
+      el.innerHTML = '<div class="cartao"><div class="mensagem-erro visivel">Erro: ' + escaparHtml(e.message) + '</div></div>';
+      return;
+    }
+    let an = info.principal;
 
     if (!an) {
       const { data: nova, error: en } = await sb.from('anamneses')
@@ -78,7 +129,9 @@ window.MODULOS.anamnese = {
           escaparHtml(en.message) + '</div></div>';
         return;
       }
-      an = nova;
+      // se outra aba criou junto, fica a principal das duas
+      try { info = await this.anamnesesDe(pacienteId); } catch (e) { info = { principal: nova, todas: [nova] }; }
+      an = info.principal || nova;
     }
 
     if (an.status === 'concluida') { this.telaConcluida(); return; }
@@ -86,11 +139,8 @@ window.MODULOS.anamnese = {
     this.anamneseId = an.id;
     this.secaoAtual = Math.min(an.secao_atual || 0, this.SECOES.length - 1);
 
-    // Respostas ja salvas
-    this.respostas = {};
-    const { data: resps } = await sb.from('anamnese_respostas')
-      .select('questao_id, resposta').eq('anamnese_id', an.id);
-    (resps || []).forEach(r => { this.respostas[r.questao_id] = r.resposta; });
+    // Respostas ja salvas (de todas as linhas da crianca: ao salvar a etapa, elas passam para a principal)
+    this.respostas = await this.respostasDe(info);
 
     this.telaSecao();
   },
@@ -295,20 +345,28 @@ window.MODULOS.anamnese = {
   // ─────────────── Leitura interna (aba Anamnese do prontuario) ───────────────
 
   async htmlResumoInterno(pacienteId) {
-    const { data: an } = await sb.from('anamneses')
-      .select('*').eq('paciente_id', pacienteId).maybeSingle();
+    let info;
+    try { info = await this.anamnesesDe(pacienteId); }
+    catch (e) { return '<div class="cartao"><div class="mensagem-erro visivel">Nao consegui ler a anamnese: ' + escaparHtml(e.message) + '</div></div>'; }
+    const an = info.principal;
 
     if (!an) {
+      const outro = await this.outroCadastro(pacienteId);
+      if (outro && outro.paciente) {
+        return '<div class="cartao faixa-ambar"><h3>A anamnese foi respondida em outro cadastro</h3>' +
+          '<p class="sub" style="margin:6px 0 10px">Existe outro cadastro com o mesmo nome (<b>' + escaparHtml(outro.paciente.nome) + '</b>' +
+          (outro.paciente.status ? ', situacao ' + escaparHtml(String(outro.paciente.status)) : '') + ') com a anamnese ' +
+          (outro.status === 'concluida' ? '<b>concluida</b>' : 'em andamento') + '. Normalmente e o cadastro que a familia fez pelo link. ' +
+          'Confira e, se for a mesma crianca, avise o suporte para juntar os dois.</p>' +
+          '<button class="btn btn-primario" onclick="MODULOS.pacientes.telaDetalhe(\'' + outro.paciente.id + '\', \'anamnese\')">Abrir o outro cadastro</button></div>';
+      }
       return '<div class="cartao"><div class="vazio"><div class="simbolo-vazio">&#9998;</div>' +
         '<strong>Anamnese ainda nao iniciada</strong>' +
         'A familia recebera a pendencia no portal.</div></div>';
     }
 
     const { data: qs } = await sb.from('anamnese_questoes').select('*').order('ordem');
-    const { data: resps } = await sb.from('anamnese_respostas')
-      .select('questao_id, resposta').eq('anamnese_id', an.id);
-    const mapa = {};
-    (resps || []).forEach(r => { mapa[r.questao_id] = r.resposta; });
+    const mapa = await this.respostasDe(info);
 
     const status = an.status === 'concluida'
       ? '<span class="selo selo-ok">Concluida em ' +
@@ -359,6 +417,7 @@ window.MODULOS.anamnese = {
     return '<div class="cartao">' +
       '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px">' +
       '<h3 style="margin:0">Anamnese Global</h3>' + status + '</div>' +
+      (info.todas.length > 1 ? '<p class="sub" style="margin:-4px 0 8px">Esta crianca tem ' + info.todas.length + ' preenchimentos da anamnese no banco; as respostas foram juntadas aqui.</p>' : '') +
       nivelHtml + '</div>' +
       '<div class="cartao">' + secoes + '</div>';
   },
@@ -377,16 +436,15 @@ window.MODULOS.anamnese = {
     ov.innerHTML = '<div class="folha-pagina" id="doc-eq-corpo" style="max-width:900px"><p class="sub">Montando...</p></div>';
     document.body.appendChild(ov);
 
-    const [rAn, rPac] = await Promise.all([
-      sb.from('anamneses').select('id, status').eq('paciente_id', pacienteId).maybeSingle(),
+    let info = { principal: null, todas: [] };
+    const [rInfo, rPac] = await Promise.all([
+      this.anamnesesDe(pacienteId).catch(() => info),
       sb.from('pacientes').select('nome, data_nascimento').eq('id', pacienteId).single()
     ]);
-    const an = rAn.data, pac = rPac.data;
+    info = rInfo;
+    const an = info.principal, pac = rPac.data;
     if (!an || !pac) { ov.remove(); return; }
-    const { data: resps } = await sb.from('anamnese_respostas')
-      .select('questao_id, resposta').eq('anamnese_id', an.id);
-    const mapa = {};
-    (resps || []).forEach(r => { mapa[r.questao_id] = r.resposta; });
+    const mapa = await this.respostasDe(info);
 
     const CORES_SEC = ['azul', 'teal', 'amarelo', 'rosa', 'azul', 'teal'];
     const corpo = this.SECOES.map((sec, si) => {

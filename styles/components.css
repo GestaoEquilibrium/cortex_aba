@@ -3657,6 +3657,28 @@ html[data-cor] .nav-item.ativa .nav-badge { color: var(--acao-forte); }
 }
 [data-modo="escuro"] .rmc-bola.gerado, [data-modo="escuro"] .rmc-mes.gerado { --c: #60A5FA; --cb: rgba(96, 165, 250, .14); }
 
+/* ===== Patch 67: PDFs assinados de uma vez (aba Relatorios mensais) ===== */
+.rmc-dir { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.rmc-btn-lote { display: inline-flex; align-items: center; gap: 7px; padding: 8px 14px; font-size: 13px; }
+.rmc-btn-lote svg, #rmc-lote-ir svg { flex: none; }
+#rmc-lote-ir { display: inline-flex; align-items: center; gap: 7px; }
+.rmc-lote-sec { margin: 14px 0; }
+.rmc-lote-sec > small { display: block; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-muted); margin-bottom: 7px; }
+.rmc-lote-meses { justify-content: flex-start; }
+.rmc-lote-meses .rmc-chip small { font-size: 11px; font-weight: 800; margin-left: 3px; padding: 0 6px; border-radius: 999px; background: var(--acao-soft); color: var(--acao); }
+.rmc-lote-meses .rmc-chip.ativo small { background: rgba(255, 255, 255, .25); color: #fff; }
+.rmc-lote-sec .toggle-visao { display: inline-grid; grid-template-columns: 1fr 1fr; max-width: 100%; }
+.rmc-lote-sec .toggle-visao button { white-space: normal; line-height: 1.25; }
+.rmc-lote-res { border: 1.5px solid var(--st-ok); background: var(--st-ok-bg); border-radius: 12px; padding: 11px 14px; font-size: 13.5px; margin: 16px 0 4px; }
+.rmc-lote-res.vazio { border-color: var(--line); background: var(--surface-alt); }
+.rmc-lote-res details { margin-top: 7px; font-size: 12.5px; }
+.rmc-lote-res summary { cursor: pointer; color: var(--ink-muted); font-weight: 700; }
+.rmc-lote-res ul { margin: 6px 0 0; padding-left: 18px; max-height: 180px; overflow: auto; }
+.rmc-lote-res li small { color: var(--ink-muted); }
+@media (max-width: 720px) {
+  .rmc-dir { width: 100%; justify-content: space-between; }
+}
+
 /* ══════════════ Patch 64: celular travado como aplicativo ══════════════ */
 /* sem zoom (nem de dois dedos, nem toque duplo, nem ao tocar num campo), sem arrastar para os lados
    e sem o "elastico" da pagina para cima e para baixo */
@@ -3697,7 +3719,8 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; -webkit-tap-highl
 @keyframes alertaEntra { from { opacity: 0; transform: translateY(14px) scale(.98); } to { opacity: 1; transform: none; } }
 @keyframes alertaSai { to { opacity: 0; transform: translateX(30px); } }
 /* pergunta (uma vez por aparelho) */
-.alertas-pedir { position: fixed; left: 22px; bottom: 22px; z-index: 390; width: 360px; max-width: calc(100vw - 24px); display: flex; gap: 12px; align-items: flex-start;
+/* patch 67: o cartao de ativar o som fica ATRAS das janelas (no celular ele cobria o botao de baixo de qualquer janela) */
+.alertas-pedir { position: fixed; left: 22px; bottom: 22px; z-index: 95; width: 360px; max-width: calc(100vw - 24px); display: flex; gap: 12px; align-items: flex-start;
   padding: 14px; border-radius: 18px; background: var(--surface); border: 1px solid var(--line); box-shadow: 0 18px 44px rgba(15, 23, 42, .25); animation: alertaEntra .3s ease; }
 .alertas-pedir .alerta-ic { background: rgba(245, 158, 11, .15); color: #D97706; }
 .alertas-pedir-t { flex: 1; display: flex; flex-direction: column; gap: 3px; }

@@ -88,7 +88,7 @@ window.MODULOS.relatorios = {
     ]);
     // patch 39: o relatorio mensal e da ABA - sessoes de fono, TO, psicologia, pedagogia e psicomotricidade
     // nao entram na frequencia nem nos programas
-    const lista = (sessoes || []).filter(s => !window.ESPEC || ESPEC.ehAba(s.aplicador_id));
+    let lista = (sessoes || []).filter(s => !window.ESPEC || ESPEC.ehAba(s.aplicador_id));
     const feriados = {};
     if (!rFer.error) (rFer.data || []).forEach(f => { feriados[f.data] = f.nome; });
     const ids = lista.map(s => s.id);
@@ -105,6 +105,14 @@ window.MODULOS.relatorios = {
       ]);
       fotos = rF.data || []; evolucoes = rE.data || []; compRegs = rC.data || []; tents = (rT && !rT.error && rT.data) || [];
     }
+    // patch 67 (coordenacao, 24/09 do relatorio de setembro): sessao que ja passou e tem lancamento (evolucao ou
+    // programa aplicado), mas ficou agendada / check-in / em atendimento porque ninguem encerrou, e presenca.
+    // So o relatorio mensal le assim; o status da sessao na agenda nao muda.
+    const comLanc = new Set(evolucoes.filter(e => String(e.texto || '').trim()).map(e => e.sessao_id)
+      .concat(fotos.filter(f => !f.nao_aplicado).map(f => f.sessao_id)));
+    const hoje = typeof hojeLocal === 'function' ? hojeLocal() : new Date().toISOString().slice(0, 10);
+    lista = lista.map(s => (['agendada', 'checkin', 'em_atendimento'].includes(s.status) && s.data <= hoje && comLanc.has(s.id))
+      ? Object.assign({}, s, { status: 'concluida', status_agenda: s.status }) : s);
     const dataDe = {}; lista.forEach(s => { dataDe[s.id] = s.data; });
     // por programa: serie de % por sessao (ordem cronologica)
     const porProg = {};
@@ -767,7 +775,8 @@ window.MODULOS.relatorios = {
       Object.assign(rel, this.colherCampos());
       corpo = this.htmlMensal(rel, this._pac, this._resp, this._dados);
     }
-    window._docPortal = { paciente_id: rel.paciente_id, tipo: 'relatorio_mensal', titulo: 'Relatorio Mensal' };
+    // patch 67: o titulo leva o mes (o PDF assinado e achado pelo mes na aba Relatorios mensais)
+    window._docPortal = { paciente_id: rel.paciente_id, tipo: 'relatorio_mensal', titulo: 'Relatorio Mensal ' + this.mesRotulo(rel.mes.slice(0, 7)) };
     document.getElementById('doc-eq-corpo').innerHTML =
       '<div class="pagina-cabecalho nao-imprime">' +
       '  <div><button class="btn-voltar" onclick="document.getElementById(\'doc-eq-overlay\').remove()">&larr; Fechar</button>' +

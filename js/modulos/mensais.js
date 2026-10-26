@@ -6,6 +6,8 @@
 // aplicador. Cada crianca numa linha com os ultimos 6 meses (opcao A do Wess).
 // Aplicadora e terapeuta veem so as criancas delas.
 // Abrir/elaborar usa o editor de sempre (MODULOS.relatorios.abrirEditor).
+// Patch 67: botao "PDFs assinados" baixa um ZIP com os PDFs assinados do mes
+// das criancas que estao na tela (abrirLote / baixarLote).
 // ============================================================================
 
 window.MODULOS = window.MODULOS || {};
@@ -85,7 +87,7 @@ window.MODULOS.mensais = {
     const [rProf, rEm, rels] = await Promise.all([
       sb.from('profiles').select('id, nome, perfil, coordenador_id, ativo'),
       sb.from('equipe_membros').select('coordenador_id, aplicador_id'),
-      this.todas(() => sb.from('relatorios_mensais').select('id, paciente_id, mes, status, liberado_em').order('mes', { ascending: false }))
+      this.todas(() => sb.from('relatorios_mensais').select('id, paciente_id, mes, status, liberado_em, gerado_em').order('mes', { ascending: false }))
     ]);
     const profs = rProf.data || [];
     const nomes = Object.fromEntries(profs.map(p => [p.id, p.nome]));
@@ -195,9 +197,10 @@ window.MODULOS.mensais = {
     return '<div class="rmc-legenda">' +
       ['liberado', 'gerado', 'rascunho', 'falta'].map(k => '<span><i class="rmc-bola ' + this.ST[k].cls + '"></i>' + this.ST[k].rot + '</span>').join('') +
       '</div>' +
-      '<div class="rmc-janela"><button type="button" class="btn-chip" onclick="MODULOS.mensais.moverA(-' + this.MESES_A + ')" title="Meses anteriores">&lsaquo;</button>' +
+      '<div class="rmc-dir"><div class="rmc-janela"><button type="button" class="btn-chip" onclick="MODULOS.mensais.moverA(-' + this.MESES_A + ')" title="Meses anteriores">&lsaquo;</button>' +
       '<b>' + this.nomeMes(ms[0], true) + '/' + ms[0].slice(2, 4) + ' a ' + this.nomeMes(ms[ms.length - 1], true) + '/' + ms[ms.length - 1].slice(2, 4) + '</b>' +
-      '<button type="button" class="btn-chip" onclick="MODULOS.mensais.moverA(' + this.MESES_A + ')" title="Proximos meses"' + (this._fimA >= mesLocal() ? ' disabled' : '') + '>&rsaquo;</button></div>';
+      '<button type="button" class="btn-chip" onclick="MODULOS.mensais.moverA(' + this.MESES_A + ')" title="Proximos meses"' + (this._fimA >= mesLocal() ? ' disabled' : '') + '>&rsaquo;</button></div>' +
+      '<button type="button" class="btn btn-fantasma rmc-btn-lote" onclick="MODULOS.mensais.abrirLote()" title="Baixa de uma vez os PDFs assinados do mes, das criancas que estao na tela">' + this.ICO_BAIXAR + 'PDFs assinados</button></div>';
   },
   htmlA(lista) {
     const ms = this.mesesA();
@@ -237,5 +240,149 @@ window.MODULOS.mensais = {
     MODULOS.relatorios._origem = 'mensais';
     MODULOS.relatorios.abrirEditor(pacienteId, mes);
   },
-  prontuario(pacienteId) { MODULOS.pacientes.telaDetalhe(pacienteId, 'relatorios'); }
+  prontuario(pacienteId) { MODULOS.pacientes.telaDetalhe(pacienteId, 'relatorios'); },
+
+  // ─────────────── PDFs ASSINADOS DE UMA VEZ (patch 67) ───────────────
+  // Coordenacao (22/10): "na aba de relatorios mensais, teria como colocar um botaozinho pra baixar os PDFs assinados
+  // todos de uma vez?". Um ZIP com o PDF assinado (ICP-Brasil) do relatorio mensal de cada crianca que esta na tela
+  // agora (visao + busca), do mes escolhido, em pastas por equipe e aplicador (como na tela) ou tudo junto.
+  // Se o mesmo relatorio foi assinado mais de uma vez, vai so o mais recente.
+  ICO_BAIXAR: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>',
+  MESES_TXT: ['janeiro', 'fevereiro', 'marco', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'],
+  _lote: null,
+
+  // mes do PDF: o titulo e "Relatorio Mensal Setembro de 2026" (editor). Titulo sem mes (o "Documento oficial" ate o
+  // patch 66 gravava so "Relatorio Mensal"): o relatorio da crianca gerado por ultimo antes da assinatura.
+  mesDoPdf(doc) {
+    const t = this.semAcento(doc.titulo);
+    const m = t.match(/(janeiro|fevereiro|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\s+(?:de\s+)?(\d{4})/);
+    if (m) return m[2] + '-' + String(this.MESES_TXT.indexOf(m[1]) + 1).padStart(2, '0');
+    const quando = String(doc.criado_em || '');
+    let melhor = null;
+    Object.entries(this._d.rel[doc.paciente_id] || {}).forEach(([mes, r]) => {
+      const g = String(r.gerado_em || '');
+      if (g && g <= quando && (!melhor || g > melhor.g)) melhor = { mes, g };
+    });
+    return melhor ? melhor.mes : null;
+  },
+  async assinadosDe(ids) {
+    const docs = [];
+    for (let i = 0; i < ids.length; i += 150) {
+      const { data, error } = await sb.from('documentos_assinados').select('id, paciente_id, tipo, titulo, arquivo_path, criado_em')
+        .eq('tipo', 'relatorio_mensal').in('paciente_id', ids.slice(i, i + 150));
+      if (error) throw error;
+      docs.push(...(data || []));
+    }
+    // um por crianca e mes: o mais recente
+    const porChave = {};
+    docs.filter(d => d.arquivo_path).forEach(d => {
+      const mes = this.mesDoPdf(d); if (!mes) return;
+      const k = d.paciente_id + '|' + mes;
+      if (!porChave[k] || String(d.criado_em) > String(porChave[k].criado_em)) porChave[k] = Object.assign({ mes }, d);
+    });
+    return Object.values(porChave);
+  },
+
+  async abrirLote() {
+    if (!this._d) return;
+    const lista = this.visiveis();
+    if (!lista.length) { popAviso('Nenhuma crianca na tela. Mude a busca ou a equipe e tente de novo.'); return; }
+    const ms = this.mesesA().filter(m => m <= mesLocal());
+    this._lote = { lista, ms, mes: null, pastas: true, docs: null };
+    abrirModal('Baixar PDFs assinados', '<div id="rmc-lote"><p class="sub">Procurando os PDFs assinados...</p></div>');
+    try { this._lote.docs = await this.assinadosDe(lista.map(p => p.id)); }
+    catch (e) {
+      const alvo = document.getElementById('rmc-lote');
+      if (alvo) alvo.innerHTML = '<div class="mensagem-erro visivel">Nao consegui buscar os PDFs: ' + escaparHtml(e.message) + '</div>';
+      return;
+    }
+    // mes que abre: o mais recente da janela com PDF; senao o mes passado
+    const comPdf = ms.filter(m => this._lote.docs.some(d => d.mes === m));
+    const passado = this.somaMes(mesLocal(), -1);
+    this._lote.mes = comPdf.length ? comPdf[comPdf.length - 1] : (ms.includes(passado) ? passado : ms[ms.length - 1]);
+    this.desenharLote();
+  },
+  rotuloVisao() {
+    const d = this._d;
+    if (d.meus) return 'suas criancas';
+    if (this.ehCoord()) return this._visao === 'equipe' ? 'sua equipe' : 'todas as equipes';
+    if (this._visao === 'tudo') return 'todas as equipes';
+    return this._visao === 'sem' ? 'criancas sem equipe' : 'Equipe ' + this.primeiro(d.nomes[this._visao]);
+  },
+  desenharLote() {
+    const L = this._lote, alvo = document.getElementById('rmc-lote'); if (!L || !alvo) return;
+    const docs = L.docs.filter(d => d.mes === L.mes);
+    const tem = new Set(docs.map(d => d.paciente_id));
+    const sem = L.lista.filter(p => !tem.has(p.id) && this.stDe(p, L.mes).cls !== 'antes');
+    const busca = this._busca.trim();
+    const chip = m => { const n = L.docs.filter(d => d.mes === m).length;
+      return '<button type="button" class="rmc-chip' + (L.mes === m ? ' ativo' : '') + '" onclick="MODULOS.mensais.loteMes(\'' + m + '\')">' + this.nomeMes(m, true) + '/' + m.slice(2, 4) + (n ? ' <small>' + n + '</small>' : '') + '</button>'; };
+    alvo.innerHTML =
+      '<p class="sub" style="margin-top:0">Vai um ZIP com o PDF assinado do relatorio mensal de cada crianca que esta na tela agora: <b>' + escaparHtml(this.rotuloVisao()) + '</b>' +
+      (busca ? ', busca "' + escaparHtml(busca) + '"' : '') + ' (' + L.lista.length + ' crianca' + (L.lista.length === 1 ? '' : 's') + ').</p>' +
+      '<div class="rmc-lote-sec"><small>Mes</small><div class="rmc-chips rmc-lote-meses">' + L.ms.map(chip).join('') + '</div></div>' +
+      '<div class="rmc-lote-sec"><small>Arquivos</small><div class="toggle-visao rmc-toggle">' +
+      '<button type="button" class="' + (L.pastas ? 'ativo' : '') + '" onclick="MODULOS.mensais.lotePastas(true)">Pastas por equipe e aplicador</button>' +
+      '<button type="button" class="' + (!L.pastas ? 'ativo' : '') + '" onclick="MODULOS.mensais.lotePastas(false)">Tudo numa pasta</button></div></div>' +
+      '<div class="rmc-lote-res' + (docs.length ? '' : ' vazio') + '"><b>' + (docs.length ? docs.length + ' PDF' + (docs.length === 1 ? '' : 's') + ' assinado' + (docs.length === 1 ? '' : 's') : 'Nenhum PDF assinado') + '</b> em ' + this.nomeMes(L.mes) +
+      (sem.length ? '<details><summary>' + sem.length + ' crianca' + (sem.length === 1 ? '' : 's') + ' sem PDF assinado neste mes</summary><ul>' +
+        sem.map(p => { const s = this.stDe(p, L.mes); return '<li>' + escaparHtml(p.nome) + ' <small>' + (s.r ? s.rot.toLowerCase() + ', sem assinar' : 'relatorio nao feito') + '</small></li>'; }).join('') + '</ul></details>' : '') + '</div>' +
+      '<div class="barra-acoes"><button type="button" class="btn btn-fantasma" onclick="fecharModal()">Cancelar</button>' +
+      '<button type="button" class="btn btn-primario" id="rmc-lote-ir" onclick="MODULOS.mensais.baixarLote(this)"' + (docs.length ? '' : ' disabled') + '>' + this.ICO_BAIXAR + 'Baixar ZIP</button></div>';
+  },
+  loteMes(m) { if (this._lote) { this._lote.mes = m; this.desenharLote(); } },
+  lotePastas(v) { if (this._lote) { this._lote.pastas = v; this.desenharLote(); } },
+  nomeArq(s) { return String(s || '').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '').replace(/\s+/g, ' ').trim().slice(0, 90) || 'sem nome'; },
+
+  async baixarLote(botao) {
+    const L = this._lote; if (!L || L.baixando) return;
+    const docs = L.docs.filter(d => d.mes === L.mes);
+    if (!docs.length) return;
+    L.baixando = true;
+    const rotulo = botao.innerHTML; botao.disabled = true;
+    const passo = t => { botao.textContent = t; };
+    try {
+      passo('Preparando...');
+      if (!window.JSZip) await carregarScript('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js');
+      const zip = new window.JSZip();
+      // pasta de cada crianca, na mesma ordem e agrupamento da tela
+      const pastaDe = {};
+      this.agrupar(L.lista).forEach(t => t.apls.forEach(a => a.pacs.forEach(p => {
+        pastaDe[p.id] = L.pastas ? this.nomeArq(t.nome) + '/' + this.nomeArq(a.nome) + '/' : '';
+      })));
+      const nomeDe = Object.fromEntries(L.lista.map(p => [p.id, p.nome]));
+      const usados = new Set();
+      const mesTxt = this.nomeMes(L.mes).replace(' de ', ' ');
+      let feitos = 0; const falhas = [];
+      const fila = docs.slice();
+      const trabalhar = async () => {
+        while (fila.length) {
+          const d = fila.shift();
+          const { data: blob, error } = await sb.storage.from('documentos').download(d.arquivo_path);
+          if (error || !blob) falhas.push(nomeDe[d.paciente_id] || d.titulo || 'PDF');
+          else {
+            let nome = (pastaDe[d.paciente_id] || '') + this.nomeArq(nomeDe[d.paciente_id]) + ' - Relatorio mensal ' + mesTxt;
+            let n = 2; const base = nome; while (usados.has(nome)) nome = base + ' (' + (n++) + ')';
+            usados.add(nome);
+            zip.file(nome + '.pdf', blob);
+          }
+          feitos++; passo('Baixando ' + feitos + ' de ' + docs.length + '...');
+        }
+      };
+      await Promise.all([trabalhar(), trabalhar(), trabalhar(), trabalhar()]);
+      if (falhas.length === docs.length) throw new Error('nenhum arquivo veio do armazenamento.');
+      passo('Montando o ZIP...');
+      const arq = await zip.generateAsync({ type: 'blob', compression: 'STORE' });
+      const url = URL.createObjectURL(arq);
+      const a = document.createElement('a'); a.href = url;
+      a.download = this.nomeArq('Relatorios mensais assinados - ' + mesTxt + (this.rotuloVisao().startsWith('Equipe') ? ' - ' + this.rotuloVisao() : '')) + '.zip';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      fecharModal();
+      if (falhas.length) popAviso('O ZIP saiu com ' + (docs.length - falhas.length) + ' de ' + docs.length + ' PDFs. Nao consegui baixar: ' + falhas.join(', ') + '.\n\nAbra o prontuario da crianca e confira em Documentos.');
+    } catch (e) {
+      popAviso('Nao consegui montar o ZIP: ' + e.message);
+      botao.disabled = false; botao.innerHTML = rotulo;
+    } finally { L.baixando = false; }
+  }
 };

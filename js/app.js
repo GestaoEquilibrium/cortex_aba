@@ -51,7 +51,9 @@ const NAVEGACAO = [
       { id: 'agenda',     rotulo: 'Agenda',     chave: 'agenda' },
       { id: 'avaliacoes', rotulo: 'Avaliacoes', chave: 'avaliacoes' },
       { id: 'programas',  rotulo: 'Programas',  chave: 'programas' },
-      { id: 'mensais',    rotulo: 'Relatorios mensais', chave: 'relatorios' }
+      { id: 'mensais',    rotulo: 'Relatorios mensais', chave: 'relatorios' },
+      // patch 69: sem linha na matriz, toda a equipe ve (criar/enviar/apagar/trancar: so gestao); patch 70: logo abaixo de Relatorios mensais
+      { id: 'arquivos',   rotulo: 'Arquivos', chave: 'arquivos', perfis: ['direcao', 'coordenador', 'terapeuta', 'aplicador', 'callcenter', 'recepcao', 'suporte'] }
     ]
   },
   {
@@ -61,8 +63,6 @@ const NAVEGACAO = [
       { id: 'presenca', rotulo: 'Lista de Presenca',  chave: 'presenca' },
       { id: 'faltas',   rotulo: 'Gestao de Faltas',   chave: 'faltas' },
       { id: 'termos',   rotulo: 'Termos digitais',    chave: 'termos' },
-      // patch 69: sem linha na matriz, toda a equipe ve (criar/enviar/apagar/trancar: so gestao)
-      { id: 'arquivos', rotulo: 'Arquivos', chave: 'arquivos', perfis: ['direcao', 'coordenador', 'terapeuta', 'aplicador', 'callcenter', 'recepcao', 'suporte'] },
       { id: 'rh',       rotulo: 'RH',                 chave: 'rh' },
       { id: 'chat',       rotulo: 'Chat',               chave: 'chat' },
       { id: 'admin',      rotulo: 'Usuarios e Acessos', perfis: ['direcao','coordenador','suporte'] },

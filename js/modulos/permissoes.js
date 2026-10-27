@@ -73,6 +73,9 @@ window.MODULOS.permissoes = {
       ['gerencial.importar', 'Importar CSV do outro sistema'] ] },
     { chave: 'rh', rotulo: 'RH', dica: 'V: consulta. E: gere.' },
     { chave: 'termos', rotulo: 'Termos digitais', dica: 'V: aceites. E: cria termos.' },
+    { chave: 'arquivos', rotulo: 'Arquivos', dica: 'V: abre e baixa. E: tudo abaixo. Sem marcar: equipe ve; direcao e coordenacao mexem.', subs: [
+      ['arquivos.editar', 'Criar pastas, enviar, renomear e apagar (vai para a Lixeira)'],
+      ['arquivos.trancar', 'Trancar pastas (perfis, equipes, pessoas e senha)'] ] },
     { chave: 'auditoria', rotulo: 'Auditoria (geral)', dica: 'V: trilha de tudo.' },
     { chave: 'chat', rotulo: 'Chat da equipe', dica: 'E: conversa com a equipe (privado e grupos). Comunicados so para gestao.' },
     { chave: 'portal_msg', rotulo: 'Conversa com a familia', dica: 'E: responde mensagens e caderninho.' }

@@ -10,6 +10,7 @@ window.CORTEX_SESSAO = null;
 const SVG_ATTR = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"';
 
 const ICONES = {
+  arquivos:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>',
   eventos:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3.5 19c.6-3 2.8-4.5 5.5-4.5S13.9 16 14.5 19"/><path d="M16 8.5l1.5 1.5L20.5 7"/></svg>',
   guias:      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l4 4v14H6z"/><path d="M14.5 3v4.5H19"/><path d="M9 14l2 2 4-4.5"/></svg>',
   gerencial:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16"/><rect x="6" y="11" width="3" height="6" rx="1"/><rect x="11" y="7" width="3" height="10" rx="1"/><rect x="16" y="13" width="3" height="4" rx="1"/></svg>',
@@ -60,6 +61,8 @@ const NAVEGACAO = [
       { id: 'presenca', rotulo: 'Lista de Presenca',  chave: 'presenca' },
       { id: 'faltas',   rotulo: 'Gestao de Faltas',   chave: 'faltas' },
       { id: 'termos',   rotulo: 'Termos digitais',    chave: 'termos' },
+      // patch 69: sem linha na matriz, toda a equipe ve (criar/enviar/apagar/trancar: so gestao)
+      { id: 'arquivos', rotulo: 'Arquivos', chave: 'arquivos', perfis: ['direcao', 'coordenador', 'terapeuta', 'aplicador', 'callcenter', 'recepcao', 'suporte'] },
       { id: 'rh',       rotulo: 'RH',                 chave: 'rh' },
       { id: 'chat',       rotulo: 'Chat',               chave: 'chat' },
       { id: 'admin',      rotulo: 'Usuarios e Acessos', perfis: ['direcao','coordenador','suporte'] },
